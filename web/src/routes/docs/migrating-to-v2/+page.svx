@@ -1,0 +1,1894 @@
+# Migrating to Basin 2.0
+
+<h2 id="declaring-constraints">Declaring constraints</h2>
+
+Every objective and residual problem now implements `ProblemConstraints`. Its
+`Constraints` associated type is the complete mathematical constraint set,
+shared by `CostFunction` and `Residual`. An unconstrained problem declares
+`NoConstraints`:
+
+```rust
+impl basin::ProblemConstraints for MyProblem {
+    type Constraints = basin::NoConstraints;
+
+    fn constraint_set(&self) -> basin::NoConstraints {
+        basin::NoConstraints::EMPTY
+    }
+}
+```
+
+Constrained problems build a typed `Constraints` value. The getter returns a
+borrowed view, so existing matrices, right-hand sides, and bounds can stay in
+problem fields. For example, a box-only objective with `Vec<f64>` parameters can
+borrow its existing vectors:
+
+```rust
+use basin::{
+    BoxBounds, ConstraintDescription, Constraints, ProblemConstraints,
+};
+
+struct BoxProblem {
+    lower: Vec<f64>,
+    upper: Vec<f64>,
+}
+
+impl ProblemConstraints for BoxProblem {
+    type Constraints = Constraints<BoxBounds<Vec<f64>>>;
+
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as ConstraintDescription>::Borrowed<'_> {
+        Constraints::new()
+            .with_bounds(BoxBounds::new(Some(&self.lower), Some(&self.upper)))
+    }
+}
+```
+
+Alternatively, store the complete set on the problem and return
+`self.constraints.borrowed()`. `Constrained::new(problem, constraints)` attaches
+an owned set to a problem that declares `NoConstraints` and forwards its
+objective, residual, derivative, and constraint evaluation capabilities.
+
+The old sibling constraint traits and `FoldedConstraints` have been removed:
+
+  | Basin 1.x                         | Basin 2.0 declaration and evaluation                                                                                           |
+  | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+  | `BoxConstraints`                  | `Constraints::new().with_bounds(BoxBounds::new(lower, upper))`                                                                 |
+  | `LinearEqualityConstraints`       | `.with_linear_equalities(LinearBlock::new(matrix, rhs))`                                                                       |
+  | `LinearInequalityConstraints`     | `.with_linear_inequalities(LinearBlock::new(matrix, rhs))`                                                                     |
+  | `LinearConstraints`               | The applicable bounds and linear blocks in one set                                                                             |
+  | `NonlinearInequalityConstraints`  | `.with_nonlinear_inequalities(count)` and `NonlinearInequalityValues`                                                          |
+  | `NonlinearConstraints`            | The applicable blocks in one set, plus `NonlinearEqualityValues` and `NonlinearInequalityValues` for declared nonlinear blocks |
+  | `FoldedConstraints::new(problem)` | Pass the declared problem directly to COBYLA                                                                                   |
+
+Builders preserve the other blocks and change the set's type. `NoBounds`,
+`NoLinearBlock`, and `NoNonlinearBlock` mark statically absent blocks. A missing
+linear block needs no matrix type, and a missing nonlinear block needs no
+callback or Jacobian. `LinearBlock::optional(None)` retains a linear kind in the
+type while representing a runtime empty block. Zero-row linear blocks and
+zero-count nonlinear blocks are also valid. Static presence determines solver
+compatibility even when a block is empty at runtime.
+
+Solvers accept only the combinations they implement. Unconstrained solvers
+require `Constraints = NoConstraints`; box-only solvers require
+`Constraints<BoxBounds<V>>`. LINCOA accepts bounds and linear blocks, COBYLA and
+SLSQP accept all five kinds, and progressive-barrier MADS accepts only nonlinear
+inequalities. A box solver cannot silently ignore an additional nonlinear block.
+The barrier and augmented-Lagrangian adapters consume their supported single
+linear block and expose `NoConstraints` to their inner solvers.
+
+Nonlinear callbacks remain problem methods. `NonlinearEqualityValues` and
+`NonlinearInequalityValues` each declare independent `Param`, `Values`, and
+`Error` types. Their methods return
+`Result<Values, ConstraintSolveError<Error>>`; use `?`, `error.into()`, or
+`map_err(ConstraintSolveError::Evaluation)` to preserve an existing callback
+error. Equality residuals follow `h(x) = 0`, and inequalities follow
+`c(x) <= 0`. Constraint values need readable length and coordinate access; they
+need not use the parameter backend.
+
+`ConstraintJacobian` now declares its own `Param`, `Jacobian`, and `Error`, and
+returns `Result<Jacobian, ConstraintSolveError<Error>>`. Rows contain nonlinear
+equalities first and nonlinear inequalities second. Linear rows are excluded.
+Equality and inequality matrices, right-hand-side vectors, nonlinear value
+vectors, and the nonlinear Jacobian can all use different storage. SLSQP
+requires no nonlinear Jacobian for a linear-only set. `FiniteDiff`,
+`BoundedFiniteDiff`, and `RobustLeastSquares` preserve the canonical set; finite
+differences synthesize nonlinear Jacobians in this row order.
+
+`AugmentedLagrangianInnerDiagnostics::lambda` now stores `Vec<F>`, independently
+of the parameter backend. The standalone `AugmentedLagrangian` adapter accepts
+its multiplier vector independently of its objective parameter representation.
+
+The math layer supplies `MatrixShape` and `MatrixFinite` independently of matrix
+entry access. `MatrixIndex` now extends `MatrixShape`. Implement shape methods
+in `MatrixShape` when migrating a custom matrix. `MatVecInto<V, F>` writes `A x`
+into a scalar slice, and `MatTransposeVecInto<V, F>` writes `A^T y` from a
+scalar slice into an existing parameter vector. These operations allow
+independent constraint storage. COBYLA needs checked matrix-vector products only
+for present linear blocks, LINCOA needs transpose products, and SLSQP uses
+matrix shape and entry access. All supported dense backend versions and the
+existing nalgebra and faer CSC backends implement the new operations in pure
+Rust.
+
+Constrained solvers return `ConstraintSolveError<E>`. Match
+`InvalidConstraints(ConstraintError)` for malformed declarations or callback
+shapes, and `Evaluation(E)` for the original user error. The user error need not
+implement `std::error::Error`. Bounds reject NaN, positive infinity on the lower
+side, negative infinity on the upper side, inverted intervals, and wrong
+lengths. Negative-infinite lower and positive-infinite upper endpoints mean an
+absent side; fixed coordinates remain valid. Sampling algorithms may further
+require finite intervals. Linear coefficients and right-hand sides must be
+finite and match the parameter dimension. Nonlinear output lengths and Jacobian
+shapes are checked before indexing. A changed nonlinear count during a run
+returns `ConstraintError::LayoutChanged`.
+
+Each attempted nonempty nonlinear callback counts once in `residual_evals`,
+including failing and malformed attempts. Zero-count and statically absent
+blocks skip callbacks and add no work. Bounds and linear arithmetic add no
+callback counts. Constraint Jacobians count in `jacobian_evals`;
+finite-difference probes retain the derivative adapter's existing accounting.
+
+<h3 id="sampling-domains-and-local-relaxations">Sampling domains and local relaxations</h3>
+
+MA-LS uses a box to sample new candidates, while its local chains can explore
+and accept points outside that box. It now requires `SamplingBounds` on an
+unconstrained objective. Wrap an existing box-only problem in
+`SamplingDomain::new(problem)` to make this interpretation explicit, or
+implement `SamplingBounds` directly alongside `NoConstraints`. This preserves
+the algorithm's sampling, local search, and acceptance behavior.
+
+Bounded CMA and DE injection retain mathematical box constraints and repair
+local results. When their local solver is unconstrained, select that relaxation
+explicitly with `RelaxedInner::new(inner_solver)`:
+
+```rust
+let solver = basin::DeInject::with_inner_solver(
+    basin::De::new(42),
+    basin::RelaxedInner::new(basin::NelderMead::new()),
+);
+```
+
+A local solver that enforces the same box, such as bounded L-BFGS, can be passed
+directly. `RelaxedInner` forwards solver lifecycle and convergence behavior and
+rolls every evaluation category back into the outer problem, including on
+callback errors. Exact continuation retains the inner model. Neither adapter can
+discard additional linear or nonlinear constraints.
+
+<h2 id="structured-termination-reports">Structured termination reports</h2>
+
+Ordinary `Executor::run()` now returns `OptimizationResult<S>` with three owned
+fields: `state`, authoritative `counts: EvalCounts`, and
+`report: TerminationReport<S::Float>`. Use `run_with_solver()` when you also
+need the final solver. The report retains the stopping decision and its evidence
+even after the solver is dropped or resumed.
+
+```rust
+use basin::Termination;
+
+match &result.report.termination {
+    Termination::Converged(convergence) => {
+        for criterion in convergence.criteria() {
+            println!("{:?}: {:?}", criterion.test, criterion.evidence);
+        }
+    }
+    Termination::Limit(limits) => println!("exhausted budgets: {limits:?}"),
+    stop => println!("stopped: {stop:?}"),
+}
+```
+
+`Termination` distinguishes `Converged`, `Limit`, `Target`, `Stalled`, `Failed`,
+`Cancelled`, and `Application`. A numerical failure returns a coherent state
+through `Ok`; a typed callback abort still returns `Err` and consumes the state.
+A failed stepper exposes evaluation counts but no report or recoverable
+checkpoint.
+
+Convergence retains all sufficient predicates evaluated at the stopping stage.
+`ConvergenceTest` identifies their formulas and norms; `ConvergenceEvidence`
+records measured values, tolerances, and reference values. Compound conditions
+stay grouped: LM's relative model-reduction test records actual and predicted
+reductions, reference cost, gain ratio, and tolerance. Extreme-scale LM
+comparisons retain significands and binary exponents rather than overflowing a
+reconstructed norm. External solvers can use
+`Termination::custom(key, definition, measurements)` with a namespaced key and
+named scalar measurements. Reports do not certify global optimality or parameter
+accuracy.
+
+The main replacements are:
+
+  | Basin 1.x                                                      | Basin 2.0                                                                   |
+  | -------------------------------------------------------------- | --------------------------------------------------------------------------- |
+  | `result.reason`                                                | `result.report.termination`                                                 |
+  | `TerminationReason`                                            | `Termination<F>` for decisions; `TerminationReport<F>` for published events |
+  | `next_iter -> Result<(S, Option<TerminationReason>), E>`       | `next_iter -> Result<SolverStep<S>, E>`                                     |
+  | `terminate` / `check_convergence -> Option<TerminationReason>` | `Option<Termination<S::Float>>`                                             |
+  | `stop_when -> Option<TerminationReason>`                       | `Option<ApplicationStop>`                                                   |
+  | `Observe::observe_final(..., &TerminationReason)`              | `observe_final(..., &TerminationReport<S::Float>)`                          |
+  | `ObservationEvent::Final(reason)`                              | `ObservationEvent::Final(&report)`                                          |
+  | `StepOutcome::Stopped(reason)`                                 | `StepOutcome::Stopped(report)`                                              |
+  | `Stepper::finished() -> Option<TerminationReason>`             | `Option<&TerminationReport<S::Float>>`                                      |
+  | Enum casts such as `reason as u8`                              | `result.report.code().as_u8()`                                              |
+
+`State::Float` now requires `Scalar`. `StepOutcome<F>` is `Clone`, rather than
+`Copy`. Final observer events borrow the report; clone it explicitly when
+retaining it beyond the callback. `TerminationCode` is a compact, lossy
+projection with an explicit `as_u8()` mapping preserving the 24 Basin 1.x
+numeric identifiers. Simultaneous criteria or budgets project to the first
+entry. Inspect the structured report when the distinction matters.
+
+`SolverStep` separates completion from termination. Use
+`SolverStep::completed(state)` to continue, `stopped(state, decision)` to
+publish a partial stopping step, or
+`completed_with_termination(state, decision)` when the stopping iteration
+finished. A completed stopping step increments the iteration count, fires the
+gated iteration observer, and then fires the final observer. A partial stopping
+step fires only the final observer. A continuing partial step uses
+`SolverStep::partial(state)` to publish progress without incrementing the count
+or firing iteration observers. In all cases the executor publishes counts and
+incumbent updates. `report.stage` distinguishes an execution boundary from a
+step and records whether the step completed.
+
+LM now counts a completed trial that passes a native stopping test as an
+iteration, including a rejected trial. Initial gradient checks remain partial
+step stops at iteration zero. Evaluation counts and numerical trajectories are
+unchanged. BFGS reports a finite nonpositive line-search step as a numerical
+stall; a non-finite step is a numerical failure. Bounded L-BFGS reports its
+bound-clipped gradient predicate consistently, with the compact code
+`ProjectedGradientTolerance` for both default and configured tolerances.
+
+Execution controls still precede numerical checks. A limit report retains all
+budgets exhausted at that boundary, including their observed counts and
+thresholds. Application hooks return, for example,
+`Some(ApplicationStop::new("feasible_target"))`; they cannot impersonate a
+numerical convergence test. Targets and stalls retain their measurements.
+
+Exact continuation preserves solver and convergence history, discards the
+previous event, and produces a new report. Native identities are available from
+`result.report.termination.native_convergence_tests()` without retaining the
+solver. The compatibility accessor on `OptimizationResultWithSolver` now derives
+its owned `Vec<NativeConvergenceTest>` from the report, so an execution limit
+cannot expose an earlier convergence event.
+
+Composed solvers can call
+`report.into_outer_termination(PartialResultPolicy::Consume)` to accept inner
+limits, targets, or stalls as partial progress, or use `RequireConvergence`. An
+inner numerical failure retains its nested report. Cancellation and application
+stops propagate. An algorithm may explicitly reject a failed local candidate and
+continue, as basin hopping does; an inner convergence report never establishes
+outer convergence.
+
+Exact checkpoint files now use format version 4 because solver convergence
+history includes report payloads and L-BFGS-B's previous accepted cost. The
+convergence-test enum also identifies the native cost-reduction rule. Older
+exact formats are rejected. Finish those runs with the matching application and
+export parameters for a fresh run. State-only checkpoint files retain their
+format.
+
+<h2 id="extensible-results-and-diagnostics">Extensible results and diagnostics</h2>
+
+`OptimizationResult`, `OptimizationResultWithSolver`, and `TerminationReport`
+are now non-exhaustive. Replace struct literals with their constructors:
+
+```rust
+let report = TerminationReport::new(termination, stage, iteration);
+let result = OptimizationResult::new(state, counts, report);
+```
+
+Use `OptimizationResultWithSolver::new(state, solver, counts, report)` when
+retaining the final solver.
+
+Fields remain public for reading, moving, and assignment. Destructuring must
+include `..`, even when naming every current field:
+
+```rust
+let OptimizationResult { state, counts, report, .. } = result;
+```
+
+Struct update syntax is also unavailable. To change an existing report, assign
+its public field instead of constructing
+`TerminationReport { termination, ..report }`.
+
+`ExecutionLimit`, `Stall`, and `NumericalFailure` are now non-exhaustive,
+matching the existing `Termination` policy. Matches need a fallback arm for
+future stopping categories. Existing variants remain constructible, and their
+current fields are unchanged.
+
+The following diagnostic records are also non-exhaustive. Obtain them from the
+relevant solver or derivative checker, read their public fields, and use `..`
+when destructuring:
+
+- `LeastSquaresObservation` and `LeastSquaresCheck`.
+- L-BFGS `ModelObservation`, trust-region `Trial`, and Nelder-Mead `Trial`.
+- Moré-Thuente `Bracket` and `SearchTrial`.
+- `DerivativeComparison` and `DerivativeCheckReport`.
+- `core::inner::diagnostics::{Context, Record}`.
+- `BarrierInnerDiagnostics` and `AugmentedLagrangianInnerDiagnostics`.
+- CMA `DistributionRef` and DIRECT `RectangleRef`.
+
+Their accompanying enums `ModelPhase`, `ModelFailure`, trust-region `Phase`,
+Nelder-Mead `TrialKind`, Moré-Thuente `SearchExit`, and inner diagnostic
+`Status` also require fallback match arms. Diagnostic struct literals are no
+longer supported outside Basin. These changes allow future fields and enum
+variants; they do not change current numerical behavior or serialized
+representations.
+
+<h2 id="extensible-solver-publications">Extensible solver publications</h2>
+
+`SolverStep` and `IncumbentRef` are now non-exhaustive. External `Solver` and
+`IncumbentState` implementations must replace struct literals with public
+constructors. The named step constructors cover every completion and termination
+combination:
+
+  | Publication                   | Constructor                                                  |
+  | ----------------------------- | ------------------------------------------------------------ |
+  | Completed iteration, continue | `SolverStep::completed(state)`                               |
+  | Partial step, continue        | `SolverStep::partial(state)`                                 |
+  | Partial step, stop            | `SolverStep::stopped(state, termination)`                    |
+  | Completed iteration, stop     | `SolverStep::completed_with_termination(state, termination)` |
+
+Use `SolverStep::new(state, completed, termination)` when forwarding dynamic
+decisions, and `IncumbentRef::new(param, cost, iter, counts)` when borrowing a
+selected record. The incumbent's iteration and counts must still describe the
+boundary that published its selection.
+
+Fields remain public for reading, moving, and assignment. Struct update syntax
+is unavailable, and destructuring must include `..`:
+
+```rust
+let SolverStep { state, completed, termination, .. } = step;
+let IncumbentRef { param, cost, iter, counts, .. } = incumbent;
+```
+
+Existing constructors will remain sufficient throughout Basin 2.x. Future
+optional metadata must have defaults that preserve their behavior without
+requiring new information from external solvers or states.
+`SolverStep::into_parts()` continues to return `(state, completed, termination)`
+and discards any future optional metadata. Numerical behavior and serialized
+representations are unchanged.
+
+<h2 id="extensible-stopping-records">Extensible stopping records</h2>
+
+`ConvergenceCriterion` and `ApplicationStop` are now non-exhaustive. Replace
+struct literals with `ConvergenceCriterion::new(test, evidence)` and
+`ApplicationStop::new(code)`. The existing `ConvergenceCriterion::upper_bound`
+and `ConvergenceCriterion::custom` constructors remain available. The general
+constructor accepts any `ConvergenceEvidence` variant:
+
+```rust
+let criterion = ConvergenceCriterion::<f32>::new(
+    ConvergenceTest::NoFreeParameters,
+    ConvergenceEvidence::NoFreeParameters,
+);
+let stop = ApplicationStop::new("user_requested");
+```
+
+Fields remain public for reading, moving, and assignment. Struct update syntax
+is unavailable, and destructuring must include `..`:
+
+```rust
+let ConvergenceCriterion { test, evidence, .. } = criterion;
+let ApplicationStop { code, .. } = stop;
+```
+
+Existing constructors will remain sufficient throughout Basin 2.x. Future
+optional metadata must have defaults that preserve their behavior without
+requiring new information from external solvers or application hooks. These
+changes preserve current numerical behavior and serialized representations;
+future serialization compatibility requires a separate decision.
+
+`Threshold` remains exhaustive, with struct literals and exhaustive
+destructuring supported. Its fields describe a complete mathematical comparison;
+different comparison rules require distinct evidence representations.
+
+<h2 id="enum-payload-compatibility">Enum payload compatibility</h2>
+
+Existing public enum variants keep their field lists throughout Basin 2.x. This
+includes `ConvergenceEvidence`: variant literals and complete field patterns
+remain supported. Enum-level `#[non_exhaustive]` still requires a fallback match
+arm for future variants; it does not require `..` inside existing variants.
+
+Different mathematical evidence will use new variants, following the existing
+`UpperBound` and `FactoredUpperBound` distinction. Optional reporting metadata
+can be added to enclosing non-exhaustive records such as `ConvergenceCriterion`,
+with defaults that preserve existing constructors. When a solver starts emitting
+a new variant, consumers may need to handle it explicitly to use its evidence.
+
+`BoundSide`, `ConstraintAxis`, `StepOutcome`, `TerminationStage`, and
+`PartialResultPolicy` remain exhaustive. `BinaryValue`, `Measurement`,
+`Threshold`, and `LossEvaluation` retain struct literals and exhaustive
+destructuring. This policy preserves current serialized representations; future
+data and checkpoint compatibility require separate decisions. See the
+[contributor policy](https://github.com/jolars/basin/blob/main/CONTRIBUTING.md#enum-payloads-and-complete-values).
+
+<h2 id="extensible-line-search-configurations">Extensible line-search configurations</h2>
+
+`Backtracking`, `Wolfe`, `MoreThuente`, and `HagerZhang` are now non-exhaustive.
+Replace struct literals, including those using `..Default::default()` or an
+existing configuration, with `new()` or `Default` and builder calls:
+
+```rust
+let mut search = Wolfe::<f64>::new()
+    .with_curvature_coefficient(0.8)
+    .max_iter(50);
+```
+
+Fields remain public for reading and assignment. To update a configuration,
+assign its fields directly. Destructuring must include `..`:
+
+```rust
+search.alpha_max = 20.0;
+let Wolfe { c1, c2, .. } = search;
+```
+
+Existing constructors and builders will remain sufficient throughout Basin 2.x.
+Future controls must default to behavior compatible with existing constructors.
+This change preserves current defaults, numerical behavior, and serialized
+representations; future serialization compatibility requires a separate
+decision.
+
+<h2 id="extensible-state-shape-errors">Extensible state shape errors</h2>
+
+`SimplexShapeError` and `PopulationShapeError` are now non-exhaustive so future
+releases can add validation cases. Matches must include a fallback arm for
+unknown variants. Handle known cases as needed and report or propagate the
+remaining errors:
+
+```rust
+use basin::{PopulationShapeError, SimplexShapeError};
+
+let error = SimplexShapeError::CostCountMismatch { vertices: 3, costs: 2 };
+match error {
+    SimplexShapeError::CostCountMismatch { vertices, costs } => {
+        eprintln!("expected {vertices} costs, got {costs}");
+    }
+    other => eprintln!("{other}"),
+}
+
+let error = PopulationShapeError::UnevaluatedPopulation;
+match error {
+    PopulationShapeError::UnevaluatedPopulation => {
+        eprintln!("evaluate the population before publishing a representative");
+    }
+    other => eprintln!("{other}"),
+}
+```
+
+Existing variants and their fields remain directly constructible, and their
+payloads can still be destructured exhaustively. Validation and update behavior
+are unchanged, including support for lower-dimensional and collapsed simplexes
+and non-finite cost records. Adding variants does not permit rejecting inputs
+accepted by the documented state contracts.
+
+<h2 id="solver-and-line-search-settings">Solver and line-search settings</h2>
+
+Basin 2.0 removes `BarrierMethod::new`, `AugmentedLagrangianMethod::new`, and
+their `with_inner_grad_tol` setters. Construct either method with
+`with_inner_solver(inner)` and configure convergence on `inner` before passing
+it in. The outer methods retain their default 50-iteration inner budgets but no
+longer install an implicit `1e-8` gradient test. For example:
+
+```rust
+let solver = BarrierMethod::with_inner_solver(
+    GradientDescent::with_line_search(Backtracking::new())
+        .with_absolute_gradient_tolerance(1e-8),
+);
+```
+
+Use the same pattern with `AugmentedLagrangianMethod`. Its inner solver may
+choose any convergence test. For `BarrierMethod`, configure gradient convergence
+if Phase I must certify that a constraint system has no strict interior; an
+inner iteration budget alone cannot establish that certificate.
+
+Both outer methods now independently check the consumed surrogate gradient,
+including when the inner solver is derivative-free or stops at its budget. The
+absolute stationarity tolerance defaults to `1e-8`; the relative tolerance
+defaults to `1e-3` times the infinity norm at the surrogate's starting point.
+Either stationarity test must pass alongside the outer feasibility or gap test.
+The same guard applies to optional outer progress tests. These checks use the
+multipliers, penalty, or barrier weight that defined the consumed solve, before
+the outer update. They add up to two counted gradient callbacks per consumed
+result. Inner diagnostics retain the inner run's own counts.
+
+Configure these checks with `with_absolute_stationarity_tolerance` and
+`with_relative_stationarity_tolerance`. Zero requests exact stationarity.
+Disable both checks with `None` to recover the former feasibility/gap-only
+behavior, which can report success after an inaccurate inner solve. Custom
+parameter storage now also needs `NormInfinity<F>`; every supported dense
+backend release already supplies it.
+
+Barrier Phase II now retries the same weight after an unfinished centering
+solve. It retains the first gradient reference across these segments and exact
+continuation, then starts a new reference after changing the weight. Loosely
+minimized subproblems remain usable, but merely shrinking the continuation
+parameter no longer produces outer success. Choose a gap and inner resolution
+that can be attained together, especially near active bounds.
+
+`Backtracking` now returns `LineSearchOutcome::Failed` when no evaluated trial
+satisfies Armijo. Its legacy `next` method returns zero on failure. Previously,
+exhaustion returned an untested reduced step as accepted. Typed callback errors
+still propagate unchanged. DIRECT's zero radius threshold now accepts a zero
+computed radius, while its logarithmic volume test keeps positive volumes from
+becoming zero through underflow. CMA's positive TolX thresholds retain their
+strict comparison, and a zero threshold now accepts an exactly zero computed
+distribution-size metric. GBNM evaluates an all-fixed box once and returns a
+structural result instead of panicking. BrentDerivative keeps trials inside its
+bracket even when a composed policy suppresses native width termination.
+
+LM and its pivoted-QR route now offer
+`with_absolute_progress_gradient_tolerance(Some(tolerance))` to require a
+stationary retained point before a relative model-reduction, step, or radius
+stop. The guard is disabled by default. The existing independent gradient tests
+still combine with those guarded progress tests using OR. An accepted trial
+needs one counted Jacobian callback for the guard; a veto caches that model for
+continuation. A rejected trial reuses its base gradient. Guarded reports use
+custom `lm.guarded_*` predicates with both progress and gradient measurements.
+Choose the absolute threshold for the objective and parameter units and
+derivative accuracy; it does not establish parameter recovery.
+
+Basin 2.0 removes the deprecated setter aliases below. Replace each call with
+the named method on the same solver or line search. The replacement keeps the
+algorithm's setting and default unless noted here.
+
+  | Solver or component                                                                      | Removed method                                                | Replacement                                                                                                        |
+  | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+  | `Brent`, `BrentDerivative`, `GoldenSection`                                              | `with_tol(relative, absolute)`                                | `new().with_relative_position_tolerance(relative).with_absolute_position_tolerance(absolute)`                      |
+  | `BrentRoot`                                                                              | `with_tol(relative, absolute)`                                | `with_relative_position_tolerance(relative).with_absolute_position_tolerance(absolute)`                            |
+  | `GaussNewton`, `BoundedLevenbergMarquardt`, `LevenbergMarquardt`, `LevenbergMarquardtQr` | `with_tol_grad`                                               | `with_absolute_gradient_tolerance` (`with_absolute_scaled_gradient_tolerance` for `BoundedLevenbergMarquardt`)     |
+  | `LevenbergMarquardt`, `LevenbergMarquardtQr`                                             | `with_tol_grad_rel`, `with_tol_cost_rel`, `with_tol_step_rel` | `with_gradient_orthogonality_tolerance`, `with_relative_model_reduction_tolerance`, `with_relative_step_tolerance` |
+  | `LevenbergMarquardtQr`                                                                   | `with_rank_tolerance`                                         | `with_relative_rank_tolerance`                                                                                     |
+  | `Lbfgs` in bounded mode                                                                  | `with_tol_pg`                                                 | `with_absolute_projected_gradient_tolerance`                                                                       |
+  | `Bfgs`, `Lbfgs`                                                                          | `with_epsilon`                                                | `with_relative_curvature_tolerance`                                                                                |
+  | `Gbnm`                                                                                   | `with_small_tolerance`, `with_flat_tolerance`                 | `with_normalized_simplex_size_tolerance`, `with_absolute_simplex_cost_tolerance`                                   |
+  | `Gbnm`                                                                                   | `with_degeneracy_tolerances(edge, determinant)`               | `with_edge_ratio_tolerance(edge).with_normalized_determinant_tolerance(determinant)`                               |
+  | `BarrierMethod`, `AugmentedLagrangianMethod`                                             | `with_tol`                                                    | `with_absolute_duality_gap_tolerance`, `with_absolute_feasibility_tolerance`, respectively                         |
+  | `BarrierMethod`                                                                          | `with_phase_one_tol`                                          | `with_absolute_phase_one_gap_tolerance`                                                                            |
+  | `Newuoa`, `Bobyqa`, `Lincoa`, `Cobyla`                                                   | `with_rho_beg`, `with_rho_end`                                | `with_initial_radius`, `with_final_radius`                                                                         |
+  | `Mads`                                                                                   | `with_min_poll_size`                                          | `with_minimum_poll_size`                                                                                           |
+  | `SolisWets`                                                                              | `with_rho_init`                                               | `with_initial_step_size`                                                                                           |
+  | `MaLsChCma`                                                                              | `with_initial_sigma_fallback`                                 | `with_initial_scale_fallback`                                                                                      |
+  | `Backtracking`                                                                           | `c`                                                           | `with_sufficient_decrease_coefficient`                                                                             |
+  | `Wolfe`                                                                                  | `c1`, `c2`                                                    | `with_sufficient_decrease_coefficient`, `with_curvature_coefficient`                                               |
+  | `MoreThuente`                                                                            | `ftol`, `gtol`, `xtol`                                        | `with_sufficient_decrease_coefficient`, `with_curvature_coefficient`, `with_relative_bracket_tolerance`            |
+  | `HagerZhang`                                                                             | `delta_sigma`, `epsilon`                                      | `with_wolfe_coefficients`, `with_relative_cost_relaxation_tolerance`                                               |
+
+The newer optional numerical tolerance setters accept `None` to disable a check
+and zero to request an exact-zero threshold. Some old setters treated zero as
+disabled, so use `None` when preserving that behavior. The new setters also
+validate finite, nonnegative values. `with_absolute_duality_gap_tolerance` and
+`with_absolute_feasibility_tolerance` accept `None` when a check should be
+disabled; their former `with_tol` aliases required a positive value. The
+relative position tolerance on `BrentRoot` still requires at least four times
+the scalar machine epsilon.
+
+<h2 id="backend-features">Backend features</h2>
+
+The unversioned `nalgebra`, `ndarray`, and `faer` features now select Basin's
+newest supported release of each backend. In particular, `nalgebra` moves from
+0.34 to 0.35, and `nalgebra-lapack` moves with it. To keep nalgebra 0.34,
+replace these features with `nalgebra_v0_34` and `nalgebra_v0_34-lapack`,
+respectively. The current `ndarray` and `faer` targets remain 0.17 and 0.24.
+
+The `*_latest` features, including `nalgebra_latest-lapack` and
+`ndarray_latest-blas`, remain available as deprecated synonyms for the
+unversioned features. Use an exact version feature when your application pins
+its backend dependency; a moving alias may select a newer, incompatible backend
+release in a later Basin version. The `nalgebra` and `nalgebra-lapack` features
+now require Rust 1.89 because nalgebra 0.35 does. Basin's package MSRV remains
+Rust 1.87 for features that do not select nalgebra 0.35.
+
+<h2 id="test-problems">Test problems</h2>
+
+Basin 2.0 enables no features by default. If your code imports
+`basin::problems`, add `problems` to your dependency's feature list:
+
+```toml
+[dependencies]
+basin = { version = "2", features = ["problems"] }
+```
+
+Keep any backend or other features you already enable. The corpus API is
+unchanged, and `problems` adds no dependencies. Applications that implement
+their own objectives need no changes for this feature switch. Basin 1.x keeps
+`problems` enabled by default.
+
+When working in this repository, use `cargo test -p basin --features problems`
+to include corpus-dependent tests. Enable the same feature for corpus
+benchmarks, for example
+`cargo bench -p basin --features problems --bench rosenbrock`. The WASM
+visualizer and competitor benchmark crate enable it explicitly in their
+dependencies.
+
+<h2 id="evaluation-counters">Evaluation counters</h2>
+
+`EvalCounts` is now non-exhaustive so future releases can add evaluation
+categories. Replace struct literals, including those using
+`..EvalCounts::default()`, with default construction and field assignments:
+
+```rust
+let mut counts = basin::EvalCounts::default();
+counts.cost_evals = 3;
+counts.gradient_evals = 2;
+```
+
+Include `..` when destructuring `EvalCounts`:
+
+```rust
+let basin::EvalCounts { cost_evals, .. } = counts;
+```
+
+Counters retain their existing meaning: callback requests at the `Problem`
+boundary. Fused requests charge each category they produce, batches charge every
+submitted item, and failing requests retain their charges. Internal adapter
+calls are excluded. For example, requesting only a central finite-difference
+gradient in 10 parameters makes 20 internal objective calls but records
+`gradient_evals = 1`, `cost_evals = 0`, and `total_work() = 1`.
+
+Evaluation budgets use these request counts, including
+`max_evaluations(EvaluationKind::TotalWork, n)`, and remain checked after
+initialization and between iterations. Instrument underlying callbacks
+separately to measure finite-difference probes or compare probe savings from
+different derivative implementations.
+
+<h2 id="checkpoint-files">Checkpoint files</h2>
+
+Basin 2.0 removes bincode and the readers for the two legacy checkpoint formats.
+The `serde` feature still enables serialization and, on native targets,
+checkpoint file I/O. The checkpoint writers use postcard:
+
+  | Checkpoint                      | Accepted format                                     | Removed format                                        |
+  | ------------------------------- | --------------------------------------------------- | ----------------------------------------------------- |
+  | State (`read_checkpoint`)       | `BASINST\0`, version 1, postcard payload            | Unprefixed bincode payload                            |
+  | Exact (`read_exact_checkpoint`) | `BASINEX\0`, version 4, postcard header and payload | Versions 1 (bincode), 2, and 3 (older solver layouts) |
+
+Both readers return `std::io::ErrorKind::InvalidData` for removed formats,
+unsupported versions, malformed data, or trailing bytes. Reading a checkpoint
+does not modify it.
+
+<h3 id="state-checkpoints">State checkpoints</h3>
+
+Before upgrading, use a compatible Basin 1.x release to load an unprefixed
+checkpoint with `read_checkpoint`. Basin 1.15 introduced postcard writers while
+retaining the legacy readers. With a compatible state type in that release, use
+`CheckpointWriter` through `Observe::observe_iter` to save the loaded state to a
+new file. Read the new file back to verify it before replacing the original; the
+observer reports write failures to stderr.
+
+Retaining the postcard format does not guarantee that a state's serialized
+fields remain compatible across major releases. If the state type or its layout
+changes, load it in the compatible 1.x application, export its current or best
+parameters in an application-owned format, and construct a fresh 2.0 state from
+those parameters. This starts a new run and does not preserve the solver's
+history or trajectory.
+
+<h3 id="exact-checkpoints">Exact checkpoints</h3>
+
+Exact checkpoints require the exact Basin package version and concrete solver
+and state type names recorded in the file. A 1.x exact checkpoint cannot be
+resumed in 2.0, even if it already uses postcard version 2. Changing the format
+version or the Basin version in the header is not a migration.
+
+For exact continuation, keep the matching 1.x application and its dependencies
+until the run finishes. To move the optimization to 2.0, load the checkpoint
+with that application, export parameters from `checkpoint.state()`, and start a
+fresh 2.0 run from those parameters. Reattach the problem and execution controls
+in the new application.
+
+<h2 id="observing-solver-diagnostics">Observing solver diagnostics</h2>
+
+Algorithm quantities that moved from state to solver remain available during
+ordinary `Executor::run()` calls. Use `observe_solver` for a closure receiving
+`(&state, &solver, ObservationEvent)`, or implement `ObserveSolver<S, So>` and
+register it with `observe_solver_with`. Existing `Observe<S>` implementations
+and `observe_with` calls continue to handle progress alone.
+
+For an annealing executor, replace a state-temperature logger with:
+
+```rust,ignore
+executor.observe_solver(
+    |state, solver, event| {
+        println!("{event:?}: {} {}", state.iter(), solver.temperature());
+    },
+    ObserverMode::Every(10),
+).run()?;
+```
+
+Import `State` and `ObserverMode` from `basin`; `ObservationEvent` and
+`ObserveSolver` are also root exports. A reusable observer keeps the familiar
+`observe_init`, `observe_iter`, and `observe_final` hooks, now with `&So` after
+`&S`. The final hook also receives `&TerminationReport<S::Float>`. All hooks
+have default no-op implementations. The closure receives
+`ObservationEvent::Init`, `Iter`, or `Final(reason)` instead.
+
+Both observer kinds fire in registration order. Modes filter completed
+iterations only; initialization and clean termination always fire. Exact
+continuation observes its restored boundary, potentially at a nonzero iteration.
+A clean partial-step stop refreshes counts without incrementing the iteration,
+and a hard error emits no final callback. Registered observers are owned and
+require `'static` captures, but the state and solver may borrow local data. A
+callback can cancel a cloned `CancellationToken` to request a clean stop.
+
+The solver retains its models and workspace. Observation borrows existing
+diagnostics without cloning or evaluating the problem. Preserve each getter's
+meaning: annealing's `temperature()` describes the next proposal after cooling
+and any restart; SLSQP stationarity and multiplier slices can be unavailable.
+Callbacks must not evaluate the problem or mutate solver machinery through
+interior mutability. Outer observers do not automatically receive inner-solver
+iterations.
+
+Applications that already drive a `Stepper` can keep reading `Stepper::solver()`
+between steps. Use `run_with_solver()` when only final diagnostics are needed.
+See the [observer
+API](https://docs.rs/basin/latest/basin/core/observer/index.html) for the full
+lifecycle and a runnable logging example.
+
+<h2 id="shared-progress-states">Shared progress states</h2>
+
+The migration replaces algorithm-specific progress with shared states. The
+following replacements are implemented on `main`:
+
+  | Basin 1.x state                                                     | Basin 2.0 state                 | Solver                                                                                |
+  | ------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------- |
+  | `BasicSimplexState<V, F>`                                           | `SimplexProgress<V, F>`         | `NelderMead`, both modes                                                              |
+  | `MaLsChGenericState<V, C>`, `MaLsChState<V, M>`, `MaLsChSwState<V>` | `PopulationProgress<V, F>`      | `MaLsCh`, `MaLsChCma`, `MaLsChSw`                                                     |
+  | `CmaEsState<V, M, F>`                                               | `PopulationProgress<V, F>`      | `CmaEs`, `BoundedCmaEs`, `CmaInject`, `BoundedCmaInject`                              |
+  | `BasicPopulationState<V, F>`                                        | `PopulationProgress<V, F>`      | `RandomSearch`, `De`, `Ssga`, `DeInject`                                              |
+  | `SlsqpState<V, F>`                                                  | `SelectedFirstOrderState<V, F>` | `Slsqp`                                                                               |
+  | `MadsState<V, F>`                                                   | `PointState<V, F>`              | `Mads`, unbounded and box-bounded modes                                               |
+  | `ConstrainedMadsState<V, F>`                                        | `SelectedState<V, F>`           | `Mads`, progressive-barrier mode                                                      |
+  | `CobylaState<V, F>`                                                 | `SelectedState<V, F>`           | `Cobyla`                                                                              |
+  | `NewuoaState<V, F>`, `BobyqaState<V, F>`, `LincoaState<V, F>`       | `PointState<V, F>`              | `Newuoa`, `Bobyqa`, `Lincoa`                                                          |
+  | `GbnmState<V, F>`                                                   | `PointState<V, F>`              | `Gbnm`                                                                                |
+  | `GlobalBestPsoState<V, F, R>`                                       | `PopulationProgress<V, F>`      | `GlobalBestPso`                                                                       |
+  | `QuasiNewtonState<V, M, F>` and its backend aliases                 | `FirstOrderState<V, F>`         | `Bfgs`                                                                                |
+  | `LbfgsState<V, F>`                                                  | `FirstOrderState<V, F>`         | `Lbfgs`, `Lbfgsb`                                                                     |
+  | `BasicState<V, F>`                                                  | `FirstOrderState<V, F>`         | `GradientDescent`, `ProjectedGradientDescent`, both `TrustRegion` modes               |
+  | `BasicState<V, F>`                                                  | `PointState<V, F>`              | `Sgd`, `BasinHopping`, `BarrierMethod`                                                |
+  | `BasicState<V, F>`                                                  | `SelectedState<V, F>`           | `AugmentedLagrangianMethod`                                                           |
+  | `NllsState<V, F>`                                                   | `PointState<V, F>`              | `GaussNewton`, both LM variants, `BoundedLevenbergMarquardt`, `TrustRegionReflective` |
+  | `SimulatedAnnealingState<V, N, F, R>`                               | `ProposalState<V, F>`           | `SimulatedAnnealing`                                                                  |
+  | `SolisWetsState<V, F>`                                              | `PointState<V, F>`              | `SolisWets`                                                                           |
+  | `ScalarState<F>`                                                    | `PointState<F, F>`              | `Brent`, `GoldenSection`                                                              |
+  | `ScalarGradientState<F>`                                            | `FirstOrderState<F, F>`         | `BrentDerivative`                                                                     |
+
+Construct shared states with `PointState::new(x)` or `FirstOrderState::new(x)`.
+Construction supplies a seed, not an evaluated record. `current()` and `best()`
+return `None` until those records become available. First-order
+`replace(x, cost, gradient)` requires matching dimensions and preserves the
+previous record on a dimension error. Scalar `f32` and `f64` parameters each
+have one coordinate. Scalar solver bounds remain problem-side through
+`Constraints<BoxBounds<F>>`.
+
+NEWUOA, BOBYQA, and LINCOA now publish `PointState<V, F>`. Replace their
+algorithm-specific `*State::new(x)` constructors with `PointState::new(x)`;
+`Executor::from_start` still constructs the appropriate state. The solver types
+remain `Newuoa<F = f64>`, `Bobyqa<Mode = Bounded, F = f64>`, and
+`Lincoa<F = f64>`, with an explicit `F: Scalar` bound. Vectors still require
+`Clone`, `VectorLen`, and `Index`/`IndexMut`; LINCOA constraint matrices require
+`MatrixShape`, `MatrixFinite`, and `MatTransposeVecInto`. Every supported dense
+backend release works with both `f32` and `f64`.
+
+Read the radius through `result.solver.rho()` after `run_with_solver()`, or
+through `stepper.solver().rho()`. This returns `None` before initialization.
+`PointState` supplies no `RhoState` capability. Native final-radius stopping and
+`with_absolute_radius_tolerance` continue to read the solver's schedule. The
+shared state preserves coherent evaluated points and historical objective
+incumbents with all six raw counts. LINCOA publishes only its model's feasible
+incumbent, excluding infeasible geometry probes; an infeasible start still
+relaxes the constraints as documented in its solver API.
+
+Fresh runs reevaluate the interpolation set and rebuild every model, even if the
+supplied solver or state has already run. Radius schedules, shifted bounds, and
+LINCOA's active-set QR live on the solver. Keep an `ExactCheckpoint` for exact
+continuation, including through `serde`; a serialized `PointState` alone
+provides a fresh point warm start. The removed state types and their layouts
+have no compatibility reader.
+
+COBYLA uses `SelectedState<V, F>` and has the type `Cobyla<V, F = f64>`. Replace
+`CobylaState::new(x)` with `SelectedState::new(x)` or keep using
+`Executor::from_start`. An explicit `Cobyla<f32>` annotation becomes
+`Cobyla<V, f32>`. Its backend requirements remain `Clone`, `VectorLen`, and
+indexing. Present linear blocks additionally require `MatrixShape`,
+`MatrixFinite`, and `MatVecInto`. The canonical constraint path supports every
+dense backend release with `f32` and `f64`.
+
+`current()` and `best()` expose the filter-selected point, objective, and
+`ViolationReport` for the maximum positive constraint violation. COBYLA can
+prefer a higher-cost point as feasibility improves. It does not implement
+`ObjectiveIncumbentState`; objective-only targets and stalls cannot assume its
+selection is an objective minimum. An unchanged selection keeps its original
+iteration and evaluation metadata. The driver still moderates extreme and
+non-finite values according to PRIMA's rules, including in published objective
+and violation records.
+
+The solver owns its callback buffer, simplex models, filter, and radius
+schedule. Read `rho()` on the retained solver; the shared state has no radius
+capability. Fresh runs rebuild these structures and reevaluate their seed. Exact
+checkpoints retain them, and `serde` supports the complete solver and shared
+state. Old `CobylaState` payloads have no compatibility reader.
+
+COBYLA counts each attempted nonempty nonlinear inequality or equality callback
+once in `residual_evals`. Empty and absent blocks skip callbacks. Arithmetic for
+bounds and linear constraints adds no callback count. `cost_evals()` reports
+only objective calls. Constraint budgets use
+`max_evaluations(EvaluationKind::Residual, n)`, and `state.counts()` preserves
+all six categories. See [declaring constraints](#declaring-constraints).
+
+MADS keeps its `Mads<Mode = Unbounded, F = f64>` type, now explicitly bounded by
+`F: Scalar`. Unbounded and box-bounded modes use `PointState::new(x)`;
+progressive-barrier mode uses `SelectedState::new(x)`. `Executor::from_start`
+chooses the matching state. `Clone`, `VectorLen`, and indexing remain the only
+vector requirements, and all dense backend versions support both scalar types.
+
+Read `poll_size()` and `mesh_index()` on the retained solver, where both return
+`Option` values that are absent before initialization. The shared states have no
+`MeshState` capability. In constrained mode, read the squared-sum violation from
+`state.current().unwrap().2.value` or the matching `state.best()` report instead
+of `constraint_violation()`. The progressive barrier still selects a feasible
+incumbent when available; its objective can increase while feasibility improves.
+Unchanged selections keep their original metadata. Constraint calls now count as
+residual work, while rejected box probes consume no objective call.
+
+Every fresh run rebuilds the mesh schedule, Halton history, and progressive
+barrier, and reevaluates the starting point. Native poll-size stopping and
+`with_absolute_poll_size_tolerance` remain solver-owned. All modes support owned
+and serialized exact checkpoints; old MADS state types and payloads have no
+compatibility reader.
+
+SLSQP keeps the type `Slsqp<F = f64>` and now publishes
+`SelectedFirstOrderState<V, F>`. Replace `SlsqpState::new(x)` with the shared
+constructor or use `Executor::from_start`. `current()` returns a point,
+objective, matching objective gradient, and a report for the sum of constraint
+violations; `best()` returns the selected point, objective, and report. The
+state implements `GradientState` and `EvaluatedGradientState`, but not
+`ObjectiveIncumbentState`. Each accepted iterate is an explicit selection,
+including when its objective increases as feasibility improves. Failed trials
+preserve the previous accepted record and its selection metadata.
+
+Move `stationarity()`, `complementarity()`, and `failure()` calls from state to
+the solver retained by `run_with_solver()` or `stepper.solver()`. The solver's
+`constraint_violation()` mirrors `.value` in the current shared report. These
+diagnostics return `Option` values until available. Native accuracy and
+safeguard behavior are unchanged. Cost and gradient readers now count only their
+named categories; constraint and constraint-Jacobian calls remain separate in
+`state.counts()` and in category-specific execution budgets.
+
+Fresh runs rebuild the model and reevaluate their clipped seed. Owned and
+serialized exact checkpoints retain accepted progress, models, and diagnostic
+history, while numerical scratch is rebuilt as needed. The removed SLSQP state
+and its serialized layout have no compatibility reader. Vector indexing and
+`VectorLen`, along with matrix shape and entry access, remain the backend
+requirements. Every supported dense backend release supports `f32` and `f64`.
+
+External constrained first-order solvers can also use
+`SelectedFirstOrderState::replace(x, cost, gradient, violation)`, which rejects
+mismatched dimensions without changing progress, followed by `select_current()`
+when they select an incumbent. Supply a `ViolationReport` as `violation`. The
+executor supplies publication counts and iteration metadata. The state preserves
+a pending selection even if another current record replaces it before that
+boundary.
+
+Nelder-Mead now has the type `NelderMead<V, F = f64, Mode = Unbounded>` and uses
+`SimplexProgress<V, F>`. Replace `BasicSimplexState::new(x)` and
+`from_simplex(vertices)` with the corresponding `SimplexProgress` constructors,
+or keep using `Executor::from_start`. An explicit scalar annotation becomes
+`NelderMead::<V, f32>`; `.projected()` selects the third type parameter. The
+solver owns its three scratch vectors and adaptive coefficients. The state owns
+the authoritative simplex, a separate historical incumbent, and all raw counts.
+Current vertices can change without overwriting an older best point; NaN and
+positive infinity do not establish incumbents.
+
+`SimplexProgress::replace(vertices, costs)` validates the complete record before
+mutation and returns `SimplexShapeError` on a structural mismatch. It sorts
+matching pairs with NaNs last and preserves the order of ties. `take_vertices()`
+transfers the arrays for in-place work without copying them; restore them with
+`replace` before publication. Checked `current()` and `evaluated_vertices()`
+return `None` for an unevaluated seed or drained state. Initial simplex
+construction rejects malformed shapes. A simplex has at least two same-length
+vertices and at most `n + 1` vertices in `n` coordinates; embedded subspace
+simplexes remain supported. Degenerate geometry is allowed.
+
+Nelder-Mead's vector bounds now include `VectorLen` and `VectorIndex<F>`, in
+addition to `Clone`, `ScaleInPlace<F>`, and `ScaledAdd<F>`; projection also
+requires `ClampInPlace`. Convergence reads coordinates without cloning vectors.
+`IntoInitialSimplex<V, F = f64>` now takes a relative step of type `F` and has a
+blanket implementation for `Clone + VectorLen + VectorIndex<F>`. It supports all
+backend versions and both scalar types. Remove custom implementations that
+overlap that blanket, and pass custom geometry through `from_simplex`. Fresh
+runs reevaluate all vertices, reset progress, and rebuild the workspace and
+coefficients, including after dimension changes. Exact checkpoints retain solver
+and progress together; old state payloads containing scratch cannot be read as
+the new state. Simplex-collapse convergence retains its existing semantics and
+does not treat an unchanged best vertex as a collapsed simplex.
+
+GBNM now has the type `Gbnm<V, F = f64>` because it owns a projected
+`NelderMead<V, F, Projected>`. Replace explicit `Gbnm::<f32>` annotations with
+`Gbnm::<V, f32>`; ordinary `Gbnm::new(seed)` calls still infer the vector. Its
+outer state is now `PointState<V, F>`; replace `GbnmState::new(x)` with
+`PointState::new(x)`, or use `Executor::from_start`. The solver owns its active
+local simplex, workspace, search starts, retained local optima, and restart RNG.
+Move `vertices()`, `costs()`, `search_starts()`, `local_optima()`, and
+`restart_count()` calls from state to solver. Obtain the solver through
+`run_with_solver()` or `Stepper::solver()`.
+
+GBNM's current record is the best vertex of its active search and can worsen
+after a restart. Its shared state retains a matching historical incumbent. Fresh
+initialization resets the RNG and restart history and evaluates a regular
+simplex around the current seed, including after dimension changes. Local
+simplex collapse still triggers a restart, not convergence of the global
+algorithm; `PointState` does not implement `SimplexState`. Raw counts retain
+their categories, and NaN or positive infinity cannot establish an incumbent.
+Exact checkpoints retain all local geometry and history with the solver. Old
+`GbnmState` payloads are incompatible; a shared state alone is a warm-start
+seed, not an exact continuation snapshot.
+
+Replace `BasicPopulationState::with_size(n)` with `PopulationProgress::empty()`.
+Population size has one owner: `RandomSearch::new(lambda, seed)`, or the
+`with_pop_size(n)` setting on `De` and `Ssga`.
+`PopulationProgress::from_population` supplies explicit members, which these
+solvers now honor. Members must be finite, match the bounds' dimension, and have
+the configured population size. Fresh initialization projects them into the
+finite box and reevaluates every member. It resets iterations, incumbents,
+counts, and the solver's configured RNG. Reusing a final population therefore
+starts a fresh search from those members; supply an empty state to reproduce the
+original seeded run. Exact continuation skips this reset and requires the
+solver, population, and counts together.
+
+`PopulationProgress::replace(members, costs)` validates the complete record
+before mutation and preserves member order. It returns `PopulationShapeError`
+for empty or inconsistent shapes. `take_members()` transfers storage without
+copying; restore the arrays with `replace` before publication. The current
+record is the lowest-cost member, or another evaluated point supplied by
+`publish_representative`, such as a distribution mean or a swarm's global best.
+Incumbent selection considers both samples and this representative and retains
+matching historical records even when the whole population is replaced. Checked
+`current()`, `best()`, and `evaluated_members()` report missing records
+explicitly.
+
+The `PopulationState` trait no longer requires ascending costs: generic readers
+must inspect the costs instead of assuming member zero is best. Random search,
+DE, SSGA, and DE injection still sort their records by cost. Their optional
+cost-change and step tests compare generation representatives, including
+generations whose elite remains unchanged. The shared state stores no gradient,
+even when a DE-injection inner solver uses one. All six raw evaluation
+categories survive composition, and `cost_evals()` counts only cost calls.
+
+`RandomSearch` now requires `VectorLen`, `Index<usize, Output = F>`, and
+`IndexMut<usize, Output = F>` in addition to `SampleUniformBox` and `Clone` so
+it can validate and project explicit seeds. All four dense backends support
+these bounds for both scalar types. `De<F>` and `Ssga<F>` now require
+`F: Scalar` on the types themselves. Their constructor signatures and
+DE-injection generics remain unchanged. With `serde`, all four solvers serialize
+their live RNGs and settings; DE injection also requires a serializable inner
+solver without application hooks. Old population state payloads are incompatible
+with `PopulationProgress`.
+
+`GlobalBestPso` now has the type `GlobalBestPso<V, F = f64, R = ChaCha8Rng>`.
+Replace scalar annotations such as `GlobalBestPso::<f32>` with
+`GlobalBestPso::<V, f32>` and custom-RNG annotations with
+`GlobalBestPso<V, F, R>`. The vector bounds remain `Clone`, `VectorLen`,
+`SampleUniformBox`, `Index<usize, Output = F>`, and
+`IndexMut<usize, Output = F>`; the RNG still requires `Rng + Clone`. Its
+boundary and velocity policy enums now require `F: Scalar` on their public
+types.
+
+Replace `GlobalBestPsoState::new()` with `PopulationProgress::empty()` and
+`from_positions(xs)` with `PopulationProgress::from_population(xs)`. Replace
+`from_positions_and_velocities(xs, vs)` with that population constructor and
+`solver.with_initial_velocities(Some(vs))`. Velocities correspond to the input
+member order and must match its count and dimensions. `None` restores sampled
+half-displacement velocities. Fresh initialization repairs positions and
+velocities according to the selected boundary policy, evaluates every member,
+and resets personal bests, global best, RNG, counts, and working buffers.
+Reusing final progress starts from its current members; it does not resume the
+previous particle motions. Configured initial velocities are reapplied to the
+new input order on every fresh run.
+
+Move `velocities()`, `personal_best_positions()`, and `personal_best_costs()`
+from state to the solver obtained through `run_with_solver()` or
+`Stepper::solver()`. The solver's `global_best()` returns a checked point/cost
+pair. Progress still reports the historical global best as its current
+representative, while `candidates()` and `costs()` expose the current swarm. Its
+cost-change and step checks therefore retain their global-best semantics. NaN
+and positive infinity cannot establish a progress incumbent; an all-rejected
+initial swarm still stops with `SolverFailed`, and negative infinity still
+triggers the solver's native `SolverConverged` stop.
+
+Use `ExactCheckpoint<GlobalBestPso<V, F, R>, PopulationProgress<V, F>>` to
+continue particle motions and RNG draws exactly. `Executor::resume` with a
+state-only snapshot is no longer supported. With `serde`, solver-aware
+checkpoints include both the configured and live RNGs and all particle models.
+Old state payloads are incompatible with the new progress type; deserialize them
+with Basin 1.x and export positions and, if needed, velocities for an explicit
+fresh initialization.
+
+Replace `CmaEsState::<V, M, F>::new(mean, sigma).with_stds(stds)` with
+`PopulationProgress::<V, F>::from_point(mean)` and
+`CmaEs::<V, M, F>::new(seed, sigma).with_stds(stds)`. Apply the same change to
+`BoundedCmaEs`; both injection wrappers accept the configured base solver and
+shared population progress. Solver generic order remains `V, M, F`, with
+`F: Scalar = f64`; progress no longer carries `M`. Specify the covariance matrix
+type on the solver when inference previously obtained it from state. The dense
+vector and matrix capability bounds remain unchanged, with all four backends
+supporting `f32` and `f64`. Base CMA solvers also support `Executor::from_start`
+because their initial scale is now configured explicitly.
+
+CMA solvers own the distribution mean, covariance, paths, eigenpairs, step size,
+derived constants, RNG, and boundary-penalty history. Move `mean()` and
+`sigma()` from state to the solver returned by `run_with_solver()` or
+`Stepper::solver()`; they return `None` before initialization. Progress holds
+the evaluated members and an evaluated mean as its current representative. A
+fresh run reconstructs all distribution machinery around the current progress
+point, reapplies the configured scale and standard deviations, restarts the
+original RNG seed, and reevaluates the first generation and mean. Empty progress
+cannot seed CMA. Use `from_point` to supply a mean; explicit unevaluated
+populations use their first member as the seed. Resetting shared progress
+preserves its representative as an unevaluated seed and clears all evaluated
+records and counts.
+
+Bounded CMA now publishes clipped points with their **raw objective costs**.
+Previously, its state paired unrepaired genotypes with penalized fitness. The
+solver retains genotypes and penalized ranking for the unchanged adaptation
+rules; inspect `genotypes()` and `penalized_costs()` there. Published members
+retain the model's rank order, so their raw costs need not be sorted. The
+current record is the clipped mean, and the historical incumbent compares raw
+objective costs at published feasible points. Injection uses the same
+distinction. `cost_evals()` reports only cost calls; inner derivatives remain in
+their own categories through `counts()`. Distribution-size convergence still
+checks `σ * max_axis_std` on the solver, with the same strict threshold and stop
+reason.
+
+Exact CMA continuation requires the complete solver, `PopulationProgress`, and
+counts. All four CMA variants support owned checkpoints and, with `serde`,
+serialize their models and RNGs when the vector, matrix, scalar, and chosen
+inner solver do. Application hooks remain unserializable. Legacy CMA state files
+cannot resume these solvers. Load them in Basin 1.x and export a point plus any
+initialization settings needed for a fresh 2.0 run.
+
+Replace `MaLsChState::new()`, `MaLsChSwState::new()`, and
+`MaLsChGenericState::new()` with `PopulationProgress::empty()`. The solver now
+owns every persistent `(inner solver, inner progress)` chain and its eligibility
+history. Move `ls_application_count(i)` to the retained solver; `chain(i)` also
+exposes a saved pair for inspection. The generic solver is
+`MaLsCh<V, LS, F = f64>` with `LS: ResumableInner<V, F>` on the type itself. The
+concrete aliases are `MaLsChCma<V, M, F = f64>` and `MaLsChSw<V, F = f64>`.
+Scalar settings use `F`; both aliases support all four dense backends with `f32`
+and `f64`. Custom operators keep the same resumable chain contract and can
+impose narrower capabilities.
+
+`PopulationProgress::from_population(members)` now supplies explicit MA-LS
+seeds. Their count must match `with_pop_size`; fresh initialization projects
+them into the finite sampling box, reevaluates every member, drops all chains,
+and resets the RNG and progress bookkeeping. Reusing a populated result starts
+from its members rather than sampling replacements. Use `empty()` to resample.
+The unbounded local chain may still move outside the sampling box. MA-LS reports
+those actual evaluated points and retains the historical objective incumbent.
+Category readers no longer fold inner derivatives into cost calls.
+`with_ls_intensity` and `with_nfrec` continue to budget raw cost evaluations;
+outer objective and step checks observe the published best member.
+
+MA-LS now supports exact owned checkpoints and `serde` checkpoints containing
+the outer RNG, retained chains, eligibility history, population, and all counts.
+Serialization requires the inner solver and its associated state to serialize.
+Stored chains resume without initialization, while each local segment restarts
+its own budgets and convergence controls. Legacy state payloads cannot preserve
+that ownership layout: export their population using Basin 1.x and start a fresh
+2.0 run, or finish exact continuation in the matching 1.x application.
+
+BFGS now has the type `Bfgs<V, F, M, L, I>`, with defaults for the scalar,
+matrix, line search, and initial inverse-Hessian policy. Existing type
+annotations with four parameters keep using the default identity policy.
+`Bfgs::new()` and `Bfgs::with_line_search(search)` infer the matrix from
+`V: DenseBackend<F>`. Every enabled backend version has its own association. To
+override the matrix, use
+`Bfgs::<V, F, M, L>::with_matrix_and_line_search(search)`. Custom vector
+backends implement `DenseBackend`, and the selected matrix must implement
+`MatVec`, `MatrixIdentity`, `ScaleInPlace`, and `GeneralRankOneUpdate`.
+`Executor::from_start(problem, Bfgs::new(), x)` still infers both solver and
+state. The inverse Hessian belongs to the solver; retain it with
+`run_with_solver()` and read `result.solver.inverse_hessian()`.
+
+Use `with_initial_inverse_hessian(matrix)` for a fixed seed or
+`with_initial_inverse_hessian_initializer(|x: &V, gradient: &V| ...)` to
+construct one from the freshly evaluated starting point and gradient. These
+settings belong to the solver, not `FirstOrderState`. Fixed seeds require
+`M: Clone + MatrixIndex<F>`; closures require `M: MatrixIndex<F>` without
+cloning. Both validate dimensions, finite entries, exact symmetry, and positive
+definiteness at initialization. Validation uses pure-Rust Cholesky work and
+panics on invalid seeds. The default configuration adds none of these
+capabilities. Named `solver::bfgs::InitialInverseHessian<V, M, F>`
+implementations can use the original matrix capabilities and enforce the seed
+contract themselves.
+
+Custom seeds skip the first curvature rescaling by default, preserving their
+scaling through the usual BFGS update. The default identity seed still rescales
+to `(sᵀy / yᵀy) I` before its first accepted curvature update. A curvature
+failure leaves either model unchanged. Each fresh solve reevaluates its point,
+resets line-search history, and reconstructs the configured seed. A fixed seed
+must match the new dimension; an initializer can adapt to it. Exact continuation
+retains the learned model, rescaling flag, and initializer without calling it
+again. Replacing the seed setting on a retained solver affects its next fresh
+solve and leaves its current model intact.
+
+Owned checkpoints support closures without `Clone` or serialization. With
+`serde`, fixed seeds and serializable named initializers retain their settings
+and models. The default identity policy is a unit value and preserves BFGS's
+existing Postcard payload layout and checkpoint type identifier. Other
+initializer configurations have distinct solver types; self-describing formats
+include the initializer field. Other solvers' checkpoint layouts are unchanged.
+
+L-BFGS now has the type `Lbfgs<V, F, Mode, L>`, with `Bounded` and
+`MoreThuente<F>` defaults. `Lbfgsb<V, F, L>` aliases the bounded mode. Replace
+`LbfgsState::new(x, m)` with `FirstOrderState::new(x)` and configure
+`Lbfgs::new().with_m_capacity(m)`. This setting now controls every fresh solve,
+including standalone execution. Replace `Lbfgs::<Unbounded>::new()` with
+`Lbfgs::new().unbounded()` and the unbounded `with_line_search` constructor with
+`Lbfgs::with_line_search(search).unbounded()`. Both modes require `VectorLen`,
+`Clone`, `Dot`, `ScaledAdd`, and the public
+`solver::lbfgs::{AsFloatSlice, AsFloatSliceMut}` traits. All four dense backends
+support both scalar types; ndarray storage must be contiguous. Bounded mode
+still requires a problem-side `Constraints<BoxBounds<V>>` declaration and a line
+search implementing `next_with_bounds`. History and compact work buffers belong
+to the solver; retain it with `run_with_solver()` and inspect `history_len()`
+and `history_capacity()`. Mode transitions discard the initialized model and
+require a fresh run. Changing capacity takes effect on fresh initialization; a
+checkpoint retains the capacity with which its model was built. The line-search
+settings are unchanged. Bounded `f64` convergence defaults change as described
+below.
+
+<h3 id="l-bfgs-b-stopping-defaults">L-BFGS-B stopping defaults</h3>
+
+For bounded `f64` solves, the absolute projected-gradient tolerance changes from
+`1e-10` to `1e-9`, and a signed relative-cost reduction test is enabled with
+tolerance `10 * f64::EPSILON` (about `2.22e-15`). The cost rule follows
+L-BFGS-B's original formula:
+
+```text
+f_previous - f_current <= tolerance * max(|f_previous|, |f_current|, 1)
+```
+
+The solver checks this rule after an accepted step, with projected-gradient
+convergence taking precedence. Its unit floor and signed numerator are
+intentional: an unchanged or increased finite cost satisfies a zero threshold.
+The rule can stop before stationarity, and neither test guarantees parameter
+accuracy on ill-conditioned problems. Choose tolerances for the objective's
+scale and the accuracy the application needs.
+
+Configure the two native tests directly. To retain the previous thresholds:
+
+```rust
+let solver = basin::Lbfgsb::<Vec<f64>>::new()
+    .with_absolute_projected_gradient_tolerance(1e-10)
+    .with_relative_cost_reduction_tolerance(None);
+```
+
+`with_relative_cost_reduction_tolerance` is distinct from
+`with_relative_cost_change_tolerance`, which retains its existing absolute
+change divided by the previous absolute cost. Both can be configured
+independently. `None` disables a test, and zero uses a zero threshold. Fresh
+runs reset cost history; exact continuation preserves it. The `f32` defaults
+remain `1e-10` for projected gradient with cost reduction disabled. Unbounded
+L-BFGS still has no default optimality tests.
+
+Both L-BFGS modes now reject nonfinite selected evaluations instead of
+publishing them as progress. Bounded mode uses its existing restart and failure
+path, retaining the last finite iterate. Nonfinite initial evaluations produce
+numerical failure, including at fixed bounds, rather than false
+projected-gradient convergence.
+
+Gradient descent retains the type `GradientDescent<L, V, F>`, and trust regions
+retain `TrustRegion<Sub, F, Mode>`. Replace their `BasicState::new(x)` arguments
+with `FirstOrderState::new(x)`. All three migrated drivers now require
+`V: VectorLen` to validate point/gradient dimensions. Projected gradient descent
+has the type `ProjectedGradientDescent<L, F = f64>`; its constructors infer the
+scalar from the step or problem, so `Executor::from_start` works with both `f32`
+and `f64`. Projection, momentum updates, trust-region acceptance, and rejection
+stopping semantics are unchanged. Fresh gradient-descent runs clear momentum,
+fresh trust-region runs restore the configured radius, and fresh nonlinear-CG
+runs reset conjugacy and line-search history. Exact checkpoints retain these
+components. `TrustRegion::radius()` exposes the current radius when the solver
+is retained.
+
+Trust-region `gradient_evals()` now counts gradient calls alone. Budget
+second-order work explicitly with separate `Gradient`, `Hessian`, and
+`HessianProduct` limits, or use `max_evaluations(EvaluationKind::TotalWork, n)`
+for the whole solve. Total work also includes objective calls, so adjust the
+limit when replacing a budget that formerly folded derivatives together.
+
+SGD retains `Sgd<V, F = f64>` and its batch sampling, momentum, and objective
+refresh schedule, but uses `PointState<V, F>` without a gradient capability. A
+periodic refresh now publishes the evaluated point and cost together. For
+example, with seven samples and batches of two, iteration four reports the point
+evaluated at iteration three; it no longer pairs iteration four's working point
+with iteration three's cost. Use `with_cost_eval_every(1)` to report every
+iterate, or retain the solver with `run_with_solver()` and read
+`working_param()` to inspect the latest mini-batch iterate without evaluating
+it. Ordinary results retain the last evaluated point. Cost- and step-change
+checks run only at refreshes. Replace SGD's `max_gradient_evals(n)` with
+`max_evaluations(EvaluationKind::Gradient, n)`, since `PointState` does not
+implement `GradientState`. Iteration and raw gradient budgets still count every
+mini-batch step; objective stall patience counts those steps too, so choose it
+with the refresh period in mind. Exact checkpoints retain the working iterate,
+refresh phase, momentum, batch order, and RNG. Fresh state-only runs restart
+from the reported evaluated point. Custom vectors keep the existing
+`Clone + ScaledAdd<F> + ScaleInPlace<F>` bounds.
+
+Solis-Wets now has the type `SolisWets<V, F = f64>`. Replace
+`SolisWetsState::new(x, rho)` with `PointState::new(x)` and configure
+`SolisWets::new(seed).with_initial_step_size(rho)`. Replace explicit
+`SolisWets::<F>` annotations with `SolisWets::<V, F>` or let the parameter type
+infer `V`. The solver owns bias, adaptive step size, success/failure streaks,
+and the RNG; retain it with `run_with_solver()` and use `bias()`, `step_size()`,
+`success_count()`, and `failure_count()`. The state no longer implements
+`RhoState`. Native step-size stopping reads the solver's current value, and
+cost- and step-change checks now ignore rejected proposals. Custom vectors need
+`Clone`, `VectorLen`, `SampleStandardNormal`, `ScaledAdd<F>`, and
+`ScaleInPlace<F>`. Fresh initialization always reevaluates the point and resets
+the model and RNG, even when the state already contains a cost. Resume the exact
+trajectory with a solver-aware checkpoint.
+
+Simulated annealing retains `SimulatedAnnealing<N, F = f64, R = ChaCha8Rng>` and
+now uses `ProposalState<V, F>`. `TemperatureSchedule<F = f64>` and the solver
+explicitly bound their scalar by `Scalar`. `Executor::from_start` remains the
+usual entry point; explicit callers can use `ProposalState::new(x)`. The solver
+owns the neighbor, RNG, cooling age, and reannealing progress. The state retains
+the accepted point and its objective, objective-ordered best record, all raw
+counts, and `AcceptanceState` counters for `no_acceptance`. Rejected proposals
+cannot trigger cost- or step-change convergence. The existing non-finite
+acceptance and native stopping rules remain in effect; NaN and positive infinity
+do not establish incumbents.
+
+Fresh annealing runs reevaluate the point and copy the configured neighbor and
+RNG into fresh working components. The existing `Clone` requirements on these
+components move from state seeding to the solver implementation; cloning must
+produce independent evolution state. Arbitrary cloneable parameters, including
+discrete structures, remain supported without vector math. `seed_chain(seed)`
+creates an independent chain from the configured components, without consuming
+live randomness. Read `temperature()`, `reannealings()`, and `neighbor()` from
+the solver borrowed by `observe_solver`, the retained solver after
+`run_with_solver()`, or through `Stepper::solver()` between steps. See
+[observing solver diagnostics](#observing-solver-diagnostics) for custom
+logging.
+
+State-only annealing snapshots no longer implement `ExactResumeState` or work
+with `Executor::resume`. Pass them to `Executor::new` for a fresh chain, or
+retain solver and state together with `run_with_solver().into_checkpoint()` and
+continue with `Executor::resume_from_checkpoint`. Exact serialization includes
+configured and live neighbor/RNG components and cooling history; old 1.x solver
+and state payloads are incompatible.
+
+External proposal-based solvers can reuse `ProposalState`. Initialize its record
+with `replace(x, cost)`, publish accepted moves with `accept_proposal(x, cost)`,
+and record rejections with `reject_proposal()`. The executor stamps acceptances
+at the completed publication boundary, including mid-step stops; repeated
+publication does not refresh their age.
+
+Basin-hopping retains `BasinHopping<I, V, F, S, A>` and now uses
+`PointState<V, F>`. Replace `BasicState::new(x)` with `PointState::new(x)`, or
+use `Executor::from_start`. Fresh initialization restarts the RNG, hop counters,
+perturbation strategy, and acceptance rule, then runs the initial local solve.
+Stateful custom strategies implement the new default-bodied `StepTaker::reset`
+and `AcceptanceTest::reset` hooks; they need not implement `Clone`. Exact
+checkpoints preserve the adapted walk. With `run_with_solver()`, inspect
+`solver.step_taker()` and the default strategy's `stepsize()`. Rejected hops no
+longer trigger cost- or step-change convergence. The outer state has no gradient
+capability; use raw category budgets for derivative work and
+`EvaluationKind::TotalWork` for all inner work. `RandomDisplacement`
+serialization now includes its configured initial scale as well as its current
+adapted scale, so old strategy payloads must also be reconstructed.
+
+Scaled and persistent composition follows the same ownership change.
+`MemeticInner::seed_scaled` now takes `&mut self`, allowing the inner solver to
+configure its initial model scale before a fresh run. Update custom
+implementations and use `InnerExecutor::solver_mut()` at call sites. Solis-Wets
+sets its configured initial step size to the supplied scale. Persistent
+`ResumableInner` chains initialize once, then skip `Solver::init` on subsequent
+segments. Implement `seeded_chain_is_initialized()` only when `seed_chain`
+already constructs a complete model and evaluated progress, as Solis-Wets does
+from the supplied `fx`. Its default remains `false`. Local-search segments
+explicitly restart budgets, convergence history, and progress metadata while
+retaining the model; this differs from exact checkpoint continuation, which
+retains convergence history and cumulative counts. Shared states provide
+`reset_progress()` for segment bookkeeping while preserving the evaluated
+record. `MaLsChSwState<V>` now stores `(SolisWets<V>, PointState<V>)` chain
+pairs.
+
+The augmented-Lagrangian outer method now publishes `SelectedState<V, F>`. Its
+public type remains `AugmentedLagrangianMethod<So, V, F = f64>`, and its
+constructors now support both scalar types. Replace `BasicState::new(x)` with
+`SelectedState::new(x)` or use `Executor::from_start`. `current()` and `best()`
+return checked `(point, objective, &ViolationReport)` records, whose `.value` is
+the constraint norm. Selection prefers feasible points, then lower objectives
+among them; before feasibility, it prefers lower constraint norms, breaking
+exact ties by objective. The configured feasibility tolerance defines
+eligibility, with exact zero when disabled. The selected objective can increase
+as feasibility improves. Cost- and step-change tests observe only feasible outer
+iterates.
+
+`SelectedState` provides `replace(x, cost, report)` and the explicit
+`select_current()` operation for external solvers. Call the latter only when
+selection changes. The executor records the final charged counts and completed
+iteration number at publication, including mid-step stops; repeated observation
+does not refresh the incumbent's age. It has no gradient capability or
+`ObjectiveIncumbentState` guarantee. Use a `stop_when` hook that checks both
+violation and objective for constrained targets. `target_objective` and
+`no_objective_improvement` deliberately reject this state. The Basin 1.x
+`target_cost` and `no_improvement` controls did not check feasibility and must
+not be used for these selections. Budget gradients with
+`max_evaluations(EvaluationKind::Gradient, n)`. The outer no longer computes an
+unused original-objective gradient; surrogate gradients remain charged inner
+work. Fresh runs reset multipliers and penalty history, and exact checkpoints
+preserve them. Adapter work now merges into the outer counts before propagating
+a hard callback error. The vector and matrix capabilities are unchanged; custom
+inner solvers can require additional ones.
+
+`BarrierMethod<So, F = f64>` now uses `PointState<V, F>` and supports both
+scalar types through its constructors. Replace `BasicState::new(x)` with
+`PointState::new(x)` or use `Executor::from_start`. Its current record contains
+the original objective inside the strict domain `A x < b`, and `+∞` outside it.
+Phase I computes this rejection value without calling the original objective or
+gradient. Only strictly feasible points with eligible objectives can become
+incumbents, so objective-based controls remain compatible. Cost- and step-change
+convergence runs only at accepted Phase II boundaries. The outer state no longer
+advertises a gradient, and the outer loop no longer computes one. Inner gradient
+calls remain charged in their own category; use
+`max_evaluations(EvaluationKind::Gradient, n)` to budget them. Adapter counts
+survive hard callback errors in either phase. Fresh runs reset the phase and
+barrier schedule and reevaluate the seed; exact checkpoints retain both, along
+with the inner solver. The vector and matrix bounds are unchanged, and custom
+inner solvers can impose additional capabilities.
+
+`BasicState` has been removed now that all of its shipped solvers use shared
+progress. External solvers should choose `PointState`, `FirstOrderState`, or
+`SelectedState` according to the records and selection policy they publish, and
+populate them through their public coherent-update methods.
+
+Fresh runs clear progress counters and incumbents, reevaluate the seed, and
+reset the solver's evolving machinery. Reusing BFGS after a dimension change
+creates an identity matrix of the new size. Stateful custom line searches must
+implement `LineSearch::reset` to restore their configured starting history.
+Exact solver-and-state checkpoints skip initialization and retain model,
+line-search, and convergence history. Ordinary results retain progress; progress
+alone cannot resume the exact trajectory.
+
+A state-only snapshot at iteration 12 starts at iteration zero when passed to
+`Executor::new`; `max_iter(8)` then runs eight more steps. Exact checkpoint
+resumption retains iteration 12, so `max_iter(20)` allows eight more steps.
+
+Shared-state `cost_evals()` now means cost calls only, and `gradient_evals()`
+means gradient calls only. Residual, Jacobian, Hessian, and Hessian-product work
+remains available separately in `counts()`. `best_counts()` records all
+categories at the publication boundary that selected the incumbent. Use
+`max_evaluations(EvaluationKind::TotalWork, limit)` to budget an explicit sum
+instead of relying on a state-specific fold. Category-specific budgets and
+readers count the same work. Least-squares runs typically make zero cost calls;
+replace `max_cost_evals(n)` with `max_evaluations(EvaluationKind::Residual, n)`
+and read `state.counts().residual_evals` and `state.counts().jacobian_evals`.
+Their objective remains one-half the squared residual norm, or the configured
+robust objective. Native first-order checks still use the solver's `Jᵀr`;
+`PointState` does not advertise an unevaluated gradient.
+
+Scalar solvers still expose their latest evaluated probe, which can be worse
+than their retained incumbent. Cost-change convergence tests read that current
+probe. Shared-state incumbents retain strict objective improvements; ties
+preserve their original metadata, and NaN or positive infinity cannot establish
+an incumbent. Negative infinity does not by itself establish unboundedness. Use
+checked `best()` access when every published cost can be rejected.
+
+With `serde`, the shared progress types, random search, DE, SSGA, DE injection,
+global-best PSO, all CMA variants, MA-LS chains, Nelder-Mead, GBNM, NEWUOA,
+BOBYQA, LINCOA, COBYLA, MADS, SLSQP, BFGS and L-BFGS models (including bounded
+work buffers), gradient descent (including momentum), projected gradient
+descent, SGD (including its RNG and unpublished working iterate), nonlinear CG,
+Solis-Wets, simulated annealing, basin-hopping, the barrier and
+augmented-Lagrangian methods, trust regions and their built-in subproblem
+strategies, built-in line searches, and scalar solvers support serialization.
+Least-squares solver serialization remains subject to each solver's and
+backend's existing support. Their layouts replace the old state layouts; a 1.x
+state payload is not a 2.0 shared-state payload, even when both use postcard.
+Export parameters with the matching 1.x application and create a fresh shared
+state. Exact checkpoints require matching concrete types and Basin versions, as
+described under [checkpoint files](#checkpoint-files).
+
+<h2 id="constraint-violation-reports">Constraint-violation reports</h2>
+
+`SelectedState<V, F>` and `SelectedFirstOrderState<V, F>` now require a
+`ViolationReport<F>` wherever they previously accepted a scalar violation:
+
+```rust
+use basin::{SelectedFirstOrderState, SelectedState, ViolationMeasure, ViolationReport};
+
+let mut state = SelectedState::new(vec![2.0]);
+state.replace(vec![2.0], 4.0, ViolationReport::new(1.0, ViolationMeasure::L1));
+let (_, _, violation) = state.current().unwrap();
+assert_eq!(violation.value, 1.0);
+
+let mut first = SelectedFirstOrderState::new(vec![2.0]);
+first.replace(vec![2.0], 4.0, vec![4.0],
+    ViolationReport::new(1.0, ViolationMeasure::L1)).unwrap();
+let (_, _, _, violation) = first.current().unwrap();
+assert_eq!(violation.value, 1.0);
+```
+
+The last component of `current()` and `best()` is now a borrowed report. Use
+`.value` for the numeric aggregate, and inspect `measure()`, `scaling()`, and
+`transformation()` before interpreting it. Metadata now lives in shared
+descriptors rather than public fields, keeping native reports compact without
+per-publication allocations or atomic reference-count updates. Replace metadata
+field assignments with `with_measure`, `with_scaling`, or `with_transformation`.
+The scalar `value` field remains public. `ViolationReport::new(value, measure)`
+describes an unscaled value with identity transformation. `with_scaling` and
+`with_transformation` describe computations already performed; they do not
+change the value. Each metadata enum also supports a `Custom(String)` formula or
+description for external solvers. Reports and metadata enums are non-exhaustive,
+with complete public constructors for the report.
+
+Native reports borrow static descriptors; custom descriptions use shared
+ownership with copy-on-write builders. Cloning a custom report shares its
+descriptions, and changing a clone preserves the original metadata. The
+serialized report still contains `value`, `measure`, `scaling`, and
+`transformation`, so compacting storage preserves the typed-report format.
+Selected states keep their current record, incumbent, and counters in one
+allocation made at construction, which reset reuses. Passing a state between
+solver and executor moves that allocation's owner instead of copying those
+records. Cloning a state still creates independent progress. The serialized
+selected-state format is unchanged by this storage choice. Replacing current
+progress again before a pending selection is published allocates a separate
+snapshot of that selection.
+
+All four existing reporters use `ViolationScaling::Unscaled`, preserving the
+units and any scaling supplied by the problem:
+
+  | Solver                      | Measure     | Transformation        |
+  | --------------------------- | ----------- | --------------------- |
+  | Constrained MADS            | `SquaredL2` | `Identity`            |
+  | SLSQP                       | `L1`        | `NonFiniteToInfinity` |
+  | COBYLA                      | `LInf`      | `PrimaModeration`     |
+  | `AugmentedLagrangianMethod` | `L2`        | `Identity`            |
+
+Equality violations use absolute residuals; inequality violations use positive
+parts. COBYLA includes bounds, linear constraints, and nonlinear constraints,
+folding equalities into opposite-signed residuals. Before aggregation, PRIMA
+moderation clips residuals to `[-2^100, 2^100]` and maps NaN to `2^100`. SLSQP's
+aggregate is positive infinity if any constraint residual is non-finite; bounds
+contribute zero at its clipped accepted points. Constrained MADS retains its
+native positive-part comparisons, so NaN residuals contribute zero. The
+augmented-Lagrangian report is the Euclidean linear-equality residual norm.
+Reporting preserves each solver's arithmetic, non-finite behavior, and
+convergence; these values do not provide a universal feasibility tolerance or an
+optimality certificate.
+
+Both selected states implement the unsealed `ConstraintViolationState` trait,
+which extends `EvaluatedState` and `IncumbentState`:
+
+```rust
+use basin::ConstraintViolationState;
+
+fn current_violation<S: ConstraintViolationState>(
+    state: &S,
+) -> Option<S::Float> {
+    state.current_violation().map(|report| report.value)
+}
+```
+
+`current_violation()` and `incumbent_violation()` borrow reports matching the
+corresponding checked records. Unevaluated seeds and missing incumbents return
+`None`; evaluated zero, NaN, and infinity remain available values. Reading a
+report performs no evaluations. Incumbent and pending-selection reports retain
+their own metadata when current progress changes. `reset()` clears both;
+`reset_best()` clears only incumbent and pending-selection information. Fresh
+initialization reevaluates the seed, and exact continuation preserves reports
+with the solver and state. Solver-specific scalar diagnostics, including
+`Slsqp::constraint_violation()`, retain their signatures.
+
+Serialized selected states and exact checkpoints written before typed reports
+have incompatible layouts. There is no compatibility reader that guesses a
+measure from an old scalar: recover the parameter with the producing version,
+then construct a new state for a fresh solve. New serialized reports preserve
+all metadata, including custom descriptions. Source extensibility does not
+promise cross-version serialized-state compatibility.
+
+<h2 id="stopping-conditions">Stopping conditions</h2>
+
+Replace `target_cost` with `target_objective` and `no_improvement` with
+`no_objective_improvement`. Both require `ObjectiveIncumbentState` rather than
+`State` alone. `SelectedState` and `SelectedFirstOrderState` deliberately do not
+implement that capability: their solvers can prefer feasibility over a lower
+objective. Use an application stop that checks both the selected constraint
+violation and objective when that is the intended stopping rule. Custom states
+must implement the checked incumbent and objective-selection capabilities to use
+these helpers.
+
+Targets wait for an eligible incumbent. Stall checks count completed iterations,
+not repeated observations; they require positive patience and wait until an
+incumbent exists. Zero-delta checks retain stall age through the incumbent's
+publication iteration on exact continuation. Positive-delta checks start a new
+anchor when controls are reattached. Negative infinity can be an incumbent and
+does not by itself establish unboundedness. Execution controls remain separate
+from solver convergence settings.
+
+Basin 2.0 removes `TerminationCriterion`, every shipped criterion type, and all
+criterion re-exports. `Executor::terminate_on`, `InnerExecutor::terminate_on`,
+and composed solvers' `inner_terminate_on` methods are also removed. Configure
+numerical convergence on the solver and execution limits on `Executor`,
+`InnerExecutor`, or `RunControl`.
+
+  | Removed criterion                                        | Replacement                                                                             |
+  | -------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+  | `MaxIter`, `MaxCostEvals`, `MaxGradientEvals`, `MaxTime` | `max_iter`, `max_cost_evals`, `max_gradient_evals`, `max_time` on the executor          |
+  | `TargetCost`, `NoImprovement`, `NoAcceptance`            | `target_objective`, `no_objective_improvement`, `no_acceptance` on the executor         |
+  | `GradientTolerance`, `RelativeGradientTolerance`         | `with_absolute_gradient_tolerance`, `with_relative_gradient_tolerance` on the solver    |
+  | `ProjectedGradientTolerance`                             | `with_absolute_projected_gradient_tolerance`; bounds come from the problem              |
+  | `ParamTolerance`, `RelativeParamTolerance`               | `with_absolute_step_tolerance`, `with_relative_step_tolerance`                          |
+  | `CostTolerance`, `RelativeCostTolerance`                 | `with_absolute_cost_change_tolerance`, `with_relative_cost_change_tolerance`            |
+  | `SimplexTolerance`                                       | `with_absolute_simplex_size_tolerance` and `with_absolute_simplex_cost_tolerance`       |
+  | `CmaEsTolerance`                                         | `with_absolute_distribution_size_tolerance`                                             |
+  | `RhoTolerance`                                           | `with_absolute_radius_tolerance`, or `with_absolute_step_size_tolerance` for Solis-Wets |
+  | `MeshTolerance`                                          | `with_absolute_poll_size_tolerance`                                                     |
+  | Custom criterion                                         | `stop_when` or `stop_when_factory`                                                      |
+
+Setters are available only on solvers that support the corresponding test.
+Settings that need additional state or vector capabilities return a
+`ConfiguredSolver<...>`; prefer inferred types when composing these setters. The
+compiler checks each test's required capabilities. Optional tolerances accept
+`None` to disable a test, and zero requests an exact-zero threshold. Native
+solver tests retain their documented norms and scaling, which can differ from
+the removed generic criteria. Distinct configured tests combine with OR; simplex
+size and cost spread combine with AND. Repeating a setter replaces its setting
+instead of appending a criterion.
+
+```rust
+let solver = GradientDescent::new(0.1)
+    .with_absolute_gradient_tolerance(1e-8);
+let result = Executor::from_start(problem, solver, x0)
+    .max_iter(1_000)
+    .max_cost_evals(10_000)
+    .stop_when(|state| {
+        (state.iter() >= 500).then(|| ApplicationStop::new("user_requested"))
+    })
+    .run()?;
+```
+
+Execution controls run before solver convergence, including at the initialized
+iteration-zero boundary. Their fixed order is iteration budget, cost budget,
+gradient budget, raw evaluation budgets, time budget, target, improvement stall,
+acceptance stall, and custom hooks in insertion order. This replaces criterion
+registration order. Budgets are checked at boundaries; initialization and an
+in-progress iteration can exceed an evaluation limit. A partial stopping step
+updates evaluation counts without incrementing the completed-step count.
+`TerminationReport`, `StepOutcome`, and optimization results describe why the
+run stopped. A budget, target, application stop, or numerical safeguard does not
+establish convergence. Native and shared convergence details are retained in the
+report from ordinary `run()`.
+
+Replace a custom criterion's `check` implementation with a closure returning
+`Option<ApplicationStop>`. For reusable inner solves, move its constructor and
+reset logic into a factory:
+
+```rust
+let inner = InnerExecutor::new(solver).stop_when_factory(|| {
+    let mut checks = 0;
+    move |_| {
+        checks += 1;
+        (checks == 3).then(|| ApplicationStop::new("user_requested"))
+    }
+});
+```
+
+`stop_when` retains captured history across borrowed runs; `stop_when_factory`
+creates fresh history for each run. Composed solvers expose
+`inner_stop_when_factory`. Fresh runs reset solver convergence history and
+built-in clocks and stall anchors. Exact solver-and-state continuation preserves
+solver convergence history; attach execution controls again. State-derived
+acceptance and zero-delta improvement checks retain history through the state.
+
+Replace `run_loop(problem, state, solver, criteria, max_iter)` with
+`run_loop_with_control(problem, state, solver, &mut control)`, constructing the
+controls with `RunControl::new().max_iter(max_iter)` and the appropriate
+builders. The borrowed driver retains per-run evaluation counts and the same
+initialization, mid-step-stop, and error-routing contracts.
+
+Implementors of `ResumableInner` must replace `segment_criteria` with
+`configure_segment(&mut self, state, control)`. Set numerical tolerances on
+`self` and configure application stops on `control`. The default does nothing.
+CMA-ES still derives its default distribution tolerance from each segment's
+starting sigma unless the caller explicitly configured it.
+
+Criterion objects have no serialized replacement. Inner executors still reject
+serialization of closure hooks, targets, stalls, and capability controls instead
+of silently discarding them; ordinary iteration, evaluation, and time budgets
+remain serializable. Do not assume solver payload compatibility across major
+versions. Follow the [checkpoint migration instructions](#checkpoint-files) when
+moving a saved run from 1.x to 2.0.
+
+<h2 id="nelder-mead-convergence-defaults">Nelder-Mead convergence defaults</h2>
+
+All Nelder-Mead constructors now enable paired size and cost-spread tests,
+including the adaptive and projected variants. Both absolute tolerances default
+to `1e-8`; both relative tolerances default to `sqrt(f64::EPSILON)` for `f64`
+(about `1.5e-8`) and `32 * f32::EPSILON` for `f32` (about `3.8e-6`). These
+defaults replace the Basin 1.x behavior of running until an executor limit or an
+explicitly configured stop.
+
+Corpus checks found that `sqrt(f32::EPSILON)` could stop prematurely on
+high-dimensional Rosenbrock problems. The tighter `f32` default improves those
+runs while avoiding most of the evaluation-budget stops seen with tolerances
+near machine precision. These checks covered multiple starts, dimensions,
+coefficient choices, and projected and unbounded runs. They do not establish
+stationarity or guarantee a global minimum.
+
+For the current best simplex vertex `b`, the size test compares the maximum
+`||x_i - b||_infinity` with `max(x_abs, x_rel * ||b||_infinity)`. The cost test
+compares the maximum `|f_i - f_b|` with
+`max(f_abs, f_rel * max(|f_b|, initial_cost_spread))`. Both enabled dimensions
+must pass. Absolute and relative terms within a dimension combine with OR. The
+initial cost spread is captured after projection and evaluation. If it is
+nonfinite, the first subsequent finite spread supplies the reference. Fresh
+initialization resets it; exact continuation and serialized checkpoints retain
+it. Changing a tolerance preserves the reference.
+
+The existing `with_absolute_simplex_size_tolerance` and
+`with_absolute_simplex_cost_tolerance` setters now accept the solver's scalar
+`F` and return `NelderMead` directly. The new
+`with_relative_simplex_size_tolerance` and
+`with_relative_simplex_cost_tolerance` setters follow the same contract.
+Wrappers created by other tolerance setters forward all four methods to that
+same owner. Remove explicit `ConfiguredSolver<..., SimplexChecks<...>>` type
+annotations used solely for simplex settings; prefer inferred types.
+
+Each setter replaces only its own setting. `None` disables that setting, and
+zero requests an exact-zero threshold. To retain absolute-only behavior, disable
+both relative settings before choosing absolute tolerances:
+
+```rust
+let solver = NelderMead::new()
+    .with_relative_simplex_size_tolerance(None)
+    .with_relative_simplex_cost_tolerance(None)
+    .with_absolute_simplex_size_tolerance(1e-10)
+    .with_absolute_simplex_cost_tolerance(1e-10);
+```
+
+To disable the paired simplex checks, set all four tolerances to `None`. Keep an
+iteration or evaluation budget on the executor. Other configured tests still
+combine with the simplex group using OR, and executor limits retain precedence.
+Results keep `ConvergenceTest::Simplex` and `TerminationCode::SimplexTolerance`.
+Each `Threshold` now records `absolute_tolerance`, `relative_tolerance`, and
+`reference` alongside `value`; its `tolerance` field contains the evaluated
+maximum bound. Update struct literals and serialized report consumers for these
+additional fields. Solver checkpoint payloads now include the settings and saved
+cost reference.
+
+These tests establish simplex collapse, including on flat objectives and after
+box clipping; they do not establish stationarity or parameter accuracy. Fixed
+absolute floors limit accuracy for small quantities, and a single vector norm
+does not resolve different units across coordinates. Scale parameters or tune
+the floors for the problem. Use GBNM when a projected search needs its restart
+strategy. Basin 1.x defaults remain unchanged on `v1`.
+
+<h2 id="nelder-mead-cost-standard-deviation">Nelder-Mead cost standard deviation</h2>
+
+Nelder-Mead also offers an opt-in sample standard-deviation check through
+`with_absolute_simplex_cost_std_dev_tolerance`. It compares
+`sqrt(sum_i (f_i - mean(f))^2 / (m - 1))` with the tolerance, using all `m >= 2`
+current simplex costs. The denominator is `m - 1`, rather than `m`. This
+supports rustima's cost-dispersion check directly, without a custom `Solver`
+wrapper. To use it as the only numerical convergence check:
+
+```rust
+let solver = NelderMead::<Vec<f64>>::new()
+    .with_absolute_simplex_size_tolerance(None)
+    .with_relative_simplex_size_tolerance(None)
+    .with_absolute_simplex_cost_tolerance(None)
+    .with_relative_simplex_cost_tolerance(None)
+    .with_absolute_simplex_cost_std_dev_tolerance(1e-6);
+```
+
+The new check is disabled by default. Enabling it leaves the paired size and
+cost-spread settings intact and combines with that group and other configured
+checks using OR. A small standard deviation can therefore stop a wide simplex.
+It does not establish stationarity or parameter accuracy. Both unbounded and
+projected variants support it; projected initialization checks costs after
+clipping and evaluation. Setters on `ConfiguredSolver` forward to the same
+solver-owned setting, regardless of builder order.
+
+The tolerance must be finite and nonnegative. `None` disables the check, and
+zero requires identical finite costs. NaN or infinite costs, an unevaluated
+simplex, fewer than two costs, or an unrepresentable standard deviation cannot
+pass. Centering and scaling avoid intermediate overflow and underflow of squared
+deviations. The check uses current costs without additional callbacks, vector
+clones, or convergence history. Executor limits retain precedence.
+
+Passing this check reports `ConvergenceTest::AbsoluteSimplexCostStdDev` with
+`ConvergenceEvidence::UpperBound`: `value` is the sample standard deviation,
+`bound` and `tolerance` are the configured tolerance, and `reference` is `None`.
+The compact code is `TerminationCode::SimplexTolerance`. The existing paired
+check retains `ConvergenceTest::Simplex` and its evidence. When both pass, the
+report contains both criteria, with the paired check first.
+
+Fresh initialization preserves the setting, and exact continuation preserves it
+alongside the simplex. Serialized solver checkpoints now include the optional
+tolerance; recreate Nelder-Mead checkpoints from earlier unreleased 2.0 layouts.
+The new convergence-test variant is appended to preserve existing serialized
+test identities and report representations.
+
+<h2 id="bounded-least-squares-solver-name">Bounded least-squares solver name</h2>
+
+`Trf<V, M, F>` is now `BoundedLevenbergMarquardt<V, M, F>`. Replace imports from
+`basin::Trf` or `basin::solver::Trf` with the new name. The defining module
+changes from `basin::solver::trf` to
+`basin::solver::bounded_levenberg_marquardt`. Basin 2.0 removes the old type and
+module names without a compatibility alias.
+
+For example, construct the renamed solver with:
+
+```rust
+use basin::{BoundedLevenbergMarquardt, DenseMatrix};
+
+let solver: BoundedLevenbergMarquardt<Vec<f64>, DenseMatrix> =
+    BoundedLevenbergMarquardt::new();
+```
+
+The generic parameters, settings, defaults, algorithm, and dense and sparse
+backend support are unchanged by this rename. The solver uses Coleman-Li
+scaling, Nielsen damping, and strictly feasible steps. Its structured
+termination report now identifies scaled-gradient convergence as
+`bounded_lm.scaled_gradient` instead of `trf.legacy_scaled_gradient`.
+
+`TrustRegionReflective` keeps its name and algorithm. It provides an explicit
+trust-region radius, reflected-step selection, and rank-aware dense subproblems.
+Use `BoundedLevenbergMarquardt` to retain the former `Trf` algorithm and its
+sparse support; choosing `TrustRegionReflective` changes the method.
+
+<h2 id="lm-damping-default">LM damping default</h2>
+
+Basin 2.0 defaults to `LmDamping::TrustRegion` for both `f32` and `f64`, in both
+`LevenbergMarquardt` and `LevenbergMarquardtQr`. This applies to `new()`,
+`Default::default()`, and `LmDamping::default()`. Cholesky remains the default
+factorization; `with_pivoted_qr()` still selects QR explicitly. The initial
+trust-radius factor remains `100`, and the inner solve limit remains `50`.
+Stopping tolerances and numerical no-progress handling are unchanged. Iterates,
+termination reasons, and evaluation counts can change.
+
+Nielsen damping remains available. To retain the previous damping policy, select
+it explicitly:
+
+```rust
+let solver: basin::LevenbergMarquardt<Vec<f64>, basin::DenseMatrix> =
+    basin::LevenbergMarquardt::new()
+        .with_damping(basin::LmDamping::Nielsen);
+```
+
+The same setting works on the QR solver and with `f32`. `with_tau()` only
+configures Nielsen's initial damping; it does not select Nielsen and has no
+effect under the new default. Use `with_initial_step_bound()` to configure the
+initial trust radius.
+
+The [four-configuration
+comparison](https://github.com/jolars/basin/blob/main/crates/competitor-bench/fixtures/nist/README.md#recorded-damping-comparison)
+favored trust-region damping for its improved `f64` parameter and RSS recovery
+on the NIST fixtures. The choice accepts mixed runtime results and some `f32`
+recovery regressions in exchange for one default across precisions. Neither
+damping strategy uniformly outperformed the other.
+
+<h2 id="lm-and-trf-stopping-defaults">LM and TRF stopping defaults</h2>
+
+Basin 2.0 retains the existing stopping defaults for both LM factorizations,
+`BoundedLevenbergMarquardt`, and `TrustRegionReflective`, for both scalar types.
+LM enables only `with_absolute_gradient_tolerance(1e-8)`, testing
+`||J^T r||_infinity`. Bounded LM and TRF enable only
+`with_absolute_scaled_gradient_tolerance(1e-8)`, testing `max_i |v_i (J^T r)_i|`
+with distance-to-bound scaling. Optional relative checks remain disabled. These
+absolute thresholds depend on residual and parameter units; distance-to-bound
+scaling does not remove that dependence.
+
+The [fixed stopping-policy
+comparison](https://github.com/jolars/basin/blob/main/crates/competitor-bench/fixtures/nist/README.md#basin-20-stopping-policy-decision)
+compared published LM criteria and a curated configuration for bounded LM and
+TRF against the then-current stopping defaults, with Nielsen damping held fixed
+for LM and without a tolerance search. On all 54 NIST starts, the LM alternative
+reduced joint parameter/RSS recovery at relative error `1e-4` from 50 to 47 for
+each factorization. Adding observed relative cost and step checks reduced
+recovery from 50 to 37 for `BoundedLevenbergMarquardt` and from 51 to 46 for
+TRF. The alternatives used fewer evaluations and reported convergence more
+often, but did not support replacing the defaults. Recovery was measured
+independently of the stopping reason. This comparison used `f64` and unbounded
+problems on one backend; it establishes neither universal accuracy nor a new
+`f32` policy.
+
+For problems whose units make the default tests unsuitable, first choose
+parameter scales `s_j` and a common residual scale `a`. Optimize in coordinates
+`z_j = x_j / s_j`, returning `r(x) / a` and the transformed Jacobian
+`J(x) diag(s) / a`. Transform bounds to the same coordinates. Choose scales that
+make relevant parameter changes and residual magnitudes reasonably close to one,
+while preserving the intended relative residual weights. A common residual
+multiplier preserves the minimizer; independently changing residual weights
+generally changes the fitting problem. Tolerances still need to reflect the
+desired accuracy, conditioning, and derivative error.
+
+For example, `r(x) = 1e-6 * (x - 1)` has gradient `1e-12 * (x - 1)`. The default
+absolute test accepts `x = 0` immediately. Dividing this residual and its
+Jacobian by `1e-6` removes that unit effect. The retained analytic cases
+exercise this failure and a separate change of parameter units.
+
+LM also offers dimensionless gradient orthogonality and native relative model
+reduction. To evaluate those tests instead of the absolute gradient test for an
+`f64` problem:
+
+```rust
+let solver: basin::LevenbergMarquardt<Vec<f64>, basin::DenseMatrix> =
+    basin::LevenbergMarquardt::new()
+        .with_absolute_gradient_tolerance(None)
+        .with_gradient_orthogonality_tolerance(1e-8)
+        .with_relative_model_reduction_tolerance(1e-8);
+```
+
+Call `with_pivoted_qr()` on this solver to retain the same settings with QR.
+These are MINPACK-inspired gradient/model tests, not the complete SciPy LM
+policy. MINPACK's parameter test uses a scaled trust radius; Basin's
+`with_relative_trust_radius_tolerance` requires `LmDamping::TrustRegion`, which
+is now the default, but the radius test remains disabled until set. It is
+inactive with Nielsen damping. A small model reduction can also occur at an
+inaccurate, heavily damped point. Validate the returned fit independently before
+choosing relative checks for an application.
+
+For bounded LM and TRF, `with_relative_cost_change_tolerance` and
+`with_relative_step_tolerance` inspect published iterates. SciPy's TRF cost test
+additionally requires adequate model agreement, and its parameter test uses a
+different formula on trial steps, including rejected trials. Setting Basin's
+observed tolerances to SciPy's numbers does not reproduce that policy. Tune the
+native gradient threshold to the problem's units; use observed tests only when
+their documented meaning fits the application. Keep an execution budget, and
+inspect structured termination reports: `NumericalNoProgress` does not certify
+stationarity, and neither convergence nor a small RSS alone guarantees parameter
+recovery.
+
+<h2 id="optional-least-squares-trial-observations">Optional least-squares trial observations</h2>
+
+`GaussNewton`, LM, pivoted-QR LM, `BoundedLevenbergMarquardt`, and
+`TrustRegionReflective` now offer `with_trial_diagnostics(true)`. Import
+`basin::solver::least_squares_diagnostics::LeastSquaresDiagnostics` to read
+`least_squares_observations()` from the solver between stepper calls. Recording
+is disabled by default and adds no problem evaluations. It does allocate vectors
+and evaluate diagnostic operands, so instrumented elapsed times include that
+work.
+
+Each batch records native model checks and attempted residual trials, including
+failing and disabled convergence comparisons, acceptance decisions, damping,
+radii, native steps, and model-solve counts. A callback error can leave a trial
+incomplete; an accepted trial can still fail its subsequent Jacobian callback
+before the executor publishes a new iterate. Use the executor's state and report
+to identify published and returned points.
+
+Fresh initialization clears observations and resets their sequence. Exact
+checkpoint continuation preserves the sequence. Execution controls can stop
+before a new solver decision, leaving the preceding batch intact; deduplicate by
+sequence number. Read batches after every step because later native observations
+replace the preceding batch. Structural `no_free_parameters` checks have no
+tolerance. `BoundedLevenbergMarquardt`'s opt-in builder requires `VectorLen` and
+`VectorIndex<F>` without adding those bounds to ordinary solves.
+
+The LM and `BoundedLevenbergMarquardt` type declarations now require
+`F: Scalar`, consistent with their existing implementations. Generic wrappers
+naming these types must declare the same bound; their `F = f64` defaults remain
+available. `GaussNewton<V, M, F = f64>` now requires `F: Scalar` on its type
+declaration so its owned observations retain native precision. Explicit `f32`
+type declarations must supply the third parameter, for example
+`GaussNewton<Vec<f32>, DenseMatrix<f32>, f32>`. Ordinary inferred construction
+remains available. Its trace records unconditional full steps separately from
+accepted/rejected trust-region trials.
+
+`BasinHopping`, both CMA injection methods, `DeInject`, and `MaLsCh` offer
+`with_inner_diagnostics(true)` and `inner_diagnostics()`. These optional records
+retain each actual inner report, the outer member/segment context, and shared
+problem counts before and after dispatch. Hard callback errors retain counts
+without promising a returned state. Fresh initialization clears the records;
+exact continuation and serialized solver checkpoints retain them. These reports
+describe inner completion and never certify outer convergence.
+
+<h2 id="robust-lm-damping">Robust LM damping</h2>
+
+For robust LM with Nielsen damping, an increase in the safeguarded model's
+scaling diagonal now reduces the damping parameter by the largest ratio of old
+to new diagonal entries. This compensates for growth shared by every coordinate
+while preserving effective damping in coordinates whose curvature stays clipped,
+recovering previously inaccurate `f32` stalls. Normal equations and pivoted QR
+share this adjustment. Existing settings and convergence comparisons still
+apply; robust Nielsen trajectories and callback counts can change.

@@ -141,7 +141,7 @@ the retained absolute tests for bounded LM and TRF still stopped immediately.
 In the parameter-unit case, bounded LM's observed-step policy stopped with
 about `0.43` relative parameter error, compared with about `0.0023` under its default. Thus neither
 policy makes scaling unnecessary. See the
-[migration guide](../../../../MIGRATING.md#lm-and-trf-stopping-defaults)
+[migration guide](https://basin.rs/docs/migrating-to-v2/#lm-and-trf-stopping-defaults)
 for explicit scaling and configuration guidance.
 
 ## Comparing LM damping and factorization

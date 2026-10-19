@@ -4,10 +4,10 @@ Basin now configures numerical convergence on solvers and execution limits on
 executors. Basin 2.0 removes the criterion facility, including `terminate_on`,
 `inner_terminate_on`, `run_loop`, and `ResumableInner::segment_criteria`.
 They remain available on the Basin 1.x maintenance branch. The
-[Basin 2.0 migration guide](https://github.com/jolars/basin/blob/main/MIGRATING.md#stopping-conditions)
+[Basin 2.0 migration guide](../migrating-to-v2/#stopping-conditions)
 lists replacements, stopping order, closure lifecycles, and checkpoint constraints.
 The abbreviated tolerance and algorithm-setting aliases are also removed in
-Basin 2.0. The [migration guide](https://github.com/jolars/basin/blob/main/MIGRATING.md#solver-and-line-search-settings)
+Basin 2.0. The [migration guide](../migrating-to-v2/#solver-and-line-search-settings)
 lists their replacements.
 
 Basin 2.0 also enables paired simplex size and cost-spread tests by default in
@@ -16,7 +16,7 @@ including its projected variant. Absolute and relative tolerances work together;
 the relative cost reference includes the initial cost spread. Existing absolute
 setters replace only their own settings, so disable relative settings explicitly
 when requesting absolute-only behavior. The
-[Nelder-Mead migration guide](https://github.com/jolars/basin/blob/main/MIGRATING.md#nelder-mead-convergence-defaults)
+[Nelder-Mead migration guide](../migrating-to-v2/#nelder-mead-convergence-defaults)
 covers the defaults, complete opt-out, coordinate-access requirement, checkpoint
 changes, and scaling limits. Simplex collapse does not establish stationarity,
 including when clipping caused it. Basin 1.x defaults remain unchanged.

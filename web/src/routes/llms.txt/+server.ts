@@ -26,6 +26,7 @@ export function GET() {
 - [Overview](${docs}/): how the problem, solver, state, and executor pieces fit together
 - [Getting started](${docs}/getting-started/): install, backend features, and a first solve
 - [Migrating from Argmin](${docs}/migrating-from-argmin/): map Argmin 0.11 problem traits, solvers, errors, bounds, observers, and backends to Basin
+- [Migrating to Basin 2.0](${docs}/migrating-to-v2/): upgrade from Basin 1.x, including constraints, states, termination reports, solver settings, and checkpoints
 - [Migrating convergence settings](${docs}/migrating-convergence/): solver tolerances, execution limits, and Basin 2.0 deprecations
 - [Solvers](${docs}/solvers/): catalog of optimization solvers, including SLSQP for nonlinear constraints, and direct scalar root finding
 

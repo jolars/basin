@@ -542,7 +542,7 @@ desired backend features.
   `BoundedLevenbergMarquardt` replaces `Trf`, including its defining module,
   without a compatibility alias. Its algorithm, settings, and dense and sparse
   support are preserved. `TrustRegionReflective` keeps its name. See the
-  [migration guide](MIGRATING.md#bounded-least-squares-solver-name).
+  [migration guide](https://basin.rs/docs/migrating-to-v2/#bounded-least-squares-solver-name).
 
 - [ ] **Complete the stable-release handoff before publishing 2.0.0.** Follow
   [Maintenance and releases](MAINTENANCE.md#publishing-200): disable Latest
@@ -559,7 +559,7 @@ desired backend features.
   objectives, projected collapse, high-dimensional Rosenbrock, both
   precisions, and every dense backend version. A corpus audit across
   multiple starts and dimensions informed the precision-specific defaults.
-  See the [migration guide](MIGRATING.md#nelder-mead-convergence-defaults)
+  See the [migration guide](https://basin.rs/docs/migrating-to-v2/#nelder-mead-convergence-defaults)
   for settings, checkpoint changes, and the limits imposed by fixed floors.
 
 - [x] **Revisit convergence defaults for LM, L-BFGS-B, bounded LM, and
@@ -570,12 +570,12 @@ desired backend features.
   evaluations. The `f32` defaults are unchanged. The [NIST
   fixtures](crates/competitor-bench/fixtures/nist/README.md) remain
   available for future solver comparisons. See the [migration
-  guide](MIGRATING.md#l-bfgs-b-stopping-defaults) for the individual knobs
-  and accuracy tradeoffs. A fixed, source-informed comparison on both NIST
+  guide](https://basin.rs/docs/migrating-to-v2/#l-bfgs-b-stopping-defaults)
+  for the individual knobs and accuracy tradeoffs. A fixed, source-informed comparison on both NIST
   starts and curated scaling cases supports retaining the existing LM, bounded
   LM, and TRF defaults: the tested relative policies saved evaluations but
   reduced independently verified recovery. Relative checks remain opt-in. The
-  [decision and scaling guidance](MIGRATING.md#lm-and-trf-stopping-defaults)
+  [decision and scaling guidance](https://basin.rs/docs/migrating-to-v2/#lm-and-trf-stopping-defaults)
   explain the formulas, evidence, and limitations; this decision does not
   claim scale-invariant convergence.
 
@@ -587,28 +587,28 @@ desired backend features.
   composed runs retain inner failure details and use explicit policies for
   partial results. Exact continuation produces a new report, and typed
   callback aborts remain `Result::Err`. See the [migration
-  guide](MIGRATING.md#structured-termination-reports) for the API, binding
-  code mapping, observer lifecycle, and checkpoint changes.
+  guide](https://basin.rs/docs/migrating-to-v2/#structured-termination-reports)
+  for the API, binding code mapping, observer lifecycle, and checkpoint changes.
 
 - [x] **Make evaluation counters extensible.** Mark `EvalCounts` as
   non-exhaustive so future releases can add categories without breaking
   downstream code. Construct counters with `Default` and assign public fields;
   destructuring patterns include `..`.
-  See [evaluation-counter migration](MIGRATING.md#evaluation-counters).
+  See [evaluation-counter migration](https://basin.rs/docs/migrating-to-v2/#evaluation-counters).
 
 - [x] **Make results and diagnostic records extensible.** Mark optimization
   results, termination reports, diagnostic records, and their growing reason
   and phase enums as non-exhaustive. Provide result and report constructors,
   retain public field access, and document fallback matches and destructuring
   with `..`. See the [migration
-  guide](MIGRATING.md#extensible-results-and-diagnostics).
+  guide](https://basin.rs/docs/migrating-to-v2/#extensible-results-and-diagnostics).
 
 - [x] **Make solver publication types extensible.** Mark `SolverStep` and
   `IncumbentRef` as non-exhaustive with complete public constructors and public
   fields. `SolverStep::partial` covers continuing partial steps, and `new`
   supports forwarding dynamic decisions. Future optional metadata must default
   to behavior compatible with existing constructors. See the [publication
-  migration guide](MIGRATING.md#extensible-solver-publications).
+  migration guide](https://basin.rs/docs/migrating-to-v2/#extensible-solver-publications).
 
 - [x] **Set extension points for smaller stopping records.**
   `ConvergenceCriterion` and `ApplicationStop` are non-exhaustive, retain public
@@ -616,20 +616,20 @@ desired backend features.
   `ConvergenceCriterion::new(test, evidence)`. Future optional metadata must
   default to behavior compatible with existing constructors. `Threshold`
   remains exhaustive as a complete mathematical comparison. See the
-  [stopping-record migration guide](MIGRATING.md#extensible-stopping-records).
+  [stopping-record migration guide](https://basin.rs/docs/migrating-to-v2/#extensible-stopping-records).
 
 - [x] **Make line-search configurations extensible.** `Backtracking`, `Wolfe`,
   `MoreThuente`, and `HagerZhang` are non-exhaustive, with public fields,
   default constructors, and builders. Future controls must default to behavior
   compatible with existing constructors. See the [migration
-  guide](MIGRATING.md#extensible-line-search-configurations) for constructors,
-  public field assignment, and destructuring with `..`.
+  guide](https://basin.rs/docs/migrating-to-v2/#extensible-line-search-configurations)
+  for constructors, public field assignment, and destructuring with `..`.
 
 - [x] **Make state shape errors extensible.** `SimplexShapeError` and
   `PopulationShapeError` are non-exhaustive, with directly constructible
   variants and unchanged payloads and validation contracts. Matches include a
   fallback arm for future variants. See the [state shape error migration
-  guide](MIGRATING.md#extensible-state-shape-errors).
+  guide](https://basin.rs/docs/migrating-to-v2/#extensible-state-shape-errors).
 
 - [x] **Settle the extension policy for enum payloads.** Keep existing variant
   field lists fixed throughout Basin 2.x, with direct construction and
@@ -641,7 +641,7 @@ desired backend features.
   deliberately closed contracts and literals for complete mathematical
   values. See the [contributor
   policy](CONTRIBUTING.md#enum-payloads-and-complete-values) and [migration
-  guide](MIGRATING.md#enum-payload-compatibility).
+  guide](https://basin.rs/docs/migrating-to-v2/#enum-payload-compatibility).
 
 - [x] **Clean up backend compatibility aliases in Basin 2.0.0.** Make
   unversioned `nalgebra`, `ndarray`, and `faer` features and their
@@ -657,7 +657,8 @@ desired backend features.
   state checkpoints and version 1 exact checkpoints, along with the bincode
   dependency and compatibility-only tests. Retain the postcard formats and
   document [checkpoint migration
-  requirements](MIGRATING.md#checkpoint-files) for users upgrading from 1.x.
+  requirements](https://basin.rs/docs/migrating-to-v2/#checkpoint-files)
+  for users upgrading from 1.x.
 
 - [x] **Migrate existing solvers to shared progress states.** Build on the
   validated [prototype](#state-api-prototype) and [1.x
@@ -666,7 +667,7 @@ desired backend features.
   accepted initialization and continuation contracts. Document replacement
   constructors, public types, trait bounds, stopping semantics, and
   serialized-format compatibility. See the [migration
-  guide](MIGRATING.md#shared-progress-states).
+  guide](https://basin.rs/docs/migrating-to-v2/#shared-progress-states).
 
 - [x] **Decide how observers access solver diagnostics before finalizing 2.0.**
   Keep `Observe<S>` for progress and add optional `ObserveSolver<S, So>`
@@ -675,7 +676,7 @@ desired backend features.
   mixed registration order without cloning workspace or triggering
   evaluations. `Stepper::solver()` remains available for applications
   driving their own loop. See [custom diagnostic
-  logging](MIGRATING.md#observing-solver-diagnostics).
+  logging](https://basin.rs/docs/migrating-to-v2/#observing-solver-diagnostics).
 
 - [x] **Simplify and strengthen the full-form constraint API (tenet 4).**
   Share one canonical `ProblemConstraints` declaration between objectives and
@@ -686,7 +687,7 @@ desired backend features.
   bounds, shapes, and counts with `ConstraintSolveError`, preserving original
   callback errors. Keep MA-LS sampling domains distinct from mathematical
   constraints, and require explicit local relaxation in bounded memetic runs.
-  See [constraint migration](MIGRATING.md#declaring-constraints).
+  See [constraint migration](https://basin.rs/docs/migrating-to-v2/#declaring-constraints).
 
 - [x] Remove the deprecated `TerminationCriterion` facility, all shipped
   criterion types and re-exports, `Executor::terminate_on`,
@@ -724,7 +725,7 @@ desired backend features.
   submitted batch item charged even on failure. Internal adapter probes are
   excluded from existing counters and `total_work`. Keep future opt-in probe
   accounting separate. Document the implications for finite differences and
-  execution budgets in [evaluation counters](MIGRATING.md#evaluation-counters).
+  execution budgets in [evaluation counters](https://basin.rs/docs/migrating-to-v2/#evaluation-counters).
 
 - [x] **Define shared constraint-violation reporting (tenet 3).** Add
   `ConstraintViolationState` and typed `ViolationReport` records for current
@@ -736,7 +737,7 @@ desired backend features.
   existing numerical convergence and evaluation accounting unchanged; no
   standalone feasibility stop belongs on the executor. Document the breaking
   signatures and serialized-state migration in
-  [constraint-violation reports](MIGRATING.md#constraint-violation-reports).
+  [constraint-violation reports](https://basin.rs/docs/migrating-to-v2/#constraint-violation-reports).
 
 ## Deferred design
 

@@ -124,6 +124,8 @@ the same reference in machine-readable form.
 ## Where to Go Next
 
 - [Getting Started](getting-started/): install Basin and run your first solve.
+- [Migrating to Basin 2.0](migrating-to-v2/): upgrade constraints, progress states,
+  termination reports, solver settings, and checkpoints from Basin 1.x.
 - [Migrating Convergence Settings](migrating-convergence/): replace removed
   criteria and setter names in Basin 2.0.
 - [Migrating from Argmin](migrating-from-argmin/): translate problem traits,

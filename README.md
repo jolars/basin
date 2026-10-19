@@ -30,8 +30,11 @@ target 2.x. To stay on the supported 1.x line, use `basin = "1"` and keep its
 patch version current. See the [maintenance policy](MAINTENANCE.md) for the
 support window, backport procedure, and release workflow.
 
-For breaking changes on `main`, see [Migrating to Basin 2.0](MIGRATING.md),
+For breaking changes on `main`, see
+[Migrating to Basin 2.0](https://basin.rs/docs/migrating-to-v2/),
 including the requirements for upgrading checkpoint files.
+Until the 2.0 documentation is published, read the guide's
+[source in this repository](web/src/routes/docs/migrating-to-v2/+page.svx).
 
 ## Install
 

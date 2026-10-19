@@ -39,6 +39,11 @@ export const DOCS_LINKS: NavLink[] = [
         section: "docs",
     },
     {
+        label: "Migrating to Basin 2.0",
+        href: "docs/migrating-to-v2/",
+        section: "docs",
+    },
+    {
         label: "Migrating convergence settings",
         href: "docs/migrating-convergence/",
         section: "docs",

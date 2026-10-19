@@ -2,17 +2,15 @@
 
 ## State
 
-Basin follows [semantic versioning]. As of 1.0.0 the public API is stable:
-breaking changes ship only in a major release, while new solvers, backends, and
-opt-in features arrive in minor releases.
+Basin 2.0 development takes place on `main`. Follow
+[the roadmap](TODO.md#basin-20) for planned work and
+[Maintenance and releases](MAINTENANCE.md) for release procedures.
+
+Basin follows [semantic versioning]. Breaking changes ship only in a major
+release, while new solvers, backends, and opt-in features arrive in minor
+releases.
 
 [semantic versioning]: https://semver.org/
-
-`main` develops Basin 2.0 and accepts the planned breaking changes in
-[the roadmap](TODO.md#basin-20), with migration guidance for each change.
-The 1.x compatibility requirements in this guide apply to the `v1`
-maintenance branch. See [Maintenance and releases](MAINTENANCE.md) for
-support dates, backports, and the independent Versionary workflows.
 
 ## What this is
 
@@ -38,7 +36,7 @@ fit optimization state.
 - `cargo test`: run tests.
 - `cargo test <name>`: run a single test by name.
 - `cargo test -p basin --features problems`: include tests that use the
-  standard test-function corpus. Basin 2.0 enables no features by default;
+  standard test-function corpus. No features are enabled by default;
   `cargo test -p basin` exercises the library without the corpus. Examples
   and benchmarks that use the corpus must declare `required-features =
   ["problems"]` in `crates/basin/Cargo.toml` and be run with `--features problems`.
@@ -180,7 +178,8 @@ into user-provided `Problem` traits, until solver convergence, an execution limi
     private or `pub(crate)`; shared states expose checked records and complete
     replacement operations for external solvers.
   - `solver.rs`: the `Solver` trait: `init` (one-time setup, e.g. seeding
-    cost/gradient at iter 0), `next_iter`, plus convergence reset/check hooks and the legacy `terminate` hook.
+    cost/gradient at iter 0), `next_iter`, plus convergence reset/check hooks
+    and the `terminate` hook.
   - `executor.rs`: `Executor` owns problem + state + solver and drives the loop;
     `run()` returns an `OptimizationResult<S>` (final state, authoritative counts, and an owned
     `TerminationReport<S::Float>`); opt-in `run_with_solver()` returns an
@@ -195,11 +194,10 @@ into user-provided `Problem` traits, until solver convergence, an execution limi
   - `convergence.rs`: fixed solver convergence slots and shared calculations.
     Optional checks add only the backend capabilities they need.
   - `run_control.rs`: budgets, targets, stagnation stops, and application hooks.
-    New capability-bound builders provide raw `max_evaluations` budgets,
+    Capability-bound builders provide raw `max_evaluations` budgets,
     `target_objective`, `no_objective_improvement`, and opt-in
-    `require_evaluated_state` publication validation. Existing builders retain
-    their 1.x behavior. Inner-executor serialization rejects capability
-    controls instead of discarding them; legacy budget layouts remain stable.
+    `require_evaluated_state` publication validation. Inner-executor
+    serialization rejects capability controls instead of discarding them.
   - `termination.rs`: stopping reasons reported by solvers and execution controls.
   - `constraint.rs` (+ `constraint/`), `barrier.rs`, `augmented_lagrangian.rs`:
     canonical typed constraint sets, independent evaluation capabilities,
@@ -237,8 +235,7 @@ These shape API decisions and are non-obvious from the code alone.
    receives its implementations independently, including problem adapters and
    version-specific acceleration. BFGS uses the `DenseBackend` association to infer its solver-owned
    matrix from the starting vector, independently for every enabled version.
-   Explicit solver matrix parameters allow custom storage. Basin 1.x retains
-   its legacy backend-specific quasi-Newton state aliases on `v1`.
+   Explicit solver matrix parameters allow custom storage.
    Test simultaneous versions using their actual dependency aliases.
 3. **Solver-owned convergence.** Numerical convergence settings belong on the
    solver, with one authoritative setting for each test and shared internal
@@ -248,17 +245,15 @@ These shape API decisions and are non-obvious from the code alone.
    needs. Use explicit names such as `with_absolute_gradient_tolerance` and
    document norms, scaling, defaults, and OR/AND composition. Optional checks
    accept a finite nonnegative scalar or `None`; zero requests an exact-zero
-   threshold. Algorithm controls and safeguards remain distinct. Preserve old
-   behavior through deprecated aliases until Basin 2.0. Fresh solves reset
-   convergence history; exact solver-and-state checkpoints preserve it. Native
+   threshold. Algorithm controls and safeguards remain distinct. Fresh solves
+   reset convergence history; exact solver-and-state checkpoints preserve it. Native
    convergence diagnostics record the tests at the stopping decision without
    additional evaluations or changes to precedence. Solver records may survive
    exact continuation; result readers must check the current stop reason before
    attributing those records to the run. Numerical safeguards remain distinct
    from convergence. Custom inner-stop factories create fresh history per run.
    Executor cancellation is checked between top-level iterations; typed problem
-   errors remain the finer-grained hard-abort path. See
-   [the convergence migration guide](https://basin.rs/docs/migrating-convergence/).
+   errors remain the finer-grained hard-abort path.
 4. **First-class constraints.** Constraints describe the *problem*, so they live
    problem-side, not as executor config, never on state. Solvers declare support
    via traits; a constrained problem handed to an unconstrained solver is a
@@ -281,8 +276,7 @@ These shape API decisions and are non-obvious from the code alone.
    does not authorize fractional evaluations of integer coordinates. The
    [integer-domain API prototype](TODO.md#integer-domain-api-prototype) tests
    an additive declaration and explicit refinement with integer coordinates
-   fixed; production integer support remains deferred. See
-   [constraint migration](MIGRATING.md#declaring-constraints).
+   fixed; production integer support remains deferred.
 5. **Tiered backends with full solver coverage.** A small universal
    *vector tier* keeps first-order and derivative-free solvers generic over
    operations that every backend implements well. The richer *`linalg` tier*
@@ -304,8 +298,7 @@ and `HagerZhang` are non-exhaustive, with public fields, default constructors,
 and builders. Future controls must default to behavior compatible with existing
 constructors, without requiring callers to supply new settings during Basin
 2.x. Document builders as the usual construction path, retain public field
-access and mutation, and decide serialization compatibility separately. See the
-[line-search configuration migration guide](MIGRATING.md#extensible-line-search-configurations).
+access and mutation, and decide serialization compatibility separately.
 
 ### Enum payloads and complete values
 
@@ -334,8 +327,7 @@ different mathematical record requires a distinct representation.
 
 Source compatibility and serialization compatibility are separate decisions.
 Adding enum variants or fields to an extensible record requires an explicit
-decision about serialized data and checkpoint compatibility. See the [enum
-payload migration guide](MIGRATING.md#enum-payload-compatibility).
+decision about serialized data and checkpoint compatibility.
 
 ## State and lifecycle contracts
 
@@ -344,23 +336,19 @@ publishes `TerminationReport<F>` with the observation stage and completed
 iteration count. `SolverStep::completed` is independent of its optional
 termination, and every successful step publishes counts and coherent progress.
 Ordinary results retain the report and authoritative evaluation counts. Exact
-continuation preserves convergence history and publishes a new event. See
-[MIGRATING.md](MIGRATING.md#structured-termination-reports) for signatures,
-observer ordering, and explicit policies for consuming inner results.
+continuation preserves convergence history and publishes a new event.
 
 `SolverStep` and `IncumbentRef` are non-exhaustive publication records with
 complete public constructors. Future optional metadata must have defaults that
 preserve existing constructor behavior; adding fields cannot require external
 solver or state implementations to supply new information during Basin 2.x.
-See the [publication migration guide](MIGRATING.md#extensible-solver-publications).
 
 `ConvergenceCriterion` and `ApplicationStop` follow the same extension policy:
 their public constructors remain sufficient throughout Basin 2.x, and future
 optional metadata must default to behavior compatible with those constructors.
 `Threshold` remains exhaustive because its fields describe a complete
 mathematical comparison. Different comparison rules require distinct evidence
-representations. See the [stopping-record migration
-guide](MIGRATING.md#extensible-stopping-records).
+representations.
 
 `ViolationReport` is also a non-exhaustive publication record. Its constructor
 requires the value and measure, with unscaled, identity defaults; optional
@@ -382,13 +370,11 @@ allocates a separate snapshot of that selection, preserving its own report.
 `SimplexShapeError` and `PopulationShapeError` are non-exhaustive enums with
 directly constructible variants and exhaustive payloads. New variants may
 refine diagnostics or describe new operations; they do not permit rejecting
-inputs accepted by the documented state contracts. See the
-[state shape error migration guide](MIGRATING.md#extensible-state-shape-errors).
+inputs accepted by the documented state contracts.
 
-Basin 2.0 on `main` uses shared progress states with solver-owned algorithm
-machinery. The migration follows the validated
-[prototype](TODO.md#state-api-prototype) and the contracts below.
-The `v1` branch retains its existing APIs and behavior.
+Shared progress states expose iterates, while solvers own algorithm machinery.
+The [state API prototype](TODO.md#state-api-prototype) records the design
+validation. Follow the contracts below.
 
 - **Ownership:** solvers own settings, models, history, RNGs, and working
   buffers. States expose progress through a few capability-based shapes.
@@ -450,7 +436,7 @@ dependencies, not a feature. CI enforces it
 - Every default dep must be wasm-compatible. Anything that isn't (file I/O,
   threads, BLAS/LAPACK-linked math) sits behind a non-default feature.
 - No `std::time::Instant` in default paths; use `web-time` or feature-gate the
-  time-based criterion. No rayon or parallelism in default features (gate behind
+  time-based run controls. No rayon or parallelism in default features (gate behind
   `parallel`).
 - nalgebra and ndarray are wasm-fine in pure-Rust configs; pick those when both
   exist. LAPACK/BLAS acceleration of either is opt-in and off by default:

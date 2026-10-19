@@ -34,6 +34,11 @@
             description:
                 "Migrate an Argmin 0.11 application to Basin, including executors, solvers, typed errors, finite differences, bounds, observers, and backends.",
         },
+        "/docs/migrating-to-v2": {
+            title: "Migrating to Basin 2.0 – Basin",
+            description:
+                "Upgrade from Basin 1.x to 2.0: migrate problem constraints, progress states, termination reports, solver settings, and checkpoints.",
+        },
         "/docs/migrating-convergence": {
             title: "Migrating Convergence Settings – Basin",
             description:
