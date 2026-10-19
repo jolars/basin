@@ -152,10 +152,10 @@ where
     .into_iter()
     .fold(0.0_f64, f64::max);
     assert_eq!(violation.value, expected_violation);
-    assert_eq!(violation.measure, basin::ViolationMeasure::LInf);
-    assert_eq!(violation.scaling, basin::ViolationScaling::Unscaled);
+    assert_eq!(*violation.measure(), basin::ViolationMeasure::LInf);
+    assert_eq!(*violation.scaling(), basin::ViolationScaling::Unscaled);
     assert_eq!(
-        violation.transformation,
+        *violation.transformation(),
         basin::ViolationTransformation::PrimaModeration
     );
     assert_eq!(

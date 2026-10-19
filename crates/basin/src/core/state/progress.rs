@@ -714,6 +714,12 @@ impl<V: Clone, F: Scalar> GradientState for FirstOrderState<V, F> {
 /// an incumbent's metadata after current progress changes. Resetting progress
 /// clears both reports; [`State::reset_best`] preserves the current report.
 ///
+/// The current record, incumbent, and counters occupy one owned allocation,
+/// which reset reuses. Passing the state by value moves that allocation's
+/// owner; cloning creates independent progress. Native report metadata adds
+/// no allocation at publication or selection. Replacing current progress again
+/// before a pending selection is published allocates a snapshot of that selection.
+///
 /// With `serde`, serialization is available when `V` and `F` support it.
 ///
 /// # Backends
@@ -732,23 +738,106 @@ impl<V: Clone, F: Scalar> GradientState for FirstOrderState<V, F> {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct SelectedState<V, F: Scalar = f64> {
-    progress: Progress<V, ViolationReport<F>, F>,
+    progress: Box<Progress<V, ViolationReport<F>, F>>,
     selected_violation: Option<ViolationReport<F>>,
     pending: Option<Selection<V, F>>,
 }
 
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 enum Selection<V, F: Scalar> {
     Current,
-    Snapshot(V, F, ViolationReport<F>),
+    // Most publications select the current record. Keep the uncommon snapshot
+    // out of line so it does not enlarge every state passed through the solver.
+    Snapshot(Box<(V, F, ViolationReport<F>)>),
+}
+
+#[cfg(all(test, feature = "serde"))]
+#[test]
+fn boxed_selections_preserve_the_inline_wire_format() {
+    #[derive(serde::Serialize)]
+    #[serde(rename = "Selection")]
+    enum InlineSelection {
+        Current,
+        Snapshot(Vec<f64>, f64, ViolationReport),
+    }
+
+    let current = Selection::<Vec<f64>, f64>::Current;
+    assert_eq!(
+        postcard::to_allocvec(&current).unwrap(),
+        postcard::to_allocvec(&InlineSelection::Current).unwrap(),
+    );
+    for measure in [
+        super::ViolationMeasure::L1,
+        super::ViolationMeasure::Custom("weighted residuals".into()),
+    ] {
+        let report = ViolationReport::new(0.5, measure);
+        let snapshot =
+            Selection::Snapshot(Box::new((vec![2.0], 4.0, report.clone())));
+        let inline = InlineSelection::Snapshot(vec![2.0], 4.0, report);
+        let bytes = postcard::to_allocvec(&inline).unwrap();
+        assert_eq!(postcard::to_allocvec(&snapshot).unwrap(), bytes);
+        let restored: Selection<Vec<f64>, f64> =
+            postcard::from_bytes(&bytes).unwrap();
+        assert_eq!(restored, snapshot);
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<V: serde::Serialize, F: Scalar + serde::Serialize> serde::Serialize
+    for Selection<V, F>
+{
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeTupleVariant;
+        match self {
+            Self::Current => {
+                serializer.serialize_unit_variant("Selection", 0, "Current")
+            }
+            Self::Snapshot(snapshot) => {
+                let mut variant = serializer.serialize_tuple_variant(
+                    "Selection",
+                    1,
+                    "Snapshot",
+                    3,
+                )?;
+                variant.serialize_field(&snapshot.0)?;
+                variant.serialize_field(&snapshot.1)?;
+                variant.serialize_field(&snapshot.2)?;
+                variant.end()
+            }
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, V: serde::Deserialize<'de>, F: Scalar + serde::Deserialize<'de>>
+    serde::Deserialize<'de> for Selection<V, F>
+{
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Self, D::Error> {
+        #[derive(serde::Deserialize)]
+        #[serde(rename = "Selection")]
+        enum Stored<V, F: Scalar> {
+            Current,
+            Snapshot(V, F, ViolationReport<F>),
+        }
+        Ok(match Stored::<V, F>::deserialize(deserializer)? {
+            Stored::Current => Self::Current,
+            Stored::Snapshot(param, cost, violation) => {
+                Self::Snapshot(Box::new((param, cost, violation)))
+            }
+        })
+    }
 }
 
 impl<V, F: Scalar> SelectedState<V, F> {
     /// Construct an unevaluated seed with zero counters and no selection.
     pub fn new(param: V) -> Self {
         Self {
-            progress: Progress::new(param),
+            progress: Box::new(Progress::new(param)),
             selected_violation: None,
             pending: None,
         }
@@ -780,7 +869,9 @@ impl<V, F: Scalar> SelectedState<V, F> {
         let previous = std::mem::replace(&mut self.progress.param, param);
         if matches!(self.pending, Some(Selection::Current)) {
             let (cost, violation) = self.progress.evaluated.take().unwrap();
-            self.pending = Some(Selection::Snapshot(previous, cost, violation));
+            self.pending = Some(Selection::Snapshot(Box::new((
+                previous, cost, violation,
+            ))));
         }
         self.progress.evaluated = Some((cost, violation));
     }
@@ -891,8 +982,8 @@ impl<V: Clone, F: Scalar> State for SelectedState<V, F> {
                     self.progress.evaluated.as_ref().unwrap();
                 (&self.progress.param, *cost, violation)
             }
-            Selection::Snapshot(param, cost, violation) => {
-                (param, *cost, violation)
+            Selection::Snapshot(snapshot) => {
+                (&snapshot.0, snapshot.1, &snapshot.2)
             }
         };
         if let Some(best) = &mut self.progress.best {

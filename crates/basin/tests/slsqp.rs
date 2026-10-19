@@ -271,10 +271,10 @@ where
     let violation = initialized.state.current().unwrap().3;
     // Clipping gives (1, 2, 2, 2): |-27| from the equality plus 17 from the inequality.
     assert_eq!(violation.value, num::<F>(44.));
-    assert_eq!(violation.measure, basin::ViolationMeasure::L1);
-    assert_eq!(violation.scaling, basin::ViolationScaling::Unscaled);
+    assert_eq!(*violation.measure(), basin::ViolationMeasure::L1);
+    assert_eq!(*violation.scaling(), basin::ViolationScaling::Unscaled);
     assert_eq!(
-        violation.transformation,
+        *violation.transformation(),
         basin::ViolationTransformation::NonFiniteToInfinity
     );
     let accuracy = if F::epsilon() > num(1e-10) {

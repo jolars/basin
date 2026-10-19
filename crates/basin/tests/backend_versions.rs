@@ -199,9 +199,9 @@ impl Quadratic  {
                 assert_eq!(cost, NormSquared::norm_squared(point));
                 assert!((cost - 1.0).abs() < 8.0 * F::EPSILON.sqrt());
                 assert!(violation.value < 8.0 * F::EPSILON.sqrt());
-                assert_eq!(violation.measure, basin::ViolationMeasure::LInf);
-                assert_eq!(violation.scaling, basin::ViolationScaling::Unscaled);
-                assert_eq!(violation.transformation, basin::ViolationTransformation::PrimaModeration);
+                assert_eq!(*violation.measure(), basin::ViolationMeasure::LInf);
+                assert_eq!(*violation.scaling(), basin::ViolationScaling::Unscaled);
+                assert_eq!(*violation.transformation(), basin::ViolationTransformation::PrimaModeration);
                 assert_eq!(result.state.current(), result.state.best());
                 assert_eq!(result.state.counts(), &result.counts);
                 assert_eq!(
@@ -263,9 +263,9 @@ impl Quadratic  {
         assert_eq!(gradient, &problem().gradient(point).unwrap());
         assert!((cost - 1.0).abs() < 8.0 * F::EPSILON.sqrt());
         assert!(violation.value < 8.0 * F::EPSILON.sqrt());
-        assert_eq!(violation.measure, basin::ViolationMeasure::L1);
-        assert_eq!(violation.scaling, basin::ViolationScaling::Unscaled);
-        assert_eq!(violation.transformation, basin::ViolationTransformation::NonFiniteToInfinity);
+        assert_eq!(*violation.measure(), basin::ViolationMeasure::L1);
+        assert_eq!(*violation.scaling(), basin::ViolationScaling::Unscaled);
+        assert_eq!(*violation.transformation(), basin::ViolationTransformation::NonFiniteToInfinity);
         assert_eq!(slsqp.solver.failure(), None);
         assert_eq!(slsqp.state.counts(), &slsqp.counts);
         assert_eq!(slsqp.state.cost_evals(), slsqp.counts.cost_evals);
@@ -561,9 +561,9 @@ impl Quadratic  {
         .unwrap();
         let (_, best_cost, violation) = constrained.state.best().unwrap();
         assert!(violation.value < 1e-4);
-        assert_eq!(violation.measure, basin::ViolationMeasure::L2);
-        assert_eq!(violation.scaling, basin::ViolationScaling::Unscaled);
-        assert_eq!(violation.transformation, basin::ViolationTransformation::Identity);
+        assert_eq!(*violation.measure(), basin::ViolationMeasure::L2);
+        assert_eq!(*violation.scaling(), basin::ViolationScaling::Unscaled);
+        assert_eq!(*violation.transformation(), basin::ViolationTransformation::Identity);
         assert!((best_cost - 2.0).abs() < 1e-3);
         for barrier_mode in [false, true] {
             let probe = Quadratic {

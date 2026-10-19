@@ -5,6 +5,7 @@
 mod factor;
 mod least_squares;
 
+use crate::ViolationReport;
 use crate::core::constraint::evaluation::{NonlinearSet, SlsqpSet, invalid};
 use crate::core::constraint::{ConstraintError, ConstraintSolveError};
 use crate::core::inner::InitialState;
@@ -13,7 +14,6 @@ use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{SelectedFirstOrderState, State};
 use crate::core::termination::Termination;
-use crate::{ViolationMeasure, ViolationReport, ViolationTransformation};
 use factor::Factor;
 use least_squares::{Lsei, Matrix, dot, norm, number};
 
@@ -98,9 +98,9 @@ pub enum SlsqpFailure {
 /// [`crate::ViolationReport`]. Each accepted iterate is an explicit selection event;
 /// failed trials preserve the previous record and its publication metadata.
 /// The violation is the sum of absolute equality residuals and positive
-/// inequality violations, tagged [`ViolationMeasure::L1`] and unscaled. Bounds
+/// inequality violations, tagged [`crate::ViolationMeasure::L1`] and unscaled. Bounds
 /// contribute zero at the clipped accepted points. The transformation is
-/// [`ViolationTransformation::NonFiniteToInfinity`]: any non-finite constraint
+/// [`crate::ViolationTransformation::NonFiniteToInfinity`]: any non-finite constraint
 /// residual makes the reported aggregate positive infinity.
 /// [`crate::ConstraintViolationState`] borrows current and incumbent reports
 /// without evaluations. Category readers report raw objective and gradient
@@ -899,12 +899,8 @@ where
                 param,
                 cost,
                 gradient,
-                ViolationReport::new(
+                ViolationReport::unscaled_l1_nonfinite(
                     work.reported_violation(),
-                    ViolationMeasure::L1,
-                )
-                .with_transformation(
-                    ViolationTransformation::NonFiniteToInfinity,
                 ),
             )
             .expect("SLSQP gradient dimensions were checked");
@@ -1064,12 +1060,8 @@ where
                 param,
                 cost,
                 gradient,
-                ViolationReport::new(
+                ViolationReport::unscaled_l1_nonfinite(
                     work.reported_violation(),
-                    ViolationMeasure::L1,
-                )
-                .with_transformation(
-                    ViolationTransformation::NonFiniteToInfinity,
                 ),
             )
             .expect("SLSQP gradient dimensions were checked");

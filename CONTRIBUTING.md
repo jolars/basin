@@ -367,6 +367,17 @@ requires the value and measure, with unscaled, identity defaults; optional
 builders describe existing scaling and transformations. Future optional fields
 must preserve these defaults throughout Basin 2.x. Reports preserve evaluated
 values, including NaN and infinity, without validation or extra callbacks.
+Only the scalar `value` field is public; metadata readers borrow shared
+descriptors. Built-in combinations use static storage without allocations or
+reference-count updates. Custom descriptions use shared ownership and
+copy-on-write builders. The serialized representation retains the four value
+and metadata fields independently of this storage.
+`SelectedState` keeps its current record, incumbent, and counters in one owned
+allocation so transfers between solver and executor do not copy that storage
+at every iteration. Reset reuses the allocation; cloning a state makes an
+independent progress snapshot.
+Replacing current progress again before a pending selection is published
+allocates a separate snapshot of that selection, preserving its own report.
 
 `SimplexShapeError` and `PopulationShapeError` are non-exhaustive enums with
 directly constructible variants and exhaustive payloads. New variants may

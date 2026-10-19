@@ -7,7 +7,48 @@ use basin::{
     ViolationScaling, ViolationTransformation,
 };
 
-use std::convert::Infallible;
+use std::{
+    alloc::{GlobalAlloc, Layout, System},
+    cell::Cell,
+    convert::Infallible,
+};
+
+thread_local! {
+    // Exclude concurrent tests and test-harness activity from allocation counts.
+    static ALLOCATION_REQUESTS: Cell<usize> = const { Cell::new(0) };
+}
+
+struct Counting;
+
+fn record_allocation() {
+    let _ = ALLOCATION_REQUESTS.try_with(|count| count.set(count.get() + 1));
+}
+
+unsafe impl GlobalAlloc for Counting {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        record_allocation();
+        unsafe { System.alloc(layout) }
+    }
+    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+        record_allocation();
+        unsafe { System.alloc_zeroed(layout) }
+    }
+    unsafe fn realloc(
+        &self,
+        ptr: *mut u8,
+        layout: Layout,
+        size: usize,
+    ) -> *mut u8 {
+        record_allocation();
+        unsafe { System.realloc(ptr, layout, size) }
+    }
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        unsafe { System.dealloc(ptr, layout) }
+    }
+}
+
+#[global_allocator]
+static ALLOCATOR: Counting = Counting;
 
 struct Residuals<F: Scalar>([F; 2]);
 
@@ -221,6 +262,171 @@ fn described<F: Scalar>(value: F) -> ViolationReport<F> {
     .with_transformation(ViolationTransformation::Custom(
         "non-finite residuals become infinity before aggregation".into(),
     ))
+}
+
+#[test]
+fn reports_keep_native_metadata_compact_and_thread_safe() {
+    fn send_sync<T: Send + Sync>() {}
+    send_sync::<ViolationReport<f32>>();
+    send_sync::<ViolationReport<f64>>();
+    let maximum = size_of::<f64>() + 2 * size_of::<usize>();
+    assert!(size_of::<ViolationReport<f32>>() <= maximum);
+    assert!(size_of::<ViolationReport<f64>>() <= maximum);
+    #[cfg(target_pointer_width = "64")]
+    assert!(size_of::<SelectedState<Vec<f64>>>() <= 6 * size_of::<usize>());
+    for measure in [
+        ViolationMeasure::L1,
+        ViolationMeasure::L2,
+        ViolationMeasure::SquaredL2,
+        ViolationMeasure::LInf,
+    ] {
+        for transformation in [
+            ViolationTransformation::Identity,
+            ViolationTransformation::PrimaModeration,
+            ViolationTransformation::NonFiniteToInfinity,
+        ] {
+            let report = ViolationReport::new(1.0, measure.clone())
+                .with_transformation(transformation.clone());
+            let another = ViolationReport::new(2.0, measure.clone())
+                .with_transformation(transformation.clone());
+            assert_eq!(report.measure(), &measure);
+            assert_eq!(report.scaling(), &ViolationScaling::Unscaled);
+            assert_eq!(report.transformation(), &transformation);
+            assert!(std::ptr::eq(report.measure(), another.measure()));
+            let changed = report
+                .with_measure(ViolationMeasure::L2)
+                .with_scaling(ViolationScaling::Unscaled);
+            assert_eq!(changed.measure(), &ViolationMeasure::L2);
+            assert_eq!(changed.transformation(), &transformation);
+        }
+    }
+}
+
+#[test]
+fn native_publication_and_selection_reuse_state_storage() {
+    use std::hint::black_box;
+    let mut state = SelectedState::new(0.0);
+    for (measure, transformation) in [
+        (ViolationMeasure::L1, ViolationTransformation::Identity),
+        (ViolationMeasure::L2, ViolationTransformation::Identity),
+        (
+            ViolationMeasure::SquaredL2,
+            ViolationTransformation::Identity,
+        ),
+        (
+            ViolationMeasure::LInf,
+            ViolationTransformation::PrimaModeration,
+        ),
+        (
+            ViolationMeasure::L1,
+            ViolationTransformation::NonFiniteToInfinity,
+        ),
+    ] {
+        ALLOCATION_REQUESTS.set(0);
+        for index in 0..100 {
+            let value = f64::from(index);
+            let report = ViolationReport::new(value, measure.clone())
+                .with_transformation(transformation.clone());
+            state.replace(value, value, report);
+            assert!(state.select_current());
+            state.update_best();
+            black_box(&state);
+        }
+        state.reset();
+        let requests = ALLOCATION_REQUESTS.get();
+        assert_eq!(requests, 0);
+        assert!(state.current().is_none());
+    }
+    let custom = described(1.0);
+    ALLOCATION_REQUESTS.set(0);
+    let copied = black_box(custom.clone());
+    let requests = ALLOCATION_REQUESTS.get();
+    assert_eq!(requests, 0);
+    assert_eq!(copied, custom);
+}
+
+#[test]
+fn builders_can_add_custom_metadata_to_native_reports() {
+    let native = ViolationReport::new(1.0, ViolationMeasure::L2);
+    let measure = native
+        .clone()
+        .with_measure(ViolationMeasure::Custom("weighted norm".into()));
+    let scaling = native
+        .clone()
+        .with_scaling(ViolationScaling::Custom("normalized".into()));
+    let transformation = native
+        .clone()
+        .with_transformation(ViolationTransformation::Custom("clipped".into()));
+    assert_eq!(native.measure(), &ViolationMeasure::L2);
+    assert_eq!(
+        measure.measure(),
+        &ViolationMeasure::Custom("weighted norm".into())
+    );
+    assert_eq!(scaling.measure(), native.measure());
+    assert_eq!(
+        scaling.scaling(),
+        &ViolationScaling::Custom("normalized".into())
+    );
+    assert_eq!(transformation.measure(), native.measure());
+    assert_eq!(
+        transformation.transformation(),
+        &ViolationTransformation::Custom("clipped".into())
+    );
+    assert_eq!(
+        format!("{native:?}"),
+        "ViolationReport { value: 1.0, measure: L2, scaling: Unscaled, transformation: Identity }"
+    );
+}
+
+#[test]
+fn custom_metadata_is_shared_until_a_builder_changes_it() {
+    let original = described(0.5);
+    let copied = original.clone();
+    assert!(std::ptr::eq(original.measure(), copied.measure()));
+    let changed = copied
+        .with_measure(ViolationMeasure::L2)
+        .with_scaling(ViolationScaling::Unscaled)
+        .with_transformation(ViolationTransformation::Identity);
+    assert_eq!(original, described(0.5));
+    assert_eq!(changed, ViolationReport::new(0.5, ViolationMeasure::L2));
+    let native = ViolationReport::new(1.0, ViolationMeasure::L2);
+    assert!(std::ptr::eq(changed.measure(), native.measure()));
+}
+
+#[cfg(feature = "serde")]
+#[test]
+fn compact_reports_keep_the_inline_serialization_format() {
+    #[derive(serde::Serialize, serde::Deserialize)]
+    struct InlineReport<F> {
+        value: F,
+        measure: ViolationMeasure,
+        scaling: ViolationScaling,
+        transformation: ViolationTransformation,
+    }
+    fn round_trip<
+        F: Scalar + serde::Serialize + serde::de::DeserializeOwned,
+    >() {
+        for report in [
+            ViolationReport::new(F::one(), ViolationMeasure::L1),
+            ViolationReport::new(F::infinity(), ViolationMeasure::LInf)
+                .with_transformation(ViolationTransformation::PrimaModeration),
+            described(F::zero()),
+        ] {
+            let inline = InlineReport {
+                value: report.value,
+                measure: report.measure().clone(),
+                scaling: report.scaling().clone(),
+                transformation: report.transformation().clone(),
+            };
+            let bytes = postcard::to_allocvec(&inline).unwrap();
+            assert_eq!(postcard::to_allocvec(&report).unwrap(), bytes);
+            let restored: ViolationReport<F> =
+                postcard::from_bytes(&bytes).unwrap();
+            assert_eq!(restored, report);
+        }
+    }
+    round_trip::<f32>();
+    round_trip::<f64>();
 }
 
 fn records<

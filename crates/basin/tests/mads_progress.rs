@@ -268,10 +268,10 @@ fn constrained_selection_preserves_feasibility_and_publication_counts() {
         let (x, cost, violation) = state.current().unwrap();
         assert_eq!(cost, x.iter().map(|x| x * x).sum::<f64>());
         assert_eq!(violation.value, (1.0 - x[0]).max(0.0).powi(2));
-        assert_eq!(violation.measure, basin::ViolationMeasure::SquaredL2);
-        assert_eq!(violation.scaling, basin::ViolationScaling::Unscaled);
+        assert_eq!(*violation.measure(), basin::ViolationMeasure::SquaredL2);
+        assert_eq!(*violation.scaling(), basin::ViolationScaling::Unscaled);
         assert_eq!(
-            violation.transformation,
+            *violation.transformation(),
             basin::ViolationTransformation::Identity
         );
         assert_eq!(state.current(), state.best());

@@ -1370,13 +1370,30 @@ assert_eq!(violation.value, 1.0);
 ```
 
 The last component of `current()` and `best()` is now a borrowed report. Use
-`.value` for the numeric aggregate, and inspect `.measure`, `.scaling`, and
-`.transformation` before interpreting it. `ViolationReport::new(value, measure)`
+`.value` for the numeric aggregate, and inspect `measure()`, `scaling()`, and
+`transformation()` before interpreting it. Metadata now lives in shared
+descriptors rather than public fields, keeping native reports compact without
+per-publication allocations or atomic reference-count updates. Replace metadata
+field assignments with `with_measure`, `with_scaling`, or `with_transformation`.
+The scalar `value` field remains public. `ViolationReport::new(value, measure)`
 describes an unscaled value with identity transformation. `with_scaling` and
 `with_transformation` describe computations already performed; they do not
 change the value. Each metadata enum also supports a `Custom(String)` formula
 or description for external solvers. Reports and metadata enums are
 non-exhaustive, with complete public constructors for the report.
+
+Native reports borrow static descriptors; custom descriptions use shared
+ownership with copy-on-write builders. Cloning a custom report shares its
+descriptions, and changing a clone preserves the original metadata. The
+serialized report still contains `value`, `measure`, `scaling`, and
+`transformation`, so compacting storage preserves the typed-report format.
+Selected states keep their current record, incumbent, and counters in one
+allocation made at construction, which reset reuses. Passing a state between
+solver and executor moves that allocation's owner instead of copying those
+records. Cloning a state still creates independent progress. The serialized
+selected-state format is unchanged by this storage choice.
+Replacing current progress again before a pending selection is published
+allocates a separate snapshot of that selection.
 
 All four existing reporters use `ViolationScaling::Unscaled`, preserving the
 units and any scaling supplied by the problem:
