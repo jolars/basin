@@ -1,5 +1,9 @@
 # Migrating to Basin 2.0
 
+This guide covers upgrading from Basin 1.x to 2.0. For a first solve, see
+[Getting Started](../getting-started/). The [API reference](https://docs.rs/basin/latest/basin/)
+documents current signatures and defaults.
+
 <h2 id="declaring-constraints">Declaring constraints</h2>
 
 Every objective and residual problem now implements `ProblemConstraints`. Its
@@ -1534,6 +1538,11 @@ solver tests retain their documented norms and scaling, which can differ from
 the removed generic criteria. Distinct configured tests combine with OR; simplex
 size and cost spread combine with AND. Repeating a setter replaces its setting
 instead of appending a criterion.
+
+The [`ConfiguredSolver` reference](https://docs.rs/basin/latest/basin/core/convergence/struct.ConfiguredSolver.html)
+describes optional tolerance semantics and how checks combine. The
+[`Executor` reference](https://docs.rs/basin/latest/basin/core/executor/struct.Executor.html)
+documents execution budgets, application stops, and checkpoints.
 
 ```rust
 let solver = GradientDescent::new(0.1)

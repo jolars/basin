@@ -140,7 +140,7 @@ including its projected variant. Absolute and relative tolerances work together
 within each test. An unchanged best vertex alone does not establish collapse,
 and collapse on a flat objective or after clipping does not establish
 stationarity. See the API reference and
-[convergence migration guidance](../migrating-convergence/) for settings,
+[Basin 2.0 migration guide](../migrating-to-v2/#nelder-mead-convergence-defaults) for settings,
 scaling limits, and complete opt-out. Basin 1.x retains its opt-in behavior.
 
 Choose tolerances for the scale of your objective and parameters. An absolute
@@ -159,7 +159,7 @@ alongside the reason. For an application condition, use `stop_when(|state| ...)`
 returning `Some(basin::ApplicationStop::new("my_stop"))` to stop or `None` to continue.
 
 Basin 2.0 removes the former `terminate_on` facility and abbreviated tolerance
-setters. See [Migrating Convergence Settings](../migrating-convergence/).
+setters. See [Migrating to Basin 2.0](../migrating-to-v2/#stopping-conditions).
 
 ## Next
 

@@ -115,8 +115,8 @@ fn main() {
 
 Configure convergence on the solver and execution budgets on the executor.
 Optional tolerance setters accept a scalar or `None`; enabled tests usually
-combine with OR. The old criterion API is deprecated until Basin 2.0. See the
-[convergence migration guide](https://basin.rs/docs/migrating-convergence/)
+combine with OR. See the
+[Basin 2.0 migration guide](https://basin.rs/docs/migrating-to-v2/#stopping-conditions)
 for replacements and numerical conventions.
 
 ## Solvers

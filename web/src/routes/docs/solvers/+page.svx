@@ -109,7 +109,7 @@ bracketing routines.
   to the solver. Both variants support all four dense backends with `f32` or
   `f64` and require coordinate access through `VectorIndex`. Paired simplex size
   and cost-spread tests are enabled by default in Basin 2.0; see the
-  [convergence migration guidance](../migrating-convergence/) and API reference
+  [Basin 2.0 migration guide](../migrating-to-v2/#nelder-mead-convergence-defaults) and API reference
   for tolerance settings and scaling limits.
 - **[`Mads`](https://docs.rs/basin/latest/basin/solver/mads/struct.Mads.html)**:
   mesh adaptive direct search (the deterministic OrthoMADS instance): polls a

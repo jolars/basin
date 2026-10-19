@@ -5,6 +5,8 @@ Cloudflare Workers serves the prerendered SvelteKit site at <https://basin.rs/>.
 The `www.basin.rs` domain redirects to the apex domain, preserving paths and
 query strings. Cloudflare canonicalizes page URLs with trailing slashes and
 serves `404.html` with a 404 status for unknown paths.
+[Static redirects](https://developers.cloudflare.com/workers/static-assets/redirects/)
+in `web/static/_redirects` preserve retired page URLs.
 
 `pnpm build` writes an `index.md` beside each page's `index.html`, using the
 rendered `<main>` content. The Worker serves that file when a page request

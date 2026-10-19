@@ -39,11 +39,6 @@
             description:
                 "Upgrade from Basin 1.x to 2.0: migrate problem constraints, progress states, termination reports, solver settings, and checkpoints.",
         },
-        "/docs/migrating-convergence": {
-            title: "Migrating Convergence Settings – Basin",
-            description:
-                "Move convergence settings onto solvers, configure execution limits, and prepare for Basin 2.0 deprecations.",
-        },
         "/docs/solvers": {
             title: "Solvers – Basin",
             description:

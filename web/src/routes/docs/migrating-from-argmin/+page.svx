@@ -93,7 +93,7 @@ spread, rather than Argmin's sample standard deviation of costs alone.
 In Basin 2.0 both tests have absolute and relative defaults. The example below
 disables the relative settings to request absolute-only thresholds. An absolute
 setter alone changes its floor while leaving the relative setting enabled;
-see [Migrating Convergence Settings](../migrating-convergence/) for details.
+see [Migrating to Basin 2.0](../migrating-to-v2/#nelder-mead-convergence-defaults) for details.
 
 <!-- compile: basin-nelder-mead -->
 ```rust
