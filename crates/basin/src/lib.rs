@@ -143,20 +143,26 @@
 //!   `Ok(`[`OptimizationResult`]`)` carrying that reason. This is **not** an
 //!   error.
 //! - **Hard abort**: return `Err(_)` from a problem-trait method to terminate
-//!   the *entire* solve. The error is your own type and bubbles out of
-//!   [`Executor::run`] untouched, typed as `Result<_, P::Error>`. Use it when
-//!   the failure is not about a particular `x`: a downstream service vanished,
-//!   an expensive evaluation detected a fine-grained cancellation request, or
-//!   an early-stop condition in your own problem state fired.
+//!   the *entire* solve. [`Executor::run`] preserves the problem error in the
+//!   solver's error type, either directly or in a typed wrapper described below.
+//!   Use it when the failure is not about a particular `x`: a downstream service
+//!   vanished, an expensive evaluation detected a fine-grained cancellation
+//!   request, or an early-stop condition in your own problem state fired.
 //!
 //! ## One error type, threaded through
 //!
 //! The hard-abort error is chosen *once*, on the problem
 //! ([`CostFunction::Error`], or
 //! [`Residual::Error`] for nonlinear
-//! least squares). Every downstream trait mirrors it: [`Solver::Error`] and
-//! [`LineSearch::Error`] are set to `P::Error`, so a custom problem error flows
-//! through the solver and line search out to the caller with no conversion glue.
+//! least squares). Unconstrained solvers and line searches use `P::Error`
+//! directly. Solvers that validate constraints use
+//! [`ConstraintSolveError<P::Error>`](ConstraintSolveError): its
+//! [`Evaluation`](ConstraintSolveError::Evaluation) variant preserves the original
+//! callback error, while
+//! [`InvalidConstraints`](ConstraintSolveError::InvalidConstraints) reports invalid
+//! declarations or malformed callback outputs. [`Executor::run`] returns the
+//! solver's [`Solver::Error`], so callers can handle both failures without boxing
+//! or stringifying the original error.
 //! Problems that cannot fail pick [`std::convert::Infallible`]; its niche
 //! optimization keeps `Result<f64, Infallible>` the same layout as a bare `f64`,
 //! so the happy path stays zero-cost.

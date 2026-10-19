@@ -14,9 +14,12 @@
 //!   fitness. This is the right channel for "this `x` is outside my
 //!   domain, but the solve should continue."
 //! - **Hard abort (`Err(_)`)**: return `Err` to terminate the entire
-//!   solve. The error bubbles all the way out of
-//!   [`Executor::run`](crate::Executor::run) typed as
-//!   `Result<_, P::Error>`. Use this when the failure is *not* about a
+//!   solve. [`Executor::run`](crate::Executor::run) returns the solver's error
+//!   type. Unconstrained solvers return `P::Error` directly; solvers that validate
+//!   constraints preserve it in
+//!   [`ConstraintSolveError::Evaluation`](crate::ConstraintSolveError::Evaluation),
+//!   alongside a distinct variant for invalid declarations or malformed callback
+//!   outputs. Use this when the failure is *not* about a
 //!   particular `x`: a downstream service vanished, an expensive evaluation
 //!   detected a fine-grained cancellation request, or an early-stopping
 //!   criterion in the problem's own state fired. For ordinary cancellation

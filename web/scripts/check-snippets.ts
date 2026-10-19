@@ -10,7 +10,8 @@
  * Run with: `pnpm run check:snippets` (uses tsx).
  *
  * Needs a Rust toolchain on PATH. Set `KEEP_SNIPPETS=1` to leave the
- * temporary packages on disk for inspection.
+ * temporary packages on disk for inspection. Use `--dependencies-only` to
+ * check documented versions without compiling the snippets.
  */
 import { execFileSync } from "node:child_process";
 import {
@@ -50,6 +51,48 @@ const migrationPage = resolve(
     "+page.svx",
 );
 const keep = process.env.KEEP_SNIPPETS === "1";
+
+function checkMigrationDependencyVersions(): void {
+    // Versionary bumps the manifest in its release PR, after main already
+    // documents the new API. The upgrade guide names that API's target version.
+    const upgradePage = readFileSync(
+        resolve(webDir, "src/routes/docs/migrating-to-v2/+page.svx"),
+        "utf8",
+    );
+    const expectedMajor = upgradePage.match(
+        /^# Migrating to Basin (\d+)\./,
+    )?.[1];
+    if (expectedMajor === undefined) {
+        throw new Error("missing target version in the Basin upgrade guide");
+    }
+
+    const page = readFileSync(migrationPage, "utf8");
+    const dependencies = [
+        ...page.matchAll(
+            /\bbasin\s*=\s*(?:"([^"\n]+)"|\{[^}\n]*\bversion\s*=\s*"([^"\n]+)")/g,
+        ),
+    ];
+    if (dependencies.length === 0) {
+        throw new Error(
+            "missing Basin dependency in the Argmin migration guide",
+        );
+    }
+    for (const dependency of dependencies) {
+        const requirement = dependency[1] ?? dependency[2];
+        const major = requirement.match(/^[\^~]?(\d+)(?:\.\d+)*$/)?.[1];
+        if (major !== expectedMajor) {
+            throw new Error(
+                `Argmin migration dependency ${JSON.stringify(requirement)} must target Basin ${expectedMajor}.x`,
+            );
+        }
+    }
+    console.log(
+        `✓ ${dependencies.length} documented Basin dependencies target ${expectedMajor}.x`,
+    );
+}
+
+checkMigrationDependencyVersions();
+if (process.argv.includes("--dependencies-only")) process.exit(0);
 
 function extractMigrationSnippets(): Map<string, string> {
     const page = readFileSync(migrationPage, "utf8");

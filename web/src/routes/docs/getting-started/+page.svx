@@ -102,11 +102,12 @@ let result = Executor::from_start(Rosenbrock, solver, vec![-1.2, 1.0])
     .unwrap();
 ```
 
-Most solvers support `from_start`. The few whose natural initialization needs
-more than a point do not implement it: CMA-ES (a step-size σ), the population
-GA, DE, and random search (they sample a box), and the bracketing scalar solvers
-(Brent, golden-section). For those, calling `from_start` is a compile error;
-build the state explicitly and use `Executor::new` instead.
+Most solvers support `from_start`, including `CmaEs` and `BoundedCmaEs`: the
+starting point supplies the mean, and the solver configures the initial scale.
+Solvers that sample a box or need an explicit population, such as PSO, GA, DE,
+and random search, require an explicit state. The scalar minimizers `Brent`,
+`BrentDerivative`, and `GoldenSection` also require a state because they start
+from a bracket. Use `Executor::new` for those solvers.
 
 ## Convergence and Run Limits
 
