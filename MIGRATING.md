@@ -339,6 +339,41 @@ continues to return `(state, completed, termination)` and discards any future
 optional metadata. Numerical behavior and serialized representations are
 unchanged.
 
+## Extensible stopping records
+
+`ConvergenceCriterion` and `ApplicationStop` are now non-exhaustive. Replace
+struct literals with `ConvergenceCriterion::new(test, evidence)` and
+`ApplicationStop::new(code)`. The existing `ConvergenceCriterion::upper_bound`
+and `ConvergenceCriterion::custom` constructors remain available. The general
+constructor accepts any `ConvergenceEvidence` variant:
+
+```rust
+let criterion = ConvergenceCriterion::<f32>::new(
+    ConvergenceTest::NoFreeParameters,
+    ConvergenceEvidence::NoFreeParameters,
+);
+let stop = ApplicationStop::new("user_requested");
+```
+
+Fields remain public for reading, moving, and assignment. Struct update syntax
+is unavailable, and destructuring must include `..`:
+
+```rust
+let ConvergenceCriterion { test, evidence, .. } = criterion;
+let ApplicationStop { code, .. } = stop;
+```
+
+Existing constructors will remain sufficient throughout Basin 2.x. Future
+optional metadata must have defaults that preserve their behavior without
+requiring new information from external solvers or application hooks. These
+changes preserve current numerical behavior and serialized representations;
+future serialization compatibility requires a separate decision.
+
+`Threshold` remains exhaustive, with struct literals and exhaustive
+destructuring supported. Its fields describe a complete mathematical
+comparison; different comparison rules require distinct evidence
+representations.
+
 ## Solver and line-search settings
 
 Basin 2.0 removes `BarrierMethod::new`, `AugmentedLagrangianMethod::new`,

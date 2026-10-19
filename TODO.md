@@ -565,10 +565,13 @@ desired backend features.
   to behavior compatible with existing constructors. See the [publication
   migration guide](MIGRATING.md#extensible-solver-publications).
 
-- [ ] **Decide whether smaller stopping records need extension points.**
-  Review `ConvergenceCriterion`, `Threshold`, and `ApplicationStop` for likely
-  future metadata. If they become non-exhaustive, preserve straightforward
-  construction, including a general `ConvergenceCriterion::new(test, evidence)`.
+- [x] **Set extension points for smaller stopping records.**
+  `ConvergenceCriterion` and `ApplicationStop` are non-exhaustive, retain public
+  fields, and provide straightforward construction, including the general
+  `ConvergenceCriterion::new(test, evidence)`. Future optional metadata must
+  default to behavior compatible with existing constructors. `Threshold`
+  remains exhaustive as a complete mathematical comparison. See the
+  [stopping-record migration guide](MIGRATING.md#extensible-stopping-records).
 
 - [ ] **Decide whether line-search configurations should be non-exhaustive.**
   `Backtracking`, `Wolfe`, `MoreThuente`, and `HagerZhang` expose all their

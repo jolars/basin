@@ -314,6 +314,14 @@ preserve existing constructor behavior; adding fields cannot require external
 solver or state implementations to supply new information during Basin 2.x.
 See the [publication migration guide](MIGRATING.md#extensible-solver-publications).
 
+`ConvergenceCriterion` and `ApplicationStop` follow the same extension policy:
+their public constructors remain sufficient throughout Basin 2.x, and future
+optional metadata must default to behavior compatible with those constructors.
+`Threshold` remains exhaustive because its fields describe a complete
+mathematical comparison. Different comparison rules require distinct evidence
+representations. See the [stopping-record migration
+guide](MIGRATING.md#extensible-stopping-records).
+
 Basin 2.0 on `main` uses shared progress states with solver-owned algorithm
 machinery. The migration follows the validated
 [prototype](TODO.md#state-api-prototype) and the contracts below.

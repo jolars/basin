@@ -125,8 +125,25 @@ impl<F: Scalar> Convergence<F> {
 }
 
 /// One precisely identified predicate and the measurements used to evaluate it.
+///
+/// Construct records with [`Self::new`], [`Self::upper_bound`], or [`Self::custom`].
+/// Fields remain public for reading, moving, and assignment; destructuring must
+/// include `..`. Future optional metadata must default to behavior compatible
+/// with existing constructors.
+///
+/// Struct literals are unavailable outside Basin:
+///
+/// ```compile_fail,E0639
+/// use basin::{ConvergenceCriterion, ConvergenceEvidence, ConvergenceTest};
+///
+/// let criterion = ConvergenceCriterion::<f64> {
+///     test: ConvergenceTest::NoFreeParameters,
+///     evidence: ConvergenceEvidence::NoFreeParameters,
+/// };
+/// ```
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub struct ConvergenceCriterion<F: Scalar = f64> {
     /// The mathematical predicate that passed.
     pub test: ConvergenceTest,
@@ -270,6 +287,10 @@ pub struct BinaryValue<F: Scalar = f64> {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A scalar comparison value, its tolerance settings, and the evaluated bound.
+///
+/// This complete mathematical record supports struct literals and exhaustive
+/// destructuring. Different comparison rules require distinct evidence
+/// representations.
 pub struct Threshold<F: Scalar = f64> {
     /// Observed value.
     pub value: F,
@@ -295,6 +316,14 @@ pub struct Measurement<F: Scalar = f64> {
 }
 
 impl<F: Scalar> ConvergenceCriterion<F> {
+    /// Construct a predicate report from its identity and evidence.
+    pub fn new(
+        test: ConvergenceTest,
+        evidence: ConvergenceEvidence<F>,
+    ) -> Self {
+        Self { test, evidence }
+    }
+
     /// Construct a predicate report with its measured value and bound.
     pub fn upper_bound(
         test: ConvergenceTest,
@@ -303,15 +332,15 @@ impl<F: Scalar> ConvergenceCriterion<F> {
         tolerance: F,
         reference: Option<F>,
     ) -> Self {
-        Self {
+        Self::new(
             test,
-            evidence: ConvergenceEvidence::UpperBound {
+            ConvergenceEvidence::UpperBound {
                 value,
                 bound,
                 tolerance,
                 reference,
             },
-        }
+        )
     }
     /// Construct a namespaced predicate with its definition and measurements.
     pub fn custom(
@@ -319,13 +348,13 @@ impl<F: Scalar> ConvergenceCriterion<F> {
         definition: impl Into<String>,
         measurements: Vec<Measurement<F>>,
     ) -> Self {
-        Self {
-            test: ConvergenceTest::Custom {
+        Self::new(
+            ConvergenceTest::Custom {
                 key: key.into(),
                 definition: definition.into(),
             },
-            evidence: ConvergenceEvidence::Measurements(measurements),
-        }
+            ConvergenceEvidence::Measurements(measurements),
+        )
     }
 }
 
@@ -429,14 +458,27 @@ pub enum NumericalFailure<F: Scalar = f64> {
 }
 
 /// An application hook's own stopping decision, distinct from convergence.
+///
+/// Construct records with [`Self::new`]. Fields remain public for reading,
+/// moving, and assignment; destructuring must include `..`. Future optional
+/// metadata must default to behavior compatible with existing constructors.
+///
+/// Struct literals are unavailable outside Basin:
+///
+/// ```compile_fail,E0639
+/// use basin::ApplicationStop;
+///
+/// let stop = ApplicationStop { code: "user_requested".into() };
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub struct ApplicationStop {
     /// Application-defined identifier for this stop.
     pub code: String,
 }
 impl ApplicationStop {
-    /// Construct a value with the supplied initial explanation.
+    /// Construct an application stop with the supplied identifier.
     pub fn new(code: impl Into<String>) -> Self {
         Self { code: code.into() }
     }

@@ -82,12 +82,56 @@ fn exact_continuation_creates_a_new_report_before_touching_the_solver() {
 }
 
 use basin::{
-    ApplicationStop, ConvergenceEvidence, CostFunction, EvalCounts,
-    ExecutionLimit, Gradient, GradientDescent, NumericalFailure,
+    ApplicationStop, ConvergenceCriterion, ConvergenceEvidence, CostFunction,
+    EvalCounts, ExecutionLimit, Gradient, GradientDescent, NumericalFailure,
     ObservationEvent, ObserverMode, PartialResultPolicy, Problem, Solver,
-    SolverStep, State, StepOutcome, TerminationReport,
+    SolverStep, State, StepOutcome, TerminationReport, Threshold,
 };
 use std::{cell::RefCell, rc::Rc};
+
+#[test]
+fn external_stopping_records_retain_structured_evidence() {
+    let size = Threshold::<f32> {
+        value: 0.125,
+        tolerance: 0.25,
+        absolute_tolerance: Some(0.25),
+        relative_tolerance: None,
+        reference: None,
+    };
+    let criterion = ConvergenceCriterion::new(
+        ConvergenceTest::Simplex,
+        ConvergenceEvidence::Simplex {
+            size: Some(size),
+            cost_spread: None,
+        },
+    );
+    let ConvergenceCriterion { test, evidence, .. } = criterion;
+    assert_eq!(test, ConvergenceTest::Simplex);
+    let ConvergenceEvidence::Simplex {
+        size: Some(size),
+        cost_spread: None,
+    } = evidence
+    else {
+        panic!("expected simplex size evidence");
+    };
+    let Threshold {
+        value,
+        tolerance,
+        absolute_tolerance,
+        relative_tolerance,
+        reference,
+    } = size;
+    assert_eq!(value, 0.125);
+    assert_eq!(tolerance, 0.25);
+    assert_eq!(absolute_tolerance, Some(0.25));
+    assert_eq!(relative_tolerance, None);
+    assert_eq!(reference, None);
+
+    let mut stop = ApplicationStop::new("user_requested");
+    stop.code = "service_shutdown".into();
+    let ApplicationStop { code, .. } = stop;
+    assert_eq!(code, "service_shutdown");
+}
 
 impl CostFunction for Fit {
     type Param = Vec<f64>;
