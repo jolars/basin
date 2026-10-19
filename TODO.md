@@ -43,8 +43,8 @@ numerical work against analytic cases and reference implementations.
   fixed-coordinate elimination. All four dense backends support `f32` and
   `f64`; active bounds and rank deficiency are covered by analytic and SciPy
   1.16.2 comparisons. The bounded-LM solver is named
-  `BoundedLevenbergMarquardt` in Basin 2.0 and `Trf` in Basin 1.x.
-  The large-scale path remains a follow-up below.
+  `BoundedLevenbergMarquardt` in Basin 2.0 and `Trf` in Basin 1.x. The
+  large-scale path remains a follow-up below.
 - [x] **Improve full TRF termination at the floating-point cost floor.** Found
   during the [Navette
   integration](https://github.com/opticsWolf/Navette/issues/2) and
@@ -112,10 +112,10 @@ numerical work against analytic cases and reference implementations.
 - [ ] **Add integer variables to differential evolution.** Define a problem-side
   domain contract, validate that each integer interval contains an integer,
   and preserve integrality through sampling, mutation repair, and local
-  refinement. The [integer-domain API prototype](#integer-domain-api-prototype)
-  establishes the declaration, rejection, and fixed-integer refinement
-  contracts. Production sampling, mutation repair, and mixed-integer injection
-  remain unimplemented.
+  refinement. The [integer-domain API
+  prototype](#integer-domain-api-prototype) establishes the declaration,
+  rejection, and fixed-integer refinement contracts. Production sampling,
+  mutation repair, and mixed-integer injection remain unimplemented.
 - [ ] **Add dedicated linear least-squares solvers.** Implement nonnegative
   least squares and general box-bounded linear least squares. Reuse suitable
   factorizations and test rank deficiency, active bounds, and optimality
@@ -149,17 +149,17 @@ numerical work against analytic cases and reference implementations.
 
 ### Rustima integration
 
-Follow-ups from [rustima #6](https://github.com/zongseung/rustima/issues/6).
-The probe found no integration requirement that needs a breaking Basin change
-before 2.0. The Basin additions below can ship compatibly in 2.x.
+Follow-ups from [rustima #6](https://github.com/zongseung/rustima/issues/6). The
+probe found no integration requirement that needs a breaking Basin change before
+2.0. The Basin additions below can ship compatibly in 2.x.
 
 - [x] **Probe the Basin 2.0 integration.** Compared rustima `314455b` with a
   trial using Basin `1ae01c8` for BFGS, L-BFGS, L-BFGS-B, Nelder-Mead, and
   CSS initialization. Both implementations passed 155 Rust and 424 Python
   tests. Across 384 paired runs, full-fit log-likelihood differences stayed
-  below `1.4e-7`. Stepwise and grid searches selected the same models on four
-  datasets, with reproducible repeated runs. The trial checked on Rust 1.87,
-  including the `parallel` and `nalgebra_v0_34` features.
+  below `1.4e-7`. Stepwise and grid searches selected the same models on
+  four datasets, with reproducible repeated runs. The trial checked on Rust
+  1.87, including the `parallel` and `nalgebra_v0_34` features.
 - [x] **Add configurable initial inverse Hessians to BFGS.** Support rustima's
   diagonal seed based on the initial gradient without requiring coordinate
   scaling. Preserve existing callers and default behavior. Define how custom
@@ -178,19 +178,20 @@ before 2.0. The Basin additions below can ship compatibly in 2.x.
   separately from callback `Err` values, and choose explicit policies for
   partial results and fallback solvers. Retain the accepted Basin 2.0 budget
   semantics; a future strict callback cap would need a separate opt-in API.
-- [ ] **Reconcile rustima's toolchain declaration.** Rustima declares Rust
-  1.83, but its existing nalgebra 0.34.1 dependency requires 1.87.0, matching
-  Basin's MSRV. Confirm the maintainer's support policy and correct rustima's
-  declaration or investigate genuine 1.83 support. The probe verified the
-  integration on Rust 1.87.0 and tested it on 1.89.0.
-- [ ] **Prepare the upstream comparison PR, starting with L-BFGS-B.** Retain
-  the existing implementations for comparison before migrating the remaining
+- [ ] **Reconcile rustima's toolchain declaration.** Rustima declares Rust 1.83,
+  but its existing nalgebra 0.34.1 dependency requires 1.87.0, matching
+  Basin's MSRV. Confirm the maintainer's support policy and correct
+  rustima's declaration or investigate genuine 1.83 support. The probe
+  verified the integration on Rust 1.87.0 and tested it on 1.89.0.
+- [ ] **Prepare the upstream comparison PR, starting with L-BFGS-B.** Retain the
+  existing implementations for comparison before migrating the remaining
   solvers. Preserve CSS's `[-10, 10]` box, fixed central-difference step of
   `1e-7`, and existing optimizer settings, plus the objective's fused
   evaluation and gradient fallback behavior. Compare fitted parameters,
   likelihoods, convergence, reproducibility, and performance against the
   reference fixtures, including stepwise and grid model selection. Broaden
-  the timing pilot before drawing publication-quality performance conclusions.
+  the timing pilot before drawing publication-quality performance
+  conclusions.
 
 ### Longer-term candidates
 
@@ -252,72 +253,74 @@ Ship these in order, preserving existing public APIs and behavior:
 
 ### Iterative-TRF API prototype
 
-- [x] **Prove an operator-only reflective model and robust composition.**
-  The [executable prototype](crates/basin/src/core/least_squares/iterative_trf_api_prototype.rs)
-  is a test-only child of the robust least-squares module. No types, counters,
-  or methods from the experiment enter Basin's public API. Existing dense
-  `TrustRegionReflective` keeps its constructor, bounds, and behavior.
+- [x] **Prove an operator-only reflective model and robust composition.** The
+  [executable
+  prototype](crates/basin/src/core/least_squares/iterative_trf_api_prototype.rs)
+  is a test-only child of the robust least-squares module. No types,
+  counters, or methods from the experiment enter Basin's public API.
+  Existing dense `TrustRegionReflective` keeps its constructor, bounds, and
+  behavior.
 
 Use separate `JacobianProduct: Residual` and
 `TransposeJacobianProduct: Residual` capabilities. Their signatures are
-`jacobian_product(&self, x: &Self::Param, v: &Self::Param) ->
-Result<Self::Output, Self::Error>` and
-`transpose_jacobian_product(&self, x: &Self::Param, v: &Self::Output) ->
-Result<Self::Param, Self::Error>`. Neither extends `Jacobian` nor introduces
-a matrix associated type. Products differentiate the raw residual at `x`;
-they are pure and linear in `v`. Residual length stays fixed during a solve.
-Parameter and residual spaces may use distinct vector types and lengths.
-Do not blanket-implement the capabilities for every `Jacobian`: an explicit
-dense-product adapter can provide that convenience without blocking custom
-analytic products on problems that also supply a dense Jacobian.
+`jacobian_product(&self, x: &Self::Param, v: &Self::Param) -> Result<Self::Output, Self::Error>`
+and
+`transpose_jacobian_product(&self, x: &Self::Param, v: &Self::Output) -> Result<Self::Param, Self::Error>`.
+Neither extends `Jacobian` nor introduces a matrix associated type. Products
+differentiate the raw residual at `x`; they are pure and linear in `v`. Residual
+length stays fixed during a solve. Parameter and residual spaces may use
+distinct vector types and lengths. Do not blanket-implement the capabilities for
+every `Jacobian`: an explicit dense-product adapter can provide that convenience
+without blocking custom analytic products on problems that also supply a dense
+Jacobian.
 
 The intended production entry is a separate
 `IterativeTrustRegionReflective<F = f64>` with `PointState<V, F>` and the
-existing box-problem declaration. It will require both product capabilities
-and vector operations, without `Jacobian`, `MatrixIndex`, `ScaleRowsInPlace`,
-matrix factorization, or matrix-entry access. This experiment implements its
-model preparation and operator consumption signatures, not a `Solver` impl
-or settings builders. Production LSMR tolerances, iteration limits, and
-regularization must be explicit algorithm controls. Automatic Jacobian-column
-scaling would require a separate capability or explicit user scales; it must
-not introduce a hidden matrix-entry requirement.
+existing box-problem declaration. It will require both product capabilities and
+vector operations, without `Jacobian`, `MatrixIndex`, `ScaleRowsInPlace`, matrix
+factorization, or matrix-entry access. This experiment implements its model
+preparation and operator consumption signatures, not a `Solver` impl or settings
+builders. Production LSMR tolerances, iteration limits, and regularization must
+be explicit algorithm controls. Automatic Jacobian-column scaling would require
+a separate capability or explicit user scales; it must not introduce a hidden
+matrix-entry requirement.
 
 The prototype establishes these contracts:
 
 - The model freezes the accepted parameter and robust row factors. A borrowed
-  linearization ties them to one counted objective. Repeated products and
-  trial residual evaluations retain that model; accepting another point
-  rebuilds it. Production solver-owned workspace must preserve this rule
-  across rejected trials and exact continuation.
+  linearization ties them to one counted objective. Repeated products and trial
+  residual evaluations retain that model; accepting another point rebuilds it.
+  Production solver-owned workspace must preserve this rule across rejected
+  trials and exact continuation.
 - Raw and `RobustLeastSquares` evaluations use separate internal capability
-  implementations, as the dense NLLS drivers do. The robust adapter continues
-  to expose its true objective rather than implementing `Residual`. The
-  prototype reuses its existing loss and scale calculations: with row factors
-  `a` and model residual `r_tilde`, the actions are `diag(a) J v` and
-  `J^T diag(a) u`. Thus their composition supplies safeguarded curvature,
-  while applying the transpose to `r_tilde` gives the robust gradient.
-  Trial reductions use the true robust cost, not the model residual norm.
+  implementations, as the dense NLLS drivers do. The robust adapter continues to
+  expose its true objective rather than implementing `Residual`. The prototype
+  reuses its existing loss and scale calculations: with row factors `a` and
+  model residual `r_tilde`, the actions are `diag(a) J v` and `J^T diag(a) u`.
+  Thus their composition supplies safeguarded curvature, while applying the
+  transpose to `r_tilde` gives the robust gradient. Trial reductions use the
+  true robust cost, not the model residual norm.
 - The reflective augmented operator has actions for
   `A = [diag(a) J diag(d); diag(sqrt(c))]` and its transpose. Its two output
-  blocks occupy residual and parameter space. Fixed coordinates use
-  `d = c = 0`. These actions provide the inputs needed by LSMR and a small
-  subspace model using vector storage, with no materialized normal matrix.
-  Tests supply the scaling diagonals; the production driver must compute
-  Coleman–Li scaling, eliminate fixed coordinates, and select feasible steps.
+  blocks occupy residual and parameter space. Fixed coordinates use `d = c = 0`.
+  These actions provide the inputs needed by LSMR and a small subspace model
+  using vector storage, with no materialized normal matrix. Tests supply the
+  scaling diagonals; the production driver must compute Coleman–Li scaling,
+  eliminate fixed coordinates, and select feasible steps.
 - Count attempted raw residual, Jv, and transpose-Jacobian requests separately,
   before invoking callbacks, including failures. Robust weighting adds no
   evaluations. Do not charge matrix `jacobian_evals` for products. Internal
-  probes stay excluded under the existing wrapper-boundary contract.
-  The prototype's `OperatorCounts` pairs real `EvalCounts` with two proposed
-  fields and tests totals, deltas, and composition. Production must add those
-  fields to the non-exhaustive `EvalCounts` and integrate state mirrors,
-  budgets, checkpoint/serde storage, and inner roll-ups before shipping the
-  solver. The experiment does not prove that executor integration yet.
-- Callback errors propagate unchanged. Invalid initial residuals or loss
-  models cannot produce a linearization; non-finite trial residuals yield
-  infinite cost without replacing the model. Shape and non-finite derivative
-  guards are assertions in this model consumer. The production driver must
-  map numerical failures to its structured failure reports.
+  probes stay excluded under the existing wrapper-boundary contract. The
+  prototype's `OperatorCounts` pairs real `EvalCounts` with two proposed fields
+  and tests totals, deltas, and composition. Production must add those fields to
+  the non-exhaustive `EvalCounts` and integrate state mirrors, budgets,
+  checkpoint/serde storage, and inner roll-ups before shipping the solver. The
+  experiment does not prove that executor integration yet.
+- Callback errors propagate unchanged. Invalid initial residuals or loss models
+  cannot produce a linearization; non-finite trial residuals yield infinite cost
+  without replacing the model. Shape and non-finite derivative guards are
+  assertions in this model consumer. The production driver must map numerical
+  failures to its structured failure reports.
 
 Analytic checks cover rectangular nonlinear products, adjoints, augmented
 curvature, fixed coordinates, all five built-in losses at nonunit scale,
@@ -327,8 +330,10 @@ distinct Rust types for parameter and residual space. Run
 `cargo test -p basin --lib iterative_trf_api_prototype`, optionally adding
 `--features nalgebra,ndarray,faer`.
 
-The operator design follows [SciPy 1.16.2's TRF implementation](https://github.com/scipy/scipy/blob/v1.16.2/scipy/optimize/_lsq/trf.py)
-and [its operator and robust-scaling helpers](https://github.com/scipy/scipy/blob/v1.16.2/scipy/optimize/_lsq/common.py).
+The operator design follows [SciPy 1.16.2's TRF
+implementation](https://github.com/scipy/scipy/blob/v1.16.2/scipy/optimize/_lsq/trf.py)
+and [its operator and robust-scaling
+helpers](https://github.com/scipy/scipy/blob/v1.16.2/scipy/optimize/_lsq/common.py).
 LSMR, the two-dimensional subspace solve, reflective step selection, sparse
 adapters, coloring, and production accounting/checkpoint integration remain
 future work. This prototype establishes the additive API path, not numerical
@@ -337,83 +342,84 @@ convergence or performance of a large-scale solver.
 ### Constrained-DE API prototype
 
 - [x] **Prove selection-aware population storage and constrained injection.**
-  The [executable prototype](crates/basin/tests/constrained_de_api_prototype.rs)
-  uses the real executor, inner executor, canonical problem declarations,
-  and evaluation counters. Its support types remain test-only. Scripted
+  The [executable
+  prototype](crates/basin/tests/constrained_de_api_prototype.rs) uses the
+  real executor, inner executor, canonical problem declarations, and
+  evaluation counters. Its support types remain test-only. Scripted
   populations exercise selection without implementing mutation or sampling.
 
-The additive production path is a separate `ConstrainedDe<F>` constructed
-with `ConstrainedDe::new(de: De<F>)`, paired with
-`SelectedPopulationProgress<V, F>`. A sibling
-`ConstrainedDeInject::with_inner_solver(outer: ConstrainedDe<F>, inner: I)`
-can compose local refinement. These are proposed signatures, not public
-exports. Ordinary `De`, `DeInject`, and `PopulationProgress` retain their
-existing types and behavior.
+The additive production path is a separate `ConstrainedDe<F>` constructed with
+`ConstrainedDe::new(de: De<F>)`, paired with `SelectedPopulationProgress<V, F>`.
+A sibling
+`ConstrainedDeInject::with_inner_solver(outer: ConstrainedDe<F>, inner: I)` can
+compose local refinement. These are proposed signatures, not public exports.
+Ordinary `De`, `DeInject`, and `PopulationProgress` retain their existing types
+and behavior.
 
 The prototype establishes these contracts:
 
-- Member records pair parameters with componentwise violations and an
-  optional objective. Checked replacement validates the entire population
-  before changing it and retains member order. A separate population
-  capability exposes these records without promising a cost for every
-  member. Seeds have no evaluated records.
+- Member records pair parameters with componentwise violations and an optional
+  objective. Checked replacement validates the entire population before changing
+  it and retains member order. A separate population capability exposes these
+  records without promising a cost for every member. Seeds have no evaluated
+  records.
 - Feasible members have evaluated objectives. An all-infeasible population
   evaluates its selected representative before publication, leaving other
-  infeasible objectives optional. `State::cost()` therefore remains an
-  actual evaluated objective. A representative callback error propagates.
-  This choice requires an objective that can evaluate an infeasible
-  representative; an objective defined only on feasible points needs a
-  different, future availability contract.
+  infeasible objectives optional. `State::cost()` therefore remains an actual
+  evaluated objective. A representative callback error propagates. This choice
+  requires an objective that can evaluate an infeasible representative; an
+  objective defined only on feasible points needs a different, future
+  availability contract.
 - Feasible trials beat infeasible members. Feasible pairs compare objective
-  values; infeasible pairs use componentwise non-worsening violations,
-  following [SciPy 1.16.2's Lampinen-based
+  values; infeasible pairs use componentwise non-worsening violations, following
+  [SciPy 1.16.2's Lampinen-based
   selection](https://github.com/scipy/scipy/blob/v1.16.2/scipy/optimize/_differentialevolution.py).
-  Representatives use the lowest feasible objective or, before feasibility,
-  the smallest unscaled sum of violations. Exact ranking ties retain the
-  historical incumbent. This sum is a prototype policy, not a common
-  constraint-reporting norm.
-- Explicit selection events retain independent point, objective, and
-  violation snapshots. The executor stamps iteration and all raw counts at
-  publication, including clean mid-step stops. Republishing a selection
-  preserves its age. The state implements `IncumbentState` but neither
-  `ObjectiveIncumbentState` nor `PopulationState`; objective targets and
-  objective stalls cannot attach to it.
-- An injection inner must accept the original constrained problem. Seeds
-  follow the representative ranking. Every returned point is repaired to
-  the box and its constraints are reevaluated before applying the same trial
-  selection rule. The prototype permits infeasible local starts and partial
-  results; it does not permit a local solver to discard nonlinear blocks.
+  Representatives use the lowest feasible objective or, before feasibility, the
+  smallest unscaled sum of violations. Exact ranking ties retain the historical
+  incumbent. This sum is a prototype policy, not a common constraint-reporting
+  norm.
+- Explicit selection events retain independent point, objective, and violation
+  snapshots. The executor stamps iteration and all raw counts at publication,
+  including clean mid-step stops. Republishing a selection preserves its age.
+  The state implements `IncumbentState` but neither `ObjectiveIncumbentState`
+  nor `PopulationState`; objective targets and objective stalls cannot attach to
+  it.
+- An injection inner must accept the original constrained problem. Seeds follow
+  the representative ranking. Every returned point is repaired to the box and
+  its constraints are reevaluated before applying the same trial selection rule.
+  The prototype permits infeasible local starts and partial results; it does not
+  permit a local solver to discard nonlinear blocks.
 - Nonempty nonlinear callback attempts charge `residual_evals`, including
-  failures and malformed output. Zero-count blocks skip callbacks. Objective
-  and derivative calls preserve their existing categories. Same-problem
-  inner execution shares the outer wrapper and never adds its counts twice.
-- Fresh initialization reevaluates member seeds and resets script position
-  and bookkeeping. Exact checkpoints preserve the script position, members,
-  refinement schedule, inner solver, selection metadata, and counts.
-  Tests cover both precisions on all four dense backends and serialized
-  `Vec` checkpoints.
+  failures and malformed output. Zero-count blocks skip callbacks. Objective and
+  derivative calls preserve their existing categories. Same-problem inner
+  execution shares the outer wrapper and never adds its counts twice.
+- Fresh initialization reevaluates member seeds and resets script position and
+  bookkeeping. Exact checkpoints preserve the script position, members,
+  refinement schedule, inner solver, selection metadata, and counts. Tests cover
+  both precisions on all four dense backends and serialized `Vec` checkpoints.
 
-The fixture exercises finite boxes and nonlinear inequalities. Other
-constraint blocks, feasibility tolerances, production mutation and sampling,
-and nonlinear relaxation adapters remain future work. The `De` configuration
-is retained as opaque input to the wrapper; the script does not interpret
-its settings or exercise its RNG. Run the experiment with
+The fixture exercises finite boxes and nonlinear inequalities. Other constraint
+blocks, feasibility tolerances, production mutation and sampling, and nonlinear
+relaxation adapters remain future work. The `De` configuration is retained as
+opaque input to the wrapper; the script does not interpret its settings or
+exercise its RNG. Run the experiment with
 `cargo test -p basin --test constrained_de_api_prototype`, optionally adding
 `--features nalgebra,ndarray,faer,serde,parallel`.
 
 ### Integer-domain API prototype
 
-- [x] **Prove an additive domain declaration and safe local refinement.**
-  The [executable prototype](crates/basin/src/core/constraint/model/integer_domain_api_prototype.rs)
+- [x] **Prove an additive domain declaration and safe local refinement.** The
+  [executable
+  prototype](crates/basin/src/core/constraint/model/integer_domain_api_prototype.rs)
   extends the sealed canonical declaration inside a test-only child module.
   It uses the real problem traits, adapters, executor, and inner executor.
   No prototype types or methods enter the public API.
 
-Integrality belongs in the canonical problem-side declaration, alongside
-bounds and constraint blocks. The proposed public spelling is
+Integrality belongs in the canonical problem-side declaration, alongside bounds
+and constraint blocks. The proposed public spelling is
 `Constraints<B, L, N, D = ContinuousDomain>`, with an explicit builder that
-changes the domain type. Existing declarations retain their continuous
-meaning. Do not add a required `Domain` associated type to every problem.
+changes the domain type. Existing declarations retain their continuous meaning.
+Do not add a required `Domain` associated type to every problem.
 
 The prototype wraps the existing constraint set in
 `DomainConstraints<C, D = ContinuousDomain>` rather than changing the public
@@ -429,37 +435,36 @@ The prototype establishes these contracts:
 - Bounds describe intervals; a separate coordinate mask declares integrality.
   The mask and bounds have the parameter's length and remain fixed during a
   solve. A borrowed declaration shares both the original bounds and mask.
-  Replacing bounds preserves the domain block. Finite-difference and
-  robust-loss adapters preserve the complete declaration and its type.
-- Unsupported solvers reject integer declarations through their existing
-  trait bounds. Compile-time checks cover continuous DE, ordinary and
-  projected Nelder-Mead, `DeInject`, and `RelaxedInner`, including relaxed
-  injection. The box-relaxation adapter is not permission to discard an
-  integer domain. Future constraint transformations must consume only blocks
-  they support and retain any unconsumed domain declaration.
+  Replacing bounds preserves the domain block. Finite-difference and robust-loss
+  adapters preserve the complete declaration and its type.
+- Unsupported solvers reject integer declarations through their existing trait
+  bounds. Compile-time checks cover continuous DE, ordinary and projected
+  Nelder-Mead, `DeInject`, and `RelaxedInner`, including relaxed injection. The
+  box-relaxation adapter is not permission to discard an integer domain. Future
+  constraint transformations must consume only blocks they support and retain
+  any unconsumed domain declaration.
 - Initialization validates finite, ordered bounds and requires
   `ceil(lower) <= floor(upper)` for every integer coordinate. The effective
   integer endpoints must lie in the consecutive exactly representable range:
   `[-2^24, 2^24]` for `f32` and `[-2^53, 2^53]` for `f64`. This deliberately
   conservative prototype policy rejects wider integer intervals, including
   singletons outside that range. Seeds must already satisfy bounds and
-  integrality; validation never silently rounds them or evaluates the
-  objective.
+  integrality; validation never silently rounds them or evaluates the objective.
 - Continuous local refinement requires an explicit adapter that fixes integer
-  coordinates at the selected member's values. The prototype eliminates
-  those coordinates and fixed continuous coordinates, runs projected
-  Nelder-Mead on the remaining box, and reconstructs the full parameter
-  before every callback. All-integer or otherwise fully fixed problems skip
-  refinement without evaluations. Rounding only the returned point is
-  insufficient because intermediate callbacks must also preserve integrality.
-- The adapter preserves original callback errors and folds its evaluation
-  counts into the outer problem exactly once, including failing attempts.
-  Refinement returns its inner termination report with the matching point
-  and cost. An iteration limit retains partial progress; production injection
-  must apply the normal explicit inner-stop policy and outer selection rule.
+  coordinates at the selected member's values. The prototype eliminates those
+  coordinates and fixed continuous coordinates, runs projected Nelder-Mead on
+  the remaining box, and reconstructs the full parameter before every callback.
+  All-integer or otherwise fully fixed problems skip refinement without
+  evaluations. Rounding only the returned point is insufficient because
+  intermediate callbacks must also preserve integrality.
+- The adapter preserves original callback errors and folds its evaluation counts
+  into the outer problem exactly once, including failing attempts. Refinement
+  returns its inner termination report with the matching point and cost. An
+  iteration limit retains partial progress; production injection must apply the
+  normal explicit inner-stop policy and outer selection rule.
 
-Tests exercise both precisions on each enabled dense backend version.
-Run `cargo test -p basin --lib integer_domain_api_prototype`, optionally adding
+Tests exercise both precisions on each enabled dense backend version. Run
+`cargo test -p basin --lib integer_domain_api_prototype`, optionally adding
 `--features nalgebra,ndarray,faer,parallel,serde`.
 
 Production integer-aware DE, integer sampling and mutation repair, integer
@@ -536,208 +541,9 @@ without reannealing; serialization and performance remain migration work. Run
 the prototype with `cargo test -p basin --test state_api_prototype` and the
 desired backend features.
 
-## Basin 2.0
+## Basin 3.0
 
-- [x] **Rename bounded LM to distinguish it from reflective trust regions.**
-  `BoundedLevenbergMarquardt` replaces `Trf`, including its defining module,
-  without a compatibility alias. Its algorithm, settings, and dense and sparse
-  support are preserved. `TrustRegionReflective` keeps its name. See the
-  [migration guide](https://basin.rs/docs/migrating-to-v2/#bounded-least-squares-solver-name).
-
-- [ ] **Complete the stable-release handoff before publishing 2.0.0.** Follow
-  [Maintenance and releases](MAINTENANCE.md#publishing-200): disable Latest
-  promotion on `v1`, finish in-flight maintenance releases, record the 1.x
-  support end date, and publish migration guidance. Keep the 2.0 release PR
-  open until the release is ready.
-
-- [x] **Enable paired Nelder-Mead convergence defaults
-  ([#109](https://github.com/jolars/basin/issues/109)).** Both simplex size
-  and cost spread use absolute floors of `1e-8` and relative tolerances of
-  `sqrt(f64::EPSILON)` for `f64` and `32 * f32::EPSILON` for `f32`. The
-  relative cost reference includes the initial spread so it remains useful
-  near zero minima. Tests cover objective and parameter scales, flat
-  objectives, projected collapse, high-dimensional Rosenbrock, both
-  precisions, and every dense backend version. A corpus audit across
-  multiple starts and dimensions informed the precision-specific defaults.
-  See the [migration guide](https://basin.rs/docs/migrating-to-v2/#nelder-mead-convergence-defaults)
-  for settings, checkpoint changes, and the limits imposed by fixed floors.
-
-- [x] **Revisit convergence defaults for LM, L-BFGS-B, bounded LM, and
-  TRF ([#109](https://github.com/jolars/basin/issues/109)).**
-  Bounded `f64` L-BFGS now uses projected-gradient
-  tolerance `1e-9` and signed cost-reduction tolerance `10*f64::EPSILON`,
-  after a bounded NIST investigation and a fix for nonfinite selected
-  evaluations. The `f32` defaults are unchanged. The [NIST
-  fixtures](crates/competitor-bench/fixtures/nist/README.md) remain
-  available for future solver comparisons. See the [migration
-  guide](https://basin.rs/docs/migrating-to-v2/#l-bfgs-b-stopping-defaults)
-  for the individual knobs and accuracy tradeoffs. A fixed, source-informed comparison on both NIST
-  starts and curated scaling cases supports retaining the existing LM, bounded
-  LM, and TRF defaults: the tested relative policies saved evaluations but
-  reduced independently verified recovery. Relative checks remain opt-in. The
-  [decision and scaling guidance](https://basin.rs/docs/migrating-to-v2/#lm-and-trf-stopping-defaults)
-  explain the formulas, evidence, and limitations; this decision does not
-  claim scale-invariant convergence.
-
-- [x] **Make structured termination reports part of ordinary results.** Ordinary
-  `run()` returns an owned report, final state, and authoritative counts.
-  Reports distinguish convergence, limits, targets, stalls, failures,
-  cancellation, and application stops, retaining simultaneous criteria and
-  their measurements. `SolverStep` separates completion from termination;
-  composed runs retain inner failure details and use explicit policies for
-  partial results. Exact continuation produces a new report, and typed
-  callback aborts remain `Result::Err`. See the [migration
-  guide](https://basin.rs/docs/migrating-to-v2/#structured-termination-reports)
-  for the API, binding code mapping, observer lifecycle, and checkpoint changes.
-
-- [x] **Make evaluation counters extensible.** Mark `EvalCounts` as
-  non-exhaustive so future releases can add categories without breaking
-  downstream code. Construct counters with `Default` and assign public fields;
-  destructuring patterns include `..`.
-  See [evaluation-counter migration](https://basin.rs/docs/migrating-to-v2/#evaluation-counters).
-
-- [x] **Make results and diagnostic records extensible.** Mark optimization
-  results, termination reports, diagnostic records, and their growing reason
-  and phase enums as non-exhaustive. Provide result and report constructors,
-  retain public field access, and document fallback matches and destructuring
-  with `..`. See the [migration
-  guide](https://basin.rs/docs/migrating-to-v2/#extensible-results-and-diagnostics).
-
-- [x] **Make solver publication types extensible.** Mark `SolverStep` and
-  `IncumbentRef` as non-exhaustive with complete public constructors and public
-  fields. `SolverStep::partial` covers continuing partial steps, and `new`
-  supports forwarding dynamic decisions. Future optional metadata must default
-  to behavior compatible with existing constructors. See the [publication
-  migration guide](https://basin.rs/docs/migrating-to-v2/#extensible-solver-publications).
-
-- [x] **Set extension points for smaller stopping records.**
-  `ConvergenceCriterion` and `ApplicationStop` are non-exhaustive, retain public
-  fields, and provide straightforward construction, including the general
-  `ConvergenceCriterion::new(test, evidence)`. Future optional metadata must
-  default to behavior compatible with existing constructors. `Threshold`
-  remains exhaustive as a complete mathematical comparison. See the
-  [stopping-record migration guide](https://basin.rs/docs/migrating-to-v2/#extensible-stopping-records).
-
-- [x] **Make line-search configurations extensible.** `Backtracking`, `Wolfe`,
-  `MoreThuente`, and `HagerZhang` are non-exhaustive, with public fields,
-  default constructors, and builders. Future controls must default to behavior
-  compatible with existing constructors. See the [migration
-  guide](https://basin.rs/docs/migrating-to-v2/#extensible-line-search-configurations)
-  for constructors, public field assignment, and destructuring with `..`.
-
-- [x] **Make state shape errors extensible.** `SimplexShapeError` and
-  `PopulationShapeError` are non-exhaustive, with directly constructible
-  variants and unchanged payloads and validation contracts. Matches include a
-  fallback arm for future variants. See the [state shape error migration
-  guide](https://basin.rs/docs/migrating-to-v2/#extensible-state-shape-errors).
-
-- [x] **Settle the extension policy for enum payloads.** Keep existing variant
-  field lists fixed throughout Basin 2.x, with direct construction and
-  complete field patterns. Extend `ConvergenceEvidence` through new variants
-  for different mathematical representations; put optional reporting
-  metadata on enclosing non-exhaustive records with compatible constructor
-  defaults. Document changes to the variants emitted by solvers, and decide
-  serialization compatibility separately. Preserve exhaustive matching for
-  deliberately closed contracts and literals for complete mathematical
-  values. See the [contributor
-  policy](CONTRIBUTING.md#enum-payloads-and-complete-values) and [migration
-  guide](https://basin.rs/docs/migrating-to-v2/#enum-payload-compatibility).
-
-- [x] **Clean up backend compatibility aliases in Basin 2.0.0.** Make
-  unversioned `nalgebra`, `ndarray`, and `faer` features and their
-  LAPACK/BLAS counterparts select the newest supported releases. Retain the
-  `*_latest` features as deprecated synonyms and exact version features for
-  pinned dependencies. Remove the backend-specific quasi-Newton state
-  aliases in favor of `FirstOrderState<V, F>` with a solver-owned matrix.
-  Preserve independent implementations for every enabled version and
-  version-specific acceleration. Document the 1.x migration and retain
-  simultaneous-version and downstream Cargo feature-unification tests.
-
-- [x] **Remove bincode in Basin 2.0.0.** Drop legacy readers for unprefixed
-  state checkpoints and version 1 exact checkpoints, along with the bincode
-  dependency and compatibility-only tests. Retain the postcard formats and
-  document [checkpoint migration
-  requirements](https://basin.rs/docs/migrating-to-v2/#checkpoint-files)
-  for users upgrading from 1.x.
-
-- [x] **Migrate existing solvers to shared progress states.** Build on the
-  validated [prototype](#state-api-prototype) and [1.x
-  additions](#state-api-additions-for-basin-1x). Replace legacy public
-  solver/state types and apply uniform evaluation categories and the
-  accepted initialization and continuation contracts. Document replacement
-  constructors, public types, trait bounds, stopping semantics, and
-  serialized-format compatibility. See the [migration
-  guide](https://basin.rs/docs/migrating-to-v2/#shared-progress-states).
-
-- [x] **Decide how observers access solver diagnostics before finalizing 2.0.**
-  Keep `Observe<S>` for progress and add optional `ObserveSolver<S, So>`
-  hooks and `Executor::observe_solver` closures that borrow the solver at
-  the same observation boundaries. Preserve solver ownership, modes, and
-  mixed registration order without cloning workspace or triggering
-  evaluations. `Stepper::solver()` remains available for applications
-  driving their own loop. See [custom diagnostic
-  logging](https://basin.rs/docs/migrating-to-v2/#observing-solver-diagnostics).
-
-- [x] **Simplify and strengthen the full-form constraint API (tenet 4).**
-  Share one canonical `ProblemConstraints` declaration between objectives and
-  residuals, enforce solver support through its type, and let COBYLA consume
-  every declared block directly. Separate constraint values, right-hand sides,
-  linear matrices, and nonlinear Jacobians from the parameter representation.
-  Statically absent blocks require no unused matrix or callback. Validate
-  bounds, shapes, and counts with `ConstraintSolveError`, preserving original
-  callback errors. Keep MA-LS sampling domains distinct from mathematical
-  constraints, and require explicit local relaxation in bounded memetic runs.
-  See [constraint migration](https://basin.rs/docs/migrating-to-v2/#declaring-constraints).
-
-- [x] Remove the deprecated `TerminationCriterion` facility, all shipped
-  criterion types and re-exports, `Executor::terminate_on`,
-  `InnerExecutor::terminate_on`, composed `inner_terminate_on` methods,
-  `run_loop`, and `ResumableInner::segment_criteria`. Preserve stopping
-  semantics through structured reports, solver convergence setters, direct
-  execution controls, and closure hooks.
-
-- [x] Remove deprecated tolerance and algorithm-setting aliases, including
-  scalar/root and line-search aliases.
-
-- [x] Remove `BarrierMethod::new`, `AugmentedLagrangianMethod::new`, and
-  `with_inner_grad_tol`, along with their implicit inner-gradient checks.
-  Use `with_inner_solver` and the supplied solver's convergence settings.
-
-- [x] Move remaining shared numerical calculations out of the compatibility
-  criterion types and remove the compatibility-only tests and bridges.
-
-- [x] **Make the `problems` feature opt-in.** Set `default = []` while retaining
-  `problems = []` for benchmarks, examples, and other corpus consumers. Keep
-  the existing default through Basin 1.x: removing it breaks downstream
-  imports that rely on implicit activation. Update documentation and ensure
-  tests, examples, benchmarks, and the WASM visualizer explicitly enable
-  `problems` wherever they use the corpus.
-
-- [x] **Retain soft evaluation limits for Basin 2.0.** `max_cost_evals`,
-  `max_gradient_evals`, and `max_evaluations` remain checked after
-  initialization and between iterations. Initialization and an in-progress
-  iteration may exceed a threshold before the executor checks it. Keep
-  budget checks outside callbacks to avoid per-evaluation overhead. A
-  separate hard-cap API is outside the planned 2.0 scope.
-
-- [x] **Retain callback-request evaluation counts for Basin 2.0.** Counters
-  measure requests at the `Problem` boundary, with each fused category and
-  submitted batch item charged even on failure. Internal adapter probes are
-  excluded from existing counters and `total_work`. Keep future opt-in probe
-  accounting separate. Document the implications for finite differences and
-  execution budgets in [evaluation counters](https://basin.rs/docs/migrating-to-v2/#evaluation-counters).
-
-- [x] **Define shared constraint-violation reporting (tenet 3).** Add
-  `ConstraintViolationState` and typed `ViolationReport` records for current
-  and selected incumbent progress. Reports carry runtime measures, scaling,
-  and transformations: constrained MADS uses squared L2, SLSQP uses L1,
-  COBYLA uses L-infinity with PRIMA moderation, and the augmented-Lagrangian
-  method uses L2. Require reports in constrained-state publication and
-  readers, preserving pending selections and checkpoint metadata. Keep
-  existing numerical convergence and evaluation accounting unchanged; no
-  standalone feasibility stop belongs on the executor. Document the breaking
-  signatures and serialized-state migration in
-  [constraint-violation reports](https://basin.rs/docs/migrating-to-v2/#constraint-violation-reports).
+Upcoming breaking changes for Basin 3.0.
 
 ## Deferred design
 
@@ -746,4 +552,5 @@ desired backend features.
   callback-request counters, including any savings from Jacobian coloring.
   Define accounting for failed and submitted probes, parallel evaluation,
   fused callbacks, and composed adapters without double counting. Preserve
-  the existing meanings of `EvalCounts`, `total_work`, and evaluation budgets.
+  the existing meanings of `EvalCounts`, `total_work`, and evaluation
+  budgets.
