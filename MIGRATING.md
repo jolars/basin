@@ -374,6 +374,26 @@ destructuring supported. Its fields describe a complete mathematical
 comparison; different comparison rules require distinct evidence
 representations.
 
+## Enum payload compatibility
+
+Existing public enum variants keep their field lists throughout Basin 2.x. This
+includes `ConvergenceEvidence`: variant literals and complete field patterns
+remain supported. Enum-level `#[non_exhaustive]` still requires a fallback match
+arm for future variants; it does not require `..` inside existing variants.
+
+Different mathematical evidence will use new variants, following the existing
+`UpperBound` and `FactoredUpperBound` distinction. Optional reporting metadata
+can be added to enclosing non-exhaustive records such as `ConvergenceCriterion`,
+with defaults that preserve existing constructors. When a solver starts emitting
+a new variant, consumers may need to handle it explicitly to use its evidence.
+
+`BoundSide`, `ConstraintAxis`, `StepOutcome`, `TerminationStage`, and
+`PartialResultPolicy` remain exhaustive. `BinaryValue`, `Measurement`,
+`Threshold`, and `LossEvaluation` retain struct literals and exhaustive
+destructuring. This policy preserves current serialized representations; future
+data and checkpoint compatibility require separate decisions. See the
+[contributor policy](CONTRIBUTING.md#enum-payloads-and-complete-values).
+
 ## Extensible line-search configurations
 
 `Backtracking`, `Wolfe`, `MoreThuente`, and `HagerZhang` are now non-exhaustive.

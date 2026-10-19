@@ -129,7 +129,8 @@ impl<F: Scalar> Convergence<F> {
 /// Construct records with [`Self::new`], [`Self::upper_bound`], or [`Self::custom`].
 /// Fields remain public for reading, moving, and assignment; destructuring must
 /// include `..`. Future optional metadata must default to behavior compatible
-/// with existing constructors.
+/// with existing constructors. Optional reporting metadata belongs on this
+/// record so existing [`ConvergenceEvidence`] variant fields can stay fixed.
 ///
 /// Struct literals are unavailable outside Basin:
 ///
@@ -218,6 +219,33 @@ pub enum ConvergenceTest {
 
 /// Evidence for a predicate. Values describe the actual decision, including
 /// rejected trials, rather than a reconstruction from the final iterate.
+///
+/// New variants may be added, so matches need a fallback arm. Existing variants
+/// keep their field lists throughout Basin 2.x and support direct construction
+/// and complete field patterns. Different mathematical representations use new
+/// variants, as with [`Self::UpperBound`] and [`Self::FactoredUpperBound`].
+/// Optional reporting metadata belongs on [`ConvergenceCriterion`].
+///
+/// ```
+/// use basin::ConvergenceEvidence;
+///
+/// let evidence = ConvergenceEvidence::UpperBound {
+///     value: 0.001,
+///     bound: 0.01,
+///     tolerance: 0.01,
+///     reference: None,
+/// };
+/// match evidence {
+///     ConvergenceEvidence::UpperBound {
+///         value, bound, tolerance, reference,
+///     } => {
+///         assert!(value <= bound);
+///         assert_eq!(tolerance, 0.01);
+///         assert_eq!(reference, None);
+///     }
+///     other => println!("Other evidence: {other:?}"),
+/// }
+/// ```
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]

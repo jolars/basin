@@ -586,15 +586,17 @@ desired backend features.
   fallback arm for future variants. See the [state shape error migration
   guide](MIGRATING.md#extensible-state-shape-errors).
 
-- [ ] **Settle the extension policy for enum payloads.** An enum-level
-  `#[non_exhaustive]` permits new variants but does not permit adding fields to
-  existing variants. For evolving payloads, especially `ConvergenceEvidence`,
-  choose between non-exhaustive variants with public constructors and new
-  variants for richer evidence. Keep serialization compatibility a separate
-  decision. Preserve exhaustive matching for deliberately closed contracts
-  such as `BoundSide`, `ConstraintAxis`, `StepOutcome`, `TerminationStage`, and
-  `PartialResultPolicy`, and literal construction for complete mathematical
-  values such as `BinaryValue`, `Measurement`, and `LossEvaluation`.
+- [x] **Settle the extension policy for enum payloads.** Keep existing variant
+  field lists fixed throughout Basin 2.x, with direct construction and
+  complete field patterns. Extend `ConvergenceEvidence` through new variants
+  for different mathematical representations; put optional reporting
+  metadata on enclosing non-exhaustive records with compatible constructor
+  defaults. Document changes to the variants emitted by solvers, and decide
+  serialization compatibility separately. Preserve exhaustive matching for
+  deliberately closed contracts and literals for complete mathematical
+  values. See the [contributor
+  policy](CONTRIBUTING.md#enum-payloads-and-complete-values) and [migration
+  guide](MIGRATING.md#enum-payload-compatibility).
 
 - [x] **Clean up backend compatibility aliases in Basin 2.0.0.** Make
   unversioned `nalgebra`, `ndarray`, and `faer` features and their

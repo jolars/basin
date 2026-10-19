@@ -305,6 +305,36 @@ constructors, without requiring callers to supply new settings during Basin
 access and mutation, and decide serialization compatibility separately. See the
 [line-search configuration migration guide](MIGRATING.md#extensible-line-search-configurations).
 
+### Enum payloads and complete values
+
+Public enum variants keep their existing field lists throughout Basin 2.x. An
+enum-level `#[non_exhaustive]` permits new variants; existing variants remain
+directly constructible and support complete field patterns. Do not mark existing
+variants themselves non-exhaustive or add fields to them.
+
+For `ConvergenceEvidence`, introduce a new variant when mathematical evidence
+needs a different representation. The distinction between `UpperBound` and
+`FactoredUpperBound` is the model for this policy. Preserve existing
+representations for unchanged evidence. Changing a solver to emit a new variant
+can send existing consumers into their fallback match arms, so document the
+previous and new representations and their meaning.
+
+Optional reporting metadata belongs on enclosing non-exhaustive records such as
+`ConvergenceCriterion` or `TerminationReport`. Future fields must have defaults
+that preserve existing constructor behavior. A variant may contain such a record
+without fixing that record's fields.
+
+Keep deliberately closed enums exhaustive: `BoundSide`, `ConstraintAxis`,
+`StepOutcome`, `TerminationStage`, and `PartialResultPolicy`. Complete
+mathematical records such as `BinaryValue`, `Measurement`, `Threshold`, and
+`LossEvaluation` retain struct literals and exhaustive destructuring. A
+different mathematical record requires a distinct representation.
+
+Source compatibility and serialization compatibility are separate decisions.
+Adding enum variants or fields to an extensible record requires an explicit
+decision about serialized data and checkpoint compatibility. See the [enum
+payload migration guide](MIGRATING.md#enum-payload-compatibility).
+
 ## State and lifecycle contracts
 
 Stopping decisions carry owned evidence in `Termination<F>`. The executor
