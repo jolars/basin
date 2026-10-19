@@ -129,6 +129,20 @@ macro_rules! backend_checks {
             }
 
             #[test]
+            fn underflowing_squared_gradient_does_not_establish_convergence() {
+                check_stop(
+                    TrustRegion::with_subproblem(Steihaug::new()),
+                    <$scalar>::MIN_POSITIVE,
+                    TerminationReason::NumericalNoProgress,
+                );
+                check_stop(
+                    TrustRegion::matrix_free_with(Steihaug::new()),
+                    <$scalar>::MIN_POSITIVE,
+                    TerminationReason::NumericalNoProgress,
+                );
+            }
+
+            #[test]
             fn configured_gradient_tolerances_take_precedence() {
                 check_stop(
                     TrustRegion::with_subproblem(Steihaug::new())

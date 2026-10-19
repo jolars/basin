@@ -103,6 +103,10 @@ macro_rules! gradient_setters {
              { ConfiguredSolver::new(self).set_absolute_gradient_tolerance(value) }
             /// Stop when the Euclidean gradient norm is at most the tolerance times its initial norm.
             ///
+            /// Basin 1.x retains a squared initial norm for checkpoint compatibility.
+            /// At extreme scales, that value can lose precision and this check can
+            /// miss convergence. Pair it with an absolute gradient tolerance.
+            ///
             /// Disabled by default. `None` disables; zero requests an exact-zero
             /// threshold. Values must be finite and nonnegative. Distinct enabled tests combine with OR.
             /// Evaluated at initialized iteration boundaries; repeated calls replace
@@ -120,6 +124,10 @@ macro_rules! gradient_setters {
             pub fn with_absolute_gradient_tolerance<Q: Scalar>(self, value: impl Into<Option<Q>>) -> ConfiguredSolver<$solver, GradientChecks<Q>, CX, CC, CT>
             where CG: Into<GradientChecks<Q>> { self.set_absolute_gradient_tolerance(value) }
             /// Stop when the Euclidean gradient norm is at most the tolerance times its initial norm.
+            ///
+            /// Basin 1.x retains a squared initial norm for checkpoint compatibility.
+            /// At extreme scales, that value can lose precision and this check can
+            /// miss convergence. Pair it with an absolute gradient tolerance.
             ///
             /// Disabled by default. `None` disables; zero requests an exact-zero
             /// threshold. Values must be finite and nonnegative. Distinct enabled tests combine with OR.
