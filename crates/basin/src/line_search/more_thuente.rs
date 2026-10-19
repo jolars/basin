@@ -45,7 +45,25 @@ use crate::line_search::{
 /// (`dcsrch` and `dcstep`). MINPACK-1 1983, MINPACK-2 1993; J. J. Moré
 /// and D. J. Thuente, *Line search algorithms with guaranteed
 /// sufficient decrease*, ACM TOMS 20(3), 1994.
+///
+/// # Configuration
+///
+/// Construct with [`Self::new`] or [`Self::default`], then use the builders or
+/// assign public fields. Destructuring requires `..`. Future controls must
+/// default to behavior compatible with existing constructors.
+///
+/// Struct literals, including update syntax, are unavailable outside Basin:
+///
+/// ```compile_fail,E0639
+/// use basin::MoreThuente;
+///
+/// let search = MoreThuente::<f64> {
+///     maxfev: 50,
+///     ..MoreThuente::new()
+/// };
+/// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub struct MoreThuente<F = f64> {
     /// Sufficient-decrease (Armijo) coefficient. Default `1e-3`
     /// (Fortran `lnsrlb` constant). Strong-Wolfe `c1` analog.
@@ -88,7 +106,7 @@ impl<F: Scalar> Default for MoreThuente<F> {
 impl<F: Scalar> MoreThuente<F> {
     /// Wrap this unchanged configuration in opt-in native diagnostic storage.
     /// Recording adds no callbacks and preserves the original configuration's
-    /// struct-literal construction and serde representation.
+    /// settings and serde representation.
     pub fn with_trial_diagnostics(self, enabled: bool) -> TracedMoreThuente<F> {
         TracedMoreThuente::new(self).with_trial_diagnostics(enabled)
     }

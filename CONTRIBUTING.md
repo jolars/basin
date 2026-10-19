@@ -297,6 +297,14 @@ These shape API decisions and are non-obvious from the code alone.
    composition without matrix entries. Keep that future operator path
    independent of the existing dense TRF requirements.
 
+The built-in line-search configurations `Backtracking`, `Wolfe`, `MoreThuente`,
+and `HagerZhang` are non-exhaustive, with public fields, default constructors,
+and builders. Future controls must default to behavior compatible with existing
+constructors, without requiring callers to supply new settings during Basin
+2.x. Document builders as the usual construction path, retain public field
+access and mutation, and decide serialization compatibility separately. See the
+[line-search configuration migration guide](MIGRATING.md#extensible-line-search-configurations).
+
 ## State and lifecycle contracts
 
 Stopping decisions carry owned evidence in `Termination<F>`. The executor

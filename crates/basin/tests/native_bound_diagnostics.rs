@@ -315,22 +315,12 @@ fn serde_diagnostics_are_explicitly_ephemeral() {
 }
 
 #[test]
-fn original_more_thuente_struct_literals_remain_supported() {
-    let search = MoreThuente {
-        ftol: 1e-3_f32,
-        gtol: 0.9,
-        xtol: 0.1,
-        alpha_init: 1.,
-        stpmin: 0.,
-        stpmax: 1e10,
-        maxfev: 20,
-    };
+fn more_thuente_configuration_remains_publicly_mutable() {
+    let mut search = MoreThuente::<f32>::new().maxfev(20);
     assert_eq!(search.maxfev, 20);
-    let updated = MoreThuente {
-        maxfev: 3,
-        ..search
-    };
-    assert_eq!(updated.maxfev, 3);
+    search.maxfev = 3;
+    let MoreThuente { maxfev, .. } = search;
+    assert_eq!(maxfev, 3);
 }
 
 #[cfg(feature = "serde")]

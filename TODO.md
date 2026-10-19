@@ -573,12 +573,12 @@ desired backend features.
   remains exhaustive as a complete mathematical comparison. See the
   [stopping-record migration guide](MIGRATING.md#extensible-stopping-records).
 
-- [ ] **Decide whether line-search configurations should be non-exhaustive.**
-  `Backtracking`, `Wolfe`, `MoreThuente`, and `HagerZhang` expose all their
-  fields, so adding controls during 2.x would break downstream literals.
-  Weigh that flexibility against literal construction. A non-exhaustive policy
-  would require users to construct with `new()` or `Default`, then assign
-  public fields or use builders.
+- [x] **Make line-search configurations extensible.** `Backtracking`, `Wolfe`,
+  `MoreThuente`, and `HagerZhang` are non-exhaustive, with public fields,
+  default constructors, and builders. Future controls must default to behavior
+  compatible with existing constructors. See the [migration
+  guide](MIGRATING.md#extensible-line-search-configurations) for constructors,
+  public field assignment, and destructuring with `..`.
 
 - [ ] **Decide whether state shape errors should be non-exhaustive.**
   Review `SimplexShapeError` and `PopulationShapeError` for future validation

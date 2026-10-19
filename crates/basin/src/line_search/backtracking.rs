@@ -9,7 +9,25 @@ use crate::line_search::{
 /// `f(x + α d) ≤ f(x) + c · α · ∇f(x)ᵀd`.
 /// Exhaustion reports [`LineSearchOutcome::Failed`]; the legacy
 /// [`LineSearch::next`] method returns zero on failure.
+///
+/// # Configuration
+///
+/// Construct with [`Self::new`] or [`Self::default`], then use the builders or
+/// assign public fields. Destructuring requires `..`. Future controls must
+/// default to behavior compatible with existing constructors.
+///
+/// Struct literals, including update syntax, are unavailable outside Basin:
+///
+/// ```compile_fail,E0639
+/// use basin::Backtracking;
+///
+/// let search = Backtracking::<f64> {
+///     max_iter: 100,
+///     ..Backtracking::new()
+/// };
+/// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub struct Backtracking<F = f64> {
     /// Initial trial step. Default `1.0`.
     pub alpha_init: F,

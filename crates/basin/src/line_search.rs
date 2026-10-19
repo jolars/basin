@@ -1,5 +1,26 @@
 //! Line searches: produce a step size `α` along a caller-supplied descent
 //! direction. Used by first-order solvers (gradient descent, BFGS).
+//!
+//! # Configuration
+//!
+//! Built-in line searches have non-exhaustive configurations. Construct them
+//! with `new()` or `Default`, then use their builders or assign public fields:
+//!
+//! ```
+//! use basin::{Backtracking, HagerZhang, MoreThuente, Wolfe};
+//!
+//! let mut backtracking = Backtracking::<f64>::new().max_iter(100);
+//! backtracking.rho = 0.25;
+//! let mut wolfe = Wolfe::<f64>::default().max_iter(50);
+//! wolfe.c2 = 0.8;
+//! let mut more_thuente = MoreThuente::<f32>::new().maxfev(50);
+//! more_thuente.stpmax = 100.0;
+//! let mut hager_zhang = HagerZhang::<f32>::default().maxfev(50);
+//! hager_zhang.rho = 2.0;
+//!
+//! let Wolfe { c2, .. } = wolfe;
+//! assert_eq!(c2, 0.8);
+//! ```
 
 /// Backtracking line search (Armijo-only).
 pub mod backtracking;

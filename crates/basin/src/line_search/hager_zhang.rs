@@ -36,6 +36,23 @@ use crate::line_search::{
 /// the Hager–Zhang conjugate-gradient update, not to the line-search algorithm,
 /// and is therefore intentionally absent here.
 ///
+/// # Configuration
+///
+/// Construct with [`Self::new`] or [`Self::default`], then use the builders or
+/// assign public fields. Destructuring requires `..`. Future controls must
+/// default to behavior compatible with existing constructors.
+///
+/// Struct literals, including update syntax, are unavailable outside Basin:
+///
+/// ```compile_fail,E0639
+/// use basin::HagerZhang;
+///
+/// let search = HagerZhang::<f64> {
+///     maxfev: 50,
+///     ..HagerZhang::new()
+/// };
+/// ```
+///
 /// # Backends
 ///
 /// Supported parameter types: `Vec<F>`, nalgebra vectors, ndarray vectors, and
@@ -48,6 +65,7 @@ use crate::line_search::{
 /// Optimization* 16(1), 2005, pp. 170–192.
 /// [doi:10.1137/030601880](https://doi.org/10.1137/030601880).
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub struct HagerZhang<F = f64> {
     /// Sufficient-decrease coefficient in `(0, 0.5)`. Default `0.1`.
     pub delta: F,

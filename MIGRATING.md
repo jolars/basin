@@ -374,6 +374,32 @@ destructuring supported. Its fields describe a complete mathematical
 comparison; different comparison rules require distinct evidence
 representations.
 
+## Extensible line-search configurations
+
+`Backtracking`, `Wolfe`, `MoreThuente`, and `HagerZhang` are now non-exhaustive.
+Replace struct literals, including those using `..Default::default()` or an
+existing configuration, with `new()` or `Default` and builder calls:
+
+```rust
+let mut search = Wolfe::<f64>::new()
+    .with_curvature_coefficient(0.8)
+    .max_iter(50);
+```
+
+Fields remain public for reading and assignment. To update a configuration,
+assign its fields directly. Destructuring must include `..`:
+
+```rust
+search.alpha_max = 20.0;
+let Wolfe { c1, c2, .. } = search;
+```
+
+Existing constructors and builders will remain sufficient throughout Basin 2.x.
+Future controls must default to behavior compatible with existing constructors.
+This change preserves current defaults, numerical behavior, and serialized
+representations; future serialization compatibility requires a separate
+decision.
+
 ## Solver and line-search settings
 
 Basin 2.0 removes `BarrierMethod::new`, `AugmentedLagrangianMethod::new`,
