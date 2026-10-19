@@ -22,9 +22,9 @@ use crate::core::state::SimplexProgress;
 ///
 /// # Convergence
 ///
-/// Both unbounded and projected variants stop when the whole simplex is small
-/// in parameters AND costs. Let `b` be its current best vertex, `D_x` the
-/// maximum `||x_i - b||_infinity`, and `D_f` the maximum `|f_i - f_b|`. The tests
+/// By default, both unbounded and projected variants stop when the whole
+/// simplex is small in parameters AND costs. Let `b` be its current best vertex,
+/// `D_x` the maximum `||x_i - b||_infinity`, and `D_f` the maximum `|f_i - f_b|`. The tests
 /// are `D_x <= max(x_abs, x_rel * ||b||_infinity)` and
 /// `D_f <= max(f_abs, f_rel * max(|f_b|, initial_cost_spread))`.
 /// Both absolute tolerances default to `1e-8`; both relative tolerances default
@@ -35,14 +35,26 @@ use crate::core::state::SimplexProgress;
 /// cost test useful near a zero minimum under large objective multipliers.
 /// Fresh solves reset this reference; exact checkpoints preserve it.
 ///
-/// The four `with_absolute_simplex_*_tolerance` and
-/// `with_relative_simplex_*_tolerance` setters replace individual settings.
+/// The size and cost-spread tolerance setters replace individual settings.
 /// `None` disables a setting; zero requests an exact-zero threshold. Disabled
 /// terms are omitted from each maximum, and a dimension with both settings
 /// disabled is omitted from the AND group. Disable all four settings to turn
-/// off simplex convergence. Other configured tests combine with this group
-/// using OR. Nonfinite measurements or overflowed bounds cannot establish
+/// off this group. Other configured tests combine with this group using OR.
+/// Nonfinite measurements or overflowed bounds cannot establish
 /// convergence. Checks require no additional evaluations or vector clones.
+///
+/// The optional [`with_absolute_simplex_cost_std_dev_tolerance`](Self::with_absolute_simplex_cost_std_dev_tolerance)
+/// check stops when the sample standard deviation of the current `m` simplex
+/// costs is at most its tolerance:
+/// `s = sqrt(sum_i (f_i - mean(f))^2 / (m - 1))`, with `m >= 2`.
+/// It is disabled by default and combines with the paired simplex checks and
+/// other checks using OR. When both simplex predicates pass, the report retains
+/// both. It uses only costs, independently of simplex size.
+/// NaN or infinite costs, fewer than two costs, or an unrepresentable standard
+/// deviation cannot pass this check. Finite costs are centered and scaled to
+/// avoid intermediate overflow and squared-deviation underflow. Zero tolerance
+/// requires identical finite costs. Like cost spread alone, a small standard
+/// deviation does not establish parameter accuracy or stationarity.
 ///
 /// An unchanged best vertex alone does not establish collapse. Flat objectives
 /// and simplexes collapsed by clipping can pass these tests without establishing
@@ -342,6 +354,31 @@ impl<V, Mode, F: Scalar> NelderMead<V, F, Mode> {
         value: impl Into<Option<F>>,
     ) -> Self {
         self.convergence.relative_cost = optional_tolerance(value);
+        self
+    }
+
+    /// Stop when the sample standard deviation of simplex costs is at most the tolerance.
+    ///
+    /// Disabled by default. For `m >= 2` costs, this tests
+    /// `sqrt(sum_i (f_i - mean(f))^2 / (m - 1)) <= tolerance`.
+    /// Combines with the paired simplex checks and other checks using OR,
+    /// without changing their settings. To use only this check, disable all
+    /// four size and cost-spread tolerances. The check runs at initialized
+    /// iteration boundaries without evaluations or vector clones.
+    /// It uses only the current costs and has no history to reset.
+    ///
+    /// `None` disables this setting; zero requires identical finite costs.
+    /// NaN or infinite costs and an unrepresentable standard deviation cannot
+    /// establish convergence. See [Convergence](Self#convergence).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the tolerance is negative or nonfinite.
+    pub fn with_absolute_simplex_cost_std_dev_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.convergence.cost_std_dev = optional_tolerance(value);
         self
     }
 

@@ -166,10 +166,10 @@ before 2.0. The Basin additions below can ship compatibly in 2.x.
   seeds interact with the first curvature rescaling, fresh solves, and exact
   continuation, without adding required backend capabilities to existing
   configurations.
-- [ ] **Add an opt-in Nelder-Mead cost standard-deviation check.** Support
-  rustima's sample standard deviation of simplex costs directly; the trial
-  preserves it through a public `Solver` wrapper. Document the formula,
-  non-finite inputs, and composition with other checks. Preserve the current
+- [x] **Add an opt-in Nelder-Mead cost standard-deviation check.** Added
+  `with_absolute_simplex_cost_std_dev_tolerance` for sample standard
+  deviation. Documented the formula, non-finite inputs, OR composition, and
+  checkpoint behavior. The check is disabled by default and preserves the
   paired simplex-size and cost-spread defaults.
 - [ ] **Define rustima's budget and failure handling.** Distinguish completed
   iterations from evaluation requests in `n_iter` and restart budgets.

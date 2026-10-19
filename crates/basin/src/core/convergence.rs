@@ -473,7 +473,7 @@ where
     }
 }
 
-/// Solver-owned simplex-collapse settings; enabled size and cost tests use AND.
+/// Solver-owned simplex checks; size and cost spread use AND, other tests use OR.
 #[doc(hidden)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -483,6 +483,8 @@ pub struct SimplexChecks<F: Scalar = f64> {
     pub(crate) cost: Option<F>,
     pub(crate) relative_cost: Option<F>,
     initial_cost_spread: Option<F>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub(crate) cost_std_dev: Option<F>,
 }
 impl<F: Scalar> From<()> for SimplexChecks<F> {
     fn from(_: ()) -> Self {
@@ -492,6 +494,7 @@ impl<F: Scalar> From<()> for SimplexChecks<F> {
             cost: None,
             relative_cost: None,
             initial_cost_spread: None,
+            cost_std_dev: None,
         }
     }
 }
@@ -510,6 +513,7 @@ impl<F: Scalar> SimplexChecks<F> {
             cost: Some(absolute),
             relative_cost: Some(relative),
             initial_cost_spread: None,
+            cost_std_dev: None,
         }
     }
 
@@ -522,6 +526,28 @@ impl<F: Scalar> SimplexChecks<F> {
             self.initial_cost_spread = simplex_cost_spread(costs);
         }
     }
+
+    fn check_cost_std_dev(&self, costs: &[F]) -> Option<Termination<F>> {
+        let tolerance = self.cost_std_dev?;
+        if !tolerance.is_finite() || tolerance < F::zero() {
+            return None;
+        }
+        let &first = costs.first()?;
+        // A nonconstant sample can round to zero at subnormal scales.
+        if tolerance == F::zero() && costs.iter().any(|&cost| cost != first) {
+            return None;
+        }
+        let value = sample_std_dev(costs)?;
+        (value <= tolerance).then(|| {
+            Termination::converged(ConvergenceCriterion::upper_bound(
+                ConvergenceTest::AbsoluteSimplexCostStdDev,
+                value,
+                tolerance,
+                tolerance,
+                None,
+            ))
+        })
+    }
 }
 impl<F: Scalar> sealed::Sealed for SimplexChecks<F> {}
 
@@ -532,6 +558,45 @@ fn simplex_cost_spread<F: Scalar>(costs: &[F]) -> Option<F> {
         (cost.is_finite() && difference.is_finite())
             .then(|| spread.max(difference))
     })
+}
+
+fn sample_std_dev<F: Scalar>(values: &[F]) -> Option<F> {
+    if values.len() < 2 {
+        return None;
+    }
+    let mut minimum = F::infinity();
+    let mut maximum = F::neg_infinity();
+    for &value in values {
+        if !value.is_finite() {
+            return None;
+        }
+        minimum = minimum.min(value);
+        maximum = maximum.max(value);
+    }
+    if minimum == maximum {
+        return Some(F::zero());
+    }
+
+    // Center before scaling to retain small differences at large offsets.
+    // Halving first also handles finite samples whose range overflows.
+    let half = F::from_f64(0.5)?;
+    let range = maximum - minimum;
+    let factor = if range.is_finite() { F::one() } else { half };
+    let scale = if range.is_finite() {
+        range
+    } else {
+        maximum * half - minimum * half
+    };
+    let normalized = |value: F| (value * factor - minimum * factor) / scale;
+    let mean = values.iter().map(|&value| normalized(value)).sum::<F>()
+        / F::from_usize(values.len())?;
+    let variance = values
+        .iter()
+        .map(|&value| (normalized(value) - mean).powi(2))
+        .sum::<F>()
+        / F::from_usize(values.len() - 1)?;
+    let std_dev = (scale * variance.sqrt()) / factor;
+    std_dev.is_finite().then_some(std_dev)
 }
 
 fn simplex_threshold<F: Scalar>(
@@ -561,26 +626,15 @@ fn simplex_threshold<F: Scalar>(
     })
 }
 
-impl<P, S, F> Check<P, S> for SimplexChecks<F>
-where
-    F: Scalar,
-    S: SimplexState<Float = F>,
-    S::Param: VectorLen + VectorIndex<F>,
-{
-    fn reset(&mut self) {
-        self.reset();
-    }
-    fn check(
-        &mut self,
-        _: &Problem<P>,
-        state: &S,
-    ) -> Option<Termination<S::Float>> {
+impl<F: Scalar> SimplexChecks<F> {
+    fn check_collapse<S>(&mut self, state: &S) -> Option<Termination<F>>
+    where
+        S: SimplexState<Float = F>,
+        S::Param: VectorLen + VectorIndex<F>,
+    {
         let check_size = self.size.is_some() || self.relative_size.is_some();
         let check_cost = self.cost.is_some() || self.relative_cost.is_some();
         if !check_size && !check_cost {
-            return None;
-        }
-        if state.vertices().len() != state.costs().len() {
             return None;
         }
         let spread = simplex_cost_spread(state.costs())?;
@@ -630,6 +684,33 @@ where
             test: ConvergenceTest::Simplex,
             evidence: ConvergenceEvidence::Simplex { size, cost_spread },
         }))
+    }
+}
+
+impl<P, S, F> Check<P, S> for SimplexChecks<F>
+where
+    F: Scalar,
+    S: SimplexState<Float = F>,
+    S::Param: VectorLen + VectorIndex<F>,
+{
+    fn reset(&mut self) {
+        self.reset();
+    }
+    fn check(
+        &mut self,
+        _: &Problem<P>,
+        state: &S,
+    ) -> Option<Termination<S::Float>> {
+        if state.vertices().len() != state.costs().len() {
+            return None;
+        }
+        [
+            self.check_collapse(state),
+            self.check_cost_std_dev(state.costs()),
+        ]
+        .into_iter()
+        .flatten()
+        .reduce(Termination::merge)
     }
 }
 
@@ -1025,6 +1106,12 @@ mod tests {
             checks.check(&Problem::new(()), &PointState::new(vec![1e200])),
             None,
         );
+    }
+
+    #[test]
+    fn sample_standard_deviation_requires_two_costs() {
+        assert_eq!(sample_std_dev::<f64>(&[]), None);
+        assert_eq!(sample_std_dev(&[1.0_f64]), None);
     }
 
     #[test]

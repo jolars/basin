@@ -215,6 +215,10 @@ pub enum ConvergenceTest {
         /// Mathematical definition of the predicate.
         definition: String,
     },
+    /// Sample standard deviation of the current simplex costs is at most the
+    /// absolute tolerance: `sqrt(sum_i (f_i - mean(f))^2 / (m - 1)) <= tolerance`,
+    /// with `m >= 2`. Zero tolerance requires identical finite costs.
+    AbsoluteSimplexCostStdDev,
 }
 
 /// Evidence for a predicate. Values describe the actual decision, including
@@ -689,7 +693,9 @@ impl<F: Scalar> Termination<F> {
                 C::RelativeCostChange | C::RelativeCostReduction => {
                     R::RelativeCostTolerance
                 }
-                C::Simplex => R::SimplexTolerance,
+                C::Simplex | C::AbsoluteSimplexCostStdDev => {
+                    R::SimplexTolerance
+                }
                 C::DistributionSize => R::CmaEsTolerance,
                 C::Radius => R::RhoTolerance,
                 C::Mesh => R::MeshTolerance,
@@ -756,7 +762,7 @@ pub enum TerminationCode {
     NoImprovement,
     /// No proposal has been accepted for the configured number of iterations.
     NoAcceptedMove,
-    /// Simplex collapsed below the configured tolerance.
+    /// A configured simplex-collapse or cost-dispersion test passed.
     SimplexTolerance,
     /// CMA-ES search distribution collapsed below TolX:
     /// `σ · maxᵢ dᵢ < tol_x` (Hansen 2016 Appendix B.3).

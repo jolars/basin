@@ -50,6 +50,7 @@ impl<CG, CX, CC, CT, V, F: Scalar, Mode>
     forward_setting!(NelderMead, with_relative_simplex_size_tolerance, value: impl Into<Option<F>>);
     forward_setting!(NelderMead, with_absolute_simplex_cost_tolerance, value: impl Into<Option<F>>);
     forward_setting!(NelderMead, with_relative_simplex_cost_tolerance, value: impl Into<Option<F>>);
+    forward_setting!(NelderMead, with_absolute_simplex_cost_std_dev_tolerance, value: impl Into<Option<F>>);
 }
 
 impl<CG, CX, CC, CT, V, S, F: Scalar>

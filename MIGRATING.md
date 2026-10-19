@@ -1605,7 +1605,7 @@ let solver = NelderMead::new()
     .with_absolute_simplex_cost_tolerance(1e-10);
 ```
 
-To disable simplex convergence completely, set all four tolerances to `None`.
+To disable the paired simplex checks, set all four tolerances to `None`.
 Keep an iteration or evaluation budget on the executor. Other configured tests
 still combine with the simplex group using OR, and executor limits retain
 precedence. Results keep `ConvergenceTest::Simplex` and
@@ -1621,6 +1621,52 @@ absolute floors limit accuracy for small quantities, and a single vector norm
 does not resolve different units across coordinates. Scale parameters or tune
 the floors for the problem. Use GBNM when a projected search needs its restart
 strategy. Basin 1.x defaults remain unchanged on `v1`.
+
+## Nelder-Mead cost standard deviation
+
+Nelder-Mead also offers an opt-in sample standard-deviation check through
+`with_absolute_simplex_cost_std_dev_tolerance`. It compares
+`sqrt(sum_i (f_i - mean(f))^2 / (m - 1))` with the tolerance, using all `m >= 2`
+current simplex costs. The denominator is `m - 1`, rather than `m`. This supports
+rustima's cost-dispersion check directly, without a custom `Solver` wrapper.
+To use it as the only numerical convergence check:
+
+```rust
+let solver = NelderMead::<Vec<f64>>::new()
+    .with_absolute_simplex_size_tolerance(None)
+    .with_relative_simplex_size_tolerance(None)
+    .with_absolute_simplex_cost_tolerance(None)
+    .with_relative_simplex_cost_tolerance(None)
+    .with_absolute_simplex_cost_std_dev_tolerance(1e-6);
+```
+
+The new check is disabled by default. Enabling it leaves the paired size and
+cost-spread settings intact and combines with that group and other configured
+checks using OR. A small standard deviation can therefore stop a wide simplex.
+It does not establish stationarity or parameter accuracy. Both unbounded and
+projected variants support it; projected initialization checks costs after
+clipping and evaluation. Setters on `ConfiguredSolver` forward to the same
+solver-owned setting, regardless of builder order.
+
+The tolerance must be finite and nonnegative. `None` disables the check, and
+zero requires identical finite costs. NaN or infinite costs, an unevaluated
+simplex, fewer than two costs, or an unrepresentable standard deviation cannot
+pass. Centering and scaling avoid intermediate overflow and underflow of
+squared deviations. The check uses current costs without additional callbacks,
+vector clones, or convergence history. Executor limits retain precedence.
+
+Passing this check reports `ConvergenceTest::AbsoluteSimplexCostStdDev` with
+`ConvergenceEvidence::UpperBound`: `value` is the sample standard deviation,
+`bound` and `tolerance` are the configured tolerance, and `reference` is `None`.
+The compact code is `TerminationCode::SimplexTolerance`. The existing paired
+check retains `ConvergenceTest::Simplex` and its evidence. When both pass, the
+report contains both criteria, with the paired check first.
+
+Fresh initialization preserves the setting, and exact continuation preserves it
+alongside the simplex. Serialized solver checkpoints now include the optional
+tolerance; recreate Nelder-Mead checkpoints from earlier unreleased 2.0 layouts.
+The new convergence-test variant is appended to preserve existing serialized
+test identities and report representations.
 
 ## Bounded least-squares solver name
 
