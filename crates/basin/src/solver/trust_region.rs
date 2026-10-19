@@ -659,7 +659,7 @@ where
         // checked before next_iter; only a zero norm establishes
         // convergence here without adding an implicit tolerance.
         if step.predicted_reduction <= F::zero() {
-            let reason = if g.norm_squared() == F::zero() {
+            let reason = if g.norm_l2() == F::zero() {
                 TerminationReason::SolverConverged
             } else {
                 TerminationReason::NumericalNoProgress

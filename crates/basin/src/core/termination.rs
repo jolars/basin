@@ -241,7 +241,8 @@ where
 {
     fn check(&mut self, state: &S) -> Option<TerminationReason> {
         let g = state.gradient()?;
-        if g.norm_squared() <= self.0 * self.0 {
+        let norm = g.norm_l2();
+        if norm.is_finite() && norm <= self.0.abs() {
             Some(TerminationReason::GradientTolerance)
         } else {
             None
@@ -268,6 +269,10 @@ where
 /// populated. Requires `S: GradientState`; pairing with a
 /// derivative-free solver is a compile error. Skipped silently while
 /// the state has no gradient populated yet.
+///
+/// Basin 1.x checkpoints retain the squared initial norm. If that stored value
+/// underflows to zero or overflows, this check can miss convergence at extreme
+/// scales. Pair it with an absolute gradient tolerance for those problems.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[deprecated(
@@ -296,11 +301,16 @@ where
 {
     fn check(&mut self, state: &S) -> Option<TerminationReason> {
         let g = state.gradient()?;
-        let norm_squared = g.norm_squared();
+        let norm = g.norm_l2();
+        if !norm.is_finite() {
+            return None;
+        }
         // Anchor on the first populated gradient (the initial iterate).
-        let initial = *self.initial_norm_squared.get_or_insert(norm_squared);
-        // ‖∇f_k‖ ≤ tol·‖∇f_0‖ ⟺ ‖∇f_k‖² ≤ tol²·‖∇f_0‖², avoiding a sqrt.
-        if norm_squared <= self.tol * self.tol * initial {
+        let initial =
+            *self.initial_norm_squared.get_or_insert(g.norm_squared());
+        // Retain the squared checkpoint representation without squaring the
+        // current gradient or tolerance, which could falsely round to zero.
+        if initial.is_finite() && norm <= self.tol.abs() * initial.sqrt() {
             Some(TerminationReason::RelativeGradientTolerance)
         } else {
             None
@@ -388,6 +398,10 @@ where
 
 /// Stop when `‖x_k − x_{k−1}‖ ≤ tol`. Holds its own copy of the previous
 /// iterate so it doesn't depend on state-side history.
+///
+/// Basin 1.x checkpoints retain the squared tolerance. If squaring loses the
+/// supplied tolerance at extreme scales, this criterion can miss convergence.
+/// Use the solver's absolute step tolerance to preserve the unsquared setting.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[deprecated(
@@ -419,7 +433,12 @@ where
         let triggered = if let Some(last) = &self.last {
             let mut diff = curr.clone();
             diff.scaled_add(-F::one(), last);
-            diff.norm_squared() <= self.tol_squared
+            let step = diff.norm_l2();
+            step.is_finite()
+                && self.tol_squared >= F::zero()
+                && (step == F::zero()
+                    || (self.tol_squared.is_finite()
+                        && step <= self.tol_squared.sqrt()))
         } else {
             false
         };
@@ -470,8 +489,15 @@ where
         let triggered = if let Some(last) = &self.last {
             let mut diff = curr.clone();
             diff.scaled_add(-F::one(), last);
-            // ‖Δx‖ ≤ tol·‖x_k‖ ⟺ ‖Δx‖² ≤ tol²·‖x_k‖², avoiding a sqrt.
-            diff.norm_squared() <= self.tol * self.tol * curr.norm_squared()
+            let step = diff.norm_l2();
+            let tolerance = self.tol.abs();
+            let reference = curr.norm_l2();
+            step.is_finite()
+                && if tolerance == F::zero() {
+                    step == F::zero()
+                } else {
+                    reference.is_finite() && step <= tolerance * reference
+                }
         } else {
             false
         };
@@ -933,6 +959,84 @@ mod reset_tests {
     use crate::core::state::BasicState;
 
     type S = BasicState<Vec<f64>>;
+
+    fn check_extreme_legacy_tolerances<F: Scalar>(small: F, large: F) {
+        let two = F::from_f64(2.).unwrap();
+        for magnitude in [small, large] {
+            let mut state = BasicState::<Vec<F>, F>::new(vec![F::zero()]);
+            state.gradient = Some(vec![magnitude]);
+            for tolerance in [F::zero(), magnitude / two] {
+                assert_eq!(GradientTolerance(tolerance).check(&state), None);
+            }
+            assert_eq!(
+                GradientTolerance(two * magnitude).check(&state),
+                Some(TerminationReason::GradientTolerance)
+            );
+            for tolerance in [F::zero(), F::one() / two] {
+                assert_eq!(
+                    RelativeGradientTolerance::new(tolerance).check(&state),
+                    None
+                );
+            }
+        }
+        for tolerance in [F::zero(), small / two, large] {
+            let mut criterion = ParamTolerance::new(tolerance);
+            let state = BasicState::<Vec<F>, F>::new(vec![F::zero()]);
+            assert_eq!(criterion.check(&state), None);
+            let step = if tolerance == large {
+                two * large
+            } else {
+                small
+            };
+            let state = BasicState::<Vec<F>, F>::new(vec![step]);
+            assert_eq!(criterion.check(&state), None);
+        }
+        for tolerance in [F::zero(), F::one() / two] {
+            let mut criterion = RelativeParamTolerance::new(tolerance);
+            let state = BasicState::<Vec<F>, F>::new(vec![F::zero()]);
+            assert_eq!(criterion.check(&state), None);
+            let state = BasicState::<Vec<F>, F>::new(vec![small]);
+            assert_eq!(criterion.check(&state), None);
+        }
+    }
+
+    #[test]
+    fn legacy_tolerances_reject_false_convergence_at_extreme_scales() {
+        check_extreme_legacy_tolerances(1e-30_f32, 1e30_f32);
+        check_extreme_legacy_tolerances(1e-200_f64, 1e200_f64);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn legacy_squared_checkpoint_fields_keep_their_meanings() {
+        let mut state: S = BasicState::new(vec![0.0]);
+        state.gradient = Some(vec![10.0]);
+        let mut relative = RelativeGradientTolerance::new(0.1_f64);
+        assert_eq!(relative.check(&state), None);
+        let bytes = postcard::to_allocvec(&relative).unwrap();
+        assert_eq!(
+            bytes,
+            postcard::to_allocvec(&(0.1_f64, Some(100.0_f64))).unwrap()
+        );
+        let mut relative: RelativeGradientTolerance<f64> =
+            postcard::from_bytes(&bytes).unwrap();
+        state.gradient = Some(vec![0.5]);
+        assert_eq!(
+            relative.check(&state),
+            Some(TerminationReason::RelativeGradientTolerance)
+        );
+
+        let bytes =
+            postcard::to_allocvec(&(0.25_f64, Some(vec![0.0_f64]))).unwrap();
+        let mut absolute: ParamTolerance<Vec<f64>> =
+            postcard::from_bytes(&bytes).unwrap();
+        assert_eq!(postcard::to_allocvec(&absolute).unwrap(), bytes);
+        let state: S = BasicState::new(vec![0.4]);
+        assert_eq!(
+            absolute.check(&state),
+            Some(TerminationReason::ParamTolerance)
+        );
+    }
 
     #[test]
     fn relative_gradient_tolerance_reanchors_after_reset() {

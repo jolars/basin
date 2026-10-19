@@ -171,7 +171,7 @@ where
         _: &Problem<P>,
         state: &S,
     ) -> Option<TerminationReason> {
-        if !state.gradient()?.norm_squared().is_finite() {
+        if !state.gradient()?.norm_l2().is_finite() {
             return None;
         }
         self.absolute
@@ -261,8 +261,7 @@ where
         let last = self.last.replace(current.clone())?;
         let mut difference = current.clone();
         difference.scaled_add(-F::one(), &last);
-        let step = difference.norm_squared().sqrt();
-        // A finite iterate's squared norm can overflow even when its step is zero.
+        let step = difference.norm_l2();
         if !step.is_finite() {
             return None;
         }
@@ -275,7 +274,7 @@ where
                 if tolerance == F::zero() {
                     step == F::zero()
                 } else {
-                    let norm = current.norm_squared().sqrt();
+                    let norm = current.norm_l2();
                     let bound = if norm.is_finite() {
                         tolerance * norm
                     } else {
@@ -284,7 +283,7 @@ where
                         let mut scaled = current.clone();
                         scaled.scaled_add(-F::one(), current);
                         scaled.scaled_add(tolerance, current);
-                        scaled.norm_squared().sqrt()
+                        scaled.norm_l2()
                     };
                     step <= bound
                 }

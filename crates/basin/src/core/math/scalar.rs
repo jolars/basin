@@ -19,6 +19,10 @@ impl NormSquared for f64 {
     fn norm_squared(&self) -> f64 {
         self * self
     }
+
+    fn norm_l2(&self) -> f64 {
+        self.abs()
+    }
 }
 
 impl NormInfinity for f64 {
