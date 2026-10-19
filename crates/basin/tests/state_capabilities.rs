@@ -661,12 +661,7 @@ impl EvaluatedState for Selected {
 impl IncumbentState for Selected {
     fn incumbent_record(&self) -> Option<IncumbentRef<'_, f64>> {
         let (param, cost, iter, counts) = self.best.as_ref()?;
-        Some(IncumbentRef {
-            param,
-            cost: *cost,
-            iter: *iter,
-            counts,
-        })
+        Some(IncumbentRef::new(param, *cost, *iter, counts))
     }
 }
 
@@ -697,9 +692,10 @@ fn external_selection_is_explicit_and_does_not_claim_objective_ordering() {
         later.add(&work_counts());
         state.mirror(&later);
         state.update_best();
-        let best = state.incumbent_record().unwrap();
-        assert_eq!(best.iter, 0);
-        assert_eq!(best.counts, &published_counts);
+        let IncumbentRef { iter, counts, .. } =
+            state.incumbent_record().unwrap();
+        assert_eq!(iter, 0);
+        assert_eq!(counts, &published_counts);
     }
     // Inference becomes ambiguous if a blanket implementation accidentally
     // grants objective controls to this feasibility-first state.

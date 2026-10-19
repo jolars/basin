@@ -67,7 +67,12 @@ pub trait RawEvaluationState: State {
 /// Counts include all charged work before publication, rather than only work
 /// through the evaluation that found the point. This view owns no parameter
 /// storage and does not change a state's serialized representation.
+///
+/// External states construct this view with [`Self::new`]. Fields remain public
+/// for reading, moving, and assignment; destructuring must include `..`. Future
+/// optional metadata must default to behavior compatible with this constructor.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct IncumbentRef<'a, V, F: Scalar = f64> {
     /// Selected point, matching `cost`.
     pub param: &'a V,
@@ -77,6 +82,26 @@ pub struct IncumbentRef<'a, V, F: Scalar = f64> {
     pub iter: u64,
     /// Raw counts at the selection's publication boundary.
     pub counts: &'a EvalCounts,
+}
+
+impl<'a, V, F: Scalar> IncumbentRef<'a, V, F> {
+    /// Borrow a selected record and its publication metadata.
+    ///
+    /// Keep `param` and `cost` from the same selected record, and supply the
+    /// iteration and counts from the boundary that published the selection.
+    pub fn new(
+        param: &'a V,
+        cost: F,
+        iter: u64,
+        counts: &'a EvalCounts,
+    ) -> Self {
+        Self {
+            param,
+            cost,
+            iter,
+            counts,
+        }
+    }
 }
 
 /// Checked access to a solver's selected incumbent and publication metadata.

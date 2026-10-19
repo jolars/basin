@@ -216,7 +216,8 @@ publish a partial stopping step, or
 finished. A completed stopping step increments the iteration count, fires
 the gated iteration observer, and then fires the final observer. A partial
 stopping step fires only the final observer. A continuing partial step
-publishes progress without incrementing the count or firing iteration observers.
+uses `SolverStep::partial(state)` to publish progress without incrementing
+the count or firing iteration observers.
 In all cases the executor
 publishes counts and incumbent updates. `report.stage` distinguishes an
 execution boundary from a step and records whether the step completed.
@@ -303,6 +304,40 @@ Nelder-Mead `TrialKind`, Moré-Thuente `SearchExit`, and inner diagnostic `Statu
 also require fallback match arms. Diagnostic struct literals are no longer
 supported outside Basin. These changes allow future fields and enum variants;
 they do not change current numerical behavior or serialized representations.
+
+## Extensible solver publications
+
+`SolverStep` and `IncumbentRef` are now non-exhaustive. External `Solver` and
+`IncumbentState` implementations must replace struct literals with public
+constructors. The named step constructors cover every completion and
+termination combination:
+
+| Publication | Constructor |
+| --- | --- |
+| Completed iteration, continue | `SolverStep::completed(state)` |
+| Partial step, continue | `SolverStep::partial(state)` |
+| Partial step, stop | `SolverStep::stopped(state, termination)` |
+| Completed iteration, stop | `SolverStep::completed_with_termination(state, termination)` |
+
+Use `SolverStep::new(state, completed, termination)` when forwarding dynamic
+decisions, and `IncumbentRef::new(param, cost, iter, counts)` when borrowing a
+selected record. The incumbent's iteration and counts must still describe the
+boundary that published its selection.
+
+Fields remain public for reading, moving, and assignment. Struct update syntax
+is unavailable, and destructuring must include `..`:
+
+```rust
+let SolverStep { state, completed, termination, .. } = step;
+let IncumbentRef { param, cost, iter, counts, .. } = incumbent;
+```
+
+Existing constructors will remain sufficient throughout Basin 2.x. Future
+optional metadata must have defaults that preserve their behavior without
+requiring new information from external solvers or states. `SolverStep::into_parts()`
+continues to return `(state, completed, termination)` and discards any future
+optional metadata. Numerical behavior and serialized representations are
+unchanged.
 
 ## Solver and line-search settings
 

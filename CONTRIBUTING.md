@@ -308,6 +308,12 @@ continuation preserves convergence history and publishes a new event. See
 [MIGRATING.md](MIGRATING.md#structured-termination-reports) for signatures,
 observer ordering, and explicit policies for consuming inner results.
 
+`SolverStep` and `IncumbentRef` are non-exhaustive publication records with
+complete public constructors. Future optional metadata must have defaults that
+preserve existing constructor behavior; adding fields cannot require external
+solver or state implementations to supply new information during Basin 2.x.
+See the [publication migration guide](MIGRATING.md#extensible-solver-publications).
+
 Basin 2.0 on `main` uses shared progress states with solver-owned algorithm
 machinery. The migration follows the validated
 [prototype](TODO.md#state-api-prototype) and the contracts below.

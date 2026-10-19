@@ -251,12 +251,12 @@ impl<V: Clone, F: Scalar> EvaluatedState for SelectedPopulationProgress<V, F> {
 impl<V: Clone, F: Scalar> IncumbentState for SelectedPopulationProgress<V, F> {
     fn incumbent_record(&self) -> Option<IncumbentRef<'_, V, F>> {
         let s = self.best.as_ref()?;
-        Some(IncumbentRef {
-            param: &s.member.param,
-            cost: s.member.cost?,
-            iter: s.iter,
-            counts: &s.counts,
-        })
+        Some(IncumbentRef::new(
+            &s.member.param,
+            s.member.cost?,
+            s.iter,
+            &s.counts,
+        ))
     }
 }
 impl<V: Clone, F: Scalar> SelectedPopulationState

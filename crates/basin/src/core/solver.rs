@@ -11,7 +11,13 @@ use crate::core::termination::Termination;
 /// Progress published by one solver step. Completion and termination are
 /// independent: a finished step can also be the step that stops the run.
 /// A continuing partial step publishes progress without an iteration callback.
+///
+/// Construct steps with [`Self::new`] or the named constructors. Fields remain
+/// public for reading, moving, and assignment; destructuring must include `..`.
+/// Future optional metadata must default to behavior compatible with existing
+/// constructors.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct SolverStep<S: State> {
     /// Coherent progress published by this step.
     pub state: S,
@@ -22,35 +28,53 @@ pub struct SolverStep<S: State> {
 }
 
 impl<S: State> SolverStep<S> {
+    /// Publish a step with explicit completion and termination decisions.
+    ///
+    /// Use this when forwarding decisions from another solver. Completion and
+    /// termination remain independent.
+    pub fn new(
+        state: S,
+        completed: bool,
+        termination: Option<Termination<S::Float>>,
+    ) -> Self {
+        Self {
+            state,
+            completed,
+            termination,
+        }
+    }
+
     /// Publish a completed iteration and continue.
     pub fn completed(state: S) -> Self {
-        Self {
-            state,
-            completed: true,
-            termination: None,
-        }
+        Self::new(state, true, None)
     }
+
+    /// Publish progress and continue without completing an iteration.
+    ///
+    /// The executor publishes counts and incumbent updates without incrementing
+    /// the completed-iteration count or firing iteration observers.
+    pub fn partial(state: S) -> Self {
+        Self::new(state, false, None)
+    }
+
     /// Publish a partial step and its stopping explanation.
     pub fn stopped(state: S, termination: Termination<S::Float>) -> Self {
-        Self {
-            state,
-            completed: false,
-            termination: Some(termination),
-        }
+        Self::new(state, false, Some(termination))
     }
+
     /// Publish a completed iteration and its stopping explanation.
     pub fn completed_with_termination(
         state: S,
         termination: Termination<S::Float>,
     ) -> Self {
-        Self {
-            state,
-            completed: true,
-            termination: Some(termination),
-        }
+        Self::new(state, true, Some(termination))
     }
-    /// Extract the published state and decision. Callers driving iterations
-    /// manually must account for `completed` before consuming this value.
+
+    /// Extract the published state, completion flag, and stopping decision.
+    ///
+    /// Callers driving iterations manually must account for `completed` before
+    /// consuming this value. This tuple retains only these three core fields;
+    /// any future optional metadata is discarded.
     pub fn into_parts(self) -> (S, bool, Option<Termination<S::Float>>) {
         (self.state, self.completed, self.termination)
     }
@@ -59,11 +83,7 @@ impl<S: State> SolverStep<S> {
 // Tuple conversion preserves the 1.x convention that a stopping step is partial.
 impl<S: State> From<(S, Option<Termination<S::Float>>)> for SolverStep<S> {
     fn from((state, termination): (S, Option<Termination<S::Float>>)) -> Self {
-        Self {
-            completed: termination.is_none(),
-            state,
-            termination,
-        }
+        Self::new(state, termination.is_none(), termination)
     }
 }
 

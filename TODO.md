@@ -558,11 +558,12 @@ desired backend features.
   with `..`. See the [migration
   guide](MIGRATING.md#extensible-results-and-diagnostics).
 
-- [ ] **Decide whether solver publication types should be non-exhaustive.**
-  Review `SolverStep` and `IncumbentRef` before freezing their public fields.
-  External solver and state implementations construct these values, so provide
-  complete public constructors before restricting literals. `SolverStep` needs
-  a constructor for a continuing partial step.
+- [x] **Make solver publication types extensible.** Mark `SolverStep` and
+  `IncumbentRef` as non-exhaustive with complete public constructors and public
+  fields. `SolverStep::partial` covers continuing partial steps, and `new`
+  supports forwarding dynamic decisions. Future optional metadata must default
+  to behavior compatible with existing constructors. See the [publication
+  migration guide](MIGRATING.md#extensible-solver-publications).
 
 - [ ] **Decide whether smaller stopping records need extension points.**
   Review `ConvergenceCriterion`, `Threshold`, and `ApplicationStop` for likely

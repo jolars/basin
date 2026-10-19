@@ -140,6 +140,37 @@ fn shared_checks_retain_simultaneous_predicates_and_reference_values() {
     });
 }
 
+struct ForwardSteps<So>(So);
+
+impl<So> Solver<Fit, PointState<Vec<f64>>> for ForwardSteps<So>
+where
+    So: Solver<Fit, PointState<Vec<f64>>>,
+{
+    type Error = So::Error;
+
+    fn init(
+        &mut self,
+        p: &mut Problem<Fit>,
+        s: PointState<Vec<f64>>,
+    ) -> Result<PointState<Vec<f64>>, Self::Error> {
+        self.0.init(p, s)
+    }
+
+    fn next_iter(
+        &mut self,
+        p: &mut Problem<Fit>,
+        s: PointState<Vec<f64>>,
+    ) -> Result<SolverStep<PointState<Vec<f64>>>, Self::Error> {
+        let SolverStep {
+            state,
+            completed,
+            termination,
+            ..
+        } = self.0.next_iter(p, s)?;
+        Ok(SolverStep::new(state, completed, termination))
+    }
+}
+
 struct LastStep {
     completed: bool,
     abort: bool,
@@ -165,14 +196,15 @@ impl Solver<Fit, PointState<Vec<f64>>> for LastStep {
             return Err("callback aborted");
         }
         s.replace(x, cost);
-        Ok(SolverStep {
-            state: s,
-            completed: self.completed,
-            termination: Some(Termination::custom(
-                "example.exact",
-                "The exact minimizer was evaluated.",
-                vec![],
-            )),
+        let termination = Termination::custom(
+            "example.exact",
+            "The exact minimizer was evaluated.",
+            vec![],
+        );
+        Ok(if self.completed {
+            SolverStep::completed_with_termination(s, termination)
+        } else {
+            SolverStep::stopped(s, termination)
         })
     }
 }
@@ -184,10 +216,10 @@ fn completion_controls_iteration_observation_and_final_report_is_sticky() {
         let output = events.clone();
         let mut stepper = Executor::new(
             Fit,
-            LastStep {
+            ForwardSteps(LastStep {
                 completed,
                 abort: false,
-            },
+            }),
             PointState::new(vec![3.]),
         )
         .observe_solver(
@@ -379,10 +411,10 @@ impl Solver<Fit, PointState<Vec<f64>>> for PartialThenComplete {
         s.replace(x.clone(), p.cost(&x)?);
         let completed = self.0;
         self.0 = true;
-        Ok(SolverStep {
-            state: s,
-            completed,
-            termination: None,
+        Ok(if completed {
+            SolverStep::completed(s)
+        } else {
+            SolverStep::partial(s)
         })
     }
 }
@@ -393,7 +425,7 @@ fn continuing_partial_steps_publish_work_without_iteration_observation() {
     let output = iterations.clone();
     let mut stepper = Executor::new(
         Fit,
-        PartialThenComplete(false),
+        ForwardSteps(PartialThenComplete(false)),
         PointState::new(vec![3.]),
     )
     .observe_solver(
@@ -409,11 +441,14 @@ fn continuing_partial_steps_publish_work_without_iteration_observation() {
     .unwrap();
     assert_eq!(stepper.step().unwrap(), StepOutcome::Continue);
     assert_eq!(stepper.state().param(), &vec![2.]);
+    assert_eq!(stepper.state().best_param(), &vec![2.]);
     assert_eq!(stepper.state().iter(), 0);
     assert_eq!(stepper.counts().cost_evals, 2);
     assert!(iterations.borrow().is_empty());
     assert_eq!(stepper.step().unwrap(), StepOutcome::Continue);
+    assert_eq!(stepper.state().best_param(), &vec![1.]);
     assert_eq!(stepper.state().iter(), 1);
+    assert_eq!(stepper.counts().cost_evals, 3);
     assert_eq!(*iterations.borrow(), vec![1]);
     assert!(matches!(stepper.step().unwrap(), StepOutcome::Stopped(_)));
 }

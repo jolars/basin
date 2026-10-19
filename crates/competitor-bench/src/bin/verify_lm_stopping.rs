@@ -325,11 +325,7 @@ where
             ));
         }
         self.rows.borrow_mut().push(row);
-        Ok(basin::SolverStep {
-            state,
-            completed,
-            termination: reason,
-        })
+        Ok(basin::SolverStep::new(state, completed, reason))
     }
 
     fn reset_convergence(&mut self) {
