@@ -681,6 +681,18 @@ desired backend features.
   accounting separate. Document the implications for finite differences and
   execution budgets in [evaluation counters](MIGRATING.md#evaluation-counters).
 
+- [x] **Define shared constraint-violation reporting (tenet 3).** Add
+  `ConstraintViolationState` and typed `ViolationReport` records for current
+  and selected incumbent progress. Reports carry runtime measures, scaling,
+  and transformations: constrained MADS uses squared L2, SLSQP uses L1,
+  COBYLA uses L-infinity with PRIMA moderation, and the augmented-Lagrangian
+  method uses L2. Require reports in constrained-state publication and
+  readers, preserving pending selections and checkpoint metadata. Keep
+  existing numerical convergence and evaluation accounting unchanged; no
+  standalone feasibility stop belongs on the executor. Document the breaking
+  signatures and serialized-state migration in
+  [constraint-violation reports](MIGRATING.md#constraint-violation-reports).
+
 ## Deferred design
 
 - [ ] **Add opt-in internal evaluation accounting when a consumer needs it.**
@@ -689,15 +701,3 @@ desired backend features.
   Define accounting for failed and submitted probes, parallel evaluation,
   fused callbacks, and composed adapters without double counting. Preserve
   the existing meanings of `EvalCounts`, `total_work`, and evaluation budgets.
-
-- [ ] **Define shared constraint-violation reporting (tenet 3).** Constrained
-  MADS publishes the sum of squared positive violations in `SelectedState`,
-  and SLSQP publishes the sum of absolute equality residuals and positive
-  inequality violations in `SelectedFirstOrderState`. COBYLA publishes its
-  maximum positive violation in `SelectedState`. Define a shared state
-  capability with explicit semantics for the measure, scaling, associated
-  iterate, and availability before initialization. Preserve each solver's
-  numerical convergence semantics: SLSQP already combines feasibility with
-  other convergence tests. Do not add a standalone `FeasibilityTolerance` to
-  the executor: its stopping conditions combine with OR, so it could stop at
-  the first feasible but nonoptimal iterate.

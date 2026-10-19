@@ -167,7 +167,9 @@ into user-provided `Problem` traits, until solver convergence, an execution limi
     mesh, Halton schedule, and progressive-barrier history in every mode.
     SLSQP uses `SelectedFirstOrderState`, adding coherent objective gradients
     to explicit constrained selections. Its model-dependent diagnostics live
-    on the solver. CMA-ES and its bounded and injection variants use
+    on the solver. Both selected shapes implement `ConstraintViolationState`
+    and store `ViolationReport` values with runtime measure, scaling, and
+    transformation metadata. CMA-ES and its bounded and injection variants use
     `PopulationProgress`; their solvers own distributions, eigenpairs, and
     boundary penalties. Bounded CMA publishes clipped points with raw costs
     while retaining genotypes and penalized rankings in the solver. MA-LS
@@ -360,6 +362,12 @@ mathematical comparison. Different comparison rules require distinct evidence
 representations. See the [stopping-record migration
 guide](MIGRATING.md#extensible-stopping-records).
 
+`ViolationReport` is also a non-exhaustive publication record. Its constructor
+requires the value and measure, with unscaled, identity defaults; optional
+builders describe existing scaling and transformations. Future optional fields
+must preserve these defaults throughout Basin 2.x. Reports preserve evaluated
+values, including NaN and infinity, without validation or extra callbacks.
+
 `SimplexShapeError` and `PopulationShapeError` are non-exhaustive enums with
 directly constructible variants and exhaustive payloads. New variants may
 refine diagnostics or describe new operations; they do not permit rejecting
@@ -391,6 +399,13 @@ The `v1` branch retains its existing APIs and behavior.
   timestamps record publication. Constrained selection may prefer a higher-cost
   feasible point, so generic objective-based controls require a capability that
   guarantees compatible selection semantics.
+- **Constraint reporting:** `ConstraintViolationState` borrows reports matching
+  the checked current and incumbent records, with the same availability.
+  Selection snapshots preserve the full report when current progress changes.
+  `reset` clears both records; `reset_best` preserves current progress. Runtime
+  measures remain solver-specific, including squared L2 for constrained MADS,
+  L1 for SLSQP, L-infinity for COBYLA, and L2 for the augmented-Lagrangian method.
+  Reporting adds no evaluations, feasibility thresholds, or convergence tests.
 - **Counts:** `Problem` owns authoritative `EvalCounts`; state preserves every
   category. Category readers and budgets must agree, with explicit names for
   aggregates. Counts measure callback requests at the `Problem` boundary.

@@ -108,9 +108,9 @@ fn converges_to_disk_optimum() {
     let x = result.best_param();
     assert!(x[0] * x[0] + x[1] * x[1] <= 1.0 + 1e-6, "infeasible {x:?}");
     assert!(
-        result.state.current().unwrap().2 <= 1e-12,
+        result.state.current().unwrap().2.value <= 1e-12,
         "violation = {}",
-        result.state.current().unwrap().2
+        result.state.current().unwrap().2.value
     );
 }
 

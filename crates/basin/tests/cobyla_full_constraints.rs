@@ -141,6 +141,23 @@ where
     assert!(x[3] <= 0.75 + 1e-6);
     assert!(x[4] >= 3.0 - 1e-6);
     assert!((result.best_cost() - 8.875).abs() < 1e-3);
+    let violation = result.state.best().unwrap().2;
+    let expected_violation = [
+        (x[0] * x[0] - 1.0).max(0.0),
+        (x[1] - 0.5).max(0.0),
+        (x[2] - 0.25).abs(),
+        (x[3] - 0.75).max(0.0),
+        (3.0 - x[4]).max(0.0),
+    ]
+    .into_iter()
+    .fold(0.0_f64, f64::max);
+    assert_eq!(violation.value, expected_violation);
+    assert_eq!(violation.measure, basin::ViolationMeasure::LInf);
+    assert_eq!(violation.scaling, basin::ViolationScaling::Unscaled);
+    assert_eq!(
+        violation.transformation,
+        basin::ViolationTransformation::PrimaModeration
+    );
     assert_eq!(
         result.best_cost(),
         (0..5).map(|i| (x[i] - 2.0).powi(2)).sum::<f64>()

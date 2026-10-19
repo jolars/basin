@@ -72,6 +72,7 @@ use crate::core::state::{PointState, SelectedState, State};
 use crate::core::termination::Termination;
 use crate::solver::nelder_mead::Unbounded;
 use crate::{ConstraintSolveError, NonlinearInequalityValues};
+use crate::{ViolationMeasure, ViolationReport};
 
 use driver::{MadsWork, Transition};
 use progressive_barrier::PbWork;
@@ -159,7 +160,12 @@ pub struct Constrained;
 /// category. Constraint callbacks count as residual evaluations, including
 /// failures; box-rejected probes make no objective call. The constrained
 /// state's `current()` and `best()` return the selected point, objective, and
-/// squared-sum violation. Selection can increase the objective as feasibility
+/// violation report with [`ViolationMeasure::SquaredL2`], unscaled and with
+/// identity transformation. Its `value` is the squared-sum violation. NaN
+/// residuals do not satisfy the positive-part comparison and contribute zero;
+/// reporting preserves this native behavior. [`crate::ConstraintViolationState`]
+/// borrows current and incumbent reports without evaluations.
+/// Selection can increase the objective as feasibility
 /// improves; unchanged records retain their publication metadata.
 ///
 /// The solver owns every mesh and Halton counter and the progressive barrier's
@@ -563,7 +569,11 @@ where
             )?
         };
 
-        state.replace(fill_from(&template, &best_x), best_f, best_h);
+        state.replace(
+            fill_from(&template, &best_x),
+            best_f,
+            ViolationReport::new(best_h, ViolationMeasure::SquaredL2),
+        );
         state.select_current();
         self.pb_work = Some(work);
         Ok(state)
@@ -601,10 +611,14 @@ where
         let (x_star, f_star, h_star) = out.incumbent;
         let changed = state.current().is_none_or(|(x, f, h)| {
             f != f_star
-                || h != h_star
+                || h.value != h_star
                 || (0..x_star.len()).any(|i| x[i] != x_star[i])
         });
-        state.replace(fill_from(&template, &x_star), f_star, h_star);
+        state.replace(
+            fill_from(&template, &x_star),
+            f_star,
+            ViolationReport::new(h_star, ViolationMeasure::SquaredL2),
+        );
         if changed {
             state.select_current();
         }

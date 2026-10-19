@@ -12,6 +12,7 @@ use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{CountsMirror, SelectedState, State};
 use crate::core::termination::Termination;
+use crate::{ViolationMeasure, ViolationReport};
 
 /// Owned evidence from the most recent attempted augmented-Lagrangian solve.
 ///
@@ -110,8 +111,11 @@ pub struct AugmentedLagrangianInnerDiagnostics<V, F: Scalar = f64> {
 /// additional gradient callbacks per consumed result are counted as outer
 /// verification work, separately from the native inner diagnostics.
 ///
-/// The outer [`SelectedState`] reports the original objective and residual
-/// norm without advertising an objective gradient. Optional outer cost- and
+/// The outer [`SelectedState`] reports the original objective and a
+/// [`ViolationReport`] with [`ViolationMeasure::L2`], unscaled and with identity
+/// transformation. Its `value` is `‖A x − b‖₂`; the state does not advertise an
+/// objective gradient. [`crate::ConstraintViolationState`] borrows matching
+/// current and incumbent reports without evaluations. Optional outer cost- and
 /// step-change tests require both feasibility and surrogate stationarity.
 ///
 /// Incumbent selection first prefers feasible points, using the configured
@@ -359,6 +363,7 @@ impl<So, V: Clone, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
     fn select_incumbent(&self, state: &mut SelectedState<V, F>) {
         let (_, cost, violation) =
             state.current().expect("evaluated outer point");
+        let violation = violation.value;
         if cost.is_nan() || cost == F::infinity() || !violation.is_finite() {
             return;
         }
@@ -366,6 +371,7 @@ impl<So, V: Clone, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
         let feasible = violation <= threshold;
         let improved =
             state.best().is_none_or(|(_, best_cost, best_violation)| {
+                let best_violation = best_violation.value;
                 let best_feasible = best_violation <= threshold;
                 if feasible != best_feasible {
                     feasible
@@ -445,7 +451,11 @@ where
             .linear_residual(state.param())
             .map_err(invalid)?;
         let violation = residual.norm_squared().sqrt();
-        state.replace(state.param().clone(), cost, violation);
+        state.replace(
+            state.param().clone(),
+            cost,
+            ViolationReport::new(violation, ViolationMeasure::L2),
+        );
         self.select_incumbent(&mut state);
         Ok(state)
     }
@@ -555,7 +565,11 @@ where
         }
         self.c_norm_prev = self.c_norm;
         self.c_norm = c_norm;
-        state.replace(candidate.clone(), cost, self.c_norm);
+        state.replace(
+            candidate.clone(),
+            cost,
+            ViolationReport::new(self.c_norm, ViolationMeasure::L2),
+        );
         self.select_incumbent(&mut state);
 
         // Multiplier update vs. penalty increase. The first solve

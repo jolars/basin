@@ -1,9 +1,9 @@
 //! Shared constrained progress with a matching objective gradient.
 
 use super::{
-    CountsMirror, EvaluatedGradientState, EvaluatedState,
-    GradientDimensionMismatch, GradientState, IncumbentRef, IncumbentState,
-    RawEvaluationState, SelectedState, State,
+    ConstraintViolationState, CountsMirror, EvaluatedGradientState,
+    EvaluatedState, GradientDimensionMismatch, GradientState, IncumbentRef,
+    IncumbentState, RawEvaluationState, SelectedState, State, ViolationReport,
 };
 use crate::{EvalCounts, Scalar, VectorLen};
 
@@ -14,7 +14,8 @@ use crate::{EvalCounts, Scalar, VectorLen};
 /// record, while [`select_current`](Self::select_current) explicitly chooses
 /// an incumbent. Selection can increase the objective to improve feasibility,
 /// so this state does not implement [`super::ObjectiveIncumbentState`].
-/// The solver defines the violation measure and eligibility rules.
+/// The solver supplies a [`ViolationReport`] describing the measure, scaling,
+/// and transformation, and defines its eligibility rules.
 ///
 /// Current records contain a point, objective, gradient, and violation. Best
 /// records contain the selected point, objective, and violation; their raw
@@ -56,13 +57,13 @@ impl<V, F: Scalar> SelectedFirstOrderState<V, F> {
         self.progress.reset();
         self.gradient = None;
     }
-    /// Matching point, objective, gradient, and violation, or `None` for a seed.
-    pub fn current(&self) -> Option<(&V, F, &V, F)> {
+    /// Matching point, objective, gradient, and violation report, or `None` for a seed.
+    pub fn current(&self) -> Option<(&V, F, &V, &ViolationReport<F>)> {
         let (x, cost, violation) = self.progress.current()?;
         Some((x, cost, self.gradient.as_ref()?, violation))
     }
-    /// Selected point, objective, and violation, or `None` before selection.
-    pub fn best(&self) -> Option<(&V, F, F)> {
+    /// Selected point, objective, and violation report, or `None` before selection.
+    pub fn best(&self) -> Option<(&V, F, &ViolationReport<F>)> {
         self.progress.best()
     }
     /// All six raw evaluation categories at the current publication boundary.
@@ -82,7 +83,7 @@ impl<V: VectorLen, F: Scalar> SelectedFirstOrderState<V, F> {
         param: V,
         cost: F,
         gradient: V,
-        violation: F,
+        violation: ViolationReport<F>,
     ) -> Result<(), GradientDimensionMismatch> {
         if param.vec_len() != gradient.vec_len() {
             return Err(GradientDimensionMismatch {
@@ -177,5 +178,17 @@ impl<V: Clone, F: Scalar> GradientState for SelectedFirstOrderState<V, F> {
 impl<V: Clone, F: Scalar> IncumbentState for SelectedFirstOrderState<V, F> {
     fn incumbent_record(&self) -> Option<IncumbentRef<'_, V, F>> {
         self.progress.incumbent_record()
+    }
+}
+
+impl<V: Clone, F: Scalar> ConstraintViolationState
+    for SelectedFirstOrderState<V, F>
+{
+    fn current_violation(&self) -> Option<&ViolationReport<F>> {
+        self.progress.current_violation()
+    }
+
+    fn incumbent_violation(&self) -> Option<&ViolationReport<F>> {
+        self.progress.incumbent_violation()
     }
 }

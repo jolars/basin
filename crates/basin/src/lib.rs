@@ -393,13 +393,14 @@ pub use crate::core::problem::{
 pub use crate::core::run_control::RunControl;
 pub use crate::core::solver::{Solver, SolverStep};
 pub use crate::core::state::{
-    AcceptanceState, CountsMirror, EvaluatedGradientState, EvaluatedState,
-    ExactResumeState, FirstOrderState, GradientDimensionMismatch,
-    GradientState, IncumbentRef, IncumbentState, IntoInitialSimplex, MeshState,
-    ObjectiveIncumbentState, PointState, PopulationProgress,
-    PopulationShapeError, PopulationState, ProposalState, RawEvaluationState,
-    RhoState, SelectedFirstOrderState, SelectedState, SimplexProgress,
-    SimplexShapeError, SimplexState, State,
+    AcceptanceState, ConstraintViolationState, CountsMirror,
+    EvaluatedGradientState, EvaluatedState, ExactResumeState, FirstOrderState,
+    GradientDimensionMismatch, GradientState, IncumbentRef, IncumbentState,
+    IntoInitialSimplex, MeshState, ObjectiveIncumbentState, PointState,
+    PopulationProgress, PopulationShapeError, PopulationState, ProposalState,
+    RawEvaluationState, RhoState, SelectedFirstOrderState, SelectedState,
+    SimplexProgress, SimplexShapeError, SimplexState, State, ViolationMeasure,
+    ViolationReport, ViolationScaling, ViolationTransformation,
 };
 pub use crate::core::termination::{
     ApplicationStop, BinaryValue, Convergence, ConvergenceCriterion,

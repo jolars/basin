@@ -122,8 +122,12 @@ bracketing routines.
   a `CostFunction` (plus `NonlinearInequalityValues` for the constrained
   mode). All modes support `f32` and `f64` on every dense backend release.
   Unbounded and box-bounded runs use `PointState`; progressive-barrier runs use
-  `SelectedState` with the squared-sum violation. Mesh and poll diagnostics
-  belong to the solver. Implements Audet & Dennis (2006), OrthoMADS (Abramson, Audet, Dennis &
+  `SelectedState` with an unscaled `ViolationReport` tagged `SquaredL2`. Mesh and poll diagnostics
+  belong to the solver. Selected constrained states expose matching current and
+  incumbent [violation reports](https://docs.rs/basin/latest/basin/core/state/violation/struct.ViolationReport.html)
+  through [`ConstraintViolationState`](https://docs.rs/basin/latest/basin/core/state/capabilities/trait.ConstraintViolationState.html),
+  without additional evaluations or changes to solver convergence.
+  Implements Audet & Dennis (2006), OrthoMADS (Abramson, Audet, Dennis &
   Le Digabel 2009), and the progressive barrier (Audet & Dennis 2009).
 - **[`Newuoa`](https://docs.rs/basin/latest/basin/solver/newuoa/struct.Newuoa.html)**:
   Powell's model-based trust-region method: maintains a quadratic surrogate
@@ -162,7 +166,8 @@ bracketing routines.
   The solver folds the full feasible set into inequalities while retaining
   Basin's interpolation algorithm. Bound constraints do not guarantee feasible
   callbacks, and radius convergence does not certify feasibility. Uses
-  `SelectedState` for the filter-selected point and violation; the solver owns
+  `SelectedState` for the filter-selected point and an unscaled `LInf` violation
+  report tagged `PrimaModeration`; the solver owns
   its model and radius. Supports `f32` and `f64` on every dense backend release.
   Only present linear blocks require `MatrixShape`, `MatrixFinite`, and
   `MatVecInto`; nonlinear-only input needs no matrix type. Nonempty nonlinear
@@ -421,7 +426,8 @@ solvers that enforce the same box can be supplied directly.
   require `ConstraintJacobian`; linear-only sets need no nonlinear callback. Reports feasibility, projected
   Lagrangian stationarity, and complementarity on the solver alongside Kraft's
   native convergence tests. Uses `SelectedFirstOrderState` with a matching
-  objective gradient and constraint violation. Supports `f32` and `f64` on
+  objective gradient and an unscaled `L1` violation report tagged
+  `NonFiniteToInfinity`. Supports `f32` and `f64` on
   every dense backend release; vectors need indexing and matrices need shape
   and finite entry access. Each block can use independent storage. Kraft, D. (1988), *A software package for sequential
   quadratic programming*, Technical Report DFVLR-FB 88-28, Institut für Dynamik
@@ -445,7 +451,7 @@ constraints:
   quadratic penalty plus multiplier updates for linear equality constraints
   (`A x = b`); tolerates an infeasible start (Nocedal & Wright, §17.3, Alg.
   17.4, LANCELOT-style). Publishes `SelectedState` with the objective and
-  constraint residual norm, retaining an incumbent chosen by feasibility
+  unscaled `L2` constraint-violation report, retaining an incumbent chosen by feasibility
   before objective. Supports all four dense backends with `f32` or `f64`;
   custom inner solvers can require additional capabilities.
 

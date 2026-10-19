@@ -40,6 +40,7 @@ use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{SelectedState, State};
 use crate::core::termination::Termination;
+use crate::{ViolationMeasure, ViolationReport, ViolationTransformation};
 
 use driver::{CobylaWork, Transition};
 
@@ -131,7 +132,12 @@ use driver::{CobylaWork, Transition};
 ///
 /// Construct [`SelectedState::new`] or use [`crate::Executor::from_start`].
 /// `current()` and `best()` report the filter-selected point, objective, and
-/// maximum positive constraint violation. Selection uses COBYLA's feasibility
+/// [`crate::ViolationReport`] with [`ViolationMeasure::LInf`], unscaled and
+/// with [`ViolationTransformation::PrimaModeration`]. Its `value` is the maximum
+/// positive violation across bounds, linear blocks, and nonlinear blocks;
+/// equalities enter as paired residuals of opposite signs.
+/// [`crate::ConstraintViolationState`] borrows current and incumbent reports
+/// without evaluations. Selection uses COBYLA's feasibility
 /// and merit rules, so a new incumbent may have a higher objective. Unchanged
 /// records keep their original publication metadata. Objective-only executor
 /// targets and stalls are unavailable through [`crate::ObjectiveIncumbentState`].
@@ -276,10 +282,17 @@ fn publish<V, F>(
 {
     let (x, cost, violation) = work.best_record_ref();
     let changed = state.current().is_none_or(|(previous, f, v)| {
-        f != cost || v != violation || (0..x.len()).any(|i| previous[i] != x[i])
+        f != cost
+            || v.value != violation
+            || (0..x.len()).any(|i| previous[i] != x[i])
     });
     fill_into(param, x);
-    state.replace_from(param, cost, violation);
+    state.replace_from(
+        param,
+        cost,
+        ViolationReport::new(violation, ViolationMeasure::LInf)
+            .with_transformation(ViolationTransformation::PrimaModeration),
+    );
     if changed {
         state.select_current();
     }

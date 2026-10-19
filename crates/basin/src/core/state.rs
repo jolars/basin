@@ -27,19 +27,27 @@
 //! supplies shared progress for solver-selected constrained incumbents;
 //! [`SelectedFirstOrderState`] adds matching objective gradients. Every shared
 //! state preserves the six raw evaluation categories.
+//! Both selected shapes implement [`ConstraintViolationState`], exposing
+//! [`ViolationReport`] records with runtime measure, scaling, and transformation
+//! metadata for the current point and the selected incumbent.
 //! [`ProposalState`] adds acceptance bookkeeping while leaving proposal
 //! strategies and their evolving machinery in the solver.
 
 pub mod capabilities;
 pub mod progress;
+pub mod violation;
 
 pub use capabilities::{
-    EvaluatedGradientState, EvaluatedState, IncumbentRef, IncumbentState,
-    ObjectiveIncumbentState, RawEvaluationState,
+    ConstraintViolationState, EvaluatedGradientState, EvaluatedState,
+    IncumbentRef, IncumbentState, ObjectiveIncumbentState, RawEvaluationState,
 };
 pub use progress::{
     FirstOrderState, GradientDimensionMismatch, PointState, ProposalState,
     SelectedState,
+};
+pub use violation::{
+    ViolationMeasure, ViolationReport, ViolationScaling,
+    ViolationTransformation,
 };
 
 use crate::core::math::Scalar;

@@ -1,5 +1,7 @@
 //! Shared constrained first-order records and raw evaluation categories.
 
+use basin::{ViolationMeasure, ViolationReport};
+
 use basin::{
     CountsMirror, EvalCounts, GradientState, SelectedFirstOrderState, State,
 };
@@ -26,7 +28,14 @@ fn public_records_validate_dimensions_and_preserve_pending_selections() {
     assert!(state.current().is_none());
     assert!(state.gradient().is_none());
     assert!(!state.select_current());
-    state.replace(vec![0.0], 0.0, vec![0.0], 1.0).unwrap();
+    state
+        .replace(
+            vec![0.0],
+            0.0,
+            vec![0.0],
+            ViolationReport::new(1.0, ViolationMeasure::L1),
+        )
+        .unwrap();
     state.select_current();
     state.mirror(&{
         let mut counts = EvalCounts::default();
@@ -39,14 +48,35 @@ fn public_records_validate_dimensions_and_preserve_pending_selections() {
         counts
     });
     state.update_best();
-    state.replace(vec![1.0], 1.0, vec![2.0], 0.0).unwrap();
+    state
+        .replace(
+            vec![1.0],
+            1.0,
+            vec![2.0],
+            ViolationReport::new(0.0, ViolationMeasure::L1),
+        )
+        .unwrap();
     state.select_current();
     let unchanged = state.clone();
-    let error = state.replace(vec![2.0], 4.0, vec![], 1.0).unwrap_err();
+    let error = state
+        .replace(
+            vec![2.0],
+            4.0,
+            vec![],
+            ViolationReport::new(1.0, ViolationMeasure::L1),
+        )
+        .unwrap_err();
     assert_eq!(error.param_len, 1);
     assert_eq!(error.gradient_len, 0);
     assert_eq!(state, unchanged);
-    state.replace(vec![2.0], 4.0, vec![4.0], 1.0).unwrap();
+    state
+        .replace(
+            vec![2.0],
+            4.0,
+            vec![4.0],
+            ViolationReport::new(1.0, ViolationMeasure::L1),
+        )
+        .unwrap();
     state.increment_iter();
     let mut counts = EvalCounts::default();
     counts.cost_evals = 7;
@@ -57,8 +87,23 @@ fn public_records_validate_dimensions_and_preserve_pending_selections() {
     counts.hessian_product_evals = 12;
     state.mirror(&counts);
     state.update_best();
-    assert_eq!(state.best(), Some((&vec![1.0], 1.0, 0.0)));
-    assert_eq!(state.current(), Some((&vec![2.0], 4.0, &vec![4.0], 1.0)));
+    assert_eq!(
+        state.best(),
+        Some((
+            &vec![1.0],
+            1.0,
+            &ViolationReport::new(0.0, ViolationMeasure::L1)
+        ))
+    );
+    assert_eq!(
+        state.current(),
+        Some((
+            &vec![2.0],
+            4.0,
+            &vec![4.0],
+            &ViolationReport::new(1.0, ViolationMeasure::L1)
+        ))
+    );
     assert_eq!(state.best_counts(), Some(&counts));
     assert_eq!(state.best_cost_evals(), 7);
     assert_eq!(state.best_gradient_evals(), 8);
@@ -150,7 +195,12 @@ fn fresh_slsqp_rebuilds_diagnostics_and_reevaluates_progress() {
     assert_eq!(used.state.current().unwrap().2, &vec![2.0, 0.0]);
     let mut state = used.state;
     state
-        .replace(vec![0.0; 3], -100.0, vec![100.0; 3], 0.0)
+        .replace(
+            vec![0.0; 3],
+            -100.0,
+            vec![100.0; 3],
+            ViolationReport::new(0.0, ViolationMeasure::L1),
+        )
         .unwrap();
     let fresh = Executor::new(Equality, used.solver, state)
         .require_evaluated_state()
@@ -159,7 +209,15 @@ fn fresh_slsqp_rebuilds_diagnostics_and_reevaluates_progress() {
         .unwrap();
     assert_eq!(
         fresh.state.current(),
-        Some((&vec![0.0; 3], 0.0, &vec![0.0; 3], 1.0))
+        Some((
+            &vec![0.0; 3],
+            0.0,
+            &vec![0.0; 3],
+            &ViolationReport::new(1.0, ViolationMeasure::L1)
+                .with_transformation(
+                    basin::ViolationTransformation::NonFiniteToInfinity
+                )
+        ))
     );
     assert_eq!(fresh.state.best_iter(), 0);
     assert_eq!(fresh.iter(), 0);

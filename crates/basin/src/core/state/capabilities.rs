@@ -5,7 +5,7 @@
 //! Record availability describes evaluation, not numerical validity: an
 //! evaluated rejection with infinite cost is still an available record.
 
-use super::State;
+use super::{State, ViolationReport};
 use crate::core::math::Scalar;
 use crate::core::problem::EvalCounts;
 
@@ -121,6 +121,36 @@ pub trait IncumbentState: State<Float: Scalar> {
     fn incumbent_record(
         &self,
     ) -> Option<IncumbentRef<'_, Self::Param, Self::Float>>;
+}
+
+/// Checked constraint-violation reports for current and incumbent records.
+///
+/// Availability must agree with [`EvaluatedState::current_record`] and
+/// [`IncumbentState::incumbent_record`], respectively. Each report belongs to
+/// the same point as its corresponding record. Preserve an incumbent's full
+/// report when current progress changes, including a pending selection before
+/// publication. Reports describe evaluated values, including NaN and infinity;
+/// `None` must not stand in for an evaluated zero or a non-finite value.
+///
+/// Reading reports must not evaluate the problem or change state. The report's
+/// runtime metadata describes its measure, scaling, and transformation;
+/// different solvers may publish different measures through the same shared
+/// state. This capability implies neither objective ordering nor a particular
+/// feasibility tolerance. Numerical convergence remains solver-owned.
+///
+/// Unconstrained progress does not advertise this capability:
+///
+/// ```compile_fail
+/// use basin::{ConstraintViolationState, PointState};
+/// fn report<S: ConstraintViolationState>(_: &S) {}
+/// report(&PointState::new(vec![1.0]));
+/// ```
+pub trait ConstraintViolationState: EvaluatedState + IncumbentState {
+    /// Borrow the report matching the current evaluated point, or `None`.
+    fn current_violation(&self) -> Option<&ViolationReport<Self::Float>>;
+
+    /// Borrow the report matching the selected incumbent, or `None`.
+    fn incumbent_violation(&self) -> Option<&ViolationReport<Self::Float>>;
 }
 
 /// Incumbent selection compatible with objective-only targets and stalls.

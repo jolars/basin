@@ -668,5 +668,5 @@ fn slsqp_f32_round_trips_bounded_numerical_derivatives() {
     .unwrap();
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(result.param().iter().all(|v| (*v - 0.5).abs() < 1e-3));
-    assert!(result.state.current().unwrap().3 < 1e-4);
+    assert!(result.state.current().unwrap().3.value < 1e-4);
 }

@@ -4,6 +4,7 @@ use basin::{
     AugmentedLagrangianMethod, CostFunction, DenseMatrix, Executor, Gradient,
     GradientDescent, MatrixFromDiagonal, State,
 };
+use basin::{ViolationMeasure, ViolationReport};
 use std::convert::Infallible;
 
 struct Equality {
@@ -87,13 +88,13 @@ fn coherent(state: &basin::SelectedState<Vec<f64>>) {
     let (x, cost, violation) = state.current().unwrap();
     assert_eq!(cost, x.iter().map(|x| x * x).sum::<f64>());
     assert_eq!(
-        violation,
+        violation.value,
         x.iter().map(|x| (x - 1.0).powi(2)).sum::<f64>().sqrt()
     );
     if let Some((x, cost, violation)) = state.best() {
         assert_eq!(cost, x.iter().map(|x| x * x).sum::<f64>());
         assert_eq!(
-            violation,
+            violation.value,
             x.iter().map(|x| (x - 1.0).powi(2)).sum::<f64>().sqrt()
         );
     }
@@ -122,7 +123,11 @@ fn augmented_lagrangian_fresh_and_exact_lifecycles() {
         assert_eq!(resumed.counts, expected.counts);
     }
     let mut seed = expected.state;
-    seed.replace(vec![2.0; 3], -1000.0, 0.0);
+    seed.replace(
+        vec![2.0; 3],
+        -1000.0,
+        ViolationReport::new(0.0, ViolationMeasure::L2),
+    );
     let initialized = Executor::new(Equality::new(3), expected.solver, seed)
         .require_evaluated_state()
         .max_iter(0)
@@ -155,7 +160,11 @@ fn explicit_selection_stamps_once_and_keeps_its_own_record() {
     let mut state = SelectedState::new(vec![0.0]);
     assert!(state.current().is_none());
     assert!(!state.select_current());
-    state.replace(vec![0.0], 0.0, 1.0);
+    state.replace(
+        vec![0.0],
+        0.0,
+        ViolationReport::new(1.0, ViolationMeasure::L2),
+    );
     assert!(state.select_current());
     let mut first = EvalCounts::default();
     first.cost_evals = 1;
@@ -166,22 +175,55 @@ fn explicit_selection_stamps_once_and_keeps_its_own_record() {
     first.hessian_product_evals = 6;
     state.mirror(&first);
     state.update_best();
-    assert_eq!(state.best(), Some((&vec![0.0], 0.0, 1.0)));
+    assert_eq!(
+        state.best(),
+        Some((
+            &vec![0.0],
+            0.0,
+            &ViolationReport::new(1.0, ViolationMeasure::L2)
+        ))
+    );
     assert_eq!(state.best_counts(), Some(&first));
     // A higher-cost feasible selection wins at the same iteration number.
-    state.replace(vec![1.0], 1.0, 0.0);
+    state.replace(
+        vec![1.0],
+        1.0,
+        ViolationReport::new(0.0, ViolationMeasure::L2),
+    );
     assert!(state.select_current());
     // Later work may publish a different current point without changing that choice.
-    state.replace(vec![2.0], 4.0, 1.0);
+    state.replace(
+        vec![2.0],
+        4.0,
+        ViolationReport::new(1.0, ViolationMeasure::L2),
+    );
     let mut second = first;
     second.cost_evals = 7;
     state.mirror(&second);
     state.update_best();
-    assert_eq!(state.current(), Some((&vec![2.0], 4.0, 1.0)));
-    assert_eq!(state.best(), Some((&vec![1.0], 1.0, 0.0)));
+    assert_eq!(
+        state.current(),
+        Some((
+            &vec![2.0],
+            4.0,
+            &ViolationReport::new(1.0, ViolationMeasure::L2)
+        ))
+    );
+    assert_eq!(
+        state.best(),
+        Some((
+            &vec![1.0],
+            1.0,
+            &ViolationReport::new(0.0, ViolationMeasure::L2)
+        ))
+    );
     assert_eq!(state.best_counts(), Some(&second));
     state.increment_iter();
-    state.replace(vec![3.0], 9.0, 2.0);
+    state.replace(
+        vec![3.0],
+        9.0,
+        ViolationReport::new(2.0, ViolationMeasure::L2),
+    );
     state.mirror(&{
         let mut counts = second;
         counts.cost_evals = 8;
@@ -189,7 +231,14 @@ fn explicit_selection_stamps_once_and_keeps_its_own_record() {
     });
     state.update_best();
     state.update_best();
-    assert_eq!(state.best(), Some((&vec![1.0], 1.0, 0.0)));
+    assert_eq!(
+        state.best(),
+        Some((
+            &vec![1.0],
+            1.0,
+            &ViolationReport::new(0.0, ViolationMeasure::L2)
+        ))
+    );
     assert_eq!(state.best_iter(), 0);
     assert_eq!(state.best_counts(), Some(&second));
     let best = state.incumbent_record().unwrap();
@@ -315,7 +364,7 @@ fn constrained_target_hook_requires_feasibility_as_well_as_cost() {
     let result = Executor::from_start(Equality::new(1), solver(), vec![0.0])
         .stop_when(|state| {
             state.best().and_then(|(_, cost, violation)| {
-                (violation <= 1e-3 && cost <= 1.0)
+                (violation.value <= 1e-3 && cost <= 1.0)
                     .then(|| basin::ApplicationStop::new("feasible_target"))
             })
         })
@@ -329,5 +378,5 @@ fn constrained_target_hook_requires_feasibility_as_well_as_cost() {
         ))
     );
     assert!(result.state.iter() > 0);
-    assert!(result.state.best().unwrap().2 <= 1e-3);
+    assert!(result.state.best().unwrap().2.value <= 1e-3);
 }

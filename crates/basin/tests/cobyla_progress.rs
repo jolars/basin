@@ -85,7 +85,7 @@ fn selection_preserves_feasibility_and_stamps_only_changes() {
         let state = stepper.state();
         let (x, cost, violation) = state.current().unwrap();
         assert_eq!(cost, x.iter().map(|x| x * x).sum::<f64>());
-        assert_eq!(violation, (1.0 - x[0]).max(0.0));
+        assert_eq!(violation.value, (1.0 - x[0]).max(0.0));
         assert_eq!(state.current(), state.best());
         assert_eq!(state.counts(), stepper.counts());
         assert_eq!(state.cost_evals(), state.counts().cost_evals);
@@ -101,7 +101,7 @@ fn selection_preserves_feasibility_and_stamps_only_changes() {
     }
     assert!(unchanged > 0);
     assert!(stepper.state().cost() > initial_cost);
-    assert!(stepper.state().current().unwrap().2 < 1e-8);
+    assert!(stepper.state().current().unwrap().2.value < 1e-8);
 }
 
 #[test]
@@ -386,7 +386,7 @@ fn published_records_keep_the_drivers_nonfinite_moderation() {
         let (_, actual_cost, actual_violation) =
             result.state.current().unwrap();
         assert_eq!(actual_cost, cost);
-        assert_eq!(actual_violation, violation);
+        assert_eq!(actual_violation.value, violation);
         assert_eq!(result.state.current(), result.state.best());
         assert_eq!(result.state.best_counts(), Some(&result.counts));
     }

@@ -786,8 +786,8 @@ indexing. Present linear blocks additionally require `MatrixShape`,
 dense backend release with `f32` and `f64`.
 
 `current()` and `best()` expose the filter-selected point, objective, and
-maximum positive constraint violation. COBYLA can prefer a higher-cost point as
-feasibility improves. It does not implement `ObjectiveIncumbentState`;
+`ViolationReport` for the maximum positive constraint violation. COBYLA can
+prefer a higher-cost point as feasibility improves. It does not implement `ObjectiveIncumbentState`;
 objective-only targets and stalls cannot assume its selection is an objective
 minimum. An unchanged selection keeps its original iteration and evaluation
 metadata. The driver still moderates extreme and non-finite values according to
@@ -815,8 +815,9 @@ vector requirements, and all dense backend versions support both scalar types.
 Read `poll_size()` and `mesh_index()` on the retained solver, where both return
 `Option` values that are absent before initialization. The shared states have no
 `MeshState` capability. In constrained mode, read the squared-sum violation from
-`state.current()` or `state.best()` instead of `constraint_violation()`. The
-progressive barrier still selects a feasible incumbent when available; its
+`state.current().unwrap().2.value` or the matching `state.best()` report
+instead of `constraint_violation()`. The progressive barrier still selects a
+feasible incumbent when available; its
 objective can increase while feasibility improves. Unchanged selections keep
 their original metadata. Constraint calls now count as residual work, while
 rejected box probes consume no objective call.
@@ -830,8 +831,8 @@ compatibility reader.
 SLSQP keeps the type `Slsqp<F = f64>` and now publishes
 `SelectedFirstOrderState<V, F>`. Replace `SlsqpState::new(x)` with the shared
 constructor or use `Executor::from_start`. `current()` returns a point,
-objective, matching objective gradient, and sum of constraint violations;
-`best()` returns the selected point, objective, and violation. The state
+objective, matching objective gradient, and a report for the sum of constraint
+violations; `best()` returns the selected point, objective, and report. The state
 implements `GradientState` and `EvaluatedGradientState`, but not
 `ObjectiveIncumbentState`. Each accepted iterate is an explicit selection,
 including when its objective increases as feasibility improves. Failed trials
@@ -839,7 +840,7 @@ preserve the previous accepted record and its selection metadata.
 
 Move `stationarity()`, `complementarity()`, and `failure()` calls from state to
 the solver retained by `run_with_solver()` or `stepper.solver()`. The solver's
-`constraint_violation()` mirrors the violation in the current shared record.
+`constraint_violation()` mirrors `.value` in the current shared report.
 These diagnostics return `Option` values until available. Native accuracy and
 safeguard behavior are unchanged. Cost and gradient readers now count only their
 named categories; constraint and constraint-Jacobian calls remain separate in
@@ -855,8 +856,9 @@ requirements. Every supported dense backend release supports `f32` and `f64`.
 External constrained first-order solvers can also use
 `SelectedFirstOrderState::replace(x, cost, gradient, violation)`, which rejects
 mismatched dimensions without changing progress, followed by `select_current()`
-when they select an incumbent. The executor supplies publication counts and
-iteration metadata. The state preserves a pending selection even if another
+when they select an incumbent. Supply a `ViolationReport` as `violation`.
+The executor supplies publication counts and iteration metadata. The state
+preserves a pending selection even if another
 current record replaces it before that boundary.
 
 Nelder-Mead now has the type `NelderMead<V, F = f64, Mode = Unbounded>` and uses
@@ -1254,14 +1256,15 @@ The augmented-Lagrangian outer method now publishes `SelectedState<V, F>`. Its
 public type remains `AugmentedLagrangianMethod<So, V, F = f64>`, and its
 constructors now support both scalar types. Replace `BasicState::new(x)` with
 `SelectedState::new(x)` or use `Executor::from_start`. `current()` and `best()`
-return checked `(point, objective, constraint_norm)` records. Selection prefers
-feasible points, then lower objectives among them; before feasibility, it
+return checked `(point, objective, &ViolationReport)` records, whose `.value`
+is the constraint norm. Selection prefers feasible points, then lower objectives
+among them; before feasibility, it
 prefers lower constraint norms, breaking exact ties by objective. The configured
 feasibility tolerance defines eligibility, with exact zero when disabled. The
 selected objective can increase as feasibility improves. Cost- and step-change
 tests observe only feasible outer iterates.
 
-`SelectedState` provides `replace(x, cost, violation)` and the explicit
+`SelectedState` provides `replace(x, cost, report)` and the explicit
 `select_current()` operation for external solvers. Call the latter only when
 selection changes. The executor records the final charged counts and completed
 iteration number at publication, including mid-step stops; repeated observation
@@ -1345,6 +1348,85 @@ state layouts; a 1.x state payload is not a 2.0 shared-state payload, even when
 both use postcard. Export parameters with the matching 1.x application and
 create a fresh shared state. Exact checkpoints require matching concrete types
 and Basin versions, as described under [checkpoint files](#checkpoint-files).
+
+## Constraint-violation reports
+
+`SelectedState<V, F>` and `SelectedFirstOrderState<V, F>` now require a
+`ViolationReport<F>` wherever they previously accepted a scalar violation:
+
+```rust
+use basin::{SelectedFirstOrderState, SelectedState, ViolationMeasure, ViolationReport};
+
+let mut state = SelectedState::new(vec![2.0]);
+state.replace(vec![2.0], 4.0, ViolationReport::new(1.0, ViolationMeasure::L1));
+let (_, _, violation) = state.current().unwrap();
+assert_eq!(violation.value, 1.0);
+
+let mut first = SelectedFirstOrderState::new(vec![2.0]);
+first.replace(vec![2.0], 4.0, vec![4.0],
+    ViolationReport::new(1.0, ViolationMeasure::L1)).unwrap();
+let (_, _, _, violation) = first.current().unwrap();
+assert_eq!(violation.value, 1.0);
+```
+
+The last component of `current()` and `best()` is now a borrowed report. Use
+`.value` for the numeric aggregate, and inspect `.measure`, `.scaling`, and
+`.transformation` before interpreting it. `ViolationReport::new(value, measure)`
+describes an unscaled value with identity transformation. `with_scaling` and
+`with_transformation` describe computations already performed; they do not
+change the value. Each metadata enum also supports a `Custom(String)` formula
+or description for external solvers. Reports and metadata enums are
+non-exhaustive, with complete public constructors for the report.
+
+All four existing reporters use `ViolationScaling::Unscaled`, preserving the
+units and any scaling supplied by the problem:
+
+| Solver | Measure | Transformation |
+| ------ | ------- | -------------- |
+| Constrained MADS | `SquaredL2` | `Identity` |
+| SLSQP | `L1` | `NonFiniteToInfinity` |
+| COBYLA | `LInf` | `PrimaModeration` |
+| `AugmentedLagrangianMethod` | `L2` | `Identity` |
+
+Equality violations use absolute residuals; inequality violations use positive
+parts. COBYLA includes bounds, linear constraints, and nonlinear constraints, folding
+equalities into opposite-signed residuals. Before aggregation, PRIMA moderation
+clips residuals to `[-2^100, 2^100]` and maps NaN to `2^100`. SLSQP's aggregate
+is positive infinity if any constraint residual is non-finite; bounds contribute
+zero at its clipped accepted points. Constrained MADS retains its native
+positive-part comparisons, so NaN residuals contribute zero. The
+augmented-Lagrangian report is the Euclidean linear-equality residual norm.
+Reporting preserves each solver's arithmetic, non-finite behavior, and
+convergence; these values do not provide a universal feasibility tolerance or
+an optimality certificate.
+
+Both selected states implement the unsealed `ConstraintViolationState` trait,
+which extends `EvaluatedState` and `IncumbentState`:
+
+```rust
+use basin::ConstraintViolationState;
+
+fn current_violation<S: ConstraintViolationState>(state: &S) -> Option<S::Float> {
+    state.current_violation().map(|report| report.value)
+}
+```
+
+`current_violation()` and `incumbent_violation()` borrow reports matching the
+corresponding checked records. Unevaluated seeds and missing incumbents return
+`None`; evaluated zero, NaN, and infinity remain available values. Reading a
+report performs no evaluations. Incumbent and pending-selection reports retain
+their own metadata when current progress changes. `reset()` clears both;
+`reset_best()` clears only incumbent and pending-selection information. Fresh
+initialization reevaluates the seed, and exact continuation preserves reports
+with the solver and state. Solver-specific scalar diagnostics, including
+`Slsqp::constraint_violation()`, retain their signatures.
+
+Serialized selected states and exact checkpoints written before typed reports
+have incompatible layouts. There is no compatibility reader that guesses a
+measure from an old scalar: recover the parameter with the producing version,
+then construct a new state for a fresh solve. New serialized reports preserve
+all metadata, including custom descriptions. Source extensibility does not
+promise cross-version serialized-state compatibility.
 
 ## Stopping conditions
 

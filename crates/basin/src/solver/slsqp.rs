@@ -13,6 +13,7 @@ use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{SelectedFirstOrderState, State};
 use crate::core::termination::Termination;
+use crate::{ViolationMeasure, ViolationReport, ViolationTransformation};
 use factor::Factor;
 use least_squares::{Lsei, Matrix, dot, norm, number};
 
@@ -94,10 +95,15 @@ pub enum SlsqpFailure {
 ///
 /// Construct [`SelectedFirstOrderState::new`] or use [`crate::Executor::from_start`].
 /// `current()` provides the matching point, objective, objective gradient, and
-/// constraint violation. Each accepted iterate is an explicit selection event;
+/// [`crate::ViolationReport`]. Each accepted iterate is an explicit selection event;
 /// failed trials preserve the previous record and its publication metadata.
 /// The violation is the sum of absolute equality residuals and positive
-/// inequality violations. Category readers report raw objective and gradient
+/// inequality violations, tagged [`ViolationMeasure::L1`] and unscaled. Bounds
+/// contribute zero at the clipped accepted points. The transformation is
+/// [`ViolationTransformation::NonFiniteToInfinity`]: any non-finite constraint
+/// residual makes the reported aggregate positive infinity.
+/// [`crate::ConstraintViolationState`] borrows current and incumbent reports
+/// without evaluations. Category readers report raw objective and gradient
 /// calls; residual and Jacobian work remain distinct in `state.counts()`.
 ///
 /// Fresh initialization reevaluates the clipped seed and rebuilds the Hessian
@@ -889,7 +895,18 @@ where
         }
         work.diagnostics(&param);
         state
-            .replace(param, cost, gradient, work.reported_violation())
+            .replace(
+                param,
+                cost,
+                gradient,
+                ViolationReport::new(
+                    work.reported_violation(),
+                    ViolationMeasure::L1,
+                )
+                .with_transformation(
+                    ViolationTransformation::NonFiniteToInfinity,
+                ),
+            )
             .expect("SLSQP gradient dimensions were checked");
         state.select_current();
         self.work = Some(work);
@@ -1043,7 +1060,18 @@ where
         }
         work.diagnostics(&param);
         state
-            .replace(param, cost, gradient, work.reported_violation())
+            .replace(
+                param,
+                cost,
+                gradient,
+                ViolationReport::new(
+                    work.reported_violation(),
+                    ViolationMeasure::L1,
+                )
+                .with_transformation(
+                    ViolationTransformation::NonFiniteToInfinity,
+                ),
+            )
             .expect("SLSQP gradient dimensions were checked");
         state.select_current();
         Ok(crate::SolverStep::from((state, None)))
