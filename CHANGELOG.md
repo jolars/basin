@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.2](https://github.com/jolars/basin/compare/v1.15.1...v1.15.2) (2026-10-19)
+
+### Bug Fixes
+- prepare 1.x support handoff ([`d0e0d7d`](https://github.com/jolars/basin/commit/d0e0d7d545e2191a1ae93a5b5465e9f8bee4b4cc))
+- preserve convergence at extreme scales ([`ac22ac9`](https://github.com/jolars/basin/commit/ac22ac9a8b23cf3417ab4e79ebb7f77a9e756431))
+- stop non-finite legacy TRF models (#117) ([`512d0e9`](https://github.com/jolars/basin/commit/512d0e92f227197cf3cbc9fc1879b1209edc1dd0))
+
 ## [1.15.1](https://github.com/jolars/basin/compare/v1.15.0...v1.15.1) (2026-09-29)
 
 ### Bug Fixes
