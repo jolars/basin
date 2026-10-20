@@ -378,13 +378,12 @@ mod stopping_tests {
 
     struct FlatBox<F>(Vec<F>, Vec<F>);
 
-    impl<F: Scalar> crate::ProblemConstraints for FlatBox<F> {
-        type Constraints = crate::Constraints<crate::BoxBounds<Vec<F>>>;
-        fn constraint_set(
+    impl<F: Scalar> crate::Constraints for FlatBox<F> {
+        type Set = crate::ConstraintSet<crate::BoxBounds<Vec<F>>>;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
-        {
-            crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+        ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+            crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(
                 Some(&self.0),
                 Some(&self.1),
             ))

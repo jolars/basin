@@ -26,12 +26,12 @@ use basin::{
 
 struct Sphere;
 
-impl basin::ProblemConstraints for Sphere {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Sphere {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for Sphere {
@@ -86,12 +86,12 @@ struct Counted {
     fused_calls: Rc<Cell<usize>>,
 }
 
-impl basin::ProblemConstraints for Counted {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Counted {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for Counted {
@@ -184,13 +184,12 @@ mod hessian {
 
     struct SphereN;
 
-    impl basin::ProblemConstraints for SphereN {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for SphereN {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for SphereN {
@@ -239,13 +238,12 @@ mod hessian {
         fused_calls: Rc<Cell<usize>>,
     }
 
-    impl basin::ProblemConstraints for CountedTriple {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for CountedTriple {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for CountedTriple {
@@ -319,13 +317,12 @@ mod lsq {
         fused_calls: Rc<Cell<usize>>,
     }
 
-    impl basin::ProblemConstraints for Affine {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for Affine {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for Affine {
@@ -402,12 +399,12 @@ mod lsq {
 /// Cost-only problem (no `Gradient` impl).
 struct CostOnly;
 
-impl basin::ProblemConstraints for CostOnly {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for CostOnly {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for CostOnly {

@@ -141,7 +141,7 @@ bracketing routines.
   the bound-constrained sibling of `Newuoa`: the same least-Frobenius-norm
   quadratic model, with a box-aware trust-region step (TRSBOX) and geometry step
   (ALTMOV), plus the RESCUE restoration procedure. Needs a `CostFunction` and
-  `Constraints<BoxBounds<V>>`. Uses `PointState` with `f32` and `f64` on every supported
+  `ConstraintSet<BoxBounds<V>>`. Uses `PointState` with `f32` and `f64` on every supported
   dense backend release; the solver owns the model and radius schedule.
   Implements Powell (2009), cross-validated against PRIMA
   v0.7.2.
@@ -159,7 +159,7 @@ bracketing routines.
   Powell's nonlinearly-constrained solver: it builds **linear** models by
   interpolation at the `n+1` vertices of a simplex and steers by an L-infinity
   exact-penalty merit function. Supply a `CostFunction` with a canonical
-  `ProblemConstraints` declaration containing any combination of box bounds,
+  `Constraints` declaration containing any combination of box bounds,
   linear equalities and inequalities, and nonlinear equalities and inequalities.
   Pass the problem directly to the executor; nonlinear values use the separate
   `NonlinearEqualityValues` and `NonlinearInequalityValues` capabilities.
@@ -425,7 +425,7 @@ solvers that enforce the same box can be supplied directly.
   dense Han–Powell sequential least-squares programming with damped BFGS,
   constrained least-squares subproblems, and an inexact L1 merit line search.
   Supports box bounds, linear and nonlinear equalities, and linear and nonlinear
-  inequalities through the canonical `ProblemConstraints` declaration, with
+  inequalities through the canonical `Constraints` declaration, with
   analytic or finite-difference derivatives. Only present nonlinear blocks
   require `ConstraintJacobian`; linear-only sets need no nonlinear callback. Reports feasibility, projected
   Lagrangian stationarity, and complementarity on the solver alongside Kraft's

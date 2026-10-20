@@ -11,12 +11,12 @@ use std::convert::Infallible;
 
 struct Sphere;
 
-impl basin::ProblemConstraints for Sphere {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Sphere {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for Sphere {
@@ -100,13 +100,12 @@ fn wrappers_and_projection_preserve_one_owner_in_both_builder_orders() {
         upper: Vec<f64>,
     }
 
-    impl basin::ProblemConstraints for BoundedSphere {
-        type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-        fn constraint_set(
+    impl basin::Constraints for BoundedSphere {
+        type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
                 Some(&self.lower),
                 Some(&self.upper),
             ))
@@ -198,13 +197,12 @@ fn initial_spread_survives_checks_and_setters_and_resets_on_fresh_init() {
 fn nonfinite_initial_costs_defer_reference_until_first_finite_spread() {
     struct Domain;
 
-    impl basin::ProblemConstraints for Domain {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for Domain {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for Domain {

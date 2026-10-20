@@ -78,12 +78,12 @@ struct CountedProblem {
 #[derive(Debug, PartialEq)]
 struct CallbackError;
 
-impl basin::ProblemConstraints for CountedProblem {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for CountedProblem {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl Residual for CountedProblem {
@@ -217,13 +217,12 @@ fn nonfinite_gradient_fails_before_solving() {
 fn actual_augmented_rank_loss_recovers_with_more_damping() {
     struct Redundant;
 
-    impl basin::ProblemConstraints for Redundant {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for Redundant {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl Residual for Redundant {
@@ -287,12 +286,12 @@ fn callback_errors_propagate_unchanged() {
 
 struct Linear;
 
-impl basin::ProblemConstraints for Linear {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Linear {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl Residual for Linear {
@@ -364,15 +363,16 @@ macro_rules! scaled_gradient_checks {
         fn $solve() {
             struct Fit;
 
-            impl basin::ProblemConstraints for Fit {
-                type Constraints = basin::NoConstraints;
-                fn constraint_set(
+            impl basin::Constraints for Fit {
+                type Set = basin::NoConstraints;
+                fn constraints(
                     &self,
-                ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-                    basin::Constraints::new()
+                ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_>
+                {
+                    basin::ConstraintSet::new()
                 }
             }
-impl Residual for Fit {
+            impl Residual for Fit {
                 type Param = $vector;
                 type Output = $vector;
                 type Error = std::convert::Infallible;
@@ -403,10 +403,9 @@ impl Residual for Fit {
             let tau: $scalar = 1e-3;
             let tol = 10. * <$scalar>::EPSILON;
             for max_iter in [1, 20] {
-                let solver =
-                    LevenbergMarquardtQr::<_, _, $scalar>::new()
-                        .with_damping(LmDamping::Nielsen)
-                        .with_tau(tau);
+                let solver = LevenbergMarquardtQr::<_, _, $scalar>::new()
+                    .with_damping(LmDamping::Nielsen)
+                    .with_tau(tau);
                 let out = Executor::from_start(Fit, solver, start.clone())
                     .max_iter(max_iter)
                     .run()
@@ -485,15 +484,16 @@ macro_rules! backend_solve {
         fn $name() {
             struct Fit;
 
-            impl basin::ProblemConstraints for Fit {
-                type Constraints = basin::NoConstraints;
-                fn constraint_set(
+            impl basin::Constraints for Fit {
+                type Set = basin::NoConstraints;
+                fn constraints(
                     &self,
-                ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-                    basin::Constraints::new()
+                ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_>
+                {
+                    basin::ConstraintSet::new()
                 }
             }
-impl Residual for Fit {
+            impl Residual for Fit {
                 type Param = $vector;
                 type Output = $vector;
                 type Error = std::convert::Infallible;

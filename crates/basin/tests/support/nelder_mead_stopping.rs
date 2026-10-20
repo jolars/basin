@@ -21,16 +21,16 @@ struct Objective<V, F> {
     bounds: (V, V),
 }
 
-impl<V, F> basin::ProblemConstraints for Objective<V, F>
+impl<V, F> basin::Constraints for Objective<V, F>
 where
     F: Scalar,
     V: VectorIndex<F> + VectorLen,
 {
-    type Constraints = basin::Constraints<basin::BoxBounds<V>>;
-    fn constraint_set(
+    type Set = basin::ConstraintSet<basin::BoxBounds<V>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.bounds.0),
             Some(&self.bounds.1),
         ))

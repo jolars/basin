@@ -26,7 +26,7 @@ directly, without representing root finding as objective minimization.
 ## A Solver Run at a Glance
 
 The smallest complete program: minimize the sphere function with the
-derivative-free Nelder–Mead simplex. Declare `ProblemConstraints` and implement
+derivative-free Nelder–Mead simplex. Implement
 `CostFunction`, then let
 `Executor::from_start` build the state from your starting point.
 
@@ -36,12 +36,6 @@ use std::convert::Infallible;
 
 struct Sphere;
 
-impl basin::ProblemConstraints for Sphere {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(&self) -> basin::NoConstraints {
-        basin::NoConstraints::EMPTY
-    }
-}
 impl CostFunction for Sphere {
     type Param = Vec<f64>;
     type Output = f64;

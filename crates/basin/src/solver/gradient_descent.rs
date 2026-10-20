@@ -67,10 +67,6 @@ use crate::line_search::{Constant, LineSearch, LineSearchOutcome};
 /// use basin::{FirstOrderState, CostFunction, Executor, Gradient, GradientDescent};
 ///
 /// struct Sphere;
-/// impl basin::ProblemConstraints for Sphere  {
-///     type Constraints = basin::NoConstraints;
-///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
-/// }
 /// impl CostFunction for Sphere {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -146,7 +142,6 @@ where
     P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
     V: ScaledAdd<F> + NegInPlace + ScaleInPlace<F> + Clone + VectorLen,
     L: LineSearch<P, V, F, Error = P::Error>,
-    P: crate::ProblemConstraints<Constraints = crate::NoConstraints>,
 {
     type Error = P::Error;
 
@@ -276,13 +271,12 @@ mod tests {
     /// reset checks).
     struct Quadratic;
 
-    impl crate::ProblemConstraints for Quadratic {
-        type Constraints = crate::NoConstraints;
-        fn constraint_set(
+    impl crate::Constraints for Quadratic {
+        type Set = crate::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
-        {
-            crate::Constraints::new()
+        ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+            crate::ConstraintSet::new()
         }
     }
     impl CostFunction for Quadratic {
@@ -309,13 +303,12 @@ mod tests {
     /// distinction that matters: momentum is *not* faster on `Quadratic`.
     struct IllConditioned;
 
-    impl crate::ProblemConstraints for IllConditioned {
-        type Constraints = crate::NoConstraints;
-        fn constraint_set(
+    impl crate::Constraints for IllConditioned {
+        type Set = crate::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
-        {
-            crate::Constraints::new()
+        ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+            crate::ConstraintSet::new()
         }
     }
     impl CostFunction for IllConditioned {

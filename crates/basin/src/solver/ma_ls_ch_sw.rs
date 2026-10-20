@@ -59,9 +59,9 @@ use crate::solver::solis_wets::SolisWets;
 ///     lower: Vec<f64>,
 ///     upper: Vec<f64>,
 /// }
-/// impl basin::ProblemConstraints for BoundedSphere  {
-///     type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-///     fn constraint_set(&self) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> { basin::Constraints::new().with_bounds(basin::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+/// impl basin::Constraints for BoundedSphere  {
+///     type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+///     fn constraints(&self) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> { basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 /// }
 /// impl CostFunction for BoundedSphere {
 ///     type Param = Vec<f64>;

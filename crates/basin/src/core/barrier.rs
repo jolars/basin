@@ -1,6 +1,6 @@
 //! Log-barrier adapter for linear inequality constraints.
 //!
-//! [`LogBarrier`] wraps a [`Constraints`](crate::Constraints) problem
+//! [`LogBarrier`] wraps a [`ConstraintSet`](crate::ConstraintSet) problem
 //! `min f(x) s.t. A x ≤ b` together with a fixed barrier parameter `μ > 0`
 //! and exposes the unconstrained barrier objective
 //!
@@ -54,7 +54,7 @@ use crate::core::math::{
 };
 use crate::core::problem::{CostFunction, Gradient};
 
-/// A [`Constraints`](crate::Constraints) problem rewritten as the unconstrained
+/// A [`ConstraintSet`](crate::ConstraintSet) problem rewritten as the unconstrained
 /// log-barrier objective `f(x) − μ · Σ log(bᵢ − aᵢᵀ x)` at a fixed `μ`.
 ///
 /// Borrows the underlying problem (`&'a P`) so the barrier parameter can be
@@ -311,19 +311,18 @@ mod tests {
         }
     }
 
-    impl crate::ProblemConstraints for Probe {
-        type Constraints = crate::Constraints<
+    impl crate::Constraints for Probe {
+        type Set = crate::ConstraintSet<
             crate::NoBounds,
             crate::LinearBlocks<
                 crate::NoLinearBlock,
                 crate::LinearBlock<DMatrix<f64>, DVector<f64>>,
             >,
         >;
-        fn constraint_set(
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
-        {
-            crate::Constraints::new().with_linear_inequalities(
+        ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+            crate::ConstraintSet::new().with_linear_inequalities(
                 crate::LinearBlock::new(&self.a, &self.b),
             )
         }
@@ -438,9 +437,9 @@ mod tests {
     }
 }
 
-impl<P, F> crate::ProblemConstraints for LogBarrier<'_, P, F> {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> crate::NoConstraints {
+impl<P, F> crate::Constraints for LogBarrier<'_, P, F> {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> crate::NoConstraints {
         crate::NoConstraints::EMPTY
     }
 }

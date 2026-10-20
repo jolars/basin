@@ -97,12 +97,12 @@ impl<P> HasSpec for Himmelblau<P> {
     const SPEC: &'static ProblemSpec = &HIMMELBLAU_SPEC;
 }
 
-impl crate::ProblemConstraints for Himmelblau<Vec<f64>> {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(
+impl crate::Constraints for Himmelblau<Vec<f64>> {
+    type Set = crate::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
-        crate::Constraints::new()
+    ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::ConstraintSet::new()
     }
 }
 impl CostFunction for Himmelblau<Vec<f64>> {
@@ -133,9 +133,9 @@ crate::backend_macros::nalgebra_versions! {
     use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
 
-    impl crate::ProblemConstraints for Himmelblau<DVector<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Himmelblau<DVector<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Himmelblau<DVector<f64>> {
         type Param = DVector<f64>;
@@ -169,9 +169,9 @@ crate::backend_macros::ndarray_versions! {
     use crate::{CostFunction, Gradient};
     use ndarray::Array1;
 
-    impl crate::ProblemConstraints for Himmelblau<Array1<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Himmelblau<Array1<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Himmelblau<Array1<f64>> {
         type Param = Array1<f64>;
@@ -211,9 +211,9 @@ crate::backend_macros::faer_versions! {
     // faer's `Col` doesn't expose a `&[f64]` directly across all 0.24 APIs we
     // care about, so we evaluate elementwise here rather than routing through
     // the slice-based primitives.
-    impl crate::ProblemConstraints for Himmelblau<Col<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Himmelblau<Col<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Himmelblau<Col<f64>> {
         type Param = Col<f64>;

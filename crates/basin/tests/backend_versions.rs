@@ -49,9 +49,9 @@ macro_rules! dense_checks {
             b: V,
         }
 
-        impl basin::ProblemConstraints for Quadratic {
-            type Constraints = basin::NoConstraints;
-            fn constraint_set(&self) -> basin::NoConstraints {
+        impl basin::Constraints for Quadratic {
+            type Set = basin::NoConstraints;
+            fn constraints(&self) -> basin::NoConstraints {
                 basin::NoConstraints::EMPTY
             }
         }
@@ -151,11 +151,11 @@ impl Quadratic  {
             a: <M as MatrixIdentity>::identity(2),
             b: make(&[1.0, 1.0]),
         };
-        let boxed = |p:Quadratic| {let bounds=basin::BoxBounds::new(Some(p.lower.clone()),Some(p.upper.clone()));basin::Constrained::new(p,basin::Constraints::new().with_bounds(bounds))};
-        let nonlinear = |p:Quadratic| basin::Constrained::new(p,basin::Constraints::new().with_nonlinear_inequalities(2));
-        let full = |p:Quadratic| {let bounds=basin::BoxBounds::new(Some(p.lower.clone()),Some(p.upper.clone()));basin::Constrained::new(p,basin::Constraints::new().with_bounds(bounds).with_nonlinear_inequalities(2))};
-        let linear_eq = |p:Quadratic| {let block=basin::LinearBlock::new(p.a.clone(),p.b.clone());basin::Constrained::new(p,basin::Constraints::new().with_linear_equalities(block))};
-        let linear_ineq = |p:Quadratic| {let block=basin::LinearBlock::new(p.a.clone(),p.b.clone());basin::Constrained::new(p,basin::Constraints::new().with_linear_inequalities(block))};
+        let boxed = |p:Quadratic| {let bounds=basin::BoxBounds::new(Some(p.lower.clone()),Some(p.upper.clone()));basin::Constrained::new(p,basin::ConstraintSet::new().with_bounds(bounds))};
+        let nonlinear = |p:Quadratic| basin::Constrained::new(p,basin::ConstraintSet::new().with_nonlinear_inequalities(2));
+        let full = |p:Quadratic| {let bounds=basin::BoxBounds::new(Some(p.lower.clone()),Some(p.upper.clone()));basin::Constrained::new(p,basin::ConstraintSet::new().with_bounds(bounds).with_nonlinear_inequalities(2))};
+        let linear_eq = |p:Quadratic| {let block=basin::LinearBlock::new(p.a.clone(),p.b.clone());basin::Constrained::new(p,basin::ConstraintSet::new().with_linear_equalities(block))};
+        let linear_ineq = |p:Quadratic| {let block=basin::LinearBlock::new(p.a.clone(),p.b.clone());basin::Constrained::new(p,basin::ConstraintSet::new().with_linear_inequalities(block))};
         macro_rules! powell_run {
             ($problem:expr, $solver:expr, $seed:expr) => {{
                 let result = Executor::from_start($problem, $solver, $seed)

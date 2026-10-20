@@ -4,11 +4,13 @@ use crate::core::math::Scalar;
 #[path = "model/integer_domain_api_prototype.rs"]
 mod integer_domain_api_prototype;
 
-/// The authoritative constraint declaration shared by objective and residual problems.
+/// An optional constraint declaration for objective and residual problems.
 ///
-/// Implement this even for an unconstrained problem, using [`NoConstraints`]
-/// and returning `NoConstraints::EMPTY`. Adding derivatives preserves this
-/// declaration; an explicit problem transformation may replace it.
+/// Constrained solvers require this declaration and support only the block
+/// combinations they implement. Unconstrained solvers do not inspect it.
+/// Objectives, residuals, and constraint callbacks can be implemented without
+/// this trait. Adding derivatives preserves an existing declaration; an
+/// explicit problem transformation may replace it.
 ///
 /// # Contract
 ///
@@ -16,13 +18,12 @@ mod integer_domain_api_prototype;
 /// linear data, and nonlinear counts must remain fixed during a solve. Fresh
 /// initialization may use new dimensions or data. Solvers validate the shapes
 /// they consume and report a changed nonlinear count as [`ConstraintError::LayoutChanged`].
-pub trait ProblemConstraints {
-    /// The complete constraint set. Its type determines solver compatibility.
-    type Constraints: ConstraintDescription;
+pub trait Constraints {
+    /// The complete set whose type determines compatibility with constrained solvers.
+    type Set: ConstraintDescription;
     /// Borrow the complete set without evaluating the problem.
-    fn constraint_set(
-        &self,
-    ) -> <Self::Constraints as ConstraintDescription>::Borrowed<'_>;
+    fn constraints(&self)
+    -> <Self::Set as ConstraintDescription>::Borrowed<'_>;
 }
 
 mod sealed {
@@ -51,10 +52,10 @@ pub trait BorrowConstraint {
 /// A complete set of problem-side constraints.
 ///
 /// Equality and inequality blocks remain distinct. Builders change the set's
-/// type, so an unconstrained or box-only solver cannot ignore additional blocks.
+/// type, so constrained solvers cannot ignore unsupported blocks.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Constraints<
+pub struct ConstraintSet<
     B = NoBounds,
     L = NoLinearConstraints,
     N = NoNonlinearConstraints,
@@ -63,16 +64,16 @@ pub struct Constraints<
     pub(crate) linear: L,
     pub(crate) nonlinear: N,
 }
-impl<B, L, N> sealed::Set for Constraints<B, L, N> {}
+impl<B, L, N> sealed::Set for ConstraintSet<B, L, N> {}
 impl<B: BorrowConstraint, L: BorrowConstraint, N: BorrowConstraint>
-    ConstraintDescription for Constraints<B, L, N>
+    ConstraintDescription for ConstraintSet<B, L, N>
 {
     type Borrowed<'a>
-        = Constraints<B::Borrowed<'a>, L::Borrowed<'a>, N::Borrowed<'a>>
+        = ConstraintSet<B::Borrowed<'a>, L::Borrowed<'a>, N::Borrowed<'a>>
     where
         Self: 'a;
     fn borrowed(&self) -> Self::Borrowed<'_> {
-        Constraints {
+        ConstraintSet {
             bounds: self.bounds.borrowed(),
             linear: self.linear.borrowed(),
             nonlinear: self.nonlinear.borrowed(),
@@ -81,7 +82,7 @@ impl<B: BorrowConstraint, L: BorrowConstraint, N: BorrowConstraint>
 }
 
 /// A problem with no mathematical constraints.
-pub type NoConstraints = Constraints;
+pub type NoConstraints = ConstraintSet;
 /// No parameter bounds.
 #[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -264,7 +265,7 @@ impl Default for NoConstraints {
         Self::new()
     }
 }
-impl<B, L, N> Constraints<B, L, N> {
+impl<B, L, N> ConstraintSet<B, L, N> {
     /// Borrow the bounds block.
     pub fn bounds(&self) -> &B {
         &self.bounds
@@ -281,21 +282,21 @@ impl<B, L, N> Constraints<B, L, N> {
     pub fn with_bounds<V>(
         self,
         bounds: BoxBounds<V>,
-    ) -> Constraints<BoxBounds<V>, L, N> {
-        Constraints {
+    ) -> ConstraintSet<BoxBounds<V>, L, N> {
+        ConstraintSet {
             bounds,
             linear: self.linear,
             nonlinear: self.nonlinear,
         }
     }
 }
-impl<B, E, I, N> Constraints<B, LinearBlocks<E, I>, N> {
+impl<B, E, I, N> ConstraintSet<B, LinearBlocks<E, I>, N> {
     /// Set the linear equalities `A x = b`.
     pub fn with_linear_equalities<M, R>(
         self,
         block: LinearBlock<M, R>,
-    ) -> Constraints<B, LinearBlocks<LinearBlock<M, R>, I>, N> {
-        Constraints {
+    ) -> ConstraintSet<B, LinearBlocks<LinearBlock<M, R>, I>, N> {
+        ConstraintSet {
             bounds: self.bounds,
             linear: LinearBlocks {
                 equalities: block,
@@ -308,8 +309,8 @@ impl<B, E, I, N> Constraints<B, LinearBlocks<E, I>, N> {
     pub fn with_linear_inequalities<M, R>(
         self,
         block: LinearBlock<M, R>,
-    ) -> Constraints<B, LinearBlocks<E, LinearBlock<M, R>>, N> {
-        Constraints {
+    ) -> ConstraintSet<B, LinearBlocks<E, LinearBlock<M, R>>, N> {
+        ConstraintSet {
             bounds: self.bounds,
             linear: LinearBlocks {
                 equalities: self.linear.equalities,
@@ -319,13 +320,13 @@ impl<B, E, I, N> Constraints<B, LinearBlocks<E, I>, N> {
         }
     }
 }
-impl<B, L, E, I> Constraints<B, L, NonlinearBlocks<E, I>> {
+impl<B, L, E, I> ConstraintSet<B, L, NonlinearBlocks<E, I>> {
     /// Declare a nonlinear equality callback `h(x) = 0` with `count` values.
     pub fn with_nonlinear_equalities(
         self,
         count: usize,
-    ) -> Constraints<B, L, NonlinearBlocks<NonlinearBlock, I>> {
-        Constraints {
+    ) -> ConstraintSet<B, L, NonlinearBlocks<NonlinearBlock, I>> {
+        ConstraintSet {
             bounds: self.bounds,
             linear: self.linear,
             nonlinear: NonlinearBlocks {
@@ -338,8 +339,8 @@ impl<B, L, E, I> Constraints<B, L, NonlinearBlocks<E, I>> {
     pub fn with_nonlinear_inequalities(
         self,
         count: usize,
-    ) -> Constraints<B, L, NonlinearBlocks<E, NonlinearBlock>> {
-        Constraints {
+    ) -> ConstraintSet<B, L, NonlinearBlocks<E, NonlinearBlock>> {
+        ConstraintSet {
             bounds: self.bounds,
             linear: self.linear,
             nonlinear: NonlinearBlocks {
@@ -484,7 +485,7 @@ impl<E: std::error::Error + 'static> std::error::Error
 /// residual traits. Solvers require the matching parameter and error types.
 /// Statically absent and zero-count blocks skip this callback. Non-finite values
 /// retain the consuming solver's numerical failure or moderation policy.
-pub trait NonlinearInequalityValues: ProblemConstraints {
+pub trait NonlinearInequalityValues {
     /// Parameter type.
     type Param;
     /// Readable vector of constraint values, independent of the parameter type.
@@ -498,7 +499,7 @@ pub trait NonlinearInequalityValues: ProblemConstraints {
     ) -> Result<Self::Values, ConstraintSolveError<Self::Error>>;
 }
 /// Values of the nonlinear equalities declared in the canonical set.
-pub trait NonlinearEqualityValues: ProblemConstraints {
+pub trait NonlinearEqualityValues {
     /// Parameter type.
     type Param;
     /// Readable vector of equality residuals.

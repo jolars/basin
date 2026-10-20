@@ -10,12 +10,12 @@ use std::rc::Rc;
 
 struct Sphere;
 
-impl basin::ProblemConstraints for Sphere {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Sphere {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for Sphere {
@@ -99,12 +99,12 @@ fn fresh_run_resets_progress_and_rebuilds_model_for_new_dimension() {
 
 struct Rejected(f64);
 
-impl basin::ProblemConstraints for Rejected {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Rejected {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for Rejected {
@@ -181,12 +181,12 @@ struct FlatBox {
     upper: Vec<f64>,
 }
 
-impl basin::ProblemConstraints for FlatBox {
-    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-    fn constraint_set(
+impl basin::Constraints for FlatBox {
+    type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))

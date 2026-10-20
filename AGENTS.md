@@ -8,11 +8,12 @@ contracts](CONTRIBUTING.md#state-and-lifecycle-contracts) and preserve the
 stated ownership and lifecycle contracts.
 
 For backports and releases, follow [MAINTENANCE.md](MAINTENANCE.md). `main`
-prepares Basin 2.0, while `v1` maintains the latest 1.x release. Each branch
+prepares Basin 3.0, while `v1` maintains the latest 1.x release. Each branch
 owns its release configuration, versions, changelog, and baseline manifest.
 The Basin 1.x compatibility requirements in this guide and `CONTRIBUTING.md`
-apply to the `v1` branch. On `main`, implement the planned breaking changes
-in [the Basin 2.0 roadmap](TODO.md#basin-20) and document how users migrate.
+apply to the `v1` branch. On `main`, implement the optional constraint API for Basin 3.0 and document
+migration in `web/src/routes/docs/migrating-to-v3/+page.svx`. Do not release
+these breaking changes as a Basin 2.x patch or minor update.
 
 ## Project priorities
 
@@ -110,9 +111,11 @@ belong in the core crate.
    where applicable; `None` disables optional checks and zero means exact-zero.
    Keep algorithm controls distinct and preserve deprecated 1.x behavior until
    its scheduled removal in Basin 2.0.
-4. Constraints describe problems: keep them problem-side, never on state or as
-   executor configuration. Solvers declare supported constraint traits;
-   projection, barrier, and penalty adapters are explicit opt-ins.
+4. Constraints optionally describe problems: keep them problem-side, never on
+   state or as executor configuration. Evaluation traits stand alone. Constrained
+   solvers require a complete typed declaration and reject unsupported blocks;
+   unconstrained solvers ignore declarations. Projection, barrier, and penalty
+   adapters remain explicit opt-ins.
 5. Keep the universal vector math tier small and the richer linear-algebra tier
    capability-based. Missing operations must fail at compile time.
 

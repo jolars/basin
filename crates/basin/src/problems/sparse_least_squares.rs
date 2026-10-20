@@ -105,9 +105,9 @@ crate::backend_macros::nalgebra_versions! {
     use nalgebra::DVector;
     use nalgebra_sparse::CscMatrix;
 
-    impl crate::ProblemConstraints for SparseLeastSquares<CscMatrix<f64>, DVector<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for SparseLeastSquares<CscMatrix<f64>, DVector<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for SparseLeastSquares<CscMatrix<f64>, DVector<f64>> {
         type Param = DVector<f64>;
@@ -149,9 +149,9 @@ impl CostFunction for SparseLeastSquares<CscMatrix<f64>, DVector<f64>> {
         }
     }
 
-    impl crate::ProblemConstraints for SparseLeastSquaresBoxed<CscMatrix<f64>, DVector<f64>>  {
-    type Constraints = crate::Constraints<crate::BoxBounds<DVector<f64>>>;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+    impl crate::Constraints for SparseLeastSquaresBoxed<CscMatrix<f64>, DVector<f64>>  {
+    type Set = crate::ConstraintSet<crate::BoxBounds<DVector<f64>>>;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 }
 impl CostFunction for SparseLeastSquaresBoxed<CscMatrix<f64>, DVector<f64>> {
         type Param = DVector<f64>;
@@ -212,9 +212,9 @@ crate::backend_macros::faer_versions! {
     use faer::Col;
     use faer::sparse::SparseColMat;
 
-    impl crate::ProblemConstraints for SparseLeastSquares<SparseColMat<usize, f64>, Col<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for SparseLeastSquares<SparseColMat<usize, f64>, Col<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for SparseLeastSquares<SparseColMat<usize, f64>, Col<f64>> {
         type Param = Col<f64>;
@@ -258,9 +258,9 @@ impl CostFunction for SparseLeastSquares<SparseColMat<usize, f64>, Col<f64>> {
         }
     }
 
-    impl crate::ProblemConstraints for SparseLeastSquaresBoxed<SparseColMat<usize, f64>, Col<f64>>  {
-    type Constraints = crate::Constraints<crate::BoxBounds<Col<f64>>>;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+    impl crate::Constraints for SparseLeastSquaresBoxed<SparseColMat<usize, f64>, Col<f64>>  {
+    type Set = crate::ConstraintSet<crate::BoxBounds<Col<f64>>>;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 }
 impl CostFunction
         for SparseLeastSquaresBoxed<SparseColMat<usize, f64>, Col<f64>>

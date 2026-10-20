@@ -164,7 +164,7 @@ pub struct AugmentedLagrangianInnerDiagnostics<V, F: Scalar = f64> {
 /// # Examples
 ///
 /// `AugmentedLagrangianMethod` wraps a gradient inner solver to handle
-/// `Constraints`, and tolerates infeasible starts. See
+/// `ConstraintSet`, and tolerates infeasible starts. See
 /// [`ProjectedGradientDescent`](crate::solver::ProjectedGradientDescent)
 /// for the simpler box-constrained pattern.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

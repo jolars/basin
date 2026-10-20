@@ -11,14 +11,12 @@ struct Quadratic<V, F> {
     target: Vec<F>,
 }
 
-impl<V: VectorIndex<F>, F: Scalar> basin::ProblemConstraints
-    for Quadratic<V, F>
-{
-    type Constraints = basin::Constraints<basin::BoxBounds<V>>;
-    fn constraint_set(
+impl<V: VectorIndex<F>, F: Scalar> basin::Constraints for Quadratic<V, F> {
+    type Set = basin::ConstraintSet<basin::BoxBounds<V>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))

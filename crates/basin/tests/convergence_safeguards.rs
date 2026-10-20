@@ -9,12 +9,12 @@ struct Linear<F> {
     upper: F,
 }
 
-impl<F: Scalar> basin::ProblemConstraints for Linear<F> {
-    type Constraints = basin::Constraints<basin::BoxBounds<F>>;
-    fn constraint_set(
+impl<F: Scalar> basin::Constraints for Linear<F> {
+    type Set = basin::ConstraintSet<basin::BoxBounds<F>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))
@@ -69,12 +69,12 @@ struct FixedBox<F> {
     cost: F,
 }
 
-impl<F: Scalar> basin::ProblemConstraints for FixedBox<F> {
-    type Constraints = basin::Constraints<basin::BoxBounds<Vec<F>>>;
-    fn constraint_set(
+impl<F: Scalar> basin::Constraints for FixedBox<F> {
+    type Set = basin::ConstraintSet<basin::BoxBounds<Vec<F>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.point),
             Some(&self.point),
         ))

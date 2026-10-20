@@ -5,7 +5,7 @@
 
 use super::*;
 use crate::core::constraint::evaluation::BoxProblem;
-use crate::{BoxBounds, Constraints, EvalCounts, Problem, ProblemConstraints};
+use crate::{BoxBounds, ConstraintSet, Constraints, EvalCounts, Problem};
 use std::{cell::RefCell, rc::Rc};
 
 /// Independent capabilities: neither requires a Jacobian associated type.
@@ -312,10 +312,10 @@ impl<V, R, F: Scalar> Fixture<V, R, F> {
         }
     }
 }
-impl<V, R, F> ProblemConstraints for Fixture<V, R, F> {
-    type Constraints = Constraints<BoxBounds<V>>;
-    fn constraint_set(&self) -> Constraints<BoxBounds<&V>> {
-        Constraints::new()
+impl<V, R, F> Constraints for Fixture<V, R, F> {
+    type Set = ConstraintSet<BoxBounds<V>>;
+    fn constraints(&self) -> ConstraintSet<BoxBounds<&V>> {
+        ConstraintSet::new()
             .with_bounds(BoxBounds::new(Some(&self.lower), Some(&self.upper)))
     }
 }
@@ -723,10 +723,10 @@ fn shape_and_derivative_guards_preserve_attempted_counts() {
 }
 
 struct ProbingProducts(Fixture<Vec<f64>, Vec<f64>, f64>);
-impl ProblemConstraints for ProbingProducts {
-    type Constraints = Constraints<BoxBounds<Vec<f64>>>;
-    fn constraint_set(&self) -> Constraints<BoxBounds<&Vec<f64>>> {
-        self.0.constraint_set()
+impl Constraints for ProbingProducts {
+    type Set = ConstraintSet<BoxBounds<Vec<f64>>>;
+    fn constraints(&self) -> ConstraintSet<BoxBounds<&Vec<f64>>> {
+        self.0.constraints()
     }
 }
 impl Residual for ProbingProducts {
@@ -780,10 +780,10 @@ fn internal_probes_do_not_charge_boundary_residual_counts() {
 }
 
 struct DenseOnly(Fixture<Vec<f64>, Vec<f64>, f64>);
-impl ProblemConstraints for DenseOnly {
-    type Constraints = Constraints<BoxBounds<Vec<f64>>>;
-    fn constraint_set(&self) -> Constraints<BoxBounds<&Vec<f64>>> {
-        self.0.constraint_set()
+impl Constraints for DenseOnly {
+    type Set = ConstraintSet<BoxBounds<Vec<f64>>>;
+    fn constraints(&self) -> ConstraintSet<BoxBounds<&Vec<f64>>> {
+        self.0.constraints()
     }
 }
 impl Residual for DenseOnly {

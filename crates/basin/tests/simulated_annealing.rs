@@ -8,12 +8,12 @@ use std::convert::Infallible;
 
 struct IdentityCost;
 
-impl basin::ProblemConstraints for IdentityCost {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for IdentityCost {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for IdentityCost {
@@ -33,12 +33,12 @@ enum ApplicationError {
 
 struct FallibleCost;
 
-impl basin::ProblemConstraints for FallibleCost {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for FallibleCost {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for FallibleCost {
@@ -368,12 +368,12 @@ fn repeated_reannealing_builder_replaces_only_its_threshold() {
 
 struct NonFiniteCost;
 
-impl basin::ProblemConstraints for NonFiniteCost {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for NonFiniteCost {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for NonFiniteCost {
@@ -467,13 +467,12 @@ fn f32_scalar_and_non_numeric_parameter_round_trip() {
 
     struct LabelCost;
 
-    impl basin::ProblemConstraints for LabelCost {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for LabelCost {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for LabelCost {
@@ -507,13 +506,12 @@ fn f32_scalar_and_non_numeric_parameter_round_trip() {
 fn continuous_neighbor_reaches_the_analytic_sphere_minimum() {
     struct Sphere;
 
-    impl basin::ProblemConstraints for Sphere {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for Sphere {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for Sphere {
@@ -548,13 +546,12 @@ fn discrete_permutation_neighbor_improves_a_tour() {
 
     struct Tour;
 
-    impl basin::ProblemConstraints for Tour {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for Tour {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for Tour {

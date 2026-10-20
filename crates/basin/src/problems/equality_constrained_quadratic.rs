@@ -77,9 +77,9 @@ crate::backend_macros::nalgebra_versions! {
     use crate::{CostFunction, Gradient};
     use nalgebra::{DMatrix, DVector};
 
-    impl crate::ProblemConstraints for EqualityConstrainedQuadratic<DMatrix<f64>, DVector<f64>>  {
-    type Constraints = crate::Constraints<crate::NoBounds, crate::LinearBlocks<crate::LinearBlock<DMatrix<f64>, DVector<f64>>, crate::NoLinearBlock>>;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_linear_equalities(crate::LinearBlock::new(&self.a, &self.b)) }
+    impl crate::Constraints for EqualityConstrainedQuadratic<DMatrix<f64>, DVector<f64>>  {
+    type Set = crate::ConstraintSet<crate::NoBounds, crate::LinearBlocks<crate::LinearBlock<DMatrix<f64>, DVector<f64>>, crate::NoLinearBlock>>;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new().with_linear_equalities(crate::LinearBlock::new(&self.a, &self.b)) }
 }
 impl CostFunction for EqualityConstrainedQuadratic<DMatrix<f64>, DVector<f64>> {
         type Param = DVector<f64>;
@@ -123,9 +123,9 @@ crate::backend_macros::faer_versions! {
     use crate::{CostFunction, Gradient};
     use faer::{Col, Mat};
 
-    impl crate::ProblemConstraints for EqualityConstrainedQuadratic<Mat<f64>, Col<f64>>  {
-    type Constraints = crate::Constraints<crate::NoBounds, crate::LinearBlocks<crate::LinearBlock<Mat<f64>, Col<f64>>, crate::NoLinearBlock>>;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_linear_equalities(crate::LinearBlock::new(&self.a, &self.b)) }
+    impl crate::Constraints for EqualityConstrainedQuadratic<Mat<f64>, Col<f64>>  {
+    type Set = crate::ConstraintSet<crate::NoBounds, crate::LinearBlocks<crate::LinearBlock<Mat<f64>, Col<f64>>, crate::NoLinearBlock>>;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new().with_linear_equalities(crate::LinearBlock::new(&self.a, &self.b)) }
 }
 impl CostFunction for EqualityConstrainedQuadratic<Mat<f64>, Col<f64>> {
         type Param = Col<f64>;
@@ -169,21 +169,20 @@ mod vec_impl {
     use crate::core::math::DenseMatrix;
     use crate::{CostFunction, Gradient};
 
-    impl crate::ProblemConstraints
+    impl crate::Constraints
         for EqualityConstrainedQuadratic<DenseMatrix, Vec<f64>>
     {
-        type Constraints = crate::Constraints<
+        type Set = crate::ConstraintSet<
             crate::NoBounds,
             crate::LinearBlocks<
                 crate::LinearBlock<DenseMatrix, Vec<f64>>,
                 crate::NoLinearBlock,
             >,
         >;
-        fn constraint_set(
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
-        {
-            crate::Constraints::new().with_linear_equalities(
+        ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+            crate::ConstraintSet::new().with_linear_equalities(
                 crate::LinearBlock::new(&self.a, &self.b),
             )
         }
@@ -232,9 +231,9 @@ crate::backend_macros::ndarray_versions! {
     use crate::{CostFunction, Gradient};
     use ndarray::{Array1, Array2};
 
-    impl crate::ProblemConstraints for EqualityConstrainedQuadratic<Array2<f64>, Array1<f64>>  {
-    type Constraints = crate::Constraints<crate::NoBounds, crate::LinearBlocks<crate::LinearBlock<Array2<f64>, Array1<f64>>, crate::NoLinearBlock>>;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_linear_equalities(crate::LinearBlock::new(&self.a, &self.b)) }
+    impl crate::Constraints for EqualityConstrainedQuadratic<Array2<f64>, Array1<f64>>  {
+    type Set = crate::ConstraintSet<crate::NoBounds, crate::LinearBlocks<crate::LinearBlock<Array2<f64>, Array1<f64>>, crate::NoLinearBlock>>;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new().with_linear_equalities(crate::LinearBlock::new(&self.a, &self.b)) }
 }
 impl CostFunction for EqualityConstrainedQuadratic<Array2<f64>, Array1<f64>> {
         type Param = Array1<f64>;

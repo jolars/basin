@@ -304,12 +304,12 @@ fn projected_gradient(
         .fold(0.0, f64::max)
 }
 
-impl<V: Vector> basin::ProblemConstraints for &Short<V> {
-    type Constraints = basin::Constraints<basin::BoxBounds<V>>;
-    fn constraint_set(
+impl<V: Vector> basin::Constraints for &Short<V> {
+    type Set = basin::ConstraintSet<basin::BoxBounds<V>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))

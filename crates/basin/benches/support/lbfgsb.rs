@@ -239,12 +239,12 @@ impl<V: Vector> Driver<V> {
     }
 }
 
-impl<V: Vector> basin::ProblemConstraints for &Driver<V> {
-    type Constraints = basin::Constraints<basin::BoxBounds<V>>;
-    fn constraint_set(
+impl<V: Vector> basin::Constraints for &Driver<V> {
+    type Set = basin::ConstraintSet<basin::BoxBounds<V>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))

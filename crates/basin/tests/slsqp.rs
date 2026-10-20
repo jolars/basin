@@ -7,16 +7,16 @@ use std::convert::Infallible;
 #[derive(Clone)]
 struct EqualityQuadratic;
 
-impl basin::ProblemConstraints for EqualityQuadratic {
-    type Constraints = basin::Constraints<
+impl basin::Constraints for EqualityQuadratic {
+    type Set = basin::ConstraintSet<
         basin::NoBounds,
         basin::NoLinearConstraints,
         basin::NonlinearBlocks<basin::NonlinearBlock, basin::NoNonlinearBlock>,
     >;
-    fn constraint_set(
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_nonlinear_equalities(1)
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_nonlinear_equalities(1)
     }
 }
 impl CostFunction for EqualityQuadratic {
@@ -140,16 +140,16 @@ impl<V, F: Scalar> Hs71<V, F> {
     }
 }
 
-impl<V: VectorIndex<F>, F: Scalar> basin::ProblemConstraints for Hs71<V, F> {
-    type Constraints = basin::Constraints<
+impl<V: VectorIndex<F>, F: Scalar> basin::Constraints for Hs71<V, F> {
+    type Set = basin::ConstraintSet<
         basin::BoxBounds<V>,
         basin::NoLinearConstraints,
         basin::NonlinearBlocks<basin::NonlinearBlock, basin::NonlinearBlock>,
     >;
-    fn constraint_set(
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
             .with_bounds(basin::BoxBounds::new(
                 Some(&self.lower),
                 Some(&self.upper),
@@ -485,18 +485,18 @@ impl LinearQuadratic {
     }
 }
 
-impl basin::ProblemConstraints for LinearQuadratic {
-    type Constraints = basin::Constraints<
+impl basin::Constraints for LinearQuadratic {
+    type Set = basin::ConstraintSet<
         basin::BoxBounds<Vec<f64>>,
         basin::LinearBlocks<
             basin::LinearBlock<DenseMatrix, Vec<f64>>,
             basin::LinearBlock<DenseMatrix, Vec<f64>>,
         >,
     >;
-    fn constraint_set(
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
             .with_bounds(basin::BoxBounds::new(
                 Some(&self.lower),
                 Some(&self.upper),
@@ -752,16 +752,16 @@ impl Faulty {
     }
 }
 
-impl basin::ProblemConstraints for Faulty {
-    type Constraints = basin::Constraints<
+impl basin::Constraints for Faulty {
+    type Set = basin::ConstraintSet<
         basin::NoBounds,
         basin::NoLinearConstraints,
         basin::NonlinearBlocks<basin::NonlinearBlock, basin::NoNonlinearBlock>,
     >;
-    fn constraint_set(
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_nonlinear_equalities(1)
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_nonlinear_equalities(1)
     }
 }
 impl CostFunction for Faulty {
@@ -926,8 +926,8 @@ fn inconsistent_linearization_uses_slack_recovery() {
         hi: Vec<f64>,
     }
 
-    impl basin::ProblemConstraints for OutsideCircle {
-        type Constraints = basin::Constraints<
+    impl basin::Constraints for OutsideCircle {
+        type Set = basin::ConstraintSet<
             basin::BoxBounds<Vec<f64>>,
             basin::NoLinearConstraints,
             basin::NonlinearBlocks<
@@ -935,11 +935,10 @@ fn inconsistent_linearization_uses_slack_recovery() {
                 basin::NonlinearBlock,
             >,
         >;
-        fn constraint_set(
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
                 .with_bounds(basin::BoxBounds::new(
                     Some(&self.lo),
                     Some(&self.hi),
@@ -1044,13 +1043,12 @@ fn nnls_iteration_limit_reports_a_subproblem_failure() {
 fn nonfinite_trials_can_backtrack_to_a_finite_solution() {
     struct HalfLine;
 
-    impl basin::ProblemConstraints for HalfLine {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for HalfLine {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for HalfLine {
@@ -1087,13 +1085,12 @@ fn nonfinite_trials_can_backtrack_to_a_finite_solution() {
 fn unconstrained_rosenbrock_exercises_repeated_bfgs_and_backtracking() {
     struct Rosenbrock;
 
-    impl basin::ProblemConstraints for Rosenbrock {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for Rosenbrock {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for Rosenbrock {
@@ -1143,13 +1140,12 @@ fn repeated_zero_step_bfgs_updates_exhaust_the_reset_limit() {
     // scale its final displacement rounds to zero, making BFGS singular.
     struct FlatWithBadGradient;
 
-    impl basin::ProblemConstraints for FlatWithBadGradient {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for FlatWithBadGradient {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for FlatWithBadGradient {
@@ -1188,13 +1184,12 @@ fn repeated_zero_step_bfgs_updates_exhaust_the_reset_limit() {
 fn overflowing_directional_model_is_a_numerical_failure() {
     struct HugeLinear;
 
-    impl basin::ProblemConstraints for HugeLinear {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for HugeLinear {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for HugeLinear {

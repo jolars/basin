@@ -12,12 +12,12 @@ use basin::{CostFunction, Executor, Mads, PointState, TerminationCode};
 /// Chained Rosenbrock (basin coefficient form), minimum 0 at the all-ones point.
 struct Rosenbrock;
 
-impl basin::ProblemConstraints for Rosenbrock {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Rosenbrock {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for Rosenbrock {
@@ -36,12 +36,12 @@ impl CostFunction for Rosenbrock {
 /// Sphere, minimum 0 at the origin.
 struct Sphere;
 
-impl basin::ProblemConstraints for Sphere {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Sphere {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for Sphere {
@@ -216,13 +216,12 @@ fn backend_generic_nalgebra() {
 
     struct SphereN;
 
-    impl basin::ProblemConstraints for SphereN {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for SphereN {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for SphereN {
@@ -262,13 +261,12 @@ fn backend_generic_ndarray() {
 
     struct SphereA;
 
-    impl basin::ProblemConstraints for SphereA {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for SphereA {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for SphereA {
@@ -308,13 +306,12 @@ fn backend_generic_faer() {
 
     struct SphereF;
 
-    impl basin::ProblemConstraints for SphereF {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for SphereF {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for SphereF {

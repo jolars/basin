@@ -14,12 +14,12 @@ use std::rc::Rc;
 
 struct Identity;
 
-impl basin::ProblemConstraints for Identity {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Identity {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for Identity {
@@ -391,12 +391,12 @@ fn capability_controls_are_never_silently_discarded_by_serialization() {
 
 struct Quadratic;
 
-impl basin::ProblemConstraints for Quadratic {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Quadratic {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for Quadratic {

@@ -695,13 +695,12 @@ mod tests {
     /// 1D quadratic via Vec<f64>: f(x) = (x[0] - 3)^2. Min at x = 3.
     struct Quadratic;
 
-    impl crate::ProblemConstraints for Quadratic {
-        type Constraints = crate::NoConstraints;
-        fn constraint_set(
+    impl crate::Constraints for Quadratic {
+        type Set = crate::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
-        {
-            crate::Constraints::new()
+        ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+            crate::ConstraintSet::new()
         }
     }
     impl CostFunction for Quadratic {
@@ -731,13 +730,12 @@ mod tests {
     /// descends toward x = 3.
     struct Cubic;
 
-    impl crate::ProblemConstraints for Cubic {
-        type Constraints = crate::NoConstraints;
-        fn constraint_set(
+    impl crate::Constraints for Cubic {
+        type Set = crate::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
-        {
-            crate::Constraints::new()
+        ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+            crate::ConstraintSet::new()
         }
     }
     impl CostFunction for Cubic {
@@ -765,13 +763,12 @@ mod tests {
     /// same objective and directional derivative.
     struct QuantizedPlateau;
 
-    impl crate::ProblemConstraints for QuantizedPlateau {
-        type Constraints = crate::NoConstraints;
-        fn constraint_set(
+    impl crate::Constraints for QuantizedPlateau {
+        type Set = crate::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
-        {
-            crate::Constraints::new()
+        ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+            crate::ConstraintSet::new()
         }
     }
     impl CostFunction for QuantizedPlateau {

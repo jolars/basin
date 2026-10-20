@@ -6,14 +6,6 @@ struct TourLength {
     points: Vec<(f64, f64)>,
 }
 
-impl basin::ProblemConstraints for TourLength {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
-        &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
-    }
-}
 impl CostFunction for TourLength {
     type Param = Vec<usize>;
     type Output = f64;

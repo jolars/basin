@@ -202,16 +202,16 @@ impl Problem {
     }
 }
 
-impl basin::ProblemConstraints for &Problem {
-    type Constraints = basin::Constraints<
+impl basin::Constraints for &Problem {
+    type Set = basin::ConstraintSet<
         basin::NoBounds,
         basin::NoLinearConstraints,
         basin::NonlinearBlocks<basin::NoNonlinearBlock, basin::NonlinearBlock>,
     >;
-    fn constraint_set(
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_nonlinear_inequalities({
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_nonlinear_inequalities({
             2 * self.bounds.len()
                 + usize::from(matches!(self.case, Case::Quadratic))
         })
@@ -244,7 +244,7 @@ impl basin::NonlinearInequalityValues for &Problem {
         {
             self.constraint_calls.set(self.constraint_calls.get() + 1);
             let mut values = Vec::with_capacity(
-                basin::ProblemConstraints::constraint_set(self)
+                basin::Constraints::constraints(self)
                     .nonlinear()
                     .inequalities()
                     .count(),

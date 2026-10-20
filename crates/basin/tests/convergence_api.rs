@@ -5,12 +5,12 @@ use basin::{
 
 struct Sphere;
 
-impl basin::ProblemConstraints for Sphere {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Sphere {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for Sphere {
@@ -33,12 +33,12 @@ impl Gradient for Sphere {
 
 struct ConstantCost;
 
-impl basin::ProblemConstraints for ConstantCost {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for ConstantCost {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for ConstantCost {
@@ -81,13 +81,12 @@ fn exact_step_checks_allow_overflowing_parameter_norms() {
 fn relative_step_checks_scale_large_parameters_before_taking_the_norm() {
     struct Linear;
 
-    impl basin::ProblemConstraints for Linear {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for Linear {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for Linear {
@@ -165,13 +164,12 @@ fn simplex_cost_check_does_not_require_vector_norms() {
     }
     struct MinimalSphere;
 
-    impl basin::ProblemConstraints for MinimalSphere {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for MinimalSphere {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for MinimalSphere {
@@ -473,13 +471,12 @@ fn native_zero_is_exact_and_none_disables() {
     use basin::{DenseMatrix, GaussNewton, Jacobian, Residual};
     struct Linear;
 
-    impl basin::ProblemConstraints for Linear {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for Linear {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl Residual for Linear {
@@ -521,13 +518,12 @@ fn nonfinite_gradient_is_not_convergence() {
     use basin::{InitialState, Problem, Solver};
     struct Nonfinite;
 
-    impl basin::ProblemConstraints for Nonfinite {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for Nonfinite {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for Nonfinite {
@@ -578,13 +574,12 @@ fn cost_check_does_not_require_vector_norms() {
     }
     struct MinimalSphere;
 
-    impl basin::ProblemConstraints for MinimalSphere {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for MinimalSphere {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for MinimalSphere {
@@ -646,13 +641,12 @@ fn projected_check_uses_each_inner_problems_bounds() {
         upper: Vec<f64>,
     }
 
-    impl basin::ProblemConstraints for BoundedSphere {
-        type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-        fn constraint_set(
+    impl basin::Constraints for BoundedSphere {
+        type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
                 Some(&self.lower),
                 Some(&self.upper),
             ))

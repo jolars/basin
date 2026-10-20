@@ -23,15 +23,15 @@ impl SquareResidual {
     }
 }
 
-impl basin::ProblemConstraints for SquareResidual {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(&self) -> basin::NoConstraints {
+impl basin::Constraints for SquareResidual {
+    type Set = basin::NoConstraints;
+    fn constraints(&self) -> basin::NoConstraints {
         basin::NoConstraints::EMPTY
     }
 }
 fn bounded_square() -> basin::Constrained<
     SquareResidual,
-    basin::Constraints<basin::BoxBounds<Vec<f64>>>,
+    basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>,
 > {
     let problem = SquareResidual::new();
     let bounds = basin::BoxBounds::new(
@@ -40,7 +40,7 @@ fn bounded_square() -> basin::Constrained<
     );
     basin::Constrained::new(
         problem,
-        basin::Constraints::new().with_bounds(bounds),
+        basin::ConstraintSet::new().with_bounds(bounds),
     )
 }
 impl Residual for SquareResidual {

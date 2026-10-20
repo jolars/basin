@@ -78,12 +78,12 @@ impl Model {
     }
 }
 
-impl basin::ProblemConstraints for Model {
-    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-    fn constraint_set(
+impl basin::Constraints for Model {
+    type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))
@@ -345,8 +345,8 @@ fn check_cost_floor<P>(
 ) where
     P: Residual<Param = Vec<f64>, Output = Vec<f64>, Error = &'static str>
         + Jacobian<Jacobian = DenseMatrix>
-        + basin::ProblemConstraints<
-            Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>,
+        + basin::Constraints<
+            Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>,
         >,
 {
     let result = Executor::from_start(
@@ -565,12 +565,12 @@ impl Callbacks {
     }
 }
 
-impl basin::ProblemConstraints for Callbacks {
-    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-    fn constraint_set(
+impl basin::Constraints for Callbacks {
+    type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))

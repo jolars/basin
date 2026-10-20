@@ -52,9 +52,9 @@ pub struct Bounded;
 ///     lower: Vec<f64>,
 ///     upper: Vec<f64>,
 /// }
-/// impl basin::ProblemConstraints for Booth  {
-///     type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-///     fn constraint_set(&self) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> { basin::Constraints::new().with_bounds(basin::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+/// impl basin::Constraints for Booth  {
+///     type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+///     fn constraints(&self) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> { basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 /// }
 /// impl CostFunction for Booth {
 ///     type Param = Vec<f64>;
@@ -399,13 +399,12 @@ mod tests {
         upper: Vec<f64>,
     }
 
-    impl crate::ProblemConstraints for Quad {
-        type Constraints = crate::Constraints<crate::BoxBounds<Vec<f64>>>;
-        fn constraint_set(
+    impl crate::Constraints for Quad {
+        type Set = crate::ConstraintSet<crate::BoxBounds<Vec<f64>>>;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
-        {
-            crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+        ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+            crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(
                 Some(&self.lower),
                 Some(&self.upper),
             ))
@@ -521,13 +520,13 @@ mod tests {
             upper: Vec<f64>,
         }
 
-        impl crate::ProblemConstraints for Bowl {
-            type Constraints = crate::Constraints<crate::BoxBounds<Vec<f64>>>;
-            fn constraint_set(
+        impl crate::Constraints for Bowl {
+            type Set = crate::ConstraintSet<crate::BoxBounds<Vec<f64>>>;
+            fn constraints(
                 &self,
-            ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+            ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_>
             {
-                crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+                crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(
                     Some(&self.lower),
                     Some(&self.upper),
                 ))
@@ -572,13 +571,13 @@ mod tests {
             upper: Vec<f64>,
         }
 
-        impl crate::ProblemConstraints for Rosen {
-            type Constraints = crate::Constraints<crate::BoxBounds<Vec<f64>>>;
-            fn constraint_set(
+        impl crate::Constraints for Rosen {
+            type Set = crate::ConstraintSet<crate::BoxBounds<Vec<f64>>>;
+            fn constraints(
                 &self,
-            ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+            ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_>
             {
-                crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+                crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(
                     Some(&self.lower),
                     Some(&self.upper),
                 ))

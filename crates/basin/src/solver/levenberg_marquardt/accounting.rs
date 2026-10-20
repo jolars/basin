@@ -55,12 +55,12 @@ struct Linear<F: Scalar> {
     residuals: Rc<Cell<usize>>,
 }
 
-impl<F: Scalar> crate::ProblemConstraints for Linear<F> {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(
+impl<F: Scalar> crate::Constraints for Linear<F> {
+    type Set = crate::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
-        crate::Constraints::new()
+    ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::ConstraintSet::new()
     }
 }
 impl<F: Scalar> Residual for Linear<F> {

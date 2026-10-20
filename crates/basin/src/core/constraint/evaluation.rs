@@ -424,10 +424,10 @@ pub(crate) trait CobylaSet<P: CostFunction<Param = V, Output = F>, V, F: Scalar>
         layout: &SetLayout,
     ) -> Result<Vec<F>, ConstraintSolveError<P::Error>>
     where
-        P: ProblemConstraints<Constraints = Self>;
+        P: Constraints<Set = Self>;
 }
 impl<P, V, F, B, LE, LI, NE, NI> CobylaSet<P, V, F>
-    for Constraints<B, LinearBlocks<LE, LI>, NonlinearBlocks<NE, NI>>
+    for ConstraintSet<B, LinearBlocks<LE, LI>, NonlinearBlocks<NE, NI>>
 where
     P: CostFunction<Param = V, Output = F>,
     V: VectorLen + Index<usize, Output = F>,
@@ -475,9 +475,9 @@ where
         layout: &SetLayout,
     ) -> Result<Vec<F>, ConstraintSolveError<P::Error>>
     where
-        P: ProblemConstraints<Constraints = Self>,
+        P: Constraints<Set = Self>,
     {
-        let now = Self::layout(p.inner().constraint_set(), x.vec_len())
+        let now = Self::layout(p.inner().constraints(), x.vec_len())
             .map_err(invalid)?;
         if &now != layout {
             return Err(invalid(ConstraintError::LayoutChanged));
@@ -486,7 +486,7 @@ where
             // Reuse the inequality buffer when no other rows need folding.
             let mut counts = crate::EvalCounts::default();
             let result = NI::values(
-                p.inner().constraint_set().nonlinear.inequalities,
+                p.inner().constraints().nonlinear.inequalities,
                 p.inner(),
                 x,
                 &mut counts,
@@ -495,7 +495,7 @@ where
             return result;
         }
         let bounds = {
-            let view = p.inner().constraint_set();
+            let view = p.inner().constraints();
             B::data(view.bounds, x.vec_len()).map_err(invalid)?
         };
         let mut out =
@@ -507,7 +507,7 @@ where
             out.extend(layout.upper.iter().map(|&i| x[i] - upper[i]));
         }
         let eq = LE::values(
-            p.inner().constraint_set().linear.equalities,
+            p.inner().constraints().linear.equalities,
             x,
             ConstraintBlock::LinearEqualities,
         )
@@ -516,7 +516,7 @@ where
         out.extend(eq);
         out.extend(
             LI::values(
-                p.inner().constraint_set().linear.inequalities,
+                p.inner().constraints().linear.inequalities,
                 x,
                 ConstraintBlock::LinearInequalities,
             )
@@ -524,14 +524,14 @@ where
         );
         let mut counts = crate::EvalCounts::default();
         let result: NonlinearResult<F, P::Error> = (|| {
-            let view = p.inner().constraint_set();
+            let view = p.inner().constraints();
             let ni = NI::values(
                 view.nonlinear.inequalities,
                 p.inner(),
                 x,
                 &mut counts,
             )?;
-            let view = p.inner().constraint_set();
+            let view = p.inner().constraints();
             let eq = NE::values(
                 view.nonlinear.equalities,
                 p.inner(),
@@ -551,7 +551,7 @@ where
 pub(crate) trait BoxOnly<V>: ConstraintDescription {
     fn bounds(view: Self::Borrowed<'_>) -> Result<(&V, &V), ConstraintError>;
 }
-impl<V> BoxOnly<V> for Constraints<BoxBounds<V>> {
+impl<V> BoxOnly<V> for ConstraintSet<BoxBounds<V>> {
     fn bounds(view: Self::Borrowed<'_>) -> Result<(&V, &V), ConstraintError> {
         Ok((
             view.bounds.lower().copied().ok_or(
@@ -568,7 +568,7 @@ impl<V> BoxOnly<V> for Constraints<BoxBounds<V>> {
     }
 }
 /// Read access used internally by algorithms that support exactly box constraints.
-pub(crate) trait BoxProblem: ProblemConstraints {
+pub(crate) trait BoxProblem: Constraints {
     type Param;
     fn box_bounds(
         &self,
@@ -582,11 +582,11 @@ pub(crate) trait BoxProblem: ProblemConstraints {
 }
 impl<P, V> BoxProblem for P
 where
-    P: ProblemConstraints<Constraints = Constraints<BoxBounds<V>>>,
+    P: Constraints<Set = ConstraintSet<BoxBounds<V>>>,
 {
     type Param = V;
     fn box_bounds(&self) -> Result<(&V, &V), ConstraintError> {
-        <Constraints<BoxBounds<V>> as BoxOnly<V>>::bounds(self.constraint_set())
+        <ConstraintSet<BoxBounds<V>> as BoxOnly<V>>::bounds(self.constraints())
     }
 }
 
@@ -626,21 +626,17 @@ macro_rules! single_linear {
     ($problem:ident,$gradient:ident,$eq:ty,$ineq:ty,$field:ident,$kind:ident) => {
         impl<P, V, M, R, F> $problem<V, F> for P
         where
-            P: CostFunction<
-                    Param = V,
-                    Output = F,
-                    Constraints = Constraints<
-                        NoBounds,
-                        LinearBlocks<$eq, $ineq>,
-                    >,
-                >,
+            P: CostFunction<Param = V, Output = F>,
+            P: Constraints<
+                Set = ConstraintSet<NoBounds, LinearBlocks<$eq, $ineq>>,
+            >,
             V: VectorLen,
             F: Scalar,
             M: MatrixShape + MatrixFinite + MatVecInto<V, F>,
             R: VectorLen + Index<usize, Output = F>,
         {
             fn linear_count(&self) -> usize {
-                self.constraint_set()
+                self.constraints()
                     .linear
                     .$field
                     .rhs
@@ -648,7 +644,7 @@ macro_rules! single_linear {
             }
             fn validate_linear(&self, n: usize) -> Result<(), ConstraintError> {
                 <LinearBlock<M, R> as LinearValues<V, F>>::rows(
-                    self.constraint_set().linear.$field,
+                    self.constraints().linear.$field,
                     n,
                     ConstraintBlock::$kind,
                 )
@@ -659,7 +655,7 @@ macro_rules! single_linear {
                 x: &V,
             ) -> Result<Vec<F>, ConstraintError> {
                 <LinearBlock<M, R> as LinearValues<V, F>>::values(
-                    self.constraint_set().linear.$field,
+                    self.constraints().linear.$field,
                     x,
                     ConstraintBlock::$kind,
                 )
@@ -667,14 +663,10 @@ macro_rules! single_linear {
         }
         impl<P, V, M, R, F> $gradient<V, F> for P
         where
-            P: CostFunction<
-                    Param = V,
-                    Output = F,
-                    Constraints = Constraints<
-                        NoBounds,
-                        LinearBlocks<$eq, $ineq>,
-                    >,
-                >,
+            P: CostFunction<Param = V, Output = F>,
+            P: Constraints<
+                Set = ConstraintSet<NoBounds, LinearBlocks<$eq, $ineq>>,
+            >,
             V: VectorLen + IndexMut<usize, Output = F>,
             F: Scalar,
             M: MatrixShape
@@ -689,7 +681,7 @@ macro_rules! single_linear {
                 out: &mut V,
             ) -> Result<(), ConstraintError> {
                 self.validate_linear(out.vec_len())?;
-                let view = self.constraint_set();
+                let view = self.constraints();
                 if let Some(a) = view.linear.$field.matrix {
                     dimension(
                         ConstraintBlock::$kind,
@@ -783,7 +775,7 @@ pub(crate) trait NonlinearSet<
         counts: &mut crate::EvalCounts,
     ) -> NonlinearResult<F, P::Error>
     where
-        P: ProblemConstraints<Constraints = Self>;
+        P: Constraints<Set = Self>;
     fn write_values(
         p: &P,
         x: &V,
@@ -792,10 +784,10 @@ pub(crate) trait NonlinearSet<
         inequalities: &mut [F],
     ) -> Result<(), ConstraintSolveError<P::Error>>
     where
-        P: ProblemConstraints<Constraints = Self>;
+        P: Constraints<Set = Self>;
 }
 impl<P, V, F, B, L, NE, NI> NonlinearSet<P, V, F>
-    for Constraints<B, L, NonlinearBlocks<NE, NI>>
+    for ConstraintSet<B, L, NonlinearBlocks<NE, NI>>
 where
     P: CostFunction<Param = V, Output = F>,
     F: Scalar,
@@ -816,16 +808,12 @@ where
         counts: &mut crate::EvalCounts,
     ) -> NonlinearResult<F, P::Error>
     where
-        P: ProblemConstraints<Constraints = Self>,
+        P: Constraints<Set = Self>,
     {
         let eq =
-            NE::values(p.constraint_set().nonlinear.equalities, p, x, counts)?;
-        let ni = NI::values(
-            p.constraint_set().nonlinear.inequalities,
-            p,
-            x,
-            counts,
-        )?;
+            NE::values(p.constraints().nonlinear.equalities, p, x, counts)?;
+        let ni =
+            NI::values(p.constraints().nonlinear.inequalities, p, x, counts)?;
         Ok((eq, ni))
     }
     fn write_values(
@@ -836,17 +824,17 @@ where
         inequalities: &mut [F],
     ) -> Result<(), ConstraintSolveError<P::Error>>
     where
-        P: ProblemConstraints<Constraints = Self>,
+        P: Constraints<Set = Self>,
     {
         NE::write(
-            p.constraint_set().nonlinear.equalities,
+            p.constraints().nonlinear.equalities,
             p,
             x,
             counts,
             equalities,
         )?;
         NI::write(
-            p.constraint_set().nonlinear.inequalities,
+            p.constraints().nonlinear.inequalities,
             p,
             x,
             counts,
@@ -866,7 +854,7 @@ pub(crate) struct LinearData<F> {
     pub equalities: Vec<(Vec<F>, F)>,
     pub inequalities: Vec<(Vec<F>, F)>,
 }
-impl<V, F, B, LE, LI> LincoaSet<V, F> for Constraints<B, LinearBlocks<LE, LI>>
+impl<V, F, B, LE, LI> LincoaSet<V, F> for ConstraintSet<B, LinearBlocks<LE, LI>>
 where
     V: VectorLen,
     F: Scalar,
@@ -1002,7 +990,7 @@ pub(crate) trait SlsqpSet<P: CostFunction<Param = V, Output = F>, V, F: Scalar>:
     ) -> Result<Vec<Vec<F>>, ConstraintSolveError<P::Error>>;
 }
 impl<P, V, F, B, LE, LI, NE, NI> SlsqpSet<P, V, F>
-    for Constraints<B, LinearBlocks<LE, LI>, NonlinearBlocks<NE, NI>>
+    for ConstraintSet<B, LinearBlocks<LE, LI>, NonlinearBlocks<NE, NI>>
 where
     P: CostFunction<Param = V, Output = F>,
     F: Scalar,

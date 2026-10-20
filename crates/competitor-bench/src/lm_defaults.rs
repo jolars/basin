@@ -100,9 +100,9 @@ pub struct Adapter<'a, B: Backend, P> {
     pub backend: PhantomData<B>,
 }
 
-impl<B: Backend, P> basin::ProblemConstraints for Adapter<'_, B, P> {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(&self) -> basin::NoConstraints {
+impl<B: Backend, P> basin::Constraints for Adapter<'_, B, P> {
+    type Set = basin::NoConstraints;
+    fn constraints(&self) -> basin::NoConstraints {
         basin::NoConstraints::EMPTY
     }
 }

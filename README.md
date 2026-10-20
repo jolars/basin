@@ -23,19 +23,19 @@ To port an existing Argmin project, see
 
 ## Release support
 
-Development of Basin 2.x takes place on `main`. The `v1` branch receives
+Development of Basin 3.0 takes place on `main`. Basin 2.0 remains available
+on crates.io with its published API. The `v1` branch receives
 correctness, regression, and security fixes for the latest 1.x release through
 at least April 19, 2027, and for at least six months after 2.0.0 is released,
-whichever is later. New features target 2.x. To stay on the supported 1.x line,
-use `basin = "1"` and keep its patch version current. See the
+whichever is later. The constraint API changes on `main` target 3.0. To stay on
+the supported 1.x line, use `basin = "1"` and keep its patch version current. See the
 [maintenance policy](MAINTENANCE.md) for the support window, backport procedure,
 and release workflow.
 
 For breaking changes on `main`, see
-[Migrating to Basin 2.0](https://basin.rs/docs/migrating-to-v2/),
-including the requirements for upgrading checkpoint files.
-Until the 2.0 documentation is published, read the guide's
-[source in this repository](web/src/routes/docs/migrating-to-v2/+page.svx).
+[Migrating to Basin 3.0](web/src/routes/docs/migrating-to-v3/+page.svx).
+The [Basin 2.0 migration guide](https://basin.rs/docs/migrating-to-v2/)
+remains available for upgrades from 1.x, including checkpoint changes.
 
 ## Install
 
@@ -58,8 +58,7 @@ the Rust 1.87-compatible feature set separately.
 
 ## Example
 
-Declare `ProblemConstraints` and implement `CostFunction` (and `Gradient`, when
-the solver needs derivatives),
+Implement `CostFunction` (and `Gradient` when the solver needs derivatives),
 then hand the problem, a solver, and an initial state to the `Executor`:
 
 ```rust
@@ -69,12 +68,6 @@ use std::convert::Infallible;
 struct Rosenbrock;
 
 fn main() {
-    impl basin::ProblemConstraints for Rosenbrock {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(&self) -> basin::NoConstraints {
-            basin::NoConstraints::EMPTY
-        }
-    }
     impl CostFunction for Rosenbrock {
         type Param = Vec<f64>;
         type Output = f64;

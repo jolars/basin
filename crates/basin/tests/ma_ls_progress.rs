@@ -17,12 +17,12 @@ impl Sphere {
     }
 }
 
-impl basin::ProblemConstraints for Sphere {
-    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-    fn constraint_set(
+impl basin::Constraints for Sphere {
+    type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
             .with_bounds(basin::BoxBounds::new(Some(&self.lo), Some(&self.hi)))
     }
 }
@@ -238,13 +238,12 @@ fn explicit_population_is_repaired_and_incumbent_counts_match_publication() {
 fn nonfinite_chain_without_an_incumbent_does_not_read_best_param() {
     struct Nonfinite(Sphere);
 
-    impl basin::ProblemConstraints for Nonfinite {
-        type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-        fn constraint_set(
+    impl basin::Constraints for Nonfinite {
+        type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
                 Some(&self.0.lo),
                 Some(&self.0.hi),
             ))

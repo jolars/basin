@@ -13,12 +13,11 @@ use std::{
 };
 
 use basin::{
-    BoxBounds, ConstraintDescription, ConstraintSolveError, Constraints,
-    CostFunction, CountsMirror, De, EvalCounts, EvaluatedState, EvaluationKind,
-    Executor, IncumbentState, InitialState, MemeticInner, NumericalFailure,
-    PointState, Problem, ProblemConstraints, RawEvaluationState, Scalar,
-    Solver, SolverStep, State, Termination, TerminationStage, VectorLen,
-    WarmStart,
+    BoxBounds, ConstraintDescription, ConstraintSet, ConstraintSolveError,
+    Constraints, CostFunction, CountsMirror, De, EvalCounts, EvaluatedState,
+    EvaluationKind, Executor, IncumbentState, InitialState, MemeticInner,
+    NumericalFailure, PointState, Problem, RawEvaluationState, Scalar, Solver,
+    SolverStep, State, Termination, TerminationStage, VectorLen, WarmStart,
 };
 use prototype::{
     ConstrainedDeInjectPrototype, ConstrainedDePrototype, PopulationMember,
@@ -65,12 +64,12 @@ fn serde_round_trip<T: serde::Serialize + serde::de::DeserializeOwned>(
 ) -> T {
     postcard::from_bytes(&postcard::to_allocvec(value).unwrap()).unwrap()
 }
-impl<V, F: Scalar> ProblemConstraints for Fixture<V, F> {
-    type Constraints = PrototypeConstraints<V>;
-    fn constraint_set(
+impl<V, F: Scalar> Constraints for Fixture<V, F> {
+    type Set = PrototypeConstraints<V>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as ConstraintDescription>::Borrowed<'_> {
-        Constraints::new()
+    ) -> <Self::Set as ConstraintDescription>::Borrowed<'_> {
+        ConstraintSet::new()
             .with_bounds(BoxBounds::new(Some(&self.lower), Some(&self.upper)))
             .with_nonlinear_inequalities(self.count.get())
     }
@@ -153,7 +152,7 @@ where
         let n = state.param().vec_len();
         let m = problem
             .inner()
-            .constraint_set()
+            .constraints()
             .nonlinear()
             .inequalities()
             .count();
@@ -173,7 +172,7 @@ where
         let stop = self.stop_on_seed.is_none_or(|v| state.param()[0] == v);
         let m = problem
             .inner()
-            .constraint_set()
+            .constraints()
             .nonlinear()
             .inequalities()
             .count();

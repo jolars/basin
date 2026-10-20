@@ -201,10 +201,6 @@ impl<F: Scalar> DerivativeCheckReport<F> {
 /// ```
 /// use basin::{CostFunction, DerivativeChecker, Gradient};
 /// struct Square;
-/// impl basin::ProblemConstraints for Square  {
-///     type Constraints = basin::NoConstraints;
-///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
-/// }
 /// impl CostFunction for Square {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;

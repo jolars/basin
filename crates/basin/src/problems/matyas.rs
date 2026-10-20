@@ -89,12 +89,12 @@ impl<P> HasSpec for Matyas<P> {
     const SPEC: &'static ProblemSpec = &MATYAS_SPEC;
 }
 
-impl crate::ProblemConstraints for Matyas<Vec<f64>> {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(
+impl crate::Constraints for Matyas<Vec<f64>> {
+    type Set = crate::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
-        crate::Constraints::new()
+    ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::ConstraintSet::new()
     }
 }
 impl CostFunction for Matyas<Vec<f64>> {
@@ -125,9 +125,9 @@ crate::backend_macros::nalgebra_versions! {
     use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
 
-    impl crate::ProblemConstraints for Matyas<DVector<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Matyas<DVector<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Matyas<DVector<f64>> {
         type Param = DVector<f64>;
@@ -161,9 +161,9 @@ crate::backend_macros::ndarray_versions! {
     use crate::{CostFunction, Gradient};
     use ndarray::Array1;
 
-    impl crate::ProblemConstraints for Matyas<Array1<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Matyas<Array1<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Matyas<Array1<f64>> {
         type Param = Array1<f64>;
@@ -203,9 +203,9 @@ crate::backend_macros::faer_versions! {
     // faer's `Col` doesn't expose a `&[f64]` directly across all 0.24 APIs we
     // care about, so we evaluate elementwise here rather than routing through
     // the slice-based primitives.
-    impl crate::ProblemConstraints for Matyas<Col<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Matyas<Col<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Matyas<Col<f64>> {
         type Param = Col<f64>;

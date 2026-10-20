@@ -13,12 +13,12 @@ struct Script<F> {
     fail: Option<usize>,
 }
 
-impl<F: Scalar> basin::ProblemConstraints for Script<F> {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl<F: Scalar> basin::Constraints for Script<F> {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl<F: Scalar> CostFunction for Script<F> {
@@ -162,12 +162,12 @@ struct Quadratic<F> {
     scalar: std::marker::PhantomData<F>,
 }
 
-impl<F: Scalar> basin::ProblemConstraints for Quadratic<F> {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl<F: Scalar> basin::Constraints for Quadratic<F> {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl<F: Scalar> CostFunction for Quadratic<F> {

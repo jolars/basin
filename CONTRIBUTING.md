@@ -2,9 +2,10 @@
 
 ## State
 
-Basin 2.0 development takes place on `main`. Follow
-[the roadmap](TODO.md#basin-20) for planned work and
-[Maintenance and releases](MAINTENANCE.md) for release procedures.
+Basin 3.0 development takes place on `main`. The optional constraint API
+requires a major release; do not publish it as a Basin 2.x fix. Follow
+[Maintenance and releases](MAINTENANCE.md) for release procedures and
+[the migration guide](web/src/routes/docs/migrating-to-v3/+page.svx) for API changes.
 
 Basin follows [semantic versioning]. Breaking changes ship only in a major
 release, while new solvers, backends, and opt-in features arrive in minor
@@ -261,29 +262,26 @@ These shape API decisions and are non-obvious from the code alone.
    from convergence. Custom inner-stop factories create fresh history per run.
    Executor cancellation is checked between top-level iterations; typed problem
    errors remain the finer-grained hard-abort path.
-4. **First-class constraints.** Constraints describe the *problem*, so they live
-   problem-side, not as executor config, never on state. Solvers declare support
-   via traits; a constrained problem handed to an unconstrained solver is a
-   compile error, with opt-in adapters (projection, barrier, or penalty) to wrap
-   unconstrained solvers. Box bounds, linear equalities and inequalities, and
-   nonlinear equalities and inequalities share one `ProblemConstraints` declaration with
-   `CostFunction` and `Residual`. Its canonical `Constraints` type determines
-   solver compatibility; statically absent blocks need no matrix or callback.
-   A borrowed view preserves existing problem storage. Nonlinear values,
-   right-hand sides, linear matrices, and nonlinear Jacobians may use independent
-   representations. COBYLA consumes the complete declaration directly. Validate
-   bounds, shapes, and declared counts before indexing, and preserve original
-   callback errors in `ConstraintSolveError`. Differentiation and robust-loss
-   adapters forward the declaration; barrier and penalty adapters consume only
-   their supported blocks. Sampling boxes use `SamplingBounds` on unconstrained
-   problems. Bounded memetic solvers require an explicit `RelaxedInner` when
-   their local solver ignores the box. Future integer domains belong in the
-   same canonical declaration and must receive the same static compatibility
-   checks. Adapters that add capabilities preserve domains, and box relaxation
-   does not authorize fractional evaluations of integer coordinates. The
-   [integer-domain API prototype](TODO.md#integer-domain-api-prototype) tests
-   an additive declaration and explicit refinement with integer coordinates
-   fixed; production integer support remains deferred.
+4. **Optional problem-side constraints.** Constraints describe the problem,
+   so they live problem-side, never on state or as executor configuration.
+   `CostFunction`, `Residual`, and constraint evaluation traits stand alone.
+   Problems optionally implement `Constraints`, whose associated `Set` is a
+   complete typed `ConstraintSet`. Constrained solvers require that declaration
+   and reject unsupported blocks. Unconstrained solvers ignore it, including
+   bounds and nonlinear callbacks; choosing such a solver optimizes only the
+   objective. Borrowed views preserve existing storage, and statically absent
+   blocks require no unused matrix or callback. Keep independent representations
+   for constraint values, right-hand sides, linear matrices, and Jacobians.
+   Validate consumed bounds, shapes, and counts before indexing, preserving user
+   errors in `ConstraintSolveError`. Differentiation and robust-loss adapters
+   forward optional declarations. `Constrained::new` installs its supplied set
+   as the complete declaration, replacing any declaration on its inner objective.
+   Barrier and penalty adapters transform only their supported blocks.
+   Sampling domains remain distinct from mathematical bounds. `RelaxedInner`
+   retains its explicit box transformation and error conversion for composed
+   solvers. Future integer support must define which algorithms enforce integer
+   domains; ordinary unconstrained solvers do not acquire that capability from a
+   declaration alone.
 5. **Tiered backends with full solver coverage.** A small universal
    *vector tier* keeps first-order and derivative-free solvers generic over
    operations that every backend implements well. The richer *`linalg` tier*

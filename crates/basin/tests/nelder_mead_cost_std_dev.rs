@@ -14,13 +14,13 @@ struct Quadratic<V, F> {
     _float: PhantomData<F>,
 }
 
-impl<V, F> basin::ProblemConstraints for Quadratic<V, F> {
-    type Constraints = basin::Constraints<basin::BoxBounds<V>>;
+impl<V, F> basin::Constraints for Quadratic<V, F> {
+    type Set = basin::ConstraintSet<basin::BoxBounds<V>>;
 
-    fn constraint_set(
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))

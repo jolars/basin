@@ -51,10 +51,6 @@ const FORMAT_VERSION: u32 = 1;
 /// # use basin::{FirstOrderState, CostFunction, Executor, Gradient, GradientDescent};
 /// use basin::{CheckpointWriter, ObserverMode, read_checkpoint};
 /// # struct Quadratic;
-/// # impl basin::ProblemConstraints for Quadratic  {
-///     type Constraints = basin::NoConstraints;
-///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
-/// }
 /// impl CostFunction for Quadratic {
 /// #     type Param = Vec<f64>;
 /// #     type Output = f64;

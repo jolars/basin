@@ -6,12 +6,12 @@ use std::convert::Infallible;
 
 struct Fit;
 
-impl basin::ProblemConstraints for Fit {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Fit {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl Residual for Fit {

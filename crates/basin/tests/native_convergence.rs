@@ -23,18 +23,21 @@ impl Fit {
     }
 }
 
-impl basin::ProblemConstraints for Fit {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(&self) -> basin::NoConstraints {
+impl basin::Constraints for Fit {
+    type Set = basin::NoConstraints;
+    fn constraints(&self) -> basin::NoConstraints {
         basin::NoConstraints::EMPTY
     }
 }
 fn bounded(
     fit: Fit,
-) -> basin::Constrained<Fit, basin::Constraints<basin::BoxBounds<Vec<f64>>>> {
+) -> basin::Constrained<Fit, basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>> {
     let bounds =
         basin::BoxBounds::new(Some(fit.lower.clone()), Some(fit.upper.clone()));
-    basin::Constrained::new(fit, basin::Constraints::new().with_bounds(bounds))
+    basin::Constrained::new(
+        fit,
+        basin::ConstraintSet::new().with_bounds(bounds),
+    )
 }
 impl Residual for Fit {
     type Param = Vec<f64>;

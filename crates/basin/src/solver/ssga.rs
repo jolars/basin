@@ -72,7 +72,7 @@ use crate::solver::cma_es::sort_population_ascending;
 /// # Contract
 ///
 /// - **Caller must:** implement [`CostFunction<Param = V, Output = F>`]
-///   *and* `Constraints<BoxBounds<V>>` on the problem. SSGA is a
+///   *and* `ConstraintSet<BoxBounds<V>>` on the problem. SSGA is a
 ///   bounded-search method by construction.
 /// - Supply [`PopulationProgress::empty`] to sample `pop_size` members, or
 ///   [`PopulationProgress::from_population`] with exactly `pop_size` finite

@@ -22,18 +22,18 @@ impl Equality {
     }
 }
 
-impl basin::ProblemConstraints for Equality {
-    type Constraints = basin::Constraints<
+impl basin::Constraints for Equality {
+    type Set = basin::ConstraintSet<
         basin::NoBounds,
         basin::LinearBlocks<
             basin::LinearBlock<DenseMatrix, Vec<f64>>,
             basin::NoLinearBlock,
         >,
     >;
-    fn constraint_set(
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
             .with_linear_equalities(basin::LinearBlock::new(&self.a, &self.b))
     }
 }
@@ -255,18 +255,18 @@ fn explicit_selection_stamps_once_and_keeps_its_own_record() {
 
 struct FailingEquality(Equality);
 
-impl basin::ProblemConstraints for FailingEquality {
-    type Constraints = basin::Constraints<
+impl basin::Constraints for FailingEquality {
+    type Set = basin::ConstraintSet<
         basin::NoBounds,
         basin::LinearBlocks<
             basin::LinearBlock<DenseMatrix, Vec<f64>>,
             basin::NoLinearBlock,
         >,
     >;
-    fn constraint_set(
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_linear_equalities(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_linear_equalities(
             basin::LinearBlock::new(&self.0.a, &self.0.b),
         )
     }

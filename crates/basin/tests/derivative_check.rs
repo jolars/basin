@@ -7,12 +7,12 @@ struct Polynomial {
     wrong: bool,
 }
 
-impl basin::ProblemConstraints for Polynomial {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Polynomial {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for Polynomial {
@@ -122,12 +122,12 @@ fn directional_checks_compare_products_and_normalize_direction() {
 
 struct Bounded;
 
-impl basin::ProblemConstraints for Bounded {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Bounded {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for Bounded {
@@ -205,12 +205,12 @@ struct NonFinite {
     analytic: bool,
 }
 
-impl basin::ProblemConstraints for NonFinite {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for NonFinite {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for NonFinite {
@@ -275,12 +275,12 @@ struct Linear {
     derivative: f64,
 }
 
-impl basin::ProblemConstraints for Linear {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Linear {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for Linear {
@@ -393,13 +393,12 @@ fn directional_checks_reject_probes_requiring_projection() {
         calls: AtomicUsize,
     }
 
-    impl basin::ProblemConstraints for NarrowBox {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for NarrowBox {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for NarrowBox {
@@ -506,12 +505,12 @@ struct Broken {
     mode: usize,
 }
 
-impl basin::ProblemConstraints for Broken {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Broken {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for Broken {
@@ -662,12 +661,12 @@ struct Backend<V, F> {
     make: fn(&[F]) -> V,
 }
 
-impl<V: VectorIndex<F>, F: Scalar> basin::ProblemConstraints for Backend<V, F> {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl<V: VectorIndex<F>, F: Scalar> basin::Constraints for Backend<V, F> {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl<V: VectorIndex<F>, F: Scalar> CostFunction for Backend<V, F> {
@@ -784,12 +783,12 @@ struct Counted {
     calls: std::sync::atomic::AtomicUsize,
 }
 
-impl basin::ProblemConstraints for Counted {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Counted {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for Counted {
@@ -883,13 +882,12 @@ fn empty_and_all_fixed_checks_expose_their_lack_of_coverage() {
 fn finite_evaluations_with_overflowing_differences_are_identified() {
     struct Jump;
 
-    impl basin::ProblemConstraints for Jump {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for Jump {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for Jump {

@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased (Basin 3.0)
+
+Unfortunately, I have realized that the changes to constraints API in Basin 2.0 are much less ergonomic and have decided to switch back to the simpler approach of 1.x. I apologize to anyone who has already migrated, but hope that you find the new (old) API more pleasant to use. In short:
+
+- Make constraint declarations optional. `CostFunction`, `Residual`, and constraint callbacks no longer require a declaration. Unconstrained solvers ignore declared constraints, while constrained solvers continue to validate complete sets and reject unsupported blocks.
+- Rename the `ProblemConstraints` trait to `Constraints` and the `Constraints` data container to `ConstraintSet`. Rename the associated type to `Set` and the getter to `constraints`. `Constrained::new` accepts plain objectives and uses its supplied set as the complete declaration.
+
+See the [Basin 3.0 migration guide](web/src/routes/docs/migrating-to-v3/+page.svx) for more details.
+
 ## [2.0.0](https://github.com/jolars/basin/compare/v1.15.1...v2.0.0) (2026-10-19)
 
 ### Highlights

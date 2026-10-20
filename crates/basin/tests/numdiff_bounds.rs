@@ -4,12 +4,12 @@ use basin::{
 
 struct Domain;
 
-impl basin::ProblemConstraints for Domain {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Domain {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for Domain {
@@ -50,13 +50,12 @@ fn one_sided_second_order_and_fixed_coordinate() {
 fn adjacent_float_interval_uses_the_available_probe() {
     struct Identity;
 
-    impl basin::ProblemConstraints for Identity {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for Identity {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for Identity {
@@ -86,13 +85,12 @@ fn sub_ulp_requested_step_still_uses_distinct_probes() {
 fn empty_parameter_vector_keeps_residual_row_count() {
     struct Constant;
 
-    impl basin::ProblemConstraints for Constant {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for Constant {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl Residual for Constant {
@@ -116,18 +114,16 @@ struct BackendDomain<V, F> {
     make: fn(&[F]) -> V,
 }
 
-impl<V: VectorIndex<F>, F: Scalar> basin::ProblemConstraints
-    for BackendDomain<V, F>
-{
-    type Constraints = basin::Constraints<
+impl<V: VectorIndex<F>, F: Scalar> basin::Constraints for BackendDomain<V, F> {
+    type Set = basin::ConstraintSet<
         basin::NoBounds,
         basin::NoLinearConstraints,
         basin::NonlinearBlocks<basin::NonlinearBlock, basin::NonlinearBlock>,
     >;
-    fn constraint_set(
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
             .with_nonlinear_equalities(1)
             .with_nonlinear_inequalities(1)
     }
@@ -282,13 +278,12 @@ where
         make: fn(&[f64]) -> V,
     }
 
-    impl<V: VectorIndex> basin::ProblemConstraints for Smooth<V> {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl<V: VectorIndex> basin::Constraints for Smooth<V> {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl<V: VectorIndex> CostFunction for Smooth<V> {

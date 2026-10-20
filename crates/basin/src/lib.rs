@@ -1,7 +1,7 @@
 //! Basin: a numerical optimization library.
 //!
 //! The framework lives in [`core`]: problem traits the user implements
-//! ([`ProblemConstraints`], [`CostFunction`], [`Gradient`], [`Residual`], and
+//! ([`Constraints`], [`CostFunction`], [`Gradient`], [`Residual`], and
 //! the nonlinear constraint evaluation capabilities), state shapes
 //! solvers iterate over ([`State`], [`GradientState`], [`SimplexState`]),
 //! the [`Solver`] trait, solver-owned convergence, execution controls
@@ -27,10 +27,6 @@
 //!     FirstOrderState, CostFunction, Executor, Gradient, GradientDescent};
 //!
 //! struct Sphere;
-//! impl basin::ProblemConstraints for Sphere  {
-//!     type Constraints = basin::NoConstraints;
-//!     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
-//! }
 //! impl CostFunction for Sphere {
 //!     type Param = Vec<f64>;
 //!     type Output = f64;
@@ -72,10 +68,6 @@
 //! ```
 //! use basin::{Executor, NelderMead};
 //! # struct Sphere;
-//! # impl basin::ProblemConstraints for Sphere  {
-//!     type Constraints = basin::NoConstraints;
-//!     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
-//! }
 //! impl basin::CostFunction for Sphere {
 //! #     type Param = Vec<f64>;
 //! #     type Output = f64;
@@ -347,12 +339,12 @@ pub use crate::core::checkpoint::{
 };
 pub use crate::core::constraint::{
     BoundSide, BoxBounds, Constrained, ConstraintAxis, ConstraintBlock,
-    ConstraintDescription, ConstraintError, ConstraintJacobian,
+    ConstraintDescription, ConstraintError, ConstraintJacobian, ConstraintSet,
     ConstraintSolveError, Constraints, LinearBlock, LinearBlocks, NoBounds,
     NoConstraints, NoLinearBlock, NoLinearConstraints, NoNonlinearBlock,
     NoNonlinearConstraints, NonlinearBlock, NonlinearBlocks,
-    NonlinearEqualityValues, NonlinearInequalityValues, ProblemConstraints,
-    RelaxedInner, SamplingBounds, SamplingDomain,
+    NonlinearEqualityValues, NonlinearInequalityValues, RelaxedInner,
+    SamplingBounds, SamplingDomain,
 };
 pub use crate::core::convergence::{
     ConfiguredSolver, NativeConvergenceDiagnostics, NativeConvergenceTest,

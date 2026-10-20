@@ -52,12 +52,12 @@ struct Probe<'a> {
     budget: usize,
 }
 
-impl basin::ProblemConstraints for Probe<'_> {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Probe<'_> {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl Residual for Probe<'_> {

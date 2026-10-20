@@ -52,9 +52,9 @@ static ALLOCATOR: Counting = Counting;
 
 struct Residuals<F: Scalar>([F; 2]);
 
-impl<F: Scalar> basin::ProblemConstraints for Residuals<F> {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(&self) -> basin::NoConstraints {
+impl<F: Scalar> basin::Constraints for Residuals<F> {
+    type Set = basin::NoConstraints;
+    fn constraints(&self) -> basin::NoConstraints {
         basin::NoConstraints::EMPTY
     }
 }
@@ -112,14 +112,14 @@ macro_rules! native_reports {
         #[test]
         fn $test() {
             use basin::{
-                AugmentedLagrangianMethod, Constrained, Constraints,
+                AugmentedLagrangianMethod, Constrained, ConstraintSet,
                 DenseMatrix, Executor, GradientDescent, LinearBlock,
             };
             type F = $scalar;
             let problem = || {
                 Constrained::new(
                     Residuals([3.0 as F, 4.0 as F]),
-                    Constraints::new().with_nonlinear_inequalities(2),
+                    ConstraintSet::new().with_nonlinear_inequalities(2),
                 )
             };
             let mads = Executor::from_start(
@@ -173,7 +173,7 @@ macro_rules! native_reports {
             assert_eq!(cobyla.counts.cost_evals, 3);
             assert_eq!(cobyla.counts.residual_evals, 3);
             let linear =
-                Constraints::new().with_linear_equalities(LinearBlock::new(
+                ConstraintSet::new().with_linear_equalities(LinearBlock::new(
                     DenseMatrix::from_row_slice(
                         2,
                         2,
@@ -207,11 +207,11 @@ native_reports!(native_f32_reports_preserve_different_aggregates, f32);
 
 #[test]
 fn native_reports_describe_nonfinite_handling() {
-    use basin::{Constrained, Constraints, Executor};
+    use basin::{Constrained, ConstraintSet, Executor};
     let problem = || {
         Constrained::new(
             Residuals([f64::NAN, f64::NEG_INFINITY]),
-            Constraints::new().with_nonlinear_inequalities(2),
+            ConstraintSet::new().with_nonlinear_inequalities(2),
         )
     };
     let cobyla =

@@ -268,13 +268,12 @@ fn annealing_diagnostics_describe_next_proposal_including_restarts() {
     use basin::{SimulatedAnnealing, TemperatureSchedule};
     struct Cost;
 
-    impl basin::ProblemConstraints for Cost {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for Cost {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl basin::CostFunction for Cost {
@@ -311,8 +310,8 @@ fn slsqp_observer_reads_optional_borrowed_multipliers() {
     use basin::{Gradient, Slsqp};
     struct Quadratic;
 
-    impl basin::ProblemConstraints for Quadratic {
-        type Constraints = basin::Constraints<
+    impl basin::Constraints for Quadratic {
+        type Set = basin::ConstraintSet<
             basin::NoBounds,
             basin::NoLinearConstraints,
             basin::NonlinearBlocks<
@@ -320,11 +319,10 @@ fn slsqp_observer_reads_optional_borrowed_multipliers() {
                 basin::NoNonlinearBlock,
             >,
         >;
-        fn constraint_set(
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new().with_nonlinear_equalities(1)
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new().with_nonlinear_equalities(1)
         }
     }
     impl basin::CostFunction for Quadratic {
@@ -403,13 +401,12 @@ fn scalar_f32_and_default_trait_hooks_need_no_extra_capabilities() {
     use basin::{ProposalState, SimulatedAnnealing, TemperatureSchedule};
     struct Cost;
 
-    impl basin::ProblemConstraints for Cost {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for Cost {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl basin::CostFunction for Cost {
@@ -457,13 +454,12 @@ fn direct_callback_accepts_borrowed_neighbor() {
     use basin::{CostFunction, SimulatedAnnealing, TemperatureSchedule};
     struct Cost;
 
-    impl basin::ProblemConstraints for Cost {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for Cost {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for Cost {
@@ -554,13 +550,12 @@ fn state_and_solver_may_borrow_local_data_with_mixed_observers() {
     use std::convert::Infallible;
     struct Cost<'a>(&'a f64);
 
-    impl<'a> basin::ProblemConstraints for Cost<'a> {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl<'a> basin::Constraints for Cost<'a> {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl<'a> CostFunction for Cost<'a> {

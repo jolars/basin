@@ -120,16 +120,16 @@ fn public_records_validate_dimensions_and_preserve_pending_selections() {
 
 struct Equality;
 
-impl basin::ProblemConstraints for Equality {
-    type Constraints = basin::Constraints<
+impl basin::Constraints for Equality {
+    type Set = basin::ConstraintSet<
         basin::NoBounds,
         basin::NoLinearConstraints,
         basin::NonlinearBlocks<basin::NonlinearBlock, basin::NoNonlinearBlock>,
     >;
-    fn constraint_set(
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_nonlinear_equalities(1)
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_nonlinear_equalities(1)
     }
 }
 impl basin::CostFunction for Equality {

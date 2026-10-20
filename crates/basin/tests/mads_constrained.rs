@@ -21,16 +21,16 @@ use basin::{CostFunction, Executor, Mads, SelectedState, TerminationCode};
 /// constrained optimum is `F* = −1/2` on the unit circle (at the 45° points).
 struct Disk;
 
-impl basin::ProblemConstraints for Disk {
-    type Constraints = basin::Constraints<
+impl basin::Constraints for Disk {
+    type Set = basin::ConstraintSet<
         basin::NoBounds,
         basin::NoLinearConstraints,
         basin::NonlinearBlocks<basin::NoNonlinearBlock, basin::NonlinearBlock>,
     >;
-    fn constraint_set(
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_nonlinear_inequalities(1)
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_nonlinear_inequalities(1)
     }
 }
 impl CostFunction for Disk {
@@ -171,8 +171,8 @@ fn backend_generic_nalgebra() {
 
     struct Disk;
 
-    impl basin::ProblemConstraints for Disk {
-        type Constraints = basin::Constraints<
+    impl basin::Constraints for Disk {
+        type Set = basin::ConstraintSet<
             basin::NoBounds,
             basin::NoLinearConstraints,
             basin::NonlinearBlocks<
@@ -180,11 +180,10 @@ fn backend_generic_nalgebra() {
                 basin::NonlinearBlock,
             >,
         >;
-        fn constraint_set(
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new().with_nonlinear_inequalities(1)
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new().with_nonlinear_inequalities(1)
         }
     }
     impl CostFunction for Disk {
@@ -239,8 +238,8 @@ fn backend_generic_ndarray() {
 
     struct Disk;
 
-    impl basin::ProblemConstraints for Disk {
-        type Constraints = basin::Constraints<
+    impl basin::Constraints for Disk {
+        type Set = basin::ConstraintSet<
             basin::NoBounds,
             basin::NoLinearConstraints,
             basin::NonlinearBlocks<
@@ -248,11 +247,10 @@ fn backend_generic_ndarray() {
                 basin::NonlinearBlock,
             >,
         >;
-        fn constraint_set(
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new().with_nonlinear_inequalities(1)
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new().with_nonlinear_inequalities(1)
         }
     }
     impl CostFunction for Disk {
@@ -307,8 +305,8 @@ fn backend_generic_faer() {
 
     struct Disk;
 
-    impl basin::ProblemConstraints for Disk {
-        type Constraints = basin::Constraints<
+    impl basin::Constraints for Disk {
+        type Set = basin::ConstraintSet<
             basin::NoBounds,
             basin::NoLinearConstraints,
             basin::NonlinearBlocks<
@@ -316,11 +314,10 @@ fn backend_generic_faer() {
                 basin::NonlinearBlock,
             >,
         >;
-        fn constraint_set(
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new().with_nonlinear_inequalities(1)
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new().with_nonlinear_inequalities(1)
         }
     }
     impl CostFunction for Disk {

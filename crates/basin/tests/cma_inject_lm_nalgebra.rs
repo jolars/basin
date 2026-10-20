@@ -112,13 +112,12 @@ fn consumes_lm_no_progress_and_accounts_for_each_fresh_inner_run() {
         jacobians: Arc<AtomicU64>,
     }
 
-    impl basin::ProblemConstraints for Affine {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for Affine {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for Affine {

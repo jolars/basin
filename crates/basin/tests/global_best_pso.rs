@@ -12,15 +12,15 @@ struct BoundedSphere<F> {
     upper: Vec<F>,
 }
 
-impl<F> basin::ProblemConstraints for BoundedSphere<F>
+impl<F> basin::Constraints for BoundedSphere<F>
 where
     F: basin::Scalar,
 {
-    type Constraints = basin::Constraints<basin::BoxBounds<Vec<F>>>;
-    fn constraint_set(
+    type Set = basin::ConstraintSet<basin::BoxBounds<Vec<F>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))
@@ -382,12 +382,12 @@ struct Rastrigin {
     upper: Vec<f64>,
 }
 
-impl basin::ProblemConstraints for Rastrigin {
-    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-    fn constraint_set(
+impl basin::Constraints for Rastrigin {
+    type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))
@@ -428,12 +428,12 @@ struct PartialNan {
     upper: Vec<f64>,
 }
 
-impl basin::ProblemConstraints for PartialNan {
-    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-    fn constraint_set(
+impl basin::Constraints for PartialNan {
+    type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))
@@ -490,12 +490,12 @@ struct FailingProblem {
     upper: Vec<f64>,
 }
 
-impl basin::ProblemConstraints for FailingProblem {
-    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-    fn constraint_set(
+impl basin::Constraints for FailingProblem {
+    type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))
@@ -537,12 +537,12 @@ struct AlwaysNan {
     upper: Vec<f64>,
 }
 
-impl basin::ProblemConstraints for AlwaysNan {
-    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-    fn constraint_set(
+impl basin::Constraints for AlwaysNan {
+    type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))
@@ -585,12 +585,12 @@ struct AlwaysNegativeInfinity {
     upper: Vec<f64>,
 }
 
-impl basin::ProblemConstraints for AlwaysNegativeInfinity {
-    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-    fn constraint_set(
+impl basin::Constraints for AlwaysNegativeInfinity {
+    type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))

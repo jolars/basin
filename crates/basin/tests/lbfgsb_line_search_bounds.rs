@@ -40,12 +40,12 @@ impl Quadratic {
     }
 }
 
-impl basin::ProblemConstraints for Quadratic {
-    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-    fn constraint_set(
+impl basin::Constraints for Quadratic {
+    type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))
@@ -392,16 +392,18 @@ macro_rules! backend_regression {
                 upper: Vector,
             }
 
-
-            impl basin::ProblemConstraints for BoundedQuadratic {
-                type Constraints = basin::Constraints<basin::BoxBounds<Vector>>;
-                fn constraint_set(
+            impl basin::Constraints for BoundedQuadratic {
+                type Set = basin::ConstraintSet<basin::BoxBounds<Vector>>;
+                fn constraints(
                     &self,
-                ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-                    basin::Constraints::new().with_bounds(basin::BoxBounds::new(
-                        Some(&self.lower),
-                        Some(&self.upper),
-                    ))
+                ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_>
+                {
+                    basin::ConstraintSet::new().with_bounds(
+                        basin::BoxBounds::new(
+                            Some(&self.lower),
+                            Some(&self.upper),
+                        ),
+                    )
                 }
             }
             impl CostFunction for BoundedQuadratic {
@@ -426,8 +428,6 @@ macro_rules! backend_regression {
                     Ok(($make)(vec![2.0 * (x[0] + 50.0), 2.0 * (x[1] - 50.0)]))
                 }
             }
-
-
 
             #[test]
             fn lower_and_upper_active_bounds() {

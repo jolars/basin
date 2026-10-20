@@ -31,7 +31,7 @@ use crate::core::termination::Termination;
 /// # Examples
 ///
 /// `Brent` minimizes a 1-D function over a bracket, so the problem
-/// implements `CostFunction` and declares `Constraints<BoxBounds<F>>` with scalar
+/// implements `CostFunction` and declares `ConstraintSet<BoxBounds<F>>` with scalar
 /// bounds. See [`NelderMead`](crate::NelderMead) for the general
 /// derivative-free `Executor` pattern.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -303,13 +303,12 @@ mod tests {
         hi: f64,
     }
 
-    impl crate::ProblemConstraints for Quadratic {
-        type Constraints = crate::Constraints<crate::BoxBounds<f64>>;
-        fn constraint_set(
+    impl crate::Constraints for Quadratic {
+        type Set = crate::ConstraintSet<crate::BoxBounds<f64>>;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
-        {
-            crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+        ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+            crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(
                 Some(&self.lo),
                 Some(&self.hi),
             ))
@@ -373,13 +372,12 @@ mod tests {
         hi: f64,
     }
 
-    impl crate::ProblemConstraints for Cubic {
-        type Constraints = crate::Constraints<crate::BoxBounds<f64>>;
-        fn constraint_set(
+    impl crate::Constraints for Cubic {
+        type Set = crate::ConstraintSet<crate::BoxBounds<f64>>;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
-        {
-            crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+        ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+            crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(
                 Some(&self.lo),
                 Some(&self.hi),
             ))

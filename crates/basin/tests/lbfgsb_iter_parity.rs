@@ -23,12 +23,12 @@ struct Rosen5D {
     u: Vec<f64>,
 }
 
-impl basin::ProblemConstraints for Rosen5D {
-    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-    fn constraint_set(
+impl basin::Constraints for Rosen5D {
+    type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
             .with_bounds(basin::BoxBounds::new(Some(&self.l), Some(&self.u)))
     }
 }

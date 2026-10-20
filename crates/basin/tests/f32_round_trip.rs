@@ -87,14 +87,6 @@ struct ShiftedQuadF32 {
     c: Vec<f32>,
 }
 
-impl basin::ProblemConstraints for ShiftedQuadF32 {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
-        &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
-    }
-}
 impl CostFunction for ShiftedQuadF32 {
     type Param = Vec<f32>;
     type Output = f32;
@@ -116,12 +108,12 @@ struct BoundedSphereF32 {
     upper: Vec<f32>,
 }
 
-impl basin::ProblemConstraints for BoundedSphereF32 {
-    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f32>>>;
-    fn constraint_set(
+impl basin::Constraints for BoundedSphereF32 {
+    type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f32>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))
@@ -192,8 +184,8 @@ fn cobyla_f32_round_trips_full_form_constraints() {
         upper: Vec<f32>,
     }
 
-    impl basin::ProblemConstraints for MixedF32 {
-        type Constraints = basin::Constraints<
+    impl basin::Constraints for MixedF32 {
+        type Set = basin::ConstraintSet<
             basin::BoxBounds<Vec<f32>>,
             basin::LinearBlocks<
                 basin::LinearBlock<DenseMatrix<f32>, Vec<f32>>,
@@ -204,11 +196,10 @@ fn cobyla_f32_round_trips_full_form_constraints() {
                 basin::NonlinearBlock,
             >,
         >;
-        fn constraint_set(
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
                 .with_bounds(basin::BoxBounds::new(
                     Some(&self.lower),
                     Some(&self.upper),
@@ -566,15 +557,6 @@ fn more_sorensen_f32_round_trips_state_solver_termination() {
 fn levenberg_marquardt_qr_f32_round_trip() {
     struct Fit;
 
-    impl basin::ProblemConstraints for Fit {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
-            &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
-        }
-    }
     impl basin::Residual for Fit {
         type Param = Vec<f32>;
         type Output = Vec<f32>;
@@ -607,8 +589,8 @@ fn levenberg_marquardt_qr_f32_round_trip() {
 fn slsqp_f32_round_trips_bounded_numerical_derivatives() {
     struct Equality;
 
-    impl basin::ProblemConstraints for Equality {
-        type Constraints = basin::Constraints<
+    impl basin::Constraints for Equality {
+        type Set = basin::ConstraintSet<
             basin::NoBounds,
             basin::NoLinearConstraints,
             basin::NonlinearBlocks<
@@ -616,11 +598,10 @@ fn slsqp_f32_round_trips_bounded_numerical_derivatives() {
                 basin::NoNonlinearBlock,
             >,
         >;
-        fn constraint_set(
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new().with_nonlinear_equalities(1)
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new().with_nonlinear_equalities(1)
         }
     }
     impl CostFunction for Equality {

@@ -25,18 +25,18 @@ struct MyProblem {
 
 // 1a. The objective value, f(x) = (x₀−2)² + (x₁−2)².
 
-impl basin::ProblemConstraints for MyProblem {
-    type Constraints = basin::Constraints<
+impl basin::Constraints for MyProblem {
+    type Set = basin::ConstraintSet<
         basin::NoBounds,
         basin::LinearBlocks<
             basin::NoLinearBlock,
             basin::LinearBlock<DMatrix<f64>, DVector<f64>>,
         >,
     >;
-    fn constraint_set(
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
             .with_linear_inequalities(basin::LinearBlock::new(&self.a, &self.b))
     }
 }

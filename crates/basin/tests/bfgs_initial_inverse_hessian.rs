@@ -284,9 +284,9 @@ fn fresh_fixed_seed_is_independent_of_previous_updates() {
 }
 
 struct Sphere;
-impl basin::ProblemConstraints for Sphere {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(&self) -> basin::NoConstraints {
+impl basin::Constraints for Sphere {
+    type Set = basin::NoConstraints;
+    fn constraints(&self) -> basin::NoConstraints {
         basin::NoConstraints::EMPTY
     }
 }
@@ -468,9 +468,9 @@ fn invalid_fixed_and_callback_seeds_panic_at_initialization() {
 }
 
 struct FailingEvaluation;
-impl basin::ProblemConstraints for FailingEvaluation {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(&self) -> basin::NoConstraints {
+impl basin::Constraints for FailingEvaluation {
+    type Set = basin::NoConstraints;
+    fn constraints(&self) -> basin::NoConstraints {
         basin::NoConstraints::EMPTY
     }
 }

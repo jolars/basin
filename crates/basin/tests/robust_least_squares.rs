@@ -8,14 +8,6 @@ use basin::{
 #[derive(Clone)]
 struct Location;
 
-impl basin::ProblemConstraints for Location {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
-        &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
-    }
-}
 impl Residual for Location {
     type Param = Vec<f64>;
     type Output = Vec<f64>;
@@ -265,14 +257,6 @@ struct Domain {
     hard_error: bool,
 }
 
-impl basin::ProblemConstraints for Domain {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
-        &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
-    }
-}
 impl Residual for Domain {
     type Param = Vec<f64>;
     type Output = Vec<f64>;

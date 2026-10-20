@@ -78,12 +78,12 @@ impl<P> HasSpec for Zero<P> {
     const SPEC: &'static ProblemSpec = &ZERO_SPEC;
 }
 
-impl crate::ProblemConstraints for Zero<Vec<f64>> {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(
+impl crate::Constraints for Zero<Vec<f64>> {
+    type Set = crate::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
-        crate::Constraints::new()
+    ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::ConstraintSet::new()
     }
 }
 impl CostFunction for Zero<Vec<f64>> {
@@ -114,9 +114,9 @@ crate::backend_macros::nalgebra_versions! {
     use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
 
-    impl crate::ProblemConstraints for Zero<DVector<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Zero<DVector<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Zero<DVector<f64>> {
         type Param = DVector<f64>;
@@ -150,9 +150,9 @@ crate::backend_macros::ndarray_versions! {
     use crate::{CostFunction, Gradient};
     use ndarray::Array1;
 
-    impl crate::ProblemConstraints for Zero<Array1<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Zero<Array1<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Zero<Array1<f64>> {
         type Param = Array1<f64>;
@@ -189,9 +189,9 @@ crate::backend_macros::faer_versions! {
     use crate::{CostFunction, Gradient};
     use faer::Col;
 
-    impl crate::ProblemConstraints for Zero<Col<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Zero<Col<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Zero<Col<f64>> {
         type Param = Col<f64>;

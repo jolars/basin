@@ -10,9 +10,9 @@ struct Quadratic<F> {
     scale: F,
 }
 
-impl<F: Scalar> basin::ProblemConstraints for Quadratic<F> {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(&self) -> basin::NoConstraints {
+impl<F: Scalar> basin::Constraints for Quadratic<F> {
+    type Set = basin::NoConstraints;
+    fn constraints(&self) -> basin::NoConstraints {
         basin::NoConstraints::EMPTY
     }
 }
@@ -38,7 +38,7 @@ impl<F: Scalar> Gradient for Quadratic<F> {
 
 type Equality<F> = basin::Constrained<
     Quadratic<F>,
-    basin::Constraints<
+    basin::ConstraintSet<
         basin::NoBounds,
         basin::LinearBlocks<
             basin::LinearBlock<DenseMatrix<F>, Vec<F>>,
@@ -48,7 +48,7 @@ type Equality<F> = basin::Constrained<
 >;
 type Inequality<F> = basin::Constrained<
     Quadratic<F>,
-    basin::Constraints<
+    basin::ConstraintSet<
         basin::NoBounds,
         basin::LinearBlocks<
             basin::NoLinearBlock,
@@ -60,14 +60,14 @@ fn with_eq<F: Scalar>(p: Quadratic<F>) -> Equality<F> {
     let block = basin::LinearBlock::new(p.a.clone(), p.b.clone());
     basin::Constrained::new(
         p,
-        basin::Constraints::new().with_linear_equalities(block),
+        basin::ConstraintSet::new().with_linear_equalities(block),
     )
 }
 fn with_ineq<F: Scalar>(p: Quadratic<F>) -> Inequality<F> {
     let block = basin::LinearBlock::new(p.a.clone(), p.b.clone());
     basin::Constrained::new(
         p,
-        basin::Constraints::new().with_linear_inequalities(block),
+        basin::ConstraintSet::new().with_linear_inequalities(block),
     )
 }
 fn equality<F: Scalar>() -> Equality<F> {
@@ -300,9 +300,9 @@ struct OuterProbe {
     gradient_value: f64,
 }
 
-impl basin::ProblemConstraints for OuterProbe {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(&self) -> basin::NoConstraints {
+impl basin::Constraints for OuterProbe {
+    type Set = basin::NoConstraints;
+    fn constraints(&self) -> basin::NoConstraints {
         basin::NoConstraints::EMPTY
     }
 }
@@ -311,7 +311,7 @@ fn probe_eq(
     p: OuterProbe,
 ) -> basin::Constrained<
     OuterProbe,
-    basin::Constraints<
+    basin::ConstraintSet<
         basin::NoBounds,
         basin::LinearBlocks<basin::LinearBlock<DenseMatrix, Vec<f64>>>,
     >,
@@ -319,7 +319,7 @@ fn probe_eq(
     let block = basin::LinearBlock::new(p.a.clone(), p.b.clone());
     basin::Constrained::new(
         p,
-        basin::Constraints::new().with_linear_equalities(block),
+        basin::ConstraintSet::new().with_linear_equalities(block),
     )
 }
 #[allow(clippy::type_complexity)]
@@ -327,7 +327,7 @@ fn probe_ineq(
     p: OuterProbe,
 ) -> basin::Constrained<
     OuterProbe,
-    basin::Constraints<
+    basin::ConstraintSet<
         basin::NoBounds,
         basin::LinearBlocks<
             basin::NoLinearBlock,
@@ -338,7 +338,7 @@ fn probe_ineq(
     let block = basin::LinearBlock::new(p.a.clone(), p.b.clone());
     basin::Constrained::new(
         p,
-        basin::Constraints::new().with_linear_inequalities(block),
+        basin::ConstraintSet::new().with_linear_inequalities(block),
     )
 }
 impl CostFunction for OuterProbe {

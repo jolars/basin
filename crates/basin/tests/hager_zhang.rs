@@ -10,12 +10,12 @@ struct ShiftedQuadratic {
     center: f64,
 }
 
-impl basin::ProblemConstraints for ShiftedQuadratic {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for ShiftedQuadratic {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for ShiftedQuadratic {
@@ -68,12 +68,12 @@ fn expands_before_bracketing_a_distant_minimum() {
 
 struct ShiftedQuartic;
 
-impl basin::ProblemConstraints for ShiftedQuartic {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for ShiftedQuartic {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for ShiftedQuartic {
@@ -118,12 +118,12 @@ fn expansion_and_secant_refinement_handle_a_nonlinear_profile() {
 
 struct CancellationProneQuadratic;
 
-impl basin::ProblemConstraints for CancellationProneQuadratic {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for CancellationProneQuadratic {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for CancellationProneQuadratic {
@@ -171,12 +171,12 @@ fn approximate_wolfe_accepts_when_armijo_decrease_rounds_away() {
 
 struct Linear;
 
-impl basin::ProblemConstraints for Linear {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Linear {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for Linear {
@@ -333,12 +333,12 @@ fn rejects_invalid_wolfe_parameters() {
 
 struct BoundedQuadratic;
 
-impl basin::ProblemConstraints for BoundedQuadratic {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for BoundedQuadratic {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for BoundedQuadratic {
@@ -385,12 +385,12 @@ struct BelowStepBound;
 
 struct StepBoundGuard;
 
-impl basin::ProblemConstraints for StepBoundGuard {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for StepBoundGuard {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for StepBoundGuard {
@@ -441,12 +441,12 @@ enum ProbeError {
 
 struct Bailing;
 
-impl basin::ProblemConstraints for Bailing {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Bailing {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for Bailing {
@@ -523,12 +523,12 @@ fn ackley_cost_and_gradient(x: &[f64]) -> (f64, Vec<f64>) {
     (cost, gradient)
 }
 
-impl basin::ProblemConstraints for DifferentiableAckley {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for DifferentiableAckley {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for DifferentiableAckley {

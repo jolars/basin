@@ -36,12 +36,12 @@ struct BailingSphere {
     calls: Cell<u32>,
 }
 
-impl basin::ProblemConstraints for BailingSphere {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for BailingSphere {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for BailingSphere {
@@ -121,13 +121,12 @@ fn cost_err_at_init_bubbles_out_of_executor_run() {
 fn soft_reject_via_infinity_does_not_abort() {
     struct InfiniteBeyondUnit;
 
-    impl basin::ProblemConstraints for InfiniteBeyondUnit {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for InfiniteBeyondUnit {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for InfiniteBeyondUnit {

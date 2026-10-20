@@ -43,14 +43,14 @@ impl<'a, V, F> Sphere<'a, V, F> {
     }
 }
 
-impl<V: NormSquared<F> + Clone, F: Scalar> basin::ProblemConstraints
+impl<V: NormSquared<F> + Clone, F: Scalar> basin::Constraints
     for Sphere<'_, V, F>
 {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl<V: NormSquared<F> + Clone, F: Scalar> CostFunction for Sphere<'_, V, F> {

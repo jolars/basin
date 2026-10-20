@@ -104,10 +104,6 @@ pub struct Constrained;
 ///
 /// // A nonsmooth objective (an L1 "valley") with minimizer (1, 2).
 /// struct AbsValley;
-/// impl basin::ProblemConstraints for AbsValley  {
-///     type Constraints = basin::NoConstraints;
-///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
-/// }
 /// impl CostFunction for AbsValley {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -137,7 +133,7 @@ pub struct Constrained;
 ///   poll size (default `1e-6`). The run converges once `Δᵖ` reaches it; must be
 ///   `> 0` and `< Δ₀`.
 ///
-/// # Constraints
+/// # ConstraintSet
 ///
 /// Two opt-in constrained modes specialize the default unconstrained solver:
 ///
@@ -397,7 +393,6 @@ where
         + VectorLen
         + std::ops::Index<usize, Output = F>
         + std::ops::IndexMut<usize, Output = F>,
-    P: crate::ProblemConstraints<Constraints = crate::NoConstraints>,
 {
     type Error = P::Error;
 
@@ -511,10 +506,9 @@ where
 impl<P, V, F> Solver<P, SelectedState<V, F>> for Mads<Constrained, F>
 where
     F: Scalar,
-    P: CostFunction<
-            Param = V,
-            Output = F,
-            Constraints = crate::Constraints<
+    P: CostFunction<Param = V, Output = F>
+        + crate::Constraints<
+            Set = crate::ConstraintSet<
                 crate::NoBounds,
                 crate::NoLinearConstraints,
                 crate::NonlinearBlocks<
@@ -543,7 +537,7 @@ where
         let n = state.param().vec_len();
         assert!(n >= 1, "Mads requires a non-empty start point");
 
-        let m = crate::ProblemConstraints::constraint_set(problem.inner())
+        let m = crate::Constraints::constraints(problem.inner())
             .nonlinear()
             .inequalities()
             .count();
@@ -797,10 +791,9 @@ fn checked_inequalities<P, V, F>(
     m: usize,
 ) -> Result<Vec<F>, ConstraintSolveError<<P as CostFunction>::Error>>
 where
-    P: CostFunction<
-            Param = V,
-            Output = F,
-            Constraints = crate::Constraints<
+    P: CostFunction<Param = V, Output = F>
+        + crate::Constraints<
+            Set = crate::ConstraintSet<
                 crate::NoBounds,
                 crate::NoLinearConstraints,
                 crate::NonlinearBlocks<
@@ -813,7 +806,7 @@ where
         VectorLen + std::ops::Index<usize, Output = F>,
     F: Scalar,
 {
-    if crate::ProblemConstraints::constraint_set(p.inner())
+    if crate::Constraints::constraints(p.inner())
         .nonlinear()
         .inequalities()
         .count()

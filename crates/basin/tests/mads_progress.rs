@@ -17,27 +17,31 @@ impl Bowl {
     }
 }
 
-impl basin::ProblemConstraints for Bowl {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(&self) -> basin::NoConstraints {
+impl basin::Constraints for Bowl {
+    type Set = basin::NoConstraints;
+    fn constraints(&self) -> basin::NoConstraints {
         basin::NoConstraints::EMPTY
     }
 }
 fn bounded(
     n: usize,
-) -> basin::Constrained<Bowl, basin::Constraints<basin::BoxBounds<Vec<f64>>>> {
+) -> basin::Constrained<Bowl, basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>>
+{
     let bowl = Bowl::new(n);
     let bounds = basin::BoxBounds::new(
         Some(bowl.lower.clone()),
         Some(bowl.upper.clone()),
     );
-    basin::Constrained::new(bowl, basin::Constraints::new().with_bounds(bounds))
+    basin::Constrained::new(
+        bowl,
+        basin::ConstraintSet::new().with_bounds(bounds),
+    )
 }
 fn constrained(
     n: usize,
 ) -> basin::Constrained<
     Bowl,
-    basin::Constraints<
+    basin::ConstraintSet<
         basin::NoBounds,
         basin::NoLinearConstraints,
         basin::NonlinearBlocks<basin::NoNonlinearBlock, basin::NonlinearBlock>,
@@ -45,7 +49,7 @@ fn constrained(
 > {
     basin::Constrained::new(
         Bowl::new(n),
-        basin::Constraints::new().with_nonlinear_inequalities(1),
+        basin::ConstraintSet::new().with_nonlinear_inequalities(1),
     )
 }
 impl CostFunction for Bowl {

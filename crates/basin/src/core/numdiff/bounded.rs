@@ -49,10 +49,6 @@ use crate::core::problem::{CostFunction, Gradient, Jacobian, Residual};
 /// ```
 /// use basin::{BoundedFiniteDiff, CostFunction, Gradient};
 /// struct Square;
-/// impl basin::ProblemConstraints for Square  {
-///     type Constraints = basin::NoConstraints;
-///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
-/// }
 /// impl CostFunction for Square {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -417,29 +413,30 @@ pub(super) fn constraint_values<P, V, F>(
 ) -> Result<Vec<F>, crate::ConstraintSolveError<P::Error>>
 where
     P: CostFunction<Param = V, Output = F>,
-    P::Constraints: crate::core::constraint::evaluation::NonlinearSet<P, V, F>,
+    P: crate::Constraints,
+    P::Set: crate::core::constraint::evaluation::NonlinearSet<P, V, F>,
     F: Scalar,
 {
     use crate::core::constraint::evaluation::{NonlinearSet, invalid};
-    if P::Constraints::counts(p.constraint_set()) != expected {
+    if P::Set::counts(p.constraints()) != expected {
         return Err(invalid(crate::ConstraintError::LayoutChanged));
     }
     let mut counts = crate::EvalCounts::default();
-    let (mut eq, ineq) = P::Constraints::values(p, x, &mut counts)?;
+    let (mut eq, ineq) = P::Set::values(p, x, &mut counts)?;
     eq.extend(ineq);
     Ok(eq)
 }
 
-impl<P, F> crate::ProblemConstraints for BoundedFiniteDiff<P, F>
+impl<P, F> crate::Constraints for BoundedFiniteDiff<P, F>
 where
-    P: crate::ProblemConstraints,
+    P: crate::Constraints,
     F: crate::Scalar,
 {
-    type Constraints = P::Constraints;
-    fn constraint_set(
+    type Set = P::Set;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
-        self.problem.constraint_set()
+    ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+        self.problem.constraints()
     }
 }
 
@@ -478,7 +475,8 @@ where
 impl<P, V, F> crate::ConstraintJacobian for BoundedFiniteDiff<P, F>
 where
     P: CostFunction<Param = V, Output = F> + MaybeSync,
-    P::Constraints: crate::core::constraint::evaluation::NonlinearSet<P, V, F>,
+    P: crate::Constraints,
+    P::Set: crate::core::constraint::evaluation::NonlinearSet<P, V, F>,
     V: Clone + VectorLen + VectorIndex<F> + DenseMatrixFromFn<F> + MaybeSync,
     P::Error: MaybeSend,
     F: Scalar + MaybeSend + MaybeSync,
@@ -491,7 +489,7 @@ where
         x: &V,
     ) -> Result<Self::Jacobian, crate::ConstraintSolveError<P::Error>> {
         use crate::core::constraint::evaluation::NonlinearSet;
-        let expected = P::Constraints::counts(self.problem.constraint_set());
+        let expected = P::Set::counts(self.problem.constraints());
         let m = expected.0.checked_add(expected.1).ok_or(
             crate::ConstraintSolveError::InvalidConstraints(
                 crate::ConstraintError::CountOverflow,

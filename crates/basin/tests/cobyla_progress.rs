@@ -7,16 +7,16 @@ use std::convert::Infallible;
 
 struct LowerBound;
 
-impl basin::ProblemConstraints for LowerBound {
-    type Constraints = basin::Constraints<
+impl basin::Constraints for LowerBound {
+    type Set = basin::ConstraintSet<
         basin::NoBounds,
         basin::NoLinearConstraints,
         basin::NonlinearBlocks<basin::NoNonlinearBlock, basin::NonlinearBlock>,
     >;
-    fn constraint_set(
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_nonlinear_inequalities(1)
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_nonlinear_inequalities(1)
     }
 }
 impl CostFunction for LowerBound {
@@ -226,16 +226,16 @@ struct FullForm {
     failure: Option<CallbackError>,
 }
 
-impl basin::ProblemConstraints for FullForm {
-    type Constraints = basin::Constraints<
+impl basin::Constraints for FullForm {
+    type Set = basin::ConstraintSet<
         basin::NoBounds,
         basin::NoLinearConstraints,
         basin::NonlinearBlocks<basin::NonlinearBlock, basin::NonlinearBlock>,
     >;
-    fn constraint_set(
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
             .with_nonlinear_equalities(1)
             .with_nonlinear_inequalities(1)
     }
@@ -333,8 +333,8 @@ fn folded_callbacks_count_each_block_including_failure_attempts() {
 fn published_records_keep_the_drivers_nonfinite_moderation() {
     struct Nonfinite(f64);
 
-    impl basin::ProblemConstraints for Nonfinite {
-        type Constraints = basin::Constraints<
+    impl basin::Constraints for Nonfinite {
+        type Set = basin::ConstraintSet<
             basin::NoBounds,
             basin::NoLinearConstraints,
             basin::NonlinearBlocks<
@@ -342,11 +342,10 @@ fn published_records_keep_the_drivers_nonfinite_moderation() {
                 basin::NonlinearBlock,
             >,
         >;
-        fn constraint_set(
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new().with_nonlinear_inequalities(1)
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new().with_nonlinear_inequalities(1)
         }
     }
     impl CostFunction for Nonfinite {

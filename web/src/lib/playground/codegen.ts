@@ -58,15 +58,7 @@ export const DEFAULT_CONFIG: PlaygroundConfig = {
     start: [-1.2, 1.0],
 };
 
-const COST_IMPL = `impl basin::ProblemConstraints for Rosenbrock {
-    type Constraints = basin::NoConstraints;
-
-    fn constraint_set(&self) -> basin::NoConstraints {
-        basin::NoConstraints::EMPTY
-    }
-}
-
-impl CostFunction for Rosenbrock {
+const COST_IMPL = `impl CostFunction for Rosenbrock {
     type Param = Vec<f64>;
     type Output = f64;
     type Error = std::convert::Infallible;

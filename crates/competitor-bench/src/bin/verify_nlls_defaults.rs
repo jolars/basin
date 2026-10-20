@@ -4,9 +4,9 @@
 //! observed cost and step formulas; neither policy reproduces SciPy trajectories.
 
 use basin::{
-    BoundedLevenbergMarquardt, BoxBounds, Constrained, Constraints,
-    EvaluationKind, Executor, Jacobian, LevenbergMarquardt, LmDamping,
-    NoConstraints, PointState, ProblemConstraints, Residual, Solver,
+    BoundedLevenbergMarquardt, BoxBounds, Constrained, ConstraintSet,
+    Constraints, EvaluationKind, Executor, Jacobian, LevenbergMarquardt,
+    LmDamping, NoConstraints, PointState, Residual, Solver,
     TrustRegionReflective,
 };
 use competitor_bench::nist::{Nist, datasets};
@@ -27,7 +27,7 @@ trait Fixture:
     Clone
     + Residual<Param = Vector, Output = Vector, Error = String>
     + Jacobian<Jacobian = Matrix>
-    + ProblemConstraints<Constraints = NoConstraints>
+    + Constraints<Set = NoConstraints>
 {
     fn id(&self) -> &str;
     fn starts(&self) -> Vec<Vec<f64>>;
@@ -241,7 +241,7 @@ fn compare<P: Fixture>(fixture: P) {
             let boxed = || {
                 Constrained::new(
                     fixture.clone(),
-                    Constraints::new().with_bounds(BoxBounds::new(
+                    ConstraintSet::new().with_bounds(BoxBounds::new(
                         Some(Vector::from_element(x.len(), f64::NEG_INFINITY)),
                         Some(Vector::from_element(x.len(), f64::INFINITY)),
                     )),

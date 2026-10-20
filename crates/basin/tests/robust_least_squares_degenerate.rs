@@ -25,12 +25,12 @@ impl Fit {
     }
 }
 
-impl basin::ProblemConstraints for Fit {
-    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-    fn constraint_set(
+impl basin::Constraints for Fit {
+    type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))
@@ -170,12 +170,12 @@ fn damping_and_dense_svd_handle_a_rank_deficient_robust_model() {
 
 struct IdentityResidual<F>(std::marker::PhantomData<F>);
 
-impl<F: Scalar> basin::ProblemConstraints for IdentityResidual<F> {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl<F: Scalar> basin::Constraints for IdentityResidual<F> {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl<F: Scalar> Residual for IdentityResidual<F> {

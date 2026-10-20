@@ -17,12 +17,12 @@ impl BoundedRosenbrock {
     }
 }
 
-impl basin::ProblemConstraints for BoundedRosenbrock {
-    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-    fn constraint_set(
+impl basin::Constraints for BoundedRosenbrock {
+    type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))
@@ -44,12 +44,12 @@ struct FlatBox {
     upper: Vec<f64>,
 }
 
-impl basin::ProblemConstraints for FlatBox {
-    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-    fn constraint_set(
+impl basin::Constraints for FlatBox {
+    type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))
@@ -93,13 +93,12 @@ fn upper_bound_start_explores_the_feasible_inward_direction() {
     #[derive(Clone)]
     struct Sphere(FlatBox);
 
-    impl basin::ProblemConstraints for Sphere {
-        type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-        fn constraint_set(
+    impl basin::Constraints for Sphere {
+        type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
                 Some(&self.0.lower),
                 Some(&self.0.upper),
             ))
@@ -157,13 +156,12 @@ fn f32_extreme_box_starts_with_a_working_local_simplex() {
         upper: Vec<f32>,
     }
 
-    impl basin::ProblemConstraints for ScaledSphere {
-        type Constraints = basin::Constraints<basin::BoxBounds<Vec<f32>>>;
-        fn constraint_set(
+    impl basin::Constraints for ScaledSphere {
+        type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f32>>>;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
                 Some(&self.lower),
                 Some(&self.upper),
             ))
@@ -212,13 +210,12 @@ fn f32_extreme_box_supports_probabilistic_restarts() {
         upper: Vec<f32>,
     }
 
-    impl basin::ProblemConstraints for FlatF32Box {
-        type Constraints = basin::Constraints<basin::BoxBounds<Vec<f32>>>;
-        fn constraint_set(
+    impl basin::Constraints for FlatF32Box {
+        type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f32>>>;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
                 Some(&self.lower),
                 Some(&self.upper),
             ))
@@ -382,13 +379,12 @@ fn zero_restart_candidates_are_rejected() {
 fn nan_costs_sort_after_finite_vertices() {
     struct NanAtOrigin(FlatBox);
 
-    impl basin::ProblemConstraints for NanAtOrigin {
-        type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-        fn constraint_set(
+    impl basin::Constraints for NanAtOrigin {
+        type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
                 Some(&self.0.lower),
                 Some(&self.0.upper),
             ))
@@ -428,13 +424,12 @@ fn nan_costs_sort_after_finite_vertices() {
 fn probabilistic_restarts_escape_the_initial_rastrigin_basin() {
     struct Rastrigin(FlatBox);
 
-    impl basin::ProblemConstraints for Rastrigin {
-        type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-        fn constraint_set(
+    impl basin::Constraints for Rastrigin {
+        type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
                 Some(&self.0.lower),
                 Some(&self.0.upper),
             ))

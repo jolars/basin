@@ -2,18 +2,20 @@
 
 ## Supported release lines
 
-Basin develops 2.x on `main` and maintains the latest 1.x release on `v1`, which
-starts from v1.15.1. The 1.x line receives correctness, regression, and security
-fixes through at least April 19, 2027, and for at least six months after the
-first stable 2.0.0 release, whichever is later. We will announce the end of
+Basin prepares 3.0 on `main` and maintains the latest 1.x release on `v1`,
+which starts from v1.15.1. The optional constraint API on `main` is a breaking
+change and must ship as 3.0.0. Keep published 2.x versions available; do not
+yank or replace them for this redesign. The 1.x line receives correctness,
+regression, and security fixes through at least April 19, 2027, and for at least
+six months after the first stable 2.0.0 release, whichever is later. We will announce the end of
 support in the release notes.
 
 Only the latest 1.x patch release is maintained; earlier minor releases do not
 have separate maintenance branches. Applications can use `basin = "1"` and
 update their lockfiles to receive fixes. The `v1` branch preserves its public
 API, convergence defaults, backend feature meanings, Rust 1.87-compatible
-feature set, and default WASM build. New features and breaking changes target
-2.x.
+feature set, and default WASM build. New features and breaking changes land on
+`main`. Do not backport the 3.0 constraint API to 2.x or 1.x.
 
 The published [1.x API reference](https://docs.rs/basin/1/basin/) remains
 available when the main documentation moves to 2.x. Report the Basin version,
@@ -45,7 +47,7 @@ branch's `versionary.jsonc` names the generated release PR branch:
 
   | Base branch | Generated release PR branch | Purpose                           |
   | ----------- | --------------------------- | --------------------------------- |
-  | `main`      | `versionary/release`        | Prepare the next 2.x release.     |
+  | `main`      | `versionary/release`        | Prepare the next 3.x release.     |
   | `v1`        | `versionary/release-v1`     | Release compatible fixes for 1.x. |
 
 The commit starting 2.0 development carries `Release-As: 2.0.0`, so Versionary

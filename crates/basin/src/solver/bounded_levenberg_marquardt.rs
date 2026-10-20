@@ -165,7 +165,7 @@ use super::least_squares_diagnostics::{
 /// For an ordinary residual problem, as with
 /// [`LevenbergMarquardt`](super::LevenbergMarquardt),
 /// `state.cost` carries the LM convention `½‖r‖²`. The bound on `P`
-/// requires a box-only [`ProblemConstraints`](crate::ProblemConstraints)
+/// requires a box-only [`Constraints`](crate::Constraints)
 /// declaration independent of `CostFunction`. The solver computes `½‖r‖²`
 /// from the residual and never calls `cost()`. Problems whose user-facing
 /// `cost()` uses an
@@ -383,9 +383,7 @@ impl<P, L, V, M, F> Solver<RobustLeastSquares<P, L, F>, PointState<V, F>>
     for BoundedLevenbergMarquardt<V, M, F>
 where
     F: Scalar,
-    P: crate::ProblemConstraints<
-            Constraints = crate::Constraints<crate::BoxBounds<V>>,
-        >,
+    P: crate::Constraints<Set = crate::ConstraintSet<crate::BoxBounds<V>>>,
     P: Residual<Param = V, Output = V>
         + Jacobian<Jacobian = M>
         + BoxProblem<Param = V>,

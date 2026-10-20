@@ -94,8 +94,8 @@ fn public_quadratic_iterations_reuse_trial_buffers() {
     }
     struct Quadratic(Rc<Counts>);
 
-    impl basin::ProblemConstraints for Quadratic {
-        type Constraints = basin::Constraints<
+    impl basin::Constraints for Quadratic {
+        type Set = basin::ConstraintSet<
             basin::NoBounds,
             basin::NoLinearConstraints,
             basin::NonlinearBlocks<
@@ -103,11 +103,10 @@ fn public_quadratic_iterations_reuse_trial_buffers() {
                 basin::NonlinearBlock,
             >,
         >;
-        fn constraint_set(
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new().with_nonlinear_inequalities(5)
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new().with_nonlinear_inequalities(5)
         }
     }
     impl CostFunction for Quadratic {

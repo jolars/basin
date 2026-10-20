@@ -14,9 +14,9 @@ use crate::core::termination::Termination;
 
 /// A sampling domain used by algorithms whose local search can leave the box.
 ///
-/// Sampling bounds do not declare mathematical constraints. MA-LS accepts only
-/// an unconstrained problem with this capability.
-pub trait SamplingBounds: CostFunction<Constraints = NoConstraints> {
+/// Sampling bounds do not declare mathematical constraints. Algorithms using
+/// this capability may explore and accept points outside the sampling box.
+pub trait SamplingBounds: CostFunction {
     /// Borrow both sampling endpoints, reporting missing data explicitly.
     fn sampling_bounds(
         &self,
@@ -54,9 +54,9 @@ impl<P> SamplingDomain<P> {
         self.problem
     }
 }
-impl<P> ProblemConstraints for SamplingDomain<P> {
-    type Constraints = NoConstraints;
-    fn constraint_set(&self) -> NoConstraints {
+impl<P> Constraints for SamplingDomain<P> {
+    type Set = NoConstraints;
+    fn constraints(&self) -> NoConstraints {
         NoConstraints::EMPTY
     }
 }
@@ -108,9 +108,9 @@ impl<I> RelaxedInner<I> {
 pub(crate) struct RelaxedProblem<'a, P> {
     pub(crate) problem: &'a P,
 }
-impl<P> ProblemConstraints for RelaxedProblem<'_, P> {
-    type Constraints = NoConstraints;
-    fn constraint_set(&self) -> NoConstraints {
+impl<P> Constraints for RelaxedProblem<'_, P> {
+    type Set = NoConstraints;
+    fn constraints(&self) -> NoConstraints {
         NoConstraints::EMPTY
     }
 }
@@ -185,7 +185,8 @@ where
 impl<P, S, I> Solver<P, S> for RelaxedInner<I>
 where
     P: CostFunction,
-    P::Constraints: BoxOnly<P::Param>,
+    P: crate::Constraints,
+    P::Set: BoxOnly<P::Param>,
     S: State,
     I: for<'a> Solver<RelaxedProblem<'a, P>, S, Error = P::Error>,
 {
@@ -278,11 +279,12 @@ where
     Ok(())
 }
 
-/// Attach a canonical constraint set to an unconstrained objective or residual problem.
+/// Attach a canonical constraint set to an objective or residual problem.
 ///
 /// Evaluation capabilities are forwarded without copying the problem data. The
-/// wrapped problem must declare [`NoConstraints`], so this operation cannot
-/// silently discard an existing constraint block.
+/// supplied set is the complete declaration of the wrapped problem, replacing
+/// any declaration on the inner problem. To combine constraint blocks, build
+/// them in the same [`ConstraintSet`] value before wrapping the problem.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Constrained<P, C> {
@@ -291,7 +293,6 @@ pub struct Constrained<P, C> {
 }
 impl<P, C> Constrained<P, C>
 where
-    P: ProblemConstraints<Constraints = NoConstraints>,
     C: ConstraintDescription,
 {
     /// Own the objective and its complete constraint declaration.
@@ -310,15 +311,15 @@ where
         (self.problem, self.constraints)
     }
 }
-impl<P, C: ConstraintDescription> ProblemConstraints for Constrained<P, C> {
-    type Constraints = C;
-    fn constraint_set(&self) -> C::Borrowed<'_> {
+impl<P, C: ConstraintDescription> Constraints for Constrained<P, C> {
+    type Set = C;
+    fn constraints(&self) -> C::Borrowed<'_> {
         self.constraints.borrowed()
     }
 }
 impl<P, C> CostFunction for Constrained<P, C>
 where
-    P: CostFunction<Constraints = NoConstraints>,
+    P: CostFunction,
     C: ConstraintDescription,
 {
     type Param = P::Param;
@@ -330,7 +331,7 @@ where
 }
 impl<P, C> Residual for Constrained<P, C>
 where
-    P: Residual<Constraints = NoConstraints>,
+    P: Residual,
     C: ConstraintDescription,
 {
     type Param = P::Param;
@@ -342,7 +343,7 @@ where
 }
 impl<P, C> Jacobian for Constrained<P, C>
 where
-    P: Jacobian<Constraints = NoConstraints>,
+    P: Jacobian,
     C: ConstraintDescription,
 {
     type Jacobian = P::Jacobian;
@@ -360,7 +361,7 @@ macro_rules! constrained_values {
     ($cap:ident,$method:ident,$value:ident) => {
         impl<P, C> $cap for Constrained<P, C>
         where
-            P: $cap<Constraints = NoConstraints>,
+            P: $cap,
             C: ConstraintDescription,
         {
             type Param = P::Param;
@@ -381,7 +382,7 @@ constrained_values!(ConstraintJacobian, constraint_jacobian, Jacobian);
 
 impl<P, C> MiniBatchGradient for Constrained<P, C>
 where
-    P: MiniBatchGradient<Constraints = NoConstraints>,
+    P: MiniBatchGradient,
     C: ConstraintDescription,
 {
     type Gradient = P::Gradient;
@@ -399,7 +400,7 @@ where
 
 impl<P, C> Gradient for Constrained<P, C>
 where
-    P: Gradient<Constraints = NoConstraints>,
+    P: Gradient,
     C: ConstraintDescription,
 {
     type Gradient = P::Gradient;
@@ -415,7 +416,7 @@ where
 }
 impl<P, C> Hessian for Constrained<P, C>
 where
-    P: Hessian<Constraints = NoConstraints>,
+    P: Hessian,
     C: ConstraintDescription,
 {
     type Hessian = P::Hessian;
@@ -432,7 +433,7 @@ where
 }
 impl<P, C> HessianProduct for Constrained<P, C>
 where
-    P: HessianProduct<Constraints = NoConstraints>,
+    P: HessianProduct,
     C: ConstraintDescription,
 {
     fn hessian_product(

@@ -20,12 +20,12 @@ macro_rules! stopping_checks {
             }
 
 
-            impl basin::ProblemConstraints for Affine {
-                type Constraints = basin::NoConstraints;
-                fn constraint_set(
+            impl basin::Constraints for Affine {
+                type Set = basin::NoConstraints;
+                fn constraints(
                     &self,
-                ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-                    basin::Constraints::new()
+                ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+                    basin::ConstraintSet::new()
                 }
             }
 impl Residual for Affine {
@@ -95,12 +95,12 @@ impl Residual for Affine {
             fn progress_guard_rejects_an_invalid_retained_gradient() {
                 struct InvalidJacobian;
 
-                impl basin::ProblemConstraints for InvalidJacobian {
-                    type Constraints = basin::NoConstraints;
-                    fn constraint_set(
+                impl basin::Constraints for InvalidJacobian {
+                    type Set = basin::NoConstraints;
+                    fn constraints(
                         &self,
-                    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-                        basin::Constraints::new()
+                    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+                        basin::ConstraintSet::new()
                     }
                 }
 impl Residual for InvalidJacobian {
@@ -237,12 +237,12 @@ impl Residual for InvalidJacobian {
             fn trust_radius_uses_shrunk_radius_and_base_after_rejection() {
                 struct Quadratic;
 
-                impl basin::ProblemConstraints for Quadratic {
-                    type Constraints = basin::NoConstraints;
-                    fn constraint_set(
+                impl basin::Constraints for Quadratic {
+                    type Set = basin::NoConstraints;
+                    fn constraints(
                         &self,
-                    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-                        basin::Constraints::new()
+                    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+                        basin::ConstraintSet::new()
                     }
                 }
 impl Residual for Quadratic {
@@ -291,12 +291,12 @@ impl Residual for Quadratic {
             fn trust_radius_uses_current_monotone_scaling() {
                 struct Quadratic;
 
-                impl basin::ProblemConstraints for Quadratic {
-                    type Constraints = basin::NoConstraints;
-                    fn constraint_set(
+                impl basin::Constraints for Quadratic {
+                    type Set = basin::NoConstraints;
+                    fn constraints(
                         &self,
-                    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-                        basin::Constraints::new()
+                    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+                        basin::ConstraintSet::new()
                     }
                 }
 impl Residual for Quadratic {
@@ -598,12 +598,12 @@ impl Residual for Quadratic {
             struct Quadratic;
 
 
-            impl basin::ProblemConstraints for Quadratic {
-                type Constraints = basin::NoConstraints;
-                fn constraint_set(
+            impl basin::Constraints for Quadratic {
+                type Set = basin::NoConstraints;
+                fn constraints(
                     &self,
-                ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-                    basin::Constraints::new()
+                ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+                    basin::ConstraintSet::new()
                 }
             }
 impl Residual for Quadratic {

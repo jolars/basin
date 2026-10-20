@@ -13,12 +13,12 @@ pub struct Location<V, M, F> {
     pub upper: V,
 }
 
-impl<V, M, F: Scalar> basin::ProblemConstraints for Location<V, M, F> {
-    type Constraints = basin::Constraints<basin::BoxBounds<V>>;
-    fn constraint_set(
+impl<V, M, F: Scalar> basin::Constraints for Location<V, M, F> {
+    type Set = basin::ConstraintSet<basin::BoxBounds<V>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))
@@ -56,14 +56,14 @@ pub struct CauchyLocation<V, M, F> {
     jacobian: M,
 }
 
-impl<V: VectorIndex<F>, M, F: Scalar> basin::ProblemConstraints
+impl<V: VectorIndex<F>, M, F: Scalar> basin::Constraints
     for CauchyLocation<V, M, F>
 {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl<V: VectorIndex<F>, M, F: Scalar> Residual for CauchyLocation<V, M, F> {

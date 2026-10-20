@@ -135,12 +135,12 @@ impl<P> HasSpec for Levy<P> {
     const SPEC: &'static ProblemSpec = &LEVY_SPEC;
 }
 
-impl crate::ProblemConstraints for Levy<Vec<f64>> {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(
+impl crate::Constraints for Levy<Vec<f64>> {
+    type Set = crate::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
-        crate::Constraints::new()
+    ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::ConstraintSet::new()
     }
 }
 impl CostFunction for Levy<Vec<f64>> {
@@ -171,9 +171,9 @@ crate::backend_macros::nalgebra_versions! {
     use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
 
-    impl crate::ProblemConstraints for Levy<DVector<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Levy<DVector<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Levy<DVector<f64>> {
         type Param = DVector<f64>;
@@ -207,9 +207,9 @@ crate::backend_macros::ndarray_versions! {
     use crate::{CostFunction, Gradient};
     use ndarray::Array1;
 
-    impl crate::ProblemConstraints for Levy<Array1<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Levy<Array1<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Levy<Array1<f64>> {
         type Param = Array1<f64>;
@@ -249,9 +249,9 @@ crate::backend_macros::faer_versions! {
     // The Levy math is index-coupled (first/middle/last terms differ), so we
     // collect into a `Vec` and route through the slice primitives rather than
     // duplicating the recurrence elementwise.
-    impl crate::ProblemConstraints for Levy<Col<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Levy<Col<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Levy<Col<f64>> {
         type Param = Col<f64>;
@@ -313,12 +313,12 @@ impl LevyBoxed<Vec<f64>> {
     }
 }
 
-impl crate::ProblemConstraints for LevyBoxed<Vec<f64>> {
-    type Constraints = crate::Constraints<crate::BoxBounds<Vec<f64>>>;
-    fn constraint_set(
+impl crate::Constraints for LevyBoxed<Vec<f64>> {
+    type Set = crate::ConstraintSet<crate::BoxBounds<Vec<f64>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
-        crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+    ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))
@@ -375,9 +375,9 @@ crate::backend_macros::nalgebra_versions! {
         }
     }
 
-    impl crate::ProblemConstraints for LevyBoxed<DVector<f64>>  {
-    type Constraints = crate::Constraints<crate::BoxBounds<DVector<f64>>>;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+    impl crate::Constraints for LevyBoxed<DVector<f64>>  {
+    type Set = crate::ConstraintSet<crate::BoxBounds<DVector<f64>>>;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 }
 impl CostFunction for LevyBoxed<DVector<f64>> {
         type Param = DVector<f64>;
@@ -434,9 +434,9 @@ crate::backend_macros::ndarray_versions! {
         }
     }
 
-    impl crate::ProblemConstraints for LevyBoxed<Array1<f64>>  {
-    type Constraints = crate::Constraints<crate::BoxBounds<Array1<f64>>>;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+    impl crate::Constraints for LevyBoxed<Array1<f64>>  {
+    type Set = crate::ConstraintSet<crate::BoxBounds<Array1<f64>>>;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 }
 impl CostFunction for LevyBoxed<Array1<f64>> {
         type Param = Array1<f64>;
@@ -496,9 +496,9 @@ crate::backend_macros::faer_versions! {
         }
     }
 
-    impl crate::ProblemConstraints for LevyBoxed<Col<f64>>  {
-    type Constraints = crate::Constraints<crate::BoxBounds<Col<f64>>>;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+    impl crate::Constraints for LevyBoxed<Col<f64>>  {
+    type Set = crate::ConstraintSet<crate::BoxBounds<Col<f64>>>;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 }
 impl CostFunction for LevyBoxed<Col<f64>> {
         type Param = Col<f64>;

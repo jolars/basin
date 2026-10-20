@@ -7,7 +7,7 @@
 use std::ops::{Index, IndexMut};
 
 use basin::{
-    BoxBounds, ConstraintAxis, ConstraintBlock, ConstraintError,
+    BoxBounds, ConstraintAxis, ConstraintBlock, ConstraintError, ConstraintSet,
     ConstraintSolveError, Constraints, CostFunction, CountsMirror, De,
     EvalCounts, EvaluatedState, IncumbentRef, IncumbentState, InnerExecutor,
     MemeticInner, NoLinearConstraints, NoNonlinearBlock, NonlinearBlock,
@@ -267,14 +267,15 @@ impl<V: Clone, F: Scalar> SelectedPopulationState
     }
 }
 
-pub type PrototypeConstraints<V> = Constraints<
+pub type PrototypeConstraints<V> = ConstraintSet<
     BoxBounds<V>,
     NoLinearConstraints,
     NonlinearBlocks<NoNonlinearBlock, NonlinearBlock>,
 >;
 
 pub trait PrototypeProblem<V, F: Scalar>:
-    CostFunction<Param = V, Output = F, Constraints = PrototypeConstraints<V>>
+    CostFunction<Param = V, Output = F>
+    + Constraints<Set = PrototypeConstraints<V>>
     + NonlinearInequalityValues<
         Param = V,
         Values = Vec<F>,
@@ -283,11 +284,9 @@ pub trait PrototypeProblem<V, F: Scalar>:
 {
 }
 impl<P, V, F: Scalar> PrototypeProblem<V, F> for P where
-    P: CostFunction<
-            Param = V,
-            Output = F,
-            Constraints = PrototypeConstraints<V>,
-        > + NonlinearInequalityValues<
+    P: CostFunction<Param = V, Output = F>
+        + Constraints<Set = PrototypeConstraints<V>>
+        + NonlinearInequalityValues<
             Param = V,
             Values = Vec<F>,
             Error = <Self as CostFunction>::Error,
@@ -324,7 +323,7 @@ where
     V: VectorLen + Clone + Index<usize, Output = F>,
     F: Scalar,
 {
-    let set = p.constraint_set();
+    let set = p.constraints();
     let lo = set.bounds().lower().copied().ok_or_else(|| {
         invalid(ConstraintError::MissingBound {
             side: basin::BoundSide::Lower,
@@ -353,7 +352,7 @@ where
     Ok((lo.clone(), hi.clone()))
 }
 
-/// Constraints use the current callback-request accounting contract.
+/// ConstraintSet use the current callback-request accounting contract.
 pub fn evaluate<P, V, F>(
     problem: &mut Problem<P>,
     param: V,
@@ -370,7 +369,7 @@ where
     dimension(ConstraintBlock::Bounds, layout.0, param.vec_len())?;
     if problem
         .inner()
-        .constraint_set()
+        .constraints()
         .nonlinear()
         .inequalities()
         .count()
@@ -533,7 +532,7 @@ where
             n,
             problem
                 .inner()
-                .constraint_set()
+                .constraints()
                 .nonlinear()
                 .inequalities()
                 .count(),

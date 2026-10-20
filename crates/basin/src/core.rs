@@ -16,9 +16,9 @@
 //!   [`Gradient`](problem::Gradient)/[`Jacobian`](problem::Jacobian)/
 //!   [`Hessian`](problem::Hessian) to a problem that only exposes
 //!   function values.
-//! - [`constraint`]: the canonical [`ProblemConstraints`](crate::ProblemConstraints)
-//!   declaration shared by objective and residual problems. Its typed
-//!   [`Constraints`](crate::Constraints) set determines solver compatibility.
+//! - [`constraint`]: optional [`Constraints`](crate::Constraints) declarations
+//!   for objective and residual problems. A typed
+//!   [`ConstraintSet`](crate::ConstraintSet) determines compatibility with constrained solvers.
 //!   Separate capabilities evaluate nonlinear values and Jacobians. COBYLA and
 //!   SLSQP consume the complete set directly; absent blocks require no unused
 //!   matrix type or callback.

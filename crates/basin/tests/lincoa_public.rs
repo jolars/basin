@@ -21,18 +21,18 @@ struct ConstrainedQuadratic {
     b: Vec<f64>,
 }
 
-impl basin::ProblemConstraints for ConstrainedQuadratic {
-    type Constraints = basin::Constraints<
+impl basin::Constraints for ConstrainedQuadratic {
+    type Set = basin::ConstraintSet<
         basin::NoBounds,
         basin::LinearBlocks<
             basin::NoLinearBlock,
             basin::LinearBlock<DenseMatrix<f64>, Vec<f64>>,
         >,
     >;
-    fn constraint_set(
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_linear_inequalities(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_linear_inequalities(
             basin::LinearBlock::optional(Some((&self.a, &self.b))),
         )
     }
@@ -123,12 +123,12 @@ struct BoxConstrained {
     upper: Vec<f64>,
 }
 
-impl basin::ProblemConstraints for BoxConstrained {
-    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-    fn constraint_set(
+impl basin::Constraints for BoxConstrained {
+    type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))
@@ -179,18 +179,18 @@ struct EqualityConstrained {
     b: Vec<f64>,
 }
 
-impl basin::ProblemConstraints for EqualityConstrained {
-    type Constraints = basin::Constraints<
+impl basin::Constraints for EqualityConstrained {
+    type Set = basin::ConstraintSet<
         basin::NoBounds,
         basin::LinearBlocks<
             basin::LinearBlock<DenseMatrix<f64>, Vec<f64>>,
             basin::NoLinearBlock,
         >,
     >;
-    fn constraint_set(
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_linear_equalities(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_linear_equalities(
             basin::LinearBlock::optional(Some((&self.a, &self.b))),
         )
     }
@@ -296,19 +296,18 @@ fn backend_generic_nalgebra() {
         b: DVector<f64>,
     }
 
-    impl basin::ProblemConstraints for Proj {
-        type Constraints = basin::Constraints<
+    impl basin::Constraints for Proj {
+        type Set = basin::ConstraintSet<
             basin::NoBounds,
             basin::LinearBlocks<
                 basin::NoLinearBlock,
                 basin::LinearBlock<DMatrix<f64>, DVector<f64>>,
             >,
         >;
-        fn constraint_set(
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new().with_linear_inequalities(
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new().with_linear_inequalities(
                 basin::LinearBlock::optional(Some((&self.a, &self.b))),
             )
         }
@@ -361,19 +360,18 @@ fn backend_generic_ndarray() {
         b: Array1<f64>,
     }
 
-    impl basin::ProblemConstraints for Proj {
-        type Constraints = basin::Constraints<
+    impl basin::Constraints for Proj {
+        type Set = basin::ConstraintSet<
             basin::NoBounds,
             basin::LinearBlocks<
                 basin::NoLinearBlock,
                 basin::LinearBlock<Array2<f64>, Array1<f64>>,
             >,
         >;
-        fn constraint_set(
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new().with_linear_inequalities(
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new().with_linear_inequalities(
                 basin::LinearBlock::optional(Some((&self.a, &self.b))),
             )
         }
@@ -425,19 +423,18 @@ fn backend_generic_faer() {
         b: Col<f64>,
     }
 
-    impl basin::ProblemConstraints for Proj {
-        type Constraints = basin::Constraints<
+    impl basin::Constraints for Proj {
+        type Set = basin::ConstraintSet<
             basin::NoBounds,
             basin::LinearBlocks<
                 basin::NoLinearBlock,
                 basin::LinearBlock<Mat<f64>, Col<f64>>,
             >,
         >;
-        fn constraint_set(
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new().with_linear_inequalities(
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new().with_linear_inequalities(
                 basin::LinearBlock::optional(Some((&self.a, &self.b))),
             )
         }

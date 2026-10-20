@@ -10,9 +10,9 @@ pub struct Quadratic<V, F> {
     pub make: fn(&[F]) -> V,
 }
 
-impl<V, F> basin::ProblemConstraints for Quadratic<V, F> {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(&self) -> basin::NoConstraints {
+impl<V, F> basin::Constraints for Quadratic<V, F> {
+    type Set = basin::NoConstraints;
+    fn constraints(&self) -> basin::NoConstraints {
         basin::NoConstraints::EMPTY
     }
 }

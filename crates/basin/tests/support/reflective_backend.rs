@@ -16,12 +16,12 @@ struct Fit<V, F> {
     deficient: bool,
 }
 
-impl<V, F: Scalar> basin::ProblemConstraints for Fit<V, F> {
-    type Constraints = basin::Constraints<basin::BoxBounds<V>>;
-    fn constraint_set(
+impl<V, F: Scalar> basin::Constraints for Fit<V, F> {
+    type Set = basin::ConstraintSet<basin::BoxBounds<V>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))
@@ -147,12 +147,12 @@ struct Diagonal<V, F> {
     upper: V,
 }
 
-impl<V, F: Scalar> basin::ProblemConstraints for Diagonal<V, F> {
-    type Constraints = basin::Constraints<basin::BoxBounds<V>>;
-    fn constraint_set(
+impl<V, F: Scalar> basin::Constraints for Diagonal<V, F> {
+    type Set = basin::ConstraintSet<basin::BoxBounds<V>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))

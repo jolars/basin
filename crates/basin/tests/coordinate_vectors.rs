@@ -1,10 +1,10 @@
 //! Coordinate-based solvers must not require reference-returning indexing.
 
 use basin::{
-    BoxBounds, ClampInPlace, Constrained, ConstraintError,
+    BoxBounds, ClampInPlace, Constrained, ConstraintError, ConstraintSet,
     ConstraintSolveError, Constraints, CostFunction, Direct, Executor, Gbnm,
-    NoConstraints, PointState, Problem, ProblemConstraints, SampleUniformBox,
-    ScaleInPlace, ScaledAdd, Solver, VectorIndex, VectorLen,
+    NoConstraints, PointState, Problem, SampleUniformBox, ScaleInPlace,
+    ScaledAdd, Solver, VectorIndex, VectorLen,
 };
 use std::convert::Infallible;
 
@@ -50,10 +50,10 @@ impl SampleUniformBox for Coordinates {
 }
 
 struct Quadratic;
-impl ProblemConstraints for Quadratic {
-    type Constraints = NoConstraints;
-    fn constraint_set(&self) -> NoConstraints {
-        Constraints::new()
+impl Constraints for Quadratic {
+    type Set = NoConstraints;
+    fn constraints(&self) -> NoConstraints {
+        ConstraintSet::new()
     }
 }
 impl CostFunction for Quadratic {
@@ -66,12 +66,12 @@ impl CostFunction for Quadratic {
 }
 
 type BoxedQuadratic =
-    Constrained<Quadratic, Constraints<BoxBounds<Coordinates>>>;
+    Constrained<Quadratic, ConstraintSet<BoxBounds<Coordinates>>>;
 
 fn boxed(lower: Vec<f64>, upper: Vec<f64>) -> BoxedQuadratic {
     Constrained::new(
         Quadratic,
-        Constraints::new().with_bounds(BoxBounds::new(
+        ConstraintSet::new().with_bounds(BoxBounds::new(
             Some(Coordinates(lower)),
             Some(Coordinates(upper)),
         )),

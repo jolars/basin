@@ -722,13 +722,12 @@ mod tests {
         upper: Vec<f64>,
     }
 
-    impl crate::ProblemConstraints for Plateau {
-        type Constraints = crate::Constraints<crate::BoxBounds<Vec<f64>>>;
-        fn constraint_set(
+    impl crate::Constraints for Plateau {
+        type Set = crate::ConstraintSet<crate::BoxBounds<Vec<f64>>>;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
-        {
-            crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+        ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+            crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(
                 Some(&self.lower),
                 Some(&self.upper),
             ))

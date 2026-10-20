@@ -79,12 +79,12 @@ impl<P> HasSpec for CrossInTray<P> {
     const SPEC: &'static ProblemSpec = &CROSS_IN_TRAY_SPEC;
 }
 
-impl crate::ProblemConstraints for CrossInTray<Vec<f64>> {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(
+impl crate::Constraints for CrossInTray<Vec<f64>> {
+    type Set = crate::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
-        crate::Constraints::new()
+    ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::ConstraintSet::new()
     }
 }
 impl CostFunction for CrossInTray<Vec<f64>> {
@@ -103,9 +103,9 @@ crate::backend_macros::nalgebra_versions! {
     use crate::CostFunction;
     use nalgebra::DVector;
 
-    impl crate::ProblemConstraints for CrossInTray<DVector<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for CrossInTray<DVector<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for CrossInTray<DVector<f64>> {
         type Param = DVector<f64>;
@@ -127,9 +127,9 @@ crate::backend_macros::ndarray_versions! {
     use crate::CostFunction;
     use ndarray::Array1;
 
-    impl crate::ProblemConstraints for CrossInTray<Array1<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for CrossInTray<Array1<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for CrossInTray<Array1<f64>> {
         type Param = Array1<f64>;
@@ -151,9 +151,9 @@ crate::backend_macros::faer_versions! {
     use crate::CostFunction;
     use faer::Col;
 
-    impl crate::ProblemConstraints for CrossInTray<Col<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for CrossInTray<Col<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for CrossInTray<Col<f64>> {
         type Param = Col<f64>;

@@ -143,10 +143,6 @@ use workspace::Distribution;
 /// ```
 /// use basin::{CmaEs, CostFunction, DenseMatrix, Executor, PopulationProgress};
 /// struct Sphere;
-/// impl basin::ProblemConstraints for Sphere  {
-///     type Constraints = basin::NoConstraints;
-///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
-/// }
 /// impl CostFunction for Sphere {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -568,7 +564,6 @@ where
         + RankOneUpdate<V, F>
         + SymmetricEigen<V>
         + Clone,
-    P: crate::ProblemConstraints<Constraints = crate::NoConstraints>,
 {
     type Error = P::Error;
 
@@ -871,13 +866,12 @@ mod zero_tolerance_tests {
 
     struct FlatBox<F>(Vec<F>, Vec<F>);
 
-    impl<F: Scalar> crate::ProblemConstraints for FlatBox<F> {
-        type Constraints = crate::Constraints<crate::BoxBounds<Vec<F>>>;
-        fn constraint_set(
+    impl<F: Scalar> crate::Constraints for FlatBox<F> {
+        type Set = crate::ConstraintSet<crate::BoxBounds<Vec<F>>>;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
-        {
-            crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+        ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+            crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(
                 Some(&self.0),
                 Some(&self.1),
             ))

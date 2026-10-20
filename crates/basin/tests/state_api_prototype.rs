@@ -80,14 +80,12 @@ impl<V, F: Scalar> Rosenbrock<V, F> {
     }
 }
 
-impl<V: Coordinates<F>, F: Scalar> basin::ProblemConstraints
-    for Rosenbrock<V, F>
-{
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl<V: Coordinates<F>, F: Scalar> basin::Constraints for Rosenbrock<V, F> {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl<V: Coordinates<F>, F: Scalar> CostFunction for Rosenbrock<V, F> {
@@ -119,12 +117,12 @@ impl<V: Coordinates<F>, F: Scalar> Gradient for Rosenbrock<V, F> {
 
 struct Sphere;
 
-impl basin::ProblemConstraints for Sphere {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Sphere {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for Sphere {
@@ -887,12 +885,12 @@ fn exact_resume_preserves_convergence_history_and_fresh_run_resets_it() {
 
 struct FallibleSphere;
 
-impl basin::ProblemConstraints for FallibleSphere {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for FallibleSphere {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for FallibleSphere {

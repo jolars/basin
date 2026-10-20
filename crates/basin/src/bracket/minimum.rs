@@ -66,9 +66,9 @@ impl<F: Scalar> MinimumBracketResult<F> {
 ///             PointState};
 /// use std::convert::Infallible;
 /// struct Quadratic { lower: f64, upper: f64 }
-/// impl basin::ProblemConstraints for Quadratic  {
-///     type Constraints = basin::Constraints<basin::BoxBounds<f64>>;
-///     fn constraint_set(&self) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> { basin::Constraints::new().with_bounds(basin::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+/// impl basin::Constraints for Quadratic  {
+///     type Set = basin::ConstraintSet<basin::BoxBounds<f64>>;
+///     fn constraints(&self) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> { basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 /// }
 /// impl CostFunction for Quadratic {
 ///     type Param = f64;

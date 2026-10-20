@@ -1,11 +1,12 @@
 //! Constraint declaration, checked evaluation, and independent storage regressions.
 use basin::{
     Bobyqa, BoxBounds, Cobyla, Constrained, ConstraintAxis, ConstraintBlock,
-    ConstraintDescription, ConstraintError, ConstraintSolveError, Constraints,
-    CostFunction, DenseMatrix, Executor, Gradient, MatrixFinite, MatrixIndex,
-    MatrixShape, NoConstraints, NoNonlinearBlock, NonlinearBlock,
-    NonlinearBlocks, NonlinearInequalityValues, PointState, Problem,
-    ProblemConstraints, Scalar, SelectedState, Slsqp, Solver, VectorLen,
+    ConstraintDescription, ConstraintError, ConstraintSet,
+    ConstraintSolveError, Constraints, CostFunction, DenseMatrix, Executor,
+    Gradient, MatrixFinite, MatrixIndex, MatrixShape, NoConstraints,
+    NoNonlinearBlock, NonlinearBlock, NonlinearBlocks,
+    NonlinearInequalityValues, PointState, Problem, Scalar, SelectedState,
+    Slsqp, Solver, VectorLen,
 };
 use std::{
     cell::Cell,
@@ -18,16 +19,16 @@ use std::{
 mod backend_aliases;
 
 struct Disk<V, F>(PhantomData<fn() -> (V, F)>);
-impl<V, F> ProblemConstraints for Disk<V, F> {
-    type Constraints = Constraints<
+impl<V, F> Constraints for Disk<V, F> {
+    type Set = ConstraintSet<
         basin::NoBounds,
         basin::NoLinearConstraints,
         NonlinearBlocks<NoNonlinearBlock, NonlinearBlock>,
     >;
-    fn constraint_set(
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as ConstraintDescription>::Borrowed<'_> {
-        Constraints::new().with_nonlinear_inequalities(1)
+    ) -> <Self::Set as ConstraintDescription>::Borrowed<'_> {
+        ConstraintSet::new().with_nonlinear_inequalities(1)
     }
 }
 impl<V: Index<usize, Output = F>, F: Scalar> CostFunction for Disk<V, F> {
@@ -123,12 +124,12 @@ struct BoundsProbe {
     upper: Vec<f64>,
     calls: Cell<usize>,
 }
-impl ProblemConstraints for BoundsProbe {
-    type Constraints = Constraints<BoxBounds<Vec<f64>>>;
-    fn constraint_set(
+impl Constraints for BoundsProbe {
+    type Set = ConstraintSet<BoxBounds<Vec<f64>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as ConstraintDescription>::Borrowed<'_> {
-        Constraints::new()
+    ) -> <Self::Set as ConstraintDescription>::Borrowed<'_> {
+        ConstraintSet::new()
             .with_bounds(BoxBounds::new(Some(&self.lower), Some(&self.upper)))
     }
 }
@@ -238,16 +239,16 @@ struct OutputProbe {
     fail: bool,
     calls: Cell<usize>,
 }
-impl ProblemConstraints for OutputProbe {
-    type Constraints = Constraints<
+impl Constraints for OutputProbe {
+    type Set = ConstraintSet<
         basin::NoBounds,
         basin::NoLinearConstraints,
         NonlinearBlocks<NoNonlinearBlock, NonlinearBlock>,
     >;
-    fn constraint_set(
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as ConstraintDescription>::Borrowed<'_> {
-        Constraints::new().with_nonlinear_inequalities(self.count.get())
+    ) -> <Self::Set as ConstraintDescription>::Borrowed<'_> {
+        ConstraintSet::new().with_nonlinear_inequalities(self.count.get())
     }
 }
 impl CostFunction for OutputProbe {
@@ -339,9 +340,9 @@ fn a_changed_declaration_is_a_typed_error() {
 }
 
 struct Quadratic;
-impl ProblemConstraints for Quadratic {
-    type Constraints = NoConstraints;
-    fn constraint_set(&self) -> NoConstraints {
+impl Constraints for Quadratic {
+    type Set = NoConstraints;
+    fn constraints(&self) -> NoConstraints {
         NoConstraints::EMPTY
     }
 }
@@ -380,7 +381,7 @@ impl MatrixIndex for InequalityMatrix {
 }
 #[test]
 fn linear_only_slsqp_uses_independent_matrices_without_a_nonlinear_jacobian() {
-    let constraints = Constraints::new()
+    let constraints = ConstraintSet::new()
         .with_linear_equalities(basin::LinearBlock::new(
             DenseMatrix::from_row_slice(1, 2, &[1.0, 1.0]),
             vec![1.0],
@@ -405,7 +406,7 @@ fn linear_only_slsqp_uses_independent_matrices_without_a_nonlinear_jacobian() {
 #[test]
 fn malformed_linear_shapes_are_errors_before_matrix_multiplication() {
     let constraints =
-        Constraints::new().with_linear_inequalities(basin::LinearBlock::new(
+        ConstraintSet::new().with_linear_inequalities(basin::LinearBlock::new(
             DenseMatrix::from_row_slice(1, 3, &[1.0; 3]),
             vec![0.0],
         ));
@@ -571,9 +572,9 @@ fn empty_linear_transpose_overwrites_its_destination() {
 #[test]
 fn linear_storage_does_not_require_a_parameter_backend() {
     struct Objective;
-    impl ProblemConstraints for Objective {
-        type Constraints = NoConstraints;
-        fn constraint_set(&self) -> NoConstraints {
+    impl Constraints for Objective {
+        type Set = NoConstraints;
+        fn constraints(&self) -> NoConstraints {
             NoConstraints::EMPTY
         }
     }
@@ -588,10 +589,12 @@ fn linear_storage_does_not_require_a_parameter_backend() {
     let problem = || {
         Constrained::new(
             Objective,
-            Constraints::new().with_linear_equalities(basin::LinearBlock::new(
-                DenseMatrix::from_row_slice(1, 2, &[1.0, 1.0]),
-                vec![1.0],
-            )),
+            ConstraintSet::new().with_linear_equalities(
+                basin::LinearBlock::new(
+                    DenseMatrix::from_row_slice(1, 2, &[1.0, 1.0]),
+                    vec![1.0],
+                ),
+            ),
         )
     };
     let cobyla =
@@ -618,7 +621,7 @@ fn linear_storage_does_not_require_a_parameter_backend() {
 #[test]
 fn absent_runtime_linear_blocks_have_zero_gradient_contributions() {
     let equalities =
-        Constraints::new()
+        ConstraintSet::new()
             .with_linear_equalities(
                 basin::LinearBlock::<DenseMatrix, Vec<f64>>::optional(None),
             );
@@ -630,7 +633,7 @@ fn absent_runtime_linear_blocks_have_zero_gradient_contributions() {
     assert_eq!(relaxed.gradient(&x).unwrap(), vec![2.0, 4.0]);
 
     let inequalities =
-        Constraints::new().with_linear_inequalities(basin::LinearBlock::<
+        ConstraintSet::new().with_linear_inequalities(basin::LinearBlock::<
             DenseMatrix,
             Vec<f64>,
         >::optional(None));

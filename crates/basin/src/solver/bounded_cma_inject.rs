@@ -39,7 +39,7 @@ use crate::solver::cma_inject::{MemeticInner, default_c_y};
 /// [`NelderMead`](crate::solver::NelderMead),
 /// [`LevenbergMarquardt`](crate::solver::LevenbergMarquardt), and
 /// [`Lbfgsb`](crate::Lbfgsb). L-BFGS-B is the natural inner
-/// here: its `P::Constraints = Constraints<BoxBounds<V>>` bound matches the outer's, and the
+/// here: its `P::Set = ConstraintSet<BoxBounds<V>>` bound matches the outer's, and the
 /// same box flows through both ends of the composition.
 ///
 /// Unconstrained local solvers such as NM and LM require

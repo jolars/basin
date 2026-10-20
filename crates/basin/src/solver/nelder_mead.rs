@@ -72,7 +72,7 @@ use crate::core::state::SimplexProgress;
 /// ([`Projected`]). Construct unbounded NM with [`new`](Self::new),
 /// [`adaptive`](Self::adaptive), or [`with_params`](Self::with_params), then
 /// transition with [`projected`](Self::projected) when the problem carries
-/// box bounds. The projected `Solver` impl requires `P::Constraints = Constraints<BoxBounds<V>>`
+/// box bounds. The projected `Solver` impl requires `P::Set = ConstraintSet<BoxBounds<V>>`
 /// and `V: ClampInPlace`, so handing a non-bounded problem to a projected
 /// `NelderMead` is a compile-time error per CONTRIBUTING.md tenet 4.
 ///
@@ -113,10 +113,6 @@ use crate::core::state::SimplexProgress;
 /// use basin::{SimplexProgress, CostFunction, Executor, NelderMead};
 ///
 /// struct Rosenbrock;
-/// impl basin::ProblemConstraints for Rosenbrock  {
-///     type Constraints = basin::NoConstraints;
-///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
-/// }
 /// impl CostFunction for Rosenbrock {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -157,7 +153,7 @@ pub struct Unbounded;
 /// Type-state marker for the projection-style box-constrained
 /// Nelder-Mead variant. Obtain via
 /// [`NelderMead::projected`](NelderMead::projected). The `Solver` impl
-/// requires `P::Constraints = Constraints<BoxBounds<V>>` and `V: ClampInPlace`.
+/// requires `P::Set = ConstraintSet<BoxBounds<V>>` and `V: ClampInPlace`.
 ///
 /// # Algorithm
 ///
@@ -615,7 +611,6 @@ where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
     V: Clone + VectorLen + VectorIndex<F> + ScaleInPlace<F> + ScaledAdd<F>,
-    P: crate::ProblemConstraints<Constraints = crate::NoConstraints>,
 {
     type Error = P::Error;
 

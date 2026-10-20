@@ -44,6 +44,11 @@
             description:
                 "Basin's solver catalog (first-order, derivative-free, nonlinear least-squares, and evolutionary methods) and the backend each supports.",
         },
+        "/docs/migrating-to-v3": {
+            title: "Migrating to Basin 3.0 – Basin",
+            description:
+                "Upgrade from Basin 2.0 to 3.0: optional constraint declarations, standalone evaluation traits, and unconstrained solver behavior.",
+        },
     };
     const FALLBACK_META = {
         title: "Documentation – Basin",

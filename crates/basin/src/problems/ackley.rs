@@ -111,12 +111,12 @@ impl<P> HasSpec for Ackley<P> {
     const SPEC: &'static ProblemSpec = &ACKLEY_SPEC;
 }
 
-impl crate::ProblemConstraints for Ackley<Vec<f64>> {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(
+impl crate::Constraints for Ackley<Vec<f64>> {
+    type Set = crate::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
-        crate::Constraints::new()
+    ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::ConstraintSet::new()
     }
 }
 impl CostFunction for Ackley<Vec<f64>> {
@@ -135,9 +135,9 @@ crate::backend_macros::nalgebra_versions! {
     use crate::CostFunction;
     use nalgebra::DVector;
 
-    impl crate::ProblemConstraints for Ackley<DVector<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Ackley<DVector<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Ackley<DVector<f64>> {
         type Param = DVector<f64>;
@@ -159,9 +159,9 @@ crate::backend_macros::ndarray_versions! {
     use crate::CostFunction;
     use ndarray::Array1;
 
-    impl crate::ProblemConstraints for Ackley<Array1<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Ackley<Array1<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Ackley<Array1<f64>> {
         type Param = Array1<f64>;
@@ -186,9 +186,9 @@ crate::backend_macros::faer_versions! {
     // faer's `Col` doesn't expose a `&[f64]` directly across all 0.24 APIs we
     // care about, so we evaluate elementwise here rather than routing through
     // the slice-based primitive.
-    impl crate::ProblemConstraints for Ackley<Col<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Ackley<Col<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Ackley<Col<f64>> {
         type Param = Col<f64>;
@@ -250,12 +250,12 @@ impl AckleyBoxed<Vec<f64>> {
     }
 }
 
-impl crate::ProblemConstraints for AckleyBoxed<Vec<f64>> {
-    type Constraints = crate::Constraints<crate::BoxBounds<Vec<f64>>>;
-    fn constraint_set(
+impl crate::Constraints for AckleyBoxed<Vec<f64>> {
+    type Set = crate::ConstraintSet<crate::BoxBounds<Vec<f64>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
-        crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+    ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))
@@ -299,9 +299,9 @@ crate::backend_macros::nalgebra_versions! {
         }
     }
 
-    impl crate::ProblemConstraints for AckleyBoxed<DVector<f64>>  {
-    type Constraints = crate::Constraints<crate::BoxBounds<DVector<f64>>>;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+    impl crate::Constraints for AckleyBoxed<DVector<f64>>  {
+    type Set = crate::ConstraintSet<crate::BoxBounds<DVector<f64>>>;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 }
 impl CostFunction for AckleyBoxed<DVector<f64>> {
         type Param = DVector<f64>;
@@ -345,9 +345,9 @@ crate::backend_macros::ndarray_versions! {
         }
     }
 
-    impl crate::ProblemConstraints for AckleyBoxed<Array1<f64>>  {
-    type Constraints = crate::Constraints<crate::BoxBounds<Array1<f64>>>;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+    impl crate::Constraints for AckleyBoxed<Array1<f64>>  {
+    type Set = crate::ConstraintSet<crate::BoxBounds<Array1<f64>>>;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 }
 impl CostFunction for AckleyBoxed<Array1<f64>> {
         type Param = Array1<f64>;
@@ -391,9 +391,9 @@ crate::backend_macros::faer_versions! {
         }
     }
 
-    impl crate::ProblemConstraints for AckleyBoxed<Col<f64>>  {
-    type Constraints = crate::Constraints<crate::BoxBounds<Col<f64>>>;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+    impl crate::Constraints for AckleyBoxed<Col<f64>>  {
+    type Set = crate::ConstraintSet<crate::BoxBounds<Col<f64>>>;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 }
 impl CostFunction for AckleyBoxed<Col<f64>> {
         type Param = Col<f64>;

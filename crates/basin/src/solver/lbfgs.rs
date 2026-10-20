@@ -171,9 +171,9 @@ use self::subsm::subsm;
 /// use basin::core::numdiff::Method;
 ///
 /// struct Quadratic { lower: Vec<f64>, upper: Vec<f64> }
-/// impl basin::ProblemConstraints for Quadratic  {
-///     type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-///     fn constraint_set(&self) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> { basin::Constraints::new().with_bounds(basin::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+/// impl basin::Constraints for Quadratic  {
+///     type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+///     fn constraints(&self) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> { basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 /// }
 /// impl CostFunction for Quadratic {
 ///     type Param = Vec<f64>;
@@ -246,7 +246,7 @@ pub struct Lbfgs<V, F: Scalar = f64, Mode = Bounded, S = MoreThuente<F>> {
 
 /// Type-state marker for box-constrained L-BFGS-B (the default).
 /// Constructors live on [`Lbfgs<V, F>`]; the
-/// [`Solver`] impl requires `P::Constraints = Constraints<BoxBounds<V>>` and the full
+/// [`Solver`] impl requires `P::Set = ConstraintSet<BoxBounds<V>>` and the full
 /// `AsFloatSliceMut<F>` + [`Dot<F>`] + [`ScaledAdd<F>`] backend.
 /// [`Lbfgsb`] is the canonical type alias for this mode.
 pub struct Bounded;
@@ -1131,7 +1131,6 @@ where
     P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
     V: AsFloatSliceMut<F> + Clone + Dot<F> + ScaledAdd<F> + VectorLen,
     S: LineSearch<P, V, F, Error = P::Error>,
-    P: crate::ProblemConstraints<Constraints = crate::NoConstraints>,
 {
     type Error = P::Error;
 
@@ -1642,13 +1641,13 @@ mod tests {
             u: Vec<f64>,
         }
 
-        impl crate::ProblemConstraints for Quad {
-            type Constraints = crate::Constraints<crate::BoxBounds<Vec<f64>>>;
-            fn constraint_set(
+        impl crate::Constraints for Quad {
+            type Set = crate::ConstraintSet<crate::BoxBounds<Vec<f64>>>;
+            fn constraints(
                 &self,
-            ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+            ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_>
             {
-                crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+                crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(
                     Some(&self.l),
                     Some(&self.u),
                 ))
@@ -1704,13 +1703,13 @@ mod tests {
             u: Vec<f64>,
         }
 
-        impl crate::ProblemConstraints for Rosen {
-            type Constraints = crate::Constraints<crate::BoxBounds<Vec<f64>>>;
-            fn constraint_set(
+        impl crate::Constraints for Rosen {
+            type Set = crate::ConstraintSet<crate::BoxBounds<Vec<f64>>>;
+            fn constraints(
                 &self,
-            ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+            ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_>
             {
-                crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+                crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(
                     Some(&self.l),
                     Some(&self.u),
                 ))

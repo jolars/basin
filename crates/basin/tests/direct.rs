@@ -19,15 +19,15 @@ struct Objective<C> {
     cost: C,
 }
 
-impl<C, E> basin::ProblemConstraints for Objective<C>
+impl<C, E> basin::Constraints for Objective<C>
 where
     C: Fn(&[f64]) -> Result<f64, E>,
 {
-    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-    fn constraint_set(
+    type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))
@@ -78,13 +78,12 @@ fn f32_mixed_magnitude_costs_refine_the_best_rectangle() {
         upper: Vec<f32>,
     }
 
-    impl basin::ProblemConstraints for Penalized {
-        type Constraints = basin::Constraints<basin::BoxBounds<Vec<f32>>>;
-        fn constraint_set(
+    impl basin::Constraints for Penalized {
+        type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f32>>>;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
                 Some(&self.lower),
                 Some(&self.upper),
             ))

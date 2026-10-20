@@ -11,10 +11,10 @@ struct Linear<V, F> {
     offset: F,
 }
 
-impl<V, F> basin::ProblemConstraints for Linear<V, F> {
-    type Constraints = basin::NoConstraints;
+impl<V, F> basin::Constraints for Linear<V, F> {
+    type Set = basin::NoConstraints;
 
-    fn constraint_set(&self) -> basin::NoConstraints {
+    fn constraints(&self) -> basin::NoConstraints {
         basin::NoConstraints::EMPTY
     }
 }

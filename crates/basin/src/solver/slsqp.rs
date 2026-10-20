@@ -53,7 +53,7 @@ pub enum SlsqpFailure {
 ///
 /// # Problem and progress
 ///
-/// Supply [`Gradient`] and the canonical [`ProblemConstraints`](crate::ProblemConstraints)
+/// Supply [`Gradient`] and the canonical [`Constraints`](crate::Constraints)
 /// declaration. Present nonlinear blocks additionally require
 /// [`crate::ConstraintJacobian`]. Derivatives can be analytic or synthesized
 /// with [`crate::FiniteDiff`] or [`crate::BoundedFiniteDiff`]. Native equalities are `h(x) = 0` and public
@@ -146,9 +146,9 @@ pub enum SlsqpFailure {
 /// use basin::{CostFunction, DenseMatrix, Executor, FiniteDiff,
 ///     Slsqp, SelectedFirstOrderState, State};
 /// struct Example;
-/// impl basin::ProblemConstraints for Example  {
-///     type Constraints = basin::Constraints<basin::NoBounds, basin::NoLinearConstraints, basin::NonlinearBlocks<basin::NonlinearBlock, basin::NoNonlinearBlock>>;
-///     fn constraint_set(&self) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> { basin::Constraints::new().with_nonlinear_equalities(1) }
+/// impl basin::Constraints for Example  {
+///     type Set = basin::ConstraintSet<basin::NoBounds, basin::NoLinearConstraints, basin::NonlinearBlocks<basin::NonlinearBlock, basin::NoNonlinearBlock>>;
+///     fn constraints(&self) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> { basin::ConstraintSet::new().with_nonlinear_equalities(1) }
 /// }
 /// impl CostFunction for Example {
 ///     type Param = Vec<f64>;
@@ -667,12 +667,12 @@ impl<F: Scalar> Work<F> {
     ) -> Result<Vec<F>, ConstraintSolveError<P::Error>>
     where
         P: CostFunction<Param = V, Output = F>,
-        P::Constraints: SlsqpSet<P, V, F>,
+        P: crate::Constraints,
+        P::Set: SlsqpSet<P, V, F>,
         V: VectorLen + VectorIndex<F>,
     {
         let expected = (self.nonlinear_eq, self.nonlinear_ineq);
-        if P::Constraints::counts(problem.inner().constraint_set()) != expected
-        {
+        if P::Set::counts(problem.inner().constraints()) != expected {
             return Err(invalid(ConstraintError::LayoutChanged));
         }
         let mut c = vec![F::zero(); self.c.len()];
@@ -696,7 +696,7 @@ impl<F: Scalar> Work<F> {
         }
         let (equalities, inequalities) = c.split_at_mut(meq);
         let mut counts = crate::EvalCounts::default();
-        let result = P::Constraints::write_values(
+        let result = P::Set::write_values(
             problem.inner(),
             x,
             &mut counts,
@@ -717,7 +717,8 @@ impl<F: Scalar> Work<F> {
     ) -> Result<Matrix<F>, ConstraintSolveError<P::Error>>
     where
         P: CostFunction<Param = V, Output = F>,
-        P::Constraints: SlsqpSet<P, V, F>,
+        P: crate::Constraints,
+        P::Set: SlsqpSet<P, V, F>,
         V: VectorLen,
     {
         let mut a = Matrix::zeros(self.c.len(), self.free.len());
@@ -732,7 +733,7 @@ impl<F: Scalar> Work<F> {
             }
         }
         let mut counts = crate::EvalCounts::default();
-        let result = P::Constraints::jacobian(
+        let result = P::Set::jacobian(
             problem.inner(),
             x,
             x.vec_len(),
@@ -796,7 +797,8 @@ impl<P, V, F> Solver<P, SelectedFirstOrderState<V, F>> for Slsqp<F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
-    P::Constraints: SlsqpSet<P, V, F>,
+    P: crate::Constraints,
+    P::Set: SlsqpSet<P, V, F>,
     V: Clone + VectorLen + VectorIndex<F>,
 {
     type Error = ConstraintSolveError<P::Error>;
@@ -812,8 +814,8 @@ where
         state.reset();
         let n = param.vec_len();
         assert!(n > 0, "SLSQP requires at least one parameter");
-        let data = P::Constraints::data(problem.inner().constraint_set(), n)
-            .map_err(invalid)?;
+        let data =
+            P::Set::data(problem.inner().constraints(), n).map_err(invalid)?;
         let lower = data
             .bounds
             .lower
@@ -837,7 +839,7 @@ where
         let (linear_eq, rhs_eq) = linear_block(data.equalities, n);
         let (linear_ineq, rhs_ineq) = linear_block(data.inequalities, n);
         let (nonlinear_eq, nonlinear_ineq) =
-            P::Constraints::counts(problem.inner().constraint_set());
+            P::Set::counts(problem.inner().constraints());
         let m = linear_eq
             .rows
             .checked_add(linear_ineq.rows)

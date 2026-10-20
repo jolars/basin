@@ -4,14 +4,6 @@ use basin::{
 
 struct Rosenbrock;
 
-impl basin::ProblemConstraints for Rosenbrock {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
-        &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
-    }
-}
 impl CostFunction for Rosenbrock {
     type Param = Vec<f64>;
     type Output = f64;

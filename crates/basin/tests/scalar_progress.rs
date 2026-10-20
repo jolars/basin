@@ -9,12 +9,12 @@ use std::convert::Infallible;
 
 struct Quadratic;
 
-impl basin::ProblemConstraints for Quadratic {
-    type Constraints = basin::Constraints<basin::BoxBounds<f64>>;
-    fn constraint_set(
+impl basin::Constraints for Quadratic {
+    type Set = basin::ConstraintSet<basin::BoxBounds<f64>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
             .with_bounds(basin::BoxBounds::new(Some(&-1.0), Some(&2.0)))
     }
 }

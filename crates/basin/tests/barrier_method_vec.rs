@@ -155,18 +155,18 @@ struct LinearProbe {
     b: Vec<f64>,
 }
 
-impl basin::ProblemConstraints for LinearProbe {
-    type Constraints = basin::Constraints<
+impl basin::Constraints for LinearProbe {
+    type Set = basin::ConstraintSet<
         basin::NoBounds,
         basin::LinearBlocks<
             basin::NoLinearBlock,
             basin::LinearBlock<DenseMatrix, Vec<f64>>,
         >,
     >;
-    fn constraint_set(
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
             .with_linear_inequalities(basin::LinearBlock::new(&self.a, &self.b))
     }
 }

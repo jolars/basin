@@ -187,7 +187,6 @@ where
     Problem<P>: Evaluation<V, M, F, Error = E>,
     V: ScaledAdd<F> + NormSquared<F> + NormInfinity<F> + NegInPlace + Clone,
     M: GramMatrix + MatTransposeVec<V> + LinearSolveSpd<V>,
-    P: crate::ProblemConstraints<Constraints = crate::NoConstraints>,
 {
     type Error = E;
     fn init(

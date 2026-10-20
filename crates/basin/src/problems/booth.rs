@@ -112,12 +112,12 @@ impl<P> HasSpec for Booth<P> {
     const SPEC: &'static ProblemSpec = &BOOTH_SPEC;
 }
 
-impl crate::ProblemConstraints for Booth<Vec<f64>> {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(
+impl crate::Constraints for Booth<Vec<f64>> {
+    type Set = crate::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
-        crate::Constraints::new()
+    ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::ConstraintSet::new()
     }
 }
 impl CostFunction for Booth<Vec<f64>> {
@@ -170,12 +170,12 @@ impl<P> HasSpec for BoothBoxed<P> {
     const SPEC: &'static ProblemSpec = &BOOTH_SPEC;
 }
 
-impl crate::ProblemConstraints for BoothBoxed<Vec<f64>> {
-    type Constraints = crate::Constraints<crate::BoxBounds<Vec<f64>>>;
-    fn constraint_set(
+impl crate::Constraints for BoothBoxed<Vec<f64>> {
+    type Set = crate::ConstraintSet<crate::BoxBounds<Vec<f64>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
-        crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+    ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))
@@ -266,12 +266,12 @@ impl<P> HasSpec for BoothBoxedResiduals<P> {
     const SPEC: &'static ProblemSpec = &BOOTH_SPEC;
 }
 
-impl crate::ProblemConstraints for BoothResiduals<Vec<f64>> {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(
+impl crate::Constraints for BoothResiduals<Vec<f64>> {
+    type Set = crate::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
-        crate::Constraints::new()
+    ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::ConstraintSet::new()
     }
 }
 impl CostFunction for BoothResiduals<Vec<f64>> {
@@ -311,12 +311,12 @@ impl Jacobian for BoothResiduals<Vec<f64>> {
     }
 }
 
-impl crate::ProblemConstraints for BoothBoxedResiduals<Vec<f64>> {
-    type Constraints = crate::Constraints<crate::BoxBounds<Vec<f64>>>;
-    fn constraint_set(
+impl crate::Constraints for BoothBoxedResiduals<Vec<f64>> {
+    type Set = crate::ConstraintSet<crate::BoxBounds<Vec<f64>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
-        crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+    ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))
@@ -377,9 +377,9 @@ crate::backend_macros::nalgebra_versions! {
     use crate::{CostFunction, Gradient, Jacobian, Residual};
     use nalgebra::{DMatrix, DVector};
 
-    impl crate::ProblemConstraints for Booth<DVector<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Booth<DVector<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Booth<DVector<f64>> {
         type Param = DVector<f64>;
@@ -405,9 +405,9 @@ impl CostFunction for Booth<DVector<f64>> {
         }
     }
 
-    impl crate::ProblemConstraints for BoothBoxed<DVector<f64>>  {
-    type Constraints = crate::Constraints<crate::BoxBounds<DVector<f64>>>;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+    impl crate::Constraints for BoothBoxed<DVector<f64>>  {
+    type Set = crate::ConstraintSet<crate::BoxBounds<DVector<f64>>>;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 }
 impl CostFunction for BoothBoxed<DVector<f64>> {
         type Param = DVector<f64>;
@@ -444,9 +444,9 @@ impl CostFunction for BoothBoxed<DVector<f64>> {
         }
     }
 
-    impl crate::ProblemConstraints for BoothResiduals<DVector<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for BoothResiduals<DVector<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for BoothResiduals<DVector<f64>> {
         type Param = DVector<f64>;
@@ -487,9 +487,9 @@ impl CostFunction for BoothResiduals<DVector<f64>> {
         }
     }
 
-    impl crate::ProblemConstraints for BoothBoxedResiduals<DVector<f64>>  {
-    type Constraints = crate::Constraints<crate::BoxBounds<DVector<f64>>>;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+    impl crate::Constraints for BoothBoxedResiduals<DVector<f64>>  {
+    type Set = crate::ConstraintSet<crate::BoxBounds<DVector<f64>>>;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 }
 impl CostFunction for BoothBoxedResiduals<DVector<f64>> {
         type Param = DVector<f64>;
@@ -550,9 +550,9 @@ crate::backend_macros::ndarray_versions! {
     use crate::{CostFunction, Gradient, Jacobian, Residual};
     use ndarray::{Array1, Array2};
 
-    impl crate::ProblemConstraints for Booth<Array1<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Booth<Array1<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Booth<Array1<f64>> {
         type Param = Array1<f64>;
@@ -581,9 +581,9 @@ impl CostFunction for Booth<Array1<f64>> {
         }
     }
 
-    impl crate::ProblemConstraints for BoothBoxed<Array1<f64>>  {
-    type Constraints = crate::Constraints<crate::BoxBounds<Array1<f64>>>;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+    impl crate::Constraints for BoothBoxed<Array1<f64>>  {
+    type Set = crate::ConstraintSet<crate::BoxBounds<Array1<f64>>>;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 }
 impl CostFunction for BoothBoxed<Array1<f64>> {
         type Param = Array1<f64>;
@@ -623,9 +623,9 @@ impl CostFunction for BoothBoxed<Array1<f64>> {
         }
     }
 
-    impl crate::ProblemConstraints for BoothResiduals<Array1<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for BoothResiduals<Array1<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for BoothResiduals<Array1<f64>> {
         type Param = Array1<f64>;
@@ -672,9 +672,9 @@ impl CostFunction for BoothResiduals<Array1<f64>> {
         }
     }
 
-    impl crate::ProblemConstraints for BoothBoxedResiduals<Array1<f64>>  {
-    type Constraints = crate::Constraints<crate::BoxBounds<Array1<f64>>>;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+    impl crate::Constraints for BoothBoxedResiduals<Array1<f64>>  {
+    type Set = crate::ConstraintSet<crate::BoxBounds<Array1<f64>>>;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 }
 impl CostFunction for BoothBoxedResiduals<Array1<f64>> {
         type Param = Array1<f64>;
@@ -760,9 +760,9 @@ crate::backend_macros::faer_versions! {
     // faer's `Col` doesn't expose a `&[f64]` directly across all 0.24 APIs we
     // care about, so we evaluate elementwise here rather than routing through
     // the slice-based primitives.
-    impl crate::ProblemConstraints for Booth<Col<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Booth<Col<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Booth<Col<f64>> {
         type Param = Col<f64>;
@@ -783,9 +783,9 @@ impl CostFunction for Booth<Col<f64>> {
         }
     }
 
-    impl crate::ProblemConstraints for BoothBoxed<Col<f64>>  {
-    type Constraints = crate::Constraints<crate::BoxBounds<Col<f64>>>;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+    impl crate::Constraints for BoothBoxed<Col<f64>>  {
+    type Set = crate::ConstraintSet<crate::BoxBounds<Col<f64>>>;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 }
 impl CostFunction for BoothBoxed<Col<f64>> {
         type Param = Col<f64>;
@@ -824,9 +824,9 @@ impl CostFunction for BoothBoxed<Col<f64>> {
         Col::<f64>::from_fn(2, |i| if i == 0 { r0 } else { r1 })
     }
 
-    impl crate::ProblemConstraints for BoothResiduals<Col<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for BoothResiduals<Col<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for BoothResiduals<Col<f64>> {
         type Param = Col<f64>;
@@ -861,9 +861,9 @@ impl CostFunction for BoothResiduals<Col<f64>> {
         }
     }
 
-    impl crate::ProblemConstraints for BoothBoxedResiduals<Col<f64>>  {
-    type Constraints = crate::Constraints<crate::BoxBounds<Col<f64>>>;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+    impl crate::Constraints for BoothBoxedResiduals<Col<f64>>  {
+    type Set = crate::ConstraintSet<crate::BoxBounds<Col<f64>>>;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 }
 impl CostFunction for BoothBoxedResiduals<Col<f64>> {
         type Param = Col<f64>;

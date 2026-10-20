@@ -595,7 +595,6 @@ where
     V: Clone,
     S: StepTaker<V, F>,
     A: AcceptanceTest<F>,
-    P: crate::ProblemConstraints<Constraints = crate::NoConstraints>,
 {
     type Error = P::Error;
 

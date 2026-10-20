@@ -82,12 +82,12 @@ struct Log {
 #[derive(Clone)]
 struct Objective(Rc<RefCell<Log>>);
 
-impl basin::ProblemConstraints for Objective {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Objective {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for Objective {

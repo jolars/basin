@@ -140,10 +140,6 @@ pub enum Method {
 ///     FirstOrderState, CostFunction, Executor, FiniteDiff, GradientDescent};
 ///
 /// struct Sphere;
-/// impl basin::ProblemConstraints for Sphere  {
-///     type Constraints = basin::NoConstraints;
-///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
-/// }
 /// impl CostFunction for Sphere {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -827,15 +823,15 @@ pub use check::{
     DerivativeComparison, DerivativeSource,
 };
 
-impl<P> crate::ProblemConstraints for FiniteDiff<P>
+impl<P> crate::Constraints for FiniteDiff<P>
 where
-    P: crate::ProblemConstraints,
+    P: crate::Constraints,
 {
-    type Constraints = P::Constraints;
-    fn constraint_set(
+    type Set = P::Set;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
-        self.problem.constraint_set()
+    ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+        self.problem.constraints()
     }
 }
 
@@ -872,8 +868,8 @@ where
 impl<P, V> crate::ConstraintJacobian for FiniteDiff<P>
 where
     P: CostFunction<Param = V, Output = f64> + MaybeSync,
-    P::Constraints:
-        crate::core::constraint::evaluation::NonlinearSet<P, V, f64>,
+    P: crate::Constraints,
+    P::Set: crate::core::constraint::evaluation::NonlinearSet<P, V, f64>,
     V: Clone
         + VectorLen
         + VectorIndex<f64>
@@ -889,7 +885,7 @@ where
         x: &V,
     ) -> Result<Self::Jacobian, crate::ConstraintSolveError<P::Error>> {
         use crate::core::constraint::evaluation::NonlinearSet;
-        let expected = P::Constraints::counts(self.problem.constraint_set());
+        let expected = P::Set::counts(self.problem.constraints());
         let m = expected.0.checked_add(expected.1).ok_or(
             crate::ConstraintSolveError::InvalidConstraints(
                 crate::ConstraintError::CountOverflow,
@@ -918,13 +914,12 @@ mod tests {
         a: Vec<f64>,
     }
 
-    impl crate::ProblemConstraints for DiagQuadratic {
-        type Constraints = crate::NoConstraints;
-        fn constraint_set(
+    impl crate::Constraints for DiagQuadratic {
+        type Set = crate::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
-        {
-            crate::Constraints::new()
+        ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+            crate::ConstraintSet::new()
         }
     }
     impl CostFunction for DiagQuadratic {
@@ -1018,13 +1013,12 @@ mod tests {
         a: Vec<f64>,
     }
 
-    impl crate::ProblemConstraints for DiagQuadraticGrad {
-        type Constraints = crate::NoConstraints;
-        fn constraint_set(
+    impl crate::Constraints for DiagQuadraticGrad {
+        type Set = crate::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
-        {
-            crate::Constraints::new()
+        ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+            crate::ConstraintSet::new()
         }
     }
     impl CostFunction for DiagQuadraticGrad {
@@ -1096,13 +1090,13 @@ mod tests {
         //   H₀₀ = 2 − 400(x₁ − 3x₀²), H₀₁ = H₁₀ = −400x₀, H₁₁ = 200.
         struct Rosenbrock2;
 
-        impl crate::ProblemConstraints for Rosenbrock2 {
-            type Constraints = crate::NoConstraints;
-            fn constraint_set(
+        impl crate::Constraints for Rosenbrock2 {
+            type Set = crate::NoConstraints;
+            fn constraints(
                 &self,
-            ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+            ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_>
             {
-                crate::Constraints::new()
+                crate::ConstraintSet::new()
             }
         }
         impl CostFunction for Rosenbrock2 {

@@ -12,12 +12,12 @@ use basin::{CostFunction, Executor, Newuoa, PointState, TerminationCode};
 /// Chained Rosenbrock (basin coefficient form), minimum 0 at the all-ones point.
 struct Rosenbrock;
 
-impl basin::ProblemConstraints for Rosenbrock {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Rosenbrock {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for Rosenbrock {
@@ -124,13 +124,12 @@ fn backend_generic_nalgebra() {
 
     struct RosenbrockN;
 
-    impl basin::ProblemConstraints for RosenbrockN {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for RosenbrockN {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for RosenbrockN {

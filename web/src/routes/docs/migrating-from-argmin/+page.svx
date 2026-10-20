@@ -1,7 +1,7 @@
 # Migrating from Argmin
 
 This guide is for applications that use Argmin 0.11 as an optimization framework
-and want to move their problem definitions and solver runs to Basin 2.0. The
+and want to move their problem definitions and solver runs to Basin 3.0. The
 frameworks share the same broad vocabulary—a problem, solver, state, and
 executor—but differ in where initialization, stopping rules, errors, and
 constraints live.
@@ -16,7 +16,7 @@ Plain `Vec<f64>` needs no backend feature:
 
 ```toml
 [dependencies]
-basin = "2"
+basin = "3"
 ```
 
 For a linear-algebra backend, select the Basin feature matching the version
@@ -25,17 +25,17 @@ name the same release.
 
   | Parameter type | Backend dependency                                                                    | Basin dependency                                             |
   | -------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-  | `Vec<f64>`     | —                                                                                     | `basin = "2"`                                                |
-  | nalgebra 0.32  | `nalgebra = "0.32"`                                                                   | `basin = { version = "2", features = ["nalgebra_v0_32"] }`   |
-  | nalgebra 0.33  | `nalgebra = "0.33"`                                                                   | `basin = { version = "2", features = ["nalgebra_v0_33"] }`   |
-  | nalgebra 0.34  | `nalgebra = "0.34"`                                                                   | `basin = { version = "2", features = ["nalgebra_v0_34"] }`   |
-  | nalgebra 0.35  | `nalgebra = "0.35"`                                                                   | `basin = { version = "2", features = ["nalgebra_v0_35"] }`   |
-  | ndarray 0.15   | `ndarray = "0.15"`                                                                    | `basin = { version = "2", features = ["ndarray_v0_15"] }`    |
-  | ndarray 0.16   | `ndarray = "0.16"`                                                                    | `basin = { version = "2", features = ["ndarray_v0_16"] }`    |
-  | ndarray 0.17   | `ndarray = "0.17"`                                                                    | `basin = { version = "2", features = ["ndarray_v0_17"] }`    |
-  | faer 0.22      | `faer = { version = "0.22", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "2", features = ["faer_v0_22"] }`       |
-  | faer 0.23      | `faer = { version = "0.23", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "2", features = ["faer_v0_23"] }`       |
-  | faer 0.24      | `faer = { version = "0.24", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "2", features = ["faer_v0_24"] }`       |
+  | `Vec<f64>`     | —                                                                                     | `basin = "3"`                                                |
+  | nalgebra 0.32  | `nalgebra = "0.32"`                                                                   | `basin = { version = "3", features = ["nalgebra_v0_32"] }`   |
+  | nalgebra 0.33  | `nalgebra = "0.33"`                                                                   | `basin = { version = "3", features = ["nalgebra_v0_33"] }`   |
+  | nalgebra 0.34  | `nalgebra = "0.34"`                                                                   | `basin = { version = "3", features = ["nalgebra_v0_34"] }`   |
+  | nalgebra 0.35  | `nalgebra = "0.35"`                                                                   | `basin = { version = "3", features = ["nalgebra_v0_35"] }`   |
+  | ndarray 0.15   | `ndarray = "0.15"`                                                                    | `basin = { version = "3", features = ["ndarray_v0_15"] }`    |
+  | ndarray 0.16   | `ndarray = "0.16"`                                                                    | `basin = { version = "3", features = ["ndarray_v0_16"] }`    |
+  | ndarray 0.17   | `ndarray = "0.17"`                                                                    | `basin = { version = "3", features = ["ndarray_v0_17"] }`    |
+  | faer 0.22      | `faer = { version = "0.22", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "3", features = ["faer_v0_22"] }`       |
+  | faer 0.23      | `faer = { version = "0.23", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "3", features = ["faer_v0_23"] }`       |
+  | faer 0.24      | `faer = { version = "0.24", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "3", features = ["faer_v0_24"] }`       |
 
 The moving aliases `nalgebra`, `ndarray`, and `faer` are convenient for new
 applications. The `*_latest` spellings remain as deprecated synonyms. Exact
@@ -103,12 +103,6 @@ use std::convert::Infallible;
 
 struct Rosenbrock;
 
-impl basin::ProblemConstraints for Rosenbrock {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(&self) -> basin::NoConstraints {
-        basin::NoConstraints::EMPTY
-    }
-}
 impl CostFunction for Rosenbrock {
     type Param = Vec<f64>;
     type Output = f64;
@@ -154,11 +148,11 @@ starting point supplies the mean, and the solver configures the initial scale.
 | `LBFGS::new(MoreThuenteLineSearch::new(), m)` | `Lbfgs::new().unbounded().with_m_capacity(m)` or bounded `Lbfgsb::new()` |
 | `HagerZhangLineSearch::new()` | `HagerZhang::new()` |
 | `GaussNewtonLS` | `GaussNewton` for full steps or `LevenbergMarquardt` for damping |
-| `ParticleSwarm::new((lower, upper), n)` | `GlobalBestPso::new(seed).with_swarm_size(n)` plus problem-side `Constraints<BoxBounds<V>>` and `PopulationProgress::empty()` |
+| `ParticleSwarm::new((lower, upper), n)` | `GlobalBestPso::new(seed).with_swarm_size(n)` plus problem-side `ConstraintSet<BoxBounds<V>>` and `PopulationProgress::empty()` |
 | `BrentRoot::new(lower, upper, tol)` | `BrentRoot::new(lower, upper).with_relative_position_tolerance(tol_rel).with_absolute_position_tolerance(tol_abs).solve(function)`; no `Executor` is needed |
 | `CostFunction`, `Gradient`, `Hessian`, `Residual`, `Jacobian` | Corresponding Basin traits, with one problem-owned error type |
 | Hand-written central differences | `FiniteDiff::new(problem)` or the standalone finite-difference functions |
-| Transforms, clamps, or penalties for box bounds | `Constraints<BoxBounds<V>>` plus a solver that consumes bounds |
+| Transforms, clamps, or penalties for box bounds | `ConstraintSet<BoxBounds<V>>` plus a solver that consumes bounds |
 | Argmin's general `Error` | The application's concrete error type in `CostFunction::Error` or `Residual::Error` |
 | `add_observer(observer, mode)` | `observe_with(observer, mode)` |
 | Returning an observer error to stop | A `CancellationToken` for a clean stop or a typed problem error for a hard abort |
@@ -200,7 +194,7 @@ same-sign brackets, non-finite values, and callback errors are distinct
 
 Argmin's `LBFGS` is unconstrained. Basin exposes both algorithms through one
 type-state API: `Lbfgs<V, F, Unbounded>` is unconstrained, while `Lbfgsb` (and the
-default `Lbfgs`) requires `Constraints<BoxBounds<V>>`. Moré–Thuente is Basin's default line
+default `Lbfgs`) requires `ConstraintSet<BoxBounds<V>>`. Moré–Thuente is Basin's default line
 search for both modes.
 
 <!-- compile: basin-lbfgs -->
@@ -210,12 +204,6 @@ use std::convert::Infallible;
 
 struct Sphere;
 
-impl basin::ProblemConstraints for Sphere {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(&self) -> basin::NoConstraints {
-        basin::NoConstraints::EMPTY
-    }
-}
 impl CostFunction for Sphere {
     type Param = Vec<f64>;
     type Output = f64;
@@ -273,12 +261,6 @@ use std::convert::Infallible;
 
 struct AffineResidual;
 
-impl basin::ProblemConstraints for AffineResidual {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(&self) -> basin::NoConstraints {
-        basin::NoConstraints::EMPTY
-    }
-}
 impl Residual for AffineResidual {
     type Param = Vec<f64>;
     type Output = Vec<f64>;
@@ -332,12 +314,6 @@ enum ObjectiveError {
 
 struct FallibleSphere;
 
-impl basin::ProblemConstraints for FallibleSphere {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(&self) -> basin::NoConstraints {
-        basin::NoConstraints::EMPTY
-    }
-}
 impl CostFunction for FallibleSphere {
     type Param = Vec<f64>;
     type Output = f64;
@@ -382,12 +358,6 @@ use std::convert::Infallible;
 
 struct Sphere;
 
-impl basin::ProblemConstraints for Sphere {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(&self) -> basin::NoConstraints {
-        basin::NoConstraints::EMPTY
-    }
-}
 impl CostFunction for Sphere {
     type Param = Vec<f64>;
     type Output = f64;
@@ -419,7 +389,7 @@ evaluations can run in parallel.
 
 ## Bounds and Constraints
 
-Bounds describe the problem in Basin. Declare a box-only set through `ProblemConstraints`, then choose a
+Bounds describe the problem in Basin. Declare a box-only set through `Constraints`, then choose a
 solver whose type advertises that it consumes bounds. The compiler rejects a
 bounded solver paired with a problem that does not expose them.
 
@@ -433,12 +403,12 @@ struct BoundedQuadratic {
     upper: Vec<f64>,
 }
 
-impl basin::ProblemConstraints for BoundedQuadratic {
-    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-    fn constraint_set(
+impl basin::Constraints for BoundedQuadratic {
+    type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))
@@ -493,7 +463,7 @@ neighborhoods, and SPSO-2011 also changes the motion distribution; those are
 future separate solvers, not hidden strategy modes.
 
 Move the box from Argmin's solver constructor to the problem's
-`ProblemConstraints` declaration. Set `PsoBoundaryHandling::Preserve` to match
+`Constraints` declaration. Set `PsoBoundaryHandling::Preserve` to match
 Argmin's clamp-position/retain-velocity behavior; Basin defaults to absorbing a
 boundary crossing. Basin's default initialization follows the Standard PSO 2006
 profile, `v=(u-x)/2`, rather than Argmin's `v~U(-span, span)`, so use a warm
@@ -513,12 +483,12 @@ struct BoundedSphere {
     upper: Vec<f64>,
 }
 
-impl basin::ProblemConstraints for BoundedSphere {
-    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-    fn constraint_set(
+impl basin::Constraints for BoundedSphere {
+    type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))
@@ -624,12 +594,6 @@ use std::convert::Infallible;
 
 struct Sphere;
 
-impl basin::ProblemConstraints for Sphere {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(&self) -> basin::NoConstraints {
-        basin::NoConstraints::EMPTY
-    }
-}
 impl CostFunction for Sphere {
     type Param = Vec<f64>;
     type Output = f64;
@@ -691,12 +655,6 @@ use std::convert::Infallible;
 
 struct Sphere;
 
-impl basin::ProblemConstraints for Sphere {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(&self) -> basin::NoConstraints {
-        basin::NoConstraints::EMPTY
-    }
-}
 impl CostFunction for Sphere {
     type Param = Vec<f64>;
     type Output = f64;
@@ -732,12 +690,6 @@ use std::convert::Infallible;
 
 struct Sphere;
 
-impl basin::ProblemConstraints for Sphere {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(&self) -> basin::NoConstraints {
-        basin::NoConstraints::EMPTY
-    }
-}
 impl CostFunction for Sphere {
     type Param = DVector<f64>;
     type Output = f64;
@@ -774,12 +726,6 @@ use std::convert::Infallible;
 
 struct Sphere;
 
-impl basin::ProblemConstraints for Sphere {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(&self) -> basin::NoConstraints {
-        basin::NoConstraints::EMPTY
-    }
-}
 impl CostFunction for Sphere {
     type Param = Array1<f64>;
     type Output = f64;
@@ -816,12 +762,6 @@ use std::convert::Infallible;
 
 struct Sphere;
 
-impl basin::ProblemConstraints for Sphere {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(&self) -> basin::NoConstraints {
-        basin::NoConstraints::EMPTY
-    }
-}
 impl CostFunction for Sphere {
     type Param = Col<f64>;
     type Output = f64;

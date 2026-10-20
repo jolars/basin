@@ -17,12 +17,12 @@ macro_rules! backend_checks {
 
             struct Affine;
 
-            impl basin::ProblemConstraints for Affine {
-                type Constraints = basin::NoConstraints;
-                fn constraint_set(
+            impl basin::Constraints for Affine {
+                type Set = basin::NoConstraints;
+                fn constraints(
                     &self,
-                ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-                    basin::Constraints::new()
+                ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+                    basin::ConstraintSet::new()
                 }
             }
 impl Residual for Affine {
@@ -103,12 +103,12 @@ impl Residual for Affine {
             fn insensitive_columns_and_exact_rank_deficiency_remain_solvable() {
                 struct Deficient(bool);
 
-                impl basin::ProblemConstraints for Deficient {
-                    type Constraints = basin::NoConstraints;
-                    fn constraint_set(
+                impl basin::Constraints for Deficient {
+                    type Set = basin::NoConstraints;
+                    fn constraints(
                         &self,
-                    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-                        basin::Constraints::new()
+                    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+                        basin::ConstraintSet::new()
                     }
                 }
 impl Residual for Deficient {
@@ -175,12 +175,12 @@ impl Residual for Deficient {
             fn large_inactive_coordinate_does_not_overflow_the_scaled_norm() {
                 struct Insensitive;
 
-                impl basin::ProblemConstraints for Insensitive {
-                    type Constraints = basin::NoConstraints;
-                    fn constraint_set(
+                impl basin::Constraints for Insensitive {
+                    type Set = basin::NoConstraints;
+                    fn constraints(
                         &self,
-                    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-                        basin::Constraints::new()
+                    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+                        basin::ConstraintSet::new()
                     }
                 }
 impl Residual for Insensitive {
@@ -442,12 +442,12 @@ struct Nonlinear {
 #[derive(Debug, PartialEq)]
 struct CallbackError;
 
-impl basin::ProblemConstraints for Nonlinear {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Nonlinear {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl Residual for Nonlinear {
@@ -552,13 +552,12 @@ fn damping_configuration_survives_qr_conversion_in_either_order() {
 fn trust_qr_recovers_weak_linear_direction_with_relative_stopping() {
     struct NearlyCollinear;
 
-    impl basin::ProblemConstraints for NearlyCollinear {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for NearlyCollinear {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl Residual for NearlyCollinear {

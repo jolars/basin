@@ -11,7 +11,7 @@
 //! subproblem for the linearly-constrained `trstep` (projected truncated-CG) with
 //! the active-set step `getact`/`ActiveSetQr`. It binds
 //! [`CostFunction`](crate::core::problem::CostFunction) +
-//! [`Constraints`](crate::Constraints) (the
+//! [`ConstraintSet`](crate::ConstraintSet) (the
 //! general linear form: box bounds, equalities, and inequalities).
 //!
 //! # Architecture
@@ -23,7 +23,7 @@
 //! (`ActiveSetQr`) threaded across iterations and the residual vector `rescon`.
 //! Box bounds and linear equalities fold into the inequality form `A x ≤ b`
 //! exactly as PRIMA's `get_lincon` does (`fold_constraints`); the public solver
-//! binds the general-form `Constraints` aggregator, which carries all
+//! binds the general-form `ConstraintSet` aggregator, which carries all
 //! three kinds at once (see [`Lincoa`]).
 //!
 //! # Backends
@@ -73,7 +73,7 @@ use init::fold_constraints;
 ///
 /// Drive it with an [`Executor`](crate::Executor) over a [`PointState`] on a
 /// problem implementing [`CostFunction`] and
-/// declaring its bounds and linear blocks in [`Constraints`](crate::Constraints)
+/// declaring its bounds and linear blocks in [`ConstraintSet`](crate::ConstraintSet)
 /// (here only the inequality block is present):
 ///
 /// ```
@@ -86,9 +86,9 @@ use init::fold_constraints;
 ///     a: DenseMatrix<f64>,
 ///     b: Vec<f64>,
 /// }
-/// impl basin::ProblemConstraints for Proj  {
-///     type Constraints = basin::Constraints<basin::NoBounds, basin::LinearBlocks<basin::NoLinearBlock, basin::LinearBlock<DenseMatrix<f64>, Vec<f64>>>>;
-///     fn constraint_set(&self) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> { basin::Constraints::new().with_linear_inequalities(basin::LinearBlock::optional({ Some((&self.a, &self.b)) })) }
+/// impl basin::Constraints for Proj  {
+///     type Set = basin::ConstraintSet<basin::NoBounds, basin::LinearBlocks<basin::NoLinearBlock, basin::LinearBlock<DenseMatrix<f64>, Vec<f64>>>>;
+///     fn constraints(&self) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> { basin::ConstraintSet::new().with_linear_inequalities(basin::LinearBlock::optional({ Some((&self.a, &self.b)) })) }
 /// }
 /// impl CostFunction for Proj {
 ///     type Param = Vec<f64>;
@@ -125,10 +125,10 @@ use init::fold_constraints;
 /// - [`with_npt`](Self::with_npt): interpolation-set size `npt`, in
 ///   `[n+2, ½(n+1)(n+2)]` (default `2n+1`).
 ///
-/// # Constraints
+/// # ConstraintSet
 ///
 /// LINCOA binds the general-form
-/// [`Constraints`](crate::Constraints): a problem
+/// [`ConstraintSet`](crate::ConstraintSet): a problem
 /// exposes any combination of box bounds, linear equalities, and linear
 /// inequalities (each accessor is optional). All present blocks are folded into
 /// one unit-normalized `A x ≤ b` system: bounds as `±eᵢ` rows, an equality
@@ -295,7 +295,8 @@ impl<P, V, F> Solver<P, PointState<V, F>> for Lincoa<F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
-    P::Constraints: LincoaSet<V, F>,
+    P: crate::Constraints,
+    P::Set: LincoaSet<V, F>,
     V: Clone
         + VectorLen
         + std::ops::Index<usize, Output = F>
@@ -317,11 +318,8 @@ where
         let x0: Vec<F> = (0..n).map(|i| state.param()[i]).collect();
         let template = state.param().clone();
 
-        let data = P::Constraints::data(
-            problem.inner().constraint_set(),
-            state.param(),
-        )
-        .map_err(invalid)?;
+        let data = P::Set::data(problem.inner().constraints(), state.param())
+            .map_err(invalid)?;
         let (amat, bvec_abs) = fold_constraints(
             n,
             &x0,

@@ -1,6 +1,6 @@
 //! Augmented-Lagrangian adapter for linear equality constraints.
 //!
-//! [`AugmentedLagrangian`] wraps a [`Constraints`](crate::Constraints) problem
+//! [`AugmentedLagrangian`] wraps a [`ConstraintSet`](crate::ConstraintSet) problem
 //! `min f(x) s.t. A x = b` together with a multiplier estimate `λ ∈ ℝᵐ` and
 //! a penalty parameter `ρ > 0`, and exposes the unconstrained augmented
 //! Lagrangian
@@ -46,7 +46,7 @@ use crate::core::constraint::evaluation::{
 use crate::core::math::{NormSquared, Scalar, ScaledAdd, VectorLen};
 use crate::core::problem::{CostFunction, Gradient};
 
-/// A [`Constraints`](crate::Constraints) problem rewritten as the unconstrained
+/// A [`ConstraintSet`](crate::ConstraintSet) problem rewritten as the unconstrained
 /// augmented Lagrangian `f(x) + λᵀ(A x − b) + (ρ/2)‖A x − b‖²` at a fixed
 /// multiplier estimate `λ` and penalty `ρ`.
 ///
@@ -161,19 +161,18 @@ mod tests {
         }
     }
 
-    impl crate::ProblemConstraints for Probe {
-        type Constraints = crate::Constraints<
+    impl crate::Constraints for Probe {
+        type Set = crate::ConstraintSet<
             crate::NoBounds,
             crate::LinearBlocks<
                 crate::LinearBlock<DMatrix<f64>, DVector<f64>>,
                 crate::NoLinearBlock,
             >,
         >;
-        fn constraint_set(
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
-        {
-            crate::Constraints::new().with_linear_equalities(
+        ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+            crate::ConstraintSet::new().with_linear_equalities(
                 crate::LinearBlock::new(&self.a, &self.b),
             )
         }
@@ -250,9 +249,9 @@ mod tests {
     }
 }
 
-impl<P, V, F> crate::ProblemConstraints for AugmentedLagrangian<'_, P, V, F> {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> crate::NoConstraints {
+impl<P, V, F> crate::Constraints for AugmentedLagrangian<'_, P, V, F> {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> crate::NoConstraints {
         crate::NoConstraints::EMPTY
     }
 }

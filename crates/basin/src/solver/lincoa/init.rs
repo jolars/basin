@@ -46,7 +46,7 @@ pub(crate) struct LinearSetup<F = f64> {
 /// `n × m` column-major. The right-hand side is relaxed so `x0` is feasible
 /// (`b_j ← max(b_j, a_jᵀ x0)`, computed with the *un-normalized* normals, exactly
 /// as Powell's code does), then every column and its `b` entry are divided by the
-/// normal's Euclidean norm. Constraints with a zero gradient are dropped (PRIMA
+/// normal's Euclidean norm. ConstraintSet with a zero gradient are dropped (PRIMA
 /// warns and ignores them).
 ///
 /// - `lower`/`upper`: optional box bounds, length `n`; non-finite entries mean the

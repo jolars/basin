@@ -79,12 +79,12 @@ impl<P> HasSpec for Sphere<P> {
     const SPEC: &'static ProblemSpec = &SPHERE_SPEC;
 }
 
-impl crate::ProblemConstraints for Sphere<Vec<f64>> {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(
+impl crate::Constraints for Sphere<Vec<f64>> {
+    type Set = crate::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
-        crate::Constraints::new()
+    ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::ConstraintSet::new()
     }
 }
 impl CostFunction for Sphere<Vec<f64>> {
@@ -115,9 +115,9 @@ crate::backend_macros::nalgebra_versions! {
     use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
 
-    impl crate::ProblemConstraints for Sphere<DVector<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Sphere<DVector<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Sphere<DVector<f64>> {
         type Param = DVector<f64>;
@@ -151,9 +151,9 @@ crate::backend_macros::ndarray_versions! {
     use crate::{CostFunction, Gradient};
     use ndarray::Array1;
 
-    impl crate::ProblemConstraints for Sphere<Array1<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Sphere<Array1<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Sphere<Array1<f64>> {
         type Param = Array1<f64>;
@@ -190,9 +190,9 @@ crate::backend_macros::faer_versions! {
     use crate::{CostFunction, Gradient};
     use faer::Col;
 
-    impl crate::ProblemConstraints for Sphere<Col<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Sphere<Col<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Sphere<Col<f64>> {
         type Param = Col<f64>;
@@ -263,12 +263,12 @@ impl SphereBoxed<Vec<f64>> {
     }
 }
 
-impl crate::ProblemConstraints for SphereBoxed<Vec<f64>> {
-    type Constraints = crate::Constraints<crate::BoxBounds<Vec<f64>>>;
-    fn constraint_set(
+impl crate::Constraints for SphereBoxed<Vec<f64>> {
+    type Set = crate::ConstraintSet<crate::BoxBounds<Vec<f64>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
-        crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+    ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))
@@ -312,9 +312,9 @@ crate::backend_macros::nalgebra_versions! {
         }
     }
 
-    impl crate::ProblemConstraints for SphereBoxed<DVector<f64>>  {
-    type Constraints = crate::Constraints<crate::BoxBounds<DVector<f64>>>;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+    impl crate::Constraints for SphereBoxed<DVector<f64>>  {
+    type Set = crate::ConstraintSet<crate::BoxBounds<DVector<f64>>>;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 }
 impl CostFunction for SphereBoxed<DVector<f64>> {
         type Param = DVector<f64>;
@@ -358,9 +358,9 @@ crate::backend_macros::ndarray_versions! {
         }
     }
 
-    impl crate::ProblemConstraints for SphereBoxed<Array1<f64>>  {
-    type Constraints = crate::Constraints<crate::BoxBounds<Array1<f64>>>;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+    impl crate::Constraints for SphereBoxed<Array1<f64>>  {
+    type Set = crate::ConstraintSet<crate::BoxBounds<Array1<f64>>>;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 }
 impl CostFunction for SphereBoxed<Array1<f64>> {
         type Param = Array1<f64>;
@@ -407,9 +407,9 @@ crate::backend_macros::faer_versions! {
     // faer's `Col` doesn't expose a `&[f64]` directly across all 0.24
     // APIs we care about, so we evaluate elementwise here rather than
     // routing through the slice-based primitive.
-    impl crate::ProblemConstraints for SphereBoxed<Col<f64>>  {
-    type Constraints = crate::Constraints<crate::BoxBounds<Col<f64>>>;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+    impl crate::Constraints for SphereBoxed<Col<f64>>  {
+    type Set = crate::ConstraintSet<crate::BoxBounds<Col<f64>>>;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 }
 impl CostFunction for SphereBoxed<Col<f64>> {
         type Param = Col<f64>;

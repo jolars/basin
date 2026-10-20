@@ -1,46 +1,41 @@
 //! Canonical problem-side constraint sets and checked evaluation capabilities.
 //!
-//! [`ProblemConstraints`] declares the complete constraint set. Solvers accept
-//! only block combinations they support. Bounds, linear equalities and
+//! [`Constraints`] optionally declares the complete constraint set. Constrained
+//! solvers accept only block combinations they support. Unconstrained solvers
+//! ignore the declaration. Bounds, linear equalities and
 //! inequalities, and nonlinear equalities and inequalities remain distinct.
 
 //!
-//! An unconstrained solver cannot discard a declared box:
+//! An unconstrained solver can optimize an objective without enforcing its box:
 //!
-//! ```compile_fail
-//! use basin::{BoxBounds, Constrained, Constraints, CostFunction, Executor,
-//!             NelderMead, NoConstraints, ProblemConstraints};
+//! ```
+//! use basin::{BoxBounds, Constrained, ConstraintSet, CostFunction, Executor,
+//!             NelderMead};
 //! struct Sphere;
-//! impl ProblemConstraints for Sphere {
-//!     type Constraints = NoConstraints;
-//!     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
-//! }
 //! impl CostFunction for Sphere {
 //!     type Param = Vec<f64>;
 //!     type Output = f64;
 //!     type Error = std::convert::Infallible;
 //!     fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
-//!         Ok(x.iter().map(|v| v * v).sum())
+//!         Ok(x.iter().map(|v| (v - 2.0).powi(2)).sum())
 //!     }
 //! }
-//! let constraints = Constraints::new()
+//! let constraints = ConstraintSet::new()
 //!     .with_bounds(BoxBounds::new(Some(vec![-1.0]), Some(vec![1.0])));
 //! let problem = Constrained::new(Sphere, constraints);
-//! Executor::from_start(problem, NelderMead::new(), vec![0.5]).run();
+//! let result = Executor::from_start(problem, NelderMead::new(), vec![0.5])
+//!     .max_iter(1000).run().unwrap();
+//! assert!(result.param()[0] > 1.0);
 //! ```
 //!
 //! A box-only solver also rejects an additional nonlinear block, even when
 //! the problem supplies the required value callback:
 //!
 //! ```compile_fail
-//! use basin::{BoxBounds, Constrained, ConstraintSolveError, Constraints,
-//!             CostFunction, Executor, NelderMead, NoConstraints,
-//!             NonlinearInequalityValues, ProblemConstraints};
+//! use basin::{BoxBounds, Constrained, ConstraintSolveError, ConstraintSet,
+//!             CostFunction, Executor, NelderMead,
+//!             NonlinearInequalityValues};
 //! struct Sphere;
-//! impl ProblemConstraints for Sphere {
-//!     type Constraints = NoConstraints;
-//!     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
-//! }
 //! impl CostFunction for Sphere {
 //!     type Param = Vec<f64>;
 //!     type Output = f64;
@@ -58,7 +53,7 @@
 //!         Ok(vec![x[0] - 0.25])
 //!     }
 //! }
-//! let constraints = Constraints::new()
+//! let constraints = ConstraintSet::new()
 //!     .with_bounds(BoxBounds::new(Some(vec![-1.0]), Some(vec![1.0])))
 //!     .with_nonlinear_inequalities(1);
 //! let problem = Constrained::new(Sphere, constraints);
@@ -77,7 +72,7 @@ pub use adapters::*;
 /// in callback order. Columns correspond to parameters. Linear blocks supply
 /// their own derivatives and are excluded. This storage is independent of the
 /// linear matrices. Finite-difference adapters synthesize this capability.
-pub trait ConstraintJacobian: ProblemConstraints {
+pub trait ConstraintJacobian {
     /// Parameter type.
     type Param;
     /// Nonlinear Jacobian storage.

@@ -16,12 +16,12 @@ struct Quadratic {
     fail_at: Option<u64>,
 }
 
-impl basin::ProblemConstraints for Quadratic {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Quadratic {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for Quadratic {
@@ -508,14 +508,12 @@ impl<V, F> Sphere<V, F> {
     }
 }
 
-impl<V: basin::Dot<F>, F: basin::Scalar> basin::ProblemConstraints
-    for Sphere<V, F>
-{
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl<V: basin::Dot<F>, F: basin::Scalar> basin::Constraints for Sphere<V, F> {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl<V: basin::Dot<F>, F: basin::Scalar> CostFunction for Sphere<V, F> {
@@ -601,13 +599,12 @@ fn seeded_annealing_preserves_rng_neighbor_and_reannealing_history() {
 
     struct RuggedCost;
 
-    impl basin::ProblemConstraints for RuggedCost {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for RuggedCost {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for RuggedCost {

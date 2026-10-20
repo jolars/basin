@@ -20,19 +20,21 @@ impl Quadratic {
     }
 }
 
-impl basin::ProblemConstraints for Quadratic {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(&self) -> basin::NoConstraints {
+impl basin::Constraints for Quadratic {
+    type Set = basin::NoConstraints;
+    fn constraints(&self) -> basin::NoConstraints {
         basin::NoConstraints::EMPTY
     }
 }
 fn bounded(
     p: Quadratic,
-) -> basin::Constrained<Quadratic, basin::Constraints<basin::BoxBounds<Vec<f64>>>>
-{
+) -> basin::Constrained<
+    Quadratic,
+    basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>,
+> {
     let bounds =
         basin::BoxBounds::new(Some(p.lower.clone()), Some(p.upper.clone()));
-    basin::Constrained::new(p, basin::Constraints::new().with_bounds(bounds))
+    basin::Constrained::new(p, basin::ConstraintSet::new().with_bounds(bounds))
 }
 impl CostFunction for Quadratic {
     type Param = Vec<f64>;

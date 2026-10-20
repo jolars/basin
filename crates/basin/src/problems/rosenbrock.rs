@@ -86,12 +86,12 @@ impl<P> Default for Rosenbrock<P> {
     }
 }
 
-impl crate::ProblemConstraints for Rosenbrock<Vec<f64>> {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(
+impl crate::Constraints for Rosenbrock<Vec<f64>> {
+    type Set = crate::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
-        crate::Constraints::new()
+    ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::ConstraintSet::new()
     }
 }
 impl CostFunction for Rosenbrock<Vec<f64>> {
@@ -122,9 +122,9 @@ crate::backend_macros::nalgebra_versions! {
     use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
 
-    impl crate::ProblemConstraints for Rosenbrock<DVector<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Rosenbrock<DVector<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Rosenbrock<DVector<f64>> {
         type Param = DVector<f64>;
@@ -159,9 +159,9 @@ crate::backend_macros::ndarray_versions! {
     use ndarray::Array1;
 
     // Array1 owns a contiguous buffer, so the `as_slice` calls always succeed.
-    impl crate::ProblemConstraints for Rosenbrock<Array1<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Rosenbrock<Array1<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Rosenbrock<Array1<f64>> {
         type Param = Array1<f64>;
@@ -201,9 +201,9 @@ crate::backend_macros::faer_versions! {
     // faer's `Col` doesn't expose a `&[f64]` directly across all 0.24 APIs we
     // care about, so we evaluate elementwise here rather than routing through
     // the slice-based primitives.
-    impl crate::ProblemConstraints for Rosenbrock<Col<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Rosenbrock<Col<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Rosenbrock<Col<f64>> {
         type Param = Col<f64>;
@@ -310,12 +310,12 @@ impl<P> HasSpec for RosenbrockResiduals<P> {
     const SPEC: &'static ProblemSpec = &ROSENBROCK_SPEC;
 }
 
-impl crate::ProblemConstraints for RosenbrockResiduals<Vec<f64>> {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(
+impl crate::Constraints for RosenbrockResiduals<Vec<f64>> {
+    type Set = crate::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
-        crate::Constraints::new()
+    ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::ConstraintSet::new()
     }
 }
 impl CostFunction for RosenbrockResiduals<Vec<f64>> {
@@ -362,9 +362,9 @@ crate::backend_macros::nalgebra_versions! {
     use crate::{CostFunction, Jacobian, Residual};
     use nalgebra::{DMatrix, DVector};
 
-    impl crate::ProblemConstraints for RosenbrockResiduals<DVector<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for RosenbrockResiduals<DVector<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for RosenbrockResiduals<DVector<f64>> {
         type Param = DVector<f64>;
@@ -414,9 +414,9 @@ crate::backend_macros::ndarray_versions! {
     use crate::{CostFunction, Jacobian, Residual};
     use ndarray::{Array1, Array2};
 
-    impl crate::ProblemConstraints for RosenbrockResiduals<Array1<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for RosenbrockResiduals<Array1<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for RosenbrockResiduals<Array1<f64>> {
         type Param = Array1<f64>;
@@ -475,9 +475,9 @@ crate::backend_macros::faer_versions! {
 
     // faer's `Col` doesn't expose `&[f64]` across all 0.24 APIs we care
     // about; evaluate elementwise to mirror the cost-form impl above.
-    impl crate::ProblemConstraints for RosenbrockResiduals<Col<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for RosenbrockResiduals<Col<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for RosenbrockResiduals<Col<f64>> {
         type Param = Col<f64>;

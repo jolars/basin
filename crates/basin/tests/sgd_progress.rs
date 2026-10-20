@@ -1,7 +1,7 @@
 //! SGD publishes complete objective records without changing its batch cadence.
 
 use basin::{
-    BoxBounds, Constrained, Constraints, CostFunction, EvaluationKind,
+    BoxBounds, Constrained, ConstraintSet, CostFunction, EvaluationKind,
     Executor, MiniBatchGradient, PointState, RelaxedInner, SamplingDomain, Sgd,
     State, TerminationCode,
 };
@@ -11,12 +11,12 @@ struct Quadratic {
     samples: usize,
 }
 
-impl basin::ProblemConstraints for Quadratic {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Quadratic {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for Quadratic {
@@ -69,7 +69,7 @@ fn explicit_box_relaxations_preserve_sgd_trajectory_and_counts() {
     let boxed = || {
         Constrained::new(
             problem(),
-            Constraints::new().with_bounds(BoxBounds::new(
+            ConstraintSet::new().with_bounds(BoxBounds::new(
                 Some(vec![0.0; 2]),
                 Some(vec![1.0; 2]),
             )),

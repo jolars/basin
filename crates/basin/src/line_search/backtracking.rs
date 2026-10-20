@@ -173,13 +173,12 @@ mod tests {
 
     struct RejectEveryTrial<F>(F);
 
-    impl<F: Scalar> crate::ProblemConstraints for RejectEveryTrial<F> {
-        type Constraints = crate::NoConstraints;
-        fn constraint_set(
+    impl<F: Scalar> crate::Constraints for RejectEveryTrial<F> {
+        type Set = crate::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
-        {
-            crate::Constraints::new()
+        ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+            crate::ConstraintSet::new()
         }
     }
     impl<F: Scalar> CostFunction for RejectEveryTrial<F> {
@@ -242,13 +241,12 @@ mod tests {
     /// ∇f = 2(x − 3).
     struct Quadratic;
 
-    impl crate::ProblemConstraints for Quadratic {
-        type Constraints = crate::NoConstraints;
-        fn constraint_set(
+    impl crate::Constraints for Quadratic {
+        type Set = crate::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
-        {
-            crate::Constraints::new()
+        ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+            crate::ConstraintSet::new()
         }
     }
     impl CostFunction for Quadratic {

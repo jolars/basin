@@ -142,10 +142,6 @@ impl<F: Scalar, L: LossFunction<F> + ?Sized> LossFunction<F> for &L {
 /// use basin::{DenseMatrix, Executor, HuberLoss, Jacobian,
 ///     LevenbergMarquardt, Residual, RobustLeastSquares};
 /// struct Location;
-/// impl basin::ProblemConstraints for Location  {
-///     type Constraints = basin::NoConstraints;
-///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
-/// }
 /// impl Residual for Location {
 ///     type Param = Vec<f64>;
 ///     type Output = Vec<f64>;
@@ -335,15 +331,15 @@ where
     }
 }
 
-impl<P, L, F> crate::ProblemConstraints for RobustLeastSquares<P, L, F>
+impl<P, L, F> crate::Constraints for RobustLeastSquares<P, L, F>
 where
-    P: crate::ProblemConstraints,
+    P: crate::Constraints,
     F: crate::Scalar,
 {
-    type Constraints = P::Constraints;
-    fn constraint_set(
+    type Set = P::Set;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
-        self.problem.constraint_set()
+    ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+        self.problem.constraints()
     }
 }

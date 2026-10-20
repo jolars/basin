@@ -417,13 +417,13 @@ exercise its RNG. Run the experiment with
 
 Integrality belongs in the canonical problem-side declaration, alongside bounds
 and constraint blocks. The proposed public spelling is
-`Constraints<B, L, N, D = ContinuousDomain>`, with an explicit builder that
+`ConstraintSet<B, L, N, D = ContinuousDomain>`, with an explicit builder that
 changes the domain type. Existing declarations retain their continuous meaning.
 Do not add a required `Domain` associated type to every problem.
 
 The prototype wraps the existing constraint set in
 `DomainConstraints<C, D = ContinuousDomain>` rather than changing the public
-`Constraints` type. This demonstrates a separate additive implementation path
+`ConstraintSet` type. This demonstrates a separate additive implementation path
 through the sealed `ConstraintDescription` trait. It does not prove source or
 serialization compatibility for the proposed fourth parameter. Production
 integration must check generic builders, borrowed views, and serialization
@@ -437,9 +437,11 @@ The prototype establishes these contracts:
   solve. A borrowed declaration shares both the original bounds and mask.
   Replacing bounds preserves the domain block. Finite-difference and robust-loss
   adapters preserve the complete declaration and its type.
-- Unsupported solvers reject integer declarations through their existing trait
-  bounds. Compile-time checks cover continuous DE, ordinary and projected
-  Nelder-Mead, `DeInject`, and `RelaxedInner`, including relaxed injection. The
+- Constraint-aware solvers reject unsupported integer declarations through their
+  trait bounds. Compile-time checks cover continuous DE, projected Nelder-Mead,
+  `DeInject`, and `RelaxedInner`, including relaxed injection. Ordinary
+  unconstrained solvers ignore these declarations and may evaluate fractional
+  coordinates. The
   box-relaxation adapter is not permission to discard an integer domain. Future
   constraint transformations must consume only blocks they support and retain
   any unconsumed domain declaration.

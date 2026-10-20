@@ -64,9 +64,9 @@ use driver::{CobylaWork, Transition};
 ///
 /// // min x0·x1  s.t.  x0² + x1² ≤ 1   (optimum F* = −1/2 on the unit circle).
 /// struct Disk;
-/// impl basin::ProblemConstraints for Disk  {
-///     type Constraints = basin::Constraints<basin::NoBounds, basin::NoLinearConstraints, basin::NonlinearBlocks<basin::NoNonlinearBlock, basin::NonlinearBlock>>;
-///     fn constraint_set(&self) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> { basin::Constraints::new().with_nonlinear_inequalities(1) }
+/// impl basin::Constraints for Disk  {
+///     type Set = basin::ConstraintSet<basin::NoBounds, basin::NoLinearConstraints, basin::NonlinearBlocks<basin::NoNonlinearBlock, basin::NonlinearBlock>>;
+///     fn constraints(&self) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> { basin::ConstraintSet::new().with_nonlinear_inequalities(1) }
 /// }
 /// impl CostFunction for Disk {
 ///     type Param = Vec<f64>;
@@ -102,10 +102,10 @@ use driver::{CobylaWork, Transition};
 /// - [`with_final_radius`](Self::with_final_radius): final radius `ρ_end`, ~ the required
 ///   accuracy (default `1e-6`); must satisfy `ρ_beg > ρ_end > 0`.
 ///
-/// # Constraints
+/// # ConstraintSet
 ///
-/// Declare the complete set through [`ProblemConstraints`](crate::ProblemConstraints)
-/// and [`Constraints`](crate::Constraints), then pass the problem directly to
+/// Declare the complete set through [`Constraints`](crate::Constraints)
+/// and [`ConstraintSet`](crate::ConstraintSet), then pass the problem directly to
 /// the executor. Implement [`NonlinearInequalityValues`](crate::NonlinearInequalityValues)
 /// or [`NonlinearEqualityValues`](crate::NonlinearEqualityValues) for each
 /// declared nonlinear block. Values may use a different backend from parameters.
@@ -444,7 +444,8 @@ impl<P, V, F> Solver<P, SelectedState<V, F>> for Cobyla<V, F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
-    P::Constraints: CobylaSet<P, V, F>,
+    P: crate::Constraints,
+    P::Set: CobylaSet<P, V, F>,
     V: Clone + VectorLen + std::ops::IndexMut<usize, Output = F>,
 {
     type Error = ConstraintSolveError<P::Error>;
@@ -454,14 +455,14 @@ where
         state: SelectedState<V, F>,
     ) -> Result<SelectedState<V, F>, Self::Error> {
         self.layout = None;
-        let layout = P::Constraints::layout(
-            problem.inner().constraint_set(),
+        let layout = P::Set::layout(
+            problem.inner().constraints(),
             state.param().vec_len(),
         )
         .map_err(invalid)?;
         let count = layout.folded_count().map_err(invalid)?;
         let result = self.init_with(problem, state, count, |p, x| {
-            P::Constraints::values(p, x, &layout)
+            P::Set::values(p, x, &layout)
         });
         self.layout = Some(layout);
         result
@@ -476,7 +477,7 @@ where
             .take()
             .expect("Cobyla::init prepares the constraint layout");
         let result = self.next_iter_with(problem, state, |p, x| {
-            P::Constraints::values(p, x, &layout)
+            P::Set::values(p, x, &layout)
         });
         self.layout = Some(layout);
         result

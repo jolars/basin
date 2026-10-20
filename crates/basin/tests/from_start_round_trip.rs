@@ -25,12 +25,12 @@ struct Quad {
     c: Vec<f64>,
 }
 
-impl basin::ProblemConstraints for Quad {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for Quad {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl CostFunction for Quad {
@@ -72,12 +72,12 @@ struct LinearResiduals {
     c: Vec<f64>,
 }
 
-impl basin::ProblemConstraints for LinearResiduals {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl basin::Constraints for LinearResiduals {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl Residual for LinearResiduals {
@@ -264,13 +264,12 @@ fn bfgs_from_start_nalgebra_backend() {
 
     struct QuadN;
 
-    impl basin::ProblemConstraints for QuadN {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for QuadN {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for QuadN {
@@ -317,13 +316,12 @@ fn bfgs_from_start_faer_backend() {
 
     struct QuadF;
 
-    impl basin::ProblemConstraints for QuadF {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for QuadF {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for QuadF {
@@ -366,13 +364,12 @@ fn from_start_round_trips_at_f32() {
         c: Vec<f32>,
     }
 
-    impl basin::ProblemConstraints for QuadF32 {
-        type Constraints = basin::NoConstraints;
-        fn constraint_set(
+    impl basin::Constraints for QuadF32 {
+        type Set = basin::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
         }
     }
     impl CostFunction for QuadF32 {

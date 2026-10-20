@@ -14,7 +14,7 @@ use crate::line_search::{Constant, LineSearch, LineSearchOutcome};
 /// Steepest-descent step along `−∇f` followed by an element-wise
 /// projection back into `[lower, upper]`. The first n-D constrained
 /// solver in basin and the smallest vehicle for the
-/// box-only [`ProblemConstraints`](crate::ProblemConstraints) declaration; handing this solver an unconstrained
+/// box-only [`Constraints`](crate::Constraints) declaration; handing this solver an unconstrained
 /// problem is a compile error per tenet 4.
 ///
 /// # Algorithm
@@ -90,9 +90,9 @@ use crate::line_search::{Constant, LineSearch, LineSearchOutcome};
 ///     lower: Vec<f64>,
 ///     upper: Vec<f64>,
 /// }
-/// impl basin::ProblemConstraints for ShiftedSphere  {
-///     type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-///     fn constraint_set(&self) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> { basin::Constraints::new().with_bounds(basin::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+/// impl basin::Constraints for ShiftedSphere  {
+///     type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+///     fn constraints(&self) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> { basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 /// }
 /// impl CostFunction for ShiftedSphere {
 ///     type Param = Vec<f64>;

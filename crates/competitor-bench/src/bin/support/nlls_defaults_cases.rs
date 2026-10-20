@@ -11,13 +11,13 @@ struct Affine {
     floor: f64,
 }
 
-impl basin::ProblemConstraints for Affine {
-    type Constraints = basin::NoConstraints;
+impl basin::Constraints for Affine {
+    type Set = basin::NoConstraints;
 
-    fn constraint_set(
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 

@@ -16,16 +16,16 @@ struct Hs71 {
     upper: Vec<f64>,
 }
 
-impl basin::ProblemConstraints for Hs71 {
-    type Constraints = basin::Constraints<
+impl basin::Constraints for Hs71 {
+    type Set = basin::ConstraintSet<
         basin::BoxBounds<Vec<f64>>,
         basin::NoLinearConstraints,
         basin::NonlinearBlocks<basin::NonlinearBlock, basin::NonlinearBlock>,
     >;
-    fn constraint_set(
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
             .with_bounds(basin::BoxBounds::new(
                 Some(&self.lower),
                 Some(&self.upper),

@@ -14,16 +14,16 @@ struct Prob {
     m: usize,
 }
 
-impl crate::ProblemConstraints for Prob {
-    type Constraints = crate::Constraints<
+impl crate::Constraints for Prob {
+    type Set = crate::ConstraintSet<
         crate::NoBounds,
         crate::NoLinearConstraints,
         crate::NonlinearBlocks<crate::NoNonlinearBlock, crate::NonlinearBlock>,
     >;
-    fn constraint_set(
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
-        crate::Constraints::new().with_nonlinear_inequalities(self.m)
+    ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::ConstraintSet::new().with_nonlinear_inequalities(self.m)
     }
 }
 impl CostFunction for Prob {
@@ -127,7 +127,7 @@ fn problem_f_fletcher() {
 fn problem_g_fletcher() {
     // (G) min x3 s.t. 5x1 − x2 + x3 ≥ 0, −5x1 − x2 + x3 ≥ 0,
     //     x1² + x2² + 4x2 ≤ x3 → F* = −3.
-    // Constraints in ≤ 0 form: −(5x1 − x2 + x3), −(−5x1 − x2 + x3),
+    // ConstraintSet in ≤ 0 form: −(5x1 − x2 + x3), −(−5x1 − x2 + x3),
     //     x1² + x2² + 4x2 − x3.
     let prob = Prob {
         f: |x| x[2],

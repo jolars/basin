@@ -196,7 +196,7 @@ pub struct BarrierInnerDiagnostics<F: Scalar = f64> {
 /// # Examples
 ///
 /// `BarrierMethod` wraps a gradient inner solver (e.g. `BFGS` paired with
-/// `Backtracking`) to handle `Constraints`. See
+/// `Backtracking`) to handle `ConstraintSet`. See
 /// [`ProjectedGradientDescent`](crate::solver::ProjectedGradientDescent)
 /// for the simpler box-constrained pattern.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

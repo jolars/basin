@@ -2,17 +2,17 @@
 
 use basin::{
     BoundedCmaEs, BoundedCmaInject, BoxBounds, Constrained, ConstraintError,
-    ConstraintSolveError, Constraints, CostFunction, DenseMatrix, Executor,
-    NelderMead, NoConstraints, PopulationProgress, Problem, ProblemConstraints,
-    RelaxedInner, Solver,
+    ConstraintSet, ConstraintSolveError, Constraints, CostFunction,
+    DenseMatrix, Executor, NelderMead, NoConstraints, PopulationProgress,
+    Problem, RelaxedInner, Solver,
 };
 use std::convert::Infallible;
 
 struct Quadratic;
-impl ProblemConstraints for Quadratic {
-    type Constraints = NoConstraints;
-    fn constraint_set(&self) -> NoConstraints {
-        Constraints::new()
+impl Constraints for Quadratic {
+    type Set = NoConstraints;
+    fn constraints(&self) -> NoConstraints {
+        ConstraintSet::new()
     }
 }
 impl CostFunction for Quadratic {
@@ -25,12 +25,13 @@ impl CostFunction for Quadratic {
     }
 }
 
-type BoxedQuadratic = Constrained<Quadratic, Constraints<BoxBounds<Vec<f64>>>>;
+type BoxedQuadratic =
+    Constrained<Quadratic, ConstraintSet<BoxBounds<Vec<f64>>>>;
 
 fn boxed(lower: Vec<f64>, upper: Vec<f64>) -> BoxedQuadratic {
     Constrained::new(
         Quadratic,
-        Constraints::new()
+        ConstraintSet::new()
             .with_bounds(BoxBounds::new(Some(lower), Some(upper))),
     )
 }

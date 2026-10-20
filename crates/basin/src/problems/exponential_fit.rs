@@ -164,13 +164,12 @@ mod vec_impl {
     use super::{ExponentialFit, exponential_fit, exponential_fit_residuals};
     use crate::{CostFunction, Residual};
 
-    impl crate::ProblemConstraints for ExponentialFit<Vec<f64>> {
-        type Constraints = crate::NoConstraints;
-        fn constraint_set(
+    impl crate::Constraints for ExponentialFit<Vec<f64>> {
+        type Set = crate::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
-        {
-            crate::Constraints::new()
+        ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+            crate::ConstraintSet::new()
         }
     }
     impl CostFunction for ExponentialFit<Vec<f64>> {
@@ -206,9 +205,9 @@ crate::backend_macros::nalgebra_versions! {
     use crate::{CostFunction, Jacobian, Residual};
     use nalgebra::{DMatrix, DVector};
 
-    impl crate::ProblemConstraints for ExponentialFit<DVector<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for ExponentialFit<DVector<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for ExponentialFit<DVector<f64>> {
         type Param = DVector<f64>;
@@ -265,9 +264,9 @@ crate::backend_macros::ndarray_versions! {
     use crate::{CostFunction, Jacobian, Residual};
     use ndarray::{Array1, Array2};
 
-    impl crate::ProblemConstraints for ExponentialFit<Array1<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for ExponentialFit<Array1<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for ExponentialFit<Array1<f64>> {
         type Param = Array1<f64>;
@@ -334,9 +333,9 @@ crate::backend_macros::faer_versions! {
     use crate::{CostFunction, Jacobian, Residual};
     use faer::{Col, Mat};
 
-    impl crate::ProblemConstraints for ExponentialFit<Col<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for ExponentialFit<Col<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for ExponentialFit<Col<f64>> {
         type Param = Col<f64>;

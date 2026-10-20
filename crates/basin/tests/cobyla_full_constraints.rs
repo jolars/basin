@@ -21,18 +21,16 @@ struct Mixed<V, M> {
     vector: fn(Vec<f64>) -> V,
 }
 
-impl<V: Index<usize, Output = f64>, M> basin::ProblemConstraints
-    for Mixed<V, M>
-{
-    type Constraints = basin::Constraints<
+impl<V: Index<usize, Output = f64>, M> basin::Constraints for Mixed<V, M> {
+    type Set = basin::ConstraintSet<
         basin::BoxBounds<V>,
         basin::LinearBlocks<basin::LinearBlock<M, V>, basin::LinearBlock<M, V>>,
         basin::NonlinearBlocks<basin::NoNonlinearBlock, basin::NonlinearBlock>,
     >;
-    fn constraint_set(
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
             .with_bounds(basin::BoxBounds::new(
                 Some(&self.lower),
                 Some(&self.upper),
@@ -207,16 +205,16 @@ fn canonical_set_always_supplies_every_declared_block() {
 
 struct Expanded(Mixed<Vec<f64>, DenseMatrix<f64>>);
 
-impl basin::ProblemConstraints for Expanded {
-    type Constraints = basin::Constraints<
+impl basin::Constraints for Expanded {
+    type Set = basin::ConstraintSet<
         basin::NoBounds,
         basin::NoLinearConstraints,
         basin::NonlinearBlocks<basin::NoNonlinearBlock, basin::NonlinearBlock>,
     >;
-    fn constraint_set(
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_nonlinear_inequalities(6)
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_nonlinear_inequalities(6)
     }
 }
 impl CostFunction for Expanded {
@@ -282,16 +280,16 @@ struct FallibleDisk<'a> {
     fail_at: usize,
 }
 
-impl basin::ProblemConstraints for FallibleDisk<'_> {
-    type Constraints = basin::Constraints<
+impl basin::Constraints for FallibleDisk<'_> {
+    type Set = basin::ConstraintSet<
         basin::NoBounds,
         basin::NoLinearConstraints,
         basin::NonlinearBlocks<basin::NoNonlinearBlock, basin::NonlinearBlock>,
     >;
-    fn constraint_set(
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new().with_nonlinear_inequalities(1)
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new().with_nonlinear_inequalities(1)
     }
 }
 impl CostFunction for FallibleDisk<'_> {
@@ -403,8 +401,8 @@ fn constraint_count_changes_return_typed_errors_during_initialization_and_later_
         grow_at: usize,
     }
 
-    impl basin::ProblemConstraints for GrowingDisk {
-        type Constraints = basin::Constraints<
+    impl basin::Constraints for GrowingDisk {
+        type Set = basin::ConstraintSet<
             basin::NoBounds,
             basin::NoLinearConstraints,
             basin::NonlinearBlocks<
@@ -412,11 +410,10 @@ fn constraint_count_changes_return_typed_errors_during_initialization_and_later_
                 basin::NonlinearBlock,
             >,
         >;
-        fn constraint_set(
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new().with_nonlinear_inequalities({
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new().with_nonlinear_inequalities({
                 1 + usize::from(self.costs.get() >= self.grow_at)
             })
         }
@@ -444,7 +441,7 @@ fn constraint_count_changes_return_typed_errors_during_initialization_and_later_
             {
                 let mut values = vec![x[0] * x[0] + x[1] * x[1] - 1.0];
                 values.resize(
-                    basin::ProblemConstraints::constraint_set(self)
+                    basin::Constraints::constraints(self)
                         .nonlinear()
                         .inequalities()
                         .count(),
@@ -483,8 +480,8 @@ fn reused_solver_handles_changing_dimensions_and_empty_constraint_blocks() {
         lower: Option<Vec<f64>>,
     }
 
-    impl basin::ProblemConstraints for Sphere {
-        type Constraints = basin::Constraints<
+    impl basin::Constraints for Sphere {
+        type Set = basin::ConstraintSet<
             basin::BoxBounds<Vec<f64>>,
             basin::NoLinearConstraints,
             basin::NonlinearBlocks<
@@ -492,11 +489,10 @@ fn reused_solver_handles_changing_dimensions_and_empty_constraint_blocks() {
                 basin::NonlinearBlock,
             >,
         >;
-        fn constraint_set(
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
-        {
-            basin::Constraints::new()
+        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+            basin::ConstraintSet::new()
                 .with_bounds(basin::BoxBounds::new(self.lower.as_ref(), {
                     None
                 }))

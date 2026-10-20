@@ -687,13 +687,13 @@ mod tests {
             2.0 * 10.0_f64.powf(4.0 * i as f64 / 19.0)
         }
 
-        impl crate::ProblemConstraints for Quadratic {
-            type Constraints = crate::NoConstraints;
-            fn constraint_set(
+        impl crate::Constraints for Quadratic {
+            type Set = crate::NoConstraints;
+            fn constraints(
                 &self,
-            ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+            ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_>
             {
-                crate::Constraints::new()
+                crate::ConstraintSet::new()
             }
         }
         impl CostFunction for Quadratic {

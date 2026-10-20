@@ -98,9 +98,9 @@ use rectangle::{Rectangle, Work};
 /// ```
 /// use basin::{CostFunction, Direct, Executor, PointState};
 /// struct BoundedQuartic { lower: Vec<f64>, upper: Vec<f64> }
-/// impl basin::ProblemConstraints for BoundedQuartic  {
-///     type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
-///     fn constraint_set(&self) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> { basin::Constraints::new().with_bounds(basin::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+/// impl basin::Constraints for BoundedQuartic  {
+///     type Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>;
+///     fn constraints(&self) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> { basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 /// }
 /// impl CostFunction for BoundedQuartic {
 ///     type Param = Vec<f64>;

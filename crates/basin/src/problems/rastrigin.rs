@@ -120,12 +120,12 @@ impl<P> HasSpec for Rastrigin<P> {
     const SPEC: &'static ProblemSpec = &RASTRIGIN_SPEC;
 }
 
-impl crate::ProblemConstraints for Rastrigin<Vec<f64>> {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(
+impl crate::Constraints for Rastrigin<Vec<f64>> {
+    type Set = crate::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
-        crate::Constraints::new()
+    ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::ConstraintSet::new()
     }
 }
 impl CostFunction for Rastrigin<Vec<f64>> {
@@ -144,9 +144,9 @@ crate::backend_macros::nalgebra_versions! {
     use crate::CostFunction;
     use nalgebra::DVector;
 
-    impl crate::ProblemConstraints for Rastrigin<DVector<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Rastrigin<DVector<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Rastrigin<DVector<f64>> {
         type Param = DVector<f64>;
@@ -168,9 +168,9 @@ crate::backend_macros::ndarray_versions! {
     use crate::CostFunction;
     use ndarray::Array1;
 
-    impl crate::ProblemConstraints for Rastrigin<Array1<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Rastrigin<Array1<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Rastrigin<Array1<f64>> {
         type Param = Array1<f64>;
@@ -195,9 +195,9 @@ crate::backend_macros::faer_versions! {
     // faer's `Col` doesn't expose a `&[f64]` directly across all 0.24 APIs
     // we care about, so we evaluate elementwise here rather than routing
     // through the slice-based primitive.
-    impl crate::ProblemConstraints for Rastrigin<Col<f64>>  {
-    type Constraints = crate::NoConstraints;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+    impl crate::Constraints for Rastrigin<Col<f64>>  {
+    type Set = crate::NoConstraints;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new() }
 }
 impl CostFunction for Rastrigin<Col<f64>> {
         type Param = Col<f64>;
@@ -261,12 +261,12 @@ impl RastriginBoxed<Vec<f64>> {
     }
 }
 
-impl crate::ProblemConstraints for RastriginBoxed<Vec<f64>> {
-    type Constraints = crate::Constraints<crate::BoxBounds<Vec<f64>>>;
-    fn constraint_set(
+impl crate::Constraints for RastriginBoxed<Vec<f64>> {
+    type Set = crate::ConstraintSet<crate::BoxBounds<Vec<f64>>>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
-        crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+    ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(
             Some(&self.lower),
             Some(&self.upper),
         ))
@@ -310,9 +310,9 @@ crate::backend_macros::nalgebra_versions! {
         }
     }
 
-    impl crate::ProblemConstraints for RastriginBoxed<DVector<f64>>  {
-    type Constraints = crate::Constraints<crate::BoxBounds<DVector<f64>>>;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+    impl crate::Constraints for RastriginBoxed<DVector<f64>>  {
+    type Set = crate::ConstraintSet<crate::BoxBounds<DVector<f64>>>;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 }
 impl CostFunction for RastriginBoxed<DVector<f64>> {
         type Param = DVector<f64>;
@@ -356,9 +356,9 @@ crate::backend_macros::ndarray_versions! {
         }
     }
 
-    impl crate::ProblemConstraints for RastriginBoxed<Array1<f64>>  {
-    type Constraints = crate::Constraints<crate::BoxBounds<Array1<f64>>>;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+    impl crate::Constraints for RastriginBoxed<Array1<f64>>  {
+    type Set = crate::ConstraintSet<crate::BoxBounds<Array1<f64>>>;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 }
 impl CostFunction for RastriginBoxed<Array1<f64>> {
         type Param = Array1<f64>;
@@ -402,9 +402,9 @@ crate::backend_macros::faer_versions! {
         }
     }
 
-    impl crate::ProblemConstraints for RastriginBoxed<Col<f64>>  {
-    type Constraints = crate::Constraints<crate::BoxBounds<Col<f64>>>;
-    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+    impl crate::Constraints for RastriginBoxed<Col<f64>>  {
+    type Set = crate::ConstraintSet<crate::BoxBounds<Col<f64>>>;
+    fn constraints(&self) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> { crate::ConstraintSet::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 }
 impl CostFunction for RastriginBoxed<Col<f64>> {
         type Param = Col<f64>;

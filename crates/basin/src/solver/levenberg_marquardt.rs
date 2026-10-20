@@ -280,10 +280,6 @@ pub enum LmDamping {
 /// use nalgebra::{DMatrix, DVector};
 ///
 /// struct Affine;
-/// impl basin::ProblemConstraints for Affine  {
-///     type Constraints = basin::NoConstraints;
-///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
-/// }
 /// impl Residual for Affine {
 ///     type Param = DVector<f64>;
 ///     type Output = DVector<f64>;
@@ -661,7 +657,6 @@ where
         + AddDiagonalVectorInPlace<V>
         + MatDiagonal<V>
         + Clone,
-    P: crate::ProblemConstraints<Constraints = crate::NoConstraints>,
 {
     type Error = E;
     fn should_check_iterate_change(&self) -> bool {
@@ -1852,7 +1847,6 @@ where
         + FloorZerosInPlace<F>
         + Clone,
     M: FactorizePivotedQr<V, F> + MatTransposeVec<V>,
-    P: crate::ProblemConstraints<Constraints = crate::NoConstraints>,
 {
     type Error = E;
     fn should_check_iterate_change(&self) -> bool {
@@ -1944,13 +1938,12 @@ mod tests {
     }
     struct Fit;
 
-    impl crate::ProblemConstraints for Fit {
-        type Constraints = crate::NoConstraints;
-        fn constraint_set(
+    impl crate::Constraints for Fit {
+        type Set = crate::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
-        {
-            crate::Constraints::new()
+        ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+            crate::ConstraintSet::new()
         }
     }
     impl Residual for Fit {

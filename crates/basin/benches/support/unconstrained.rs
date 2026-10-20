@@ -6,12 +6,12 @@ use basin::{CostFunction, Gradient};
 #[derive(Default)]
 pub struct Unconstrained<P>(pub P);
 
-impl<P: CostFunction> basin::ProblemConstraints for Unconstrained<P> {
-    type Constraints = basin::NoConstraints;
-    fn constraint_set(
+impl<P: CostFunction> basin::Constraints for Unconstrained<P> {
+    type Set = basin::NoConstraints;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
-        basin::Constraints::new()
+    ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::ConstraintSet::new()
     }
 }
 impl<P: CostFunction> CostFunction for Unconstrained<P> {

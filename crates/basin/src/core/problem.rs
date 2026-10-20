@@ -36,6 +36,10 @@
 /// Scalar-valued objective `f(x): Param → Output`. The smallest
 /// problem trait: every solver binds at least on this.
 ///
+/// Constraint declarations are optional and independent of this trait.
+/// Unconstrained solvers evaluate the objective without inspecting any declared
+/// constraints. Use a constrained solver to enforce them.
+///
 /// # Contract
 ///
 /// - **Implementor must:** be a *pure* function of `param`:
@@ -64,12 +68,6 @@
 /// use basin::CostFunction;
 ///
 /// struct Sphere;
-/// impl basin::ProblemConstraints for Sphere {
-///     type Constraints = basin::NoConstraints;
-///     fn constraint_set(&self) -> basin::NoConstraints {
-///         basin::NoConstraints::EMPTY
-///     }
-/// }
 /// impl CostFunction for Sphere {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -81,7 +79,7 @@
 ///
 /// assert_eq!(Sphere.cost(&vec![3.0, 4.0]).unwrap(), 25.0);
 /// ```
-pub trait CostFunction: crate::ProblemConstraints {
+pub trait CostFunction {
     /// The parameter type the objective is defined over.
     type Param;
     /// Scalar cost type. In practice `f64` (see `CONTRIBUTING.md`'s
@@ -143,12 +141,6 @@ pub trait CostFunction: crate::ProblemConstraints {
 /// use basin::{CostFunction, Gradient};
 ///
 /// struct Sphere;
-/// impl basin::ProblemConstraints for Sphere {
-///     type Constraints = basin::NoConstraints;
-///     fn constraint_set(&self) -> basin::NoConstraints {
-///         basin::NoConstraints::EMPTY
-///     }
-/// }
 /// impl CostFunction for Sphere {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -176,12 +168,6 @@ pub trait CostFunction: crate::ProblemConstraints {
 /// use basin::{CostFunction, Gradient};
 ///
 /// struct Sphere;
-/// impl basin::ProblemConstraints for Sphere {
-///     type Constraints = basin::NoConstraints;
-///     fn constraint_set(&self) -> basin::NoConstraints {
-///         basin::NoConstraints::EMPTY
-///     }
-/// }
 /// impl CostFunction for Sphere {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -301,12 +287,6 @@ pub trait Gradient: CostFunction {
 ///     rows: Vec<Vec<f64>>,
 ///     y: Vec<f64>,
 /// }
-/// impl basin::ProblemConstraints for LinReg {
-///     type Constraints = basin::NoConstraints;
-///     fn constraint_set(&self) -> basin::NoConstraints {
-///         basin::NoConstraints::EMPTY
-///     }
-/// }
 /// impl CostFunction for LinReg {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -400,12 +380,6 @@ pub trait MiniBatchGradient: CostFunction {
 ///
 /// // r(x) = (x₀ − 1, x₁ − 2); the least-squares optimum is (1, 2).
 /// struct Affine;
-/// impl basin::ProblemConstraints for Affine {
-///     type Constraints = basin::NoConstraints;
-///     fn constraint_set(&self) -> basin::NoConstraints {
-///         basin::NoConstraints::EMPTY
-///     }
-/// }
 /// impl Residual for Affine {
 ///     type Param = Vec<f64>;
 ///     type Output = Vec<f64>;
@@ -420,7 +394,7 @@ pub trait MiniBatchGradient: CostFunction {
 ///
 /// assert_eq!(Affine.residual(&vec![0.0, 0.0]).unwrap(), vec![-1.0, -2.0]);
 /// ```
-pub trait Residual: crate::ProblemConstraints {
+pub trait Residual {
     /// The parameter type the residual is defined over (matches
     /// [`CostFunction::Param`]).
     type Param;
@@ -502,10 +476,6 @@ pub trait Residual: crate::ProblemConstraints {
 /// use nalgebra::{DMatrix, DVector};
 ///
 /// struct Affine;
-/// impl basin::ProblemConstraints for Affine  {
-///     type Constraints = basin::NoConstraints;
-///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
-/// }
 /// impl Residual for Affine {
 ///     type Param = DVector<f64>;
 ///     type Output = DVector<f64>;
@@ -620,10 +590,6 @@ pub trait Jacobian: Residual {
 ///
 /// // f(x) = x₀² + x₁² has constant Hessian 2·I.
 /// struct Sphere;
-/// impl basin::ProblemConstraints for Sphere  {
-///     type Constraints = basin::NoConstraints;
-///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
-/// }
 /// impl CostFunction for Sphere {
 ///     type Param = DVector<f64>;
 ///     type Output = f64;
@@ -731,10 +697,6 @@ pub trait Hessian: Gradient {
 ///
 /// // f(x) = x₀² + x₁² has constant Hessian 2·I, so ∇²f(x)·v = 2·v.
 /// struct Sphere;
-/// impl basin::ProblemConstraints for Sphere  {
-///     type Constraints = basin::NoConstraints;
-///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
-/// }
 /// impl CostFunction for Sphere {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -1191,13 +1153,12 @@ mod problem_wrapper_tests {
 
     struct Sphere;
 
-    impl crate::ProblemConstraints for Sphere {
-        type Constraints = crate::NoConstraints;
-        fn constraint_set(
+    impl crate::Constraints for Sphere {
+        type Set = crate::NoConstraints;
+        fn constraints(
             &self,
-        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
-        {
-            crate::Constraints::new()
+        ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
+            crate::ConstraintSet::new()
         }
     }
     impl CostFunction for Sphere {

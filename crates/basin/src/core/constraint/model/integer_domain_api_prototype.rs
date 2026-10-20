@@ -1,7 +1,7 @@
 //! Integer-domain API experiment. These types are never exported.
 //!
 //! This child module can extend the sealed canonical declaration in tests.
-//! The wrapper models a future fourth `Constraints` parameter without changing
+//! The wrapper models a future fourth `ConstraintSet` parameter without changing
 //! production types. Run with `cargo test -p basin integer_domain_api_prototype`.
 
 use std::{
@@ -57,11 +57,11 @@ impl<C, D> DomainConstraints<C, D> {
         }
     }
 }
-impl<B, L, N, D> DomainConstraints<Constraints<B, L, N>, D> {
+impl<B, L, N, D> DomainConstraints<ConstraintSet<B, L, N>, D> {
     fn with_bounds<V>(
         self,
         bounds: BoxBounds<V>,
-    ) -> DomainConstraints<Constraints<BoxBounds<V>, L, N>, D> {
+    ) -> DomainConstraints<ConstraintSet<BoxBounds<V>, L, N>, D> {
         DomainConstraints {
             constraints: self.constraints.with_bounds(bounds),
             domain: self.domain,
@@ -85,9 +85,9 @@ impl<C: ConstraintDescription, D: BorrowConstraint> ConstraintDescription
 }
 
 type MixedBox<V> =
-    DomainConstraints<Constraints<BoxBounds<V>>, IntegerCoordinates>;
+    DomainConstraints<ConstraintSet<BoxBounds<V>>, IntegerCoordinates>;
 type MixedBoxView<'a, V> =
-    DomainConstraints<Constraints<BoxBounds<&'a V>>, &'a IntegerCoordinates>;
+    DomainConstraints<ConstraintSet<BoxBounds<&'a V>>, &'a IntegerCoordinates>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DomainError {
@@ -150,11 +150,11 @@ struct FixedIntegers<'a, P, V, F> {
     problem: &'a P,
     anchor: V,
     free: Vec<usize>,
-    bounds: Constraints<BoxBounds<Vec<F>>>,
+    bounds: ConstraintSet<BoxBounds<Vec<F>>>,
 }
-impl<P, V, F> ProblemConstraints for FixedIntegers<'_, P, V, F> {
-    type Constraints = Constraints<BoxBounds<Vec<F>>>;
-    fn constraint_set(&self) -> Constraints<BoxBounds<&Vec<F>>> {
+impl<P, V, F> Constraints for FixedIntegers<'_, P, V, F> {
+    type Set = ConstraintSet<BoxBounds<Vec<F>>>;
+    fn constraints(&self) -> ConstraintSet<BoxBounds<&Vec<F>>> {
         self.bounds.borrowed()
     }
 }
@@ -203,11 +203,11 @@ fn refine<P, V, F>(
     max_iter: u64,
 ) -> Result<Option<Refinement<V, F>>, RefineError<P::Error>>
 where
-    P: CostFunction<Param = V, Output = F, Constraints = MixedBox<V>>,
+    P: CostFunction<Param = V, Output = F> + Constraints<Set = MixedBox<V>>,
     V: VectorLen + Clone + IndexMut<usize, Output = F>,
     F: Scalar,
 {
-    let declaration = problem.inner().constraint_set();
+    let declaration = problem.inner().constraints();
     let free = validate(&declaration, &seed).map_err(RefineError::Domain)?;
     if free.is_empty() {
         return Ok(None);
@@ -216,7 +216,7 @@ where
     let lower = bounds.lower().unwrap();
     let upper = bounds.upper().unwrap();
     let reduced = free.iter().map(|&i| seed[i]).collect::<Vec<_>>();
-    let reduced_bounds = Constraints::new().with_bounds(BoxBounds::new(
+    let reduced_bounds = ConstraintSet::new().with_bounds(BoxBounds::new(
         Some(free.iter().map(|&i| lower[i]).collect()),
         Some(free.iter().map(|&i| upper[i]).collect()),
     ));
@@ -249,11 +249,11 @@ struct Fixture<V, F: Scalar> {
     trace: Trace<F>,
     fail_after: Option<usize>,
 }
-impl<V, F: Scalar> ProblemConstraints for Fixture<V, F> {
-    type Constraints = MixedBox<V>;
-    fn constraint_set(
+impl<V, F: Scalar> Constraints for Fixture<V, F> {
+    type Set = MixedBox<V>;
+    fn constraints(
         &self,
-    ) -> <Self::Constraints as ConstraintDescription>::Borrowed<'_> {
+    ) -> <Self::Set as ConstraintDescription>::Borrowed<'_> {
         self.declaration.borrowed()
     }
 }
@@ -286,7 +286,7 @@ fn num<F: Scalar>(value: f64) -> F {
     F::from_f64(value).unwrap()
 }
 fn declaration<V>(lower: V, upper: V, mask: Vec<bool>) -> MixedBox<V> {
-    DomainConstraints::new(Constraints::new())
+    DomainConstraints::new(ConstraintSet::new())
         .with_domains(IntegerCoordinates(mask))
         .with_bounds(BoxBounds::new(Some(lower), Some(upper)))
 }
@@ -305,9 +305,9 @@ fn fixture<V, F: Scalar>(make: impl Fn(&[F]) -> V) -> Fixture<V, F> {
 #[test]
 fn ordinary_continuous_de_still_accepts_existing_declarations() {
     struct Sphere;
-    impl ProblemConstraints for Sphere {
-        type Constraints = NoConstraints;
-        fn constraint_set(&self) -> NoConstraints {
+    impl Constraints for Sphere {
+        type Set = NoConstraints;
+        fn constraints(&self) -> NoConstraints {
             NoConstraints::EMPTY
         }
     }
@@ -321,7 +321,7 @@ fn ordinary_continuous_de_still_accepts_existing_declarations() {
     }
     let problem = Constrained::new(
         Sphere,
-        Constraints::new()
+        ConstraintSet::new()
             .with_bounds(BoxBounds::new(Some(vec![-2.0]), Some(vec![2.0]))),
     );
     let result = Executor::new(
@@ -353,9 +353,13 @@ macro_rules! assert_not_solver {
 }
 
 #[test]
-fn continuous_solvers_and_box_relaxation_reject_integer_domains() {
+fn constrained_solvers_and_box_relaxation_reject_integer_domains() {
     type Local = NelderMead<Vec<f64>>;
-    assert_not_solver!(Local, SimplexProgress<Vec<f64>>);
+    fn accepts_unconstrained<
+        S: Solver<Fixture<Vec<f64>, f64>, SimplexProgress<Vec<f64>>>,
+    >() {
+    }
+    accepts_unconstrained::<Local>();
     assert_not_solver!(
         NelderMead<Vec<f64>, f64, crate::solver::nelder_mead::Projected>,
         SimplexProgress<Vec<f64>>
@@ -371,12 +375,12 @@ fn continuous_solvers_and_box_relaxation_reject_integer_domains() {
 
 #[test]
 fn builders_and_derivative_and_loss_adapters_preserve_domains() {
-    let continuous = DomainConstraints::new(Constraints::new());
+    let continuous = DomainConstraints::new(ConstraintSet::new());
     let _: DomainConstraints<NoConstraints, ContinuousDomain> =
         continuous.borrowed();
     let p = fixture::<_, f64>(|x| x.to_vec());
     let original_bounds = p.declaration.constraints.bounds().lower().unwrap();
-    let borrowed = p.constraint_set();
+    let borrowed = p.constraints();
     assert!(std::ptr::eq(
         borrowed.constraints.bounds().lower().copied().unwrap(),
         original_bounds
@@ -385,20 +389,18 @@ fn builders_and_derivative_and_loss_adapters_preserve_domains() {
 
     let wrapped =
         RobustLeastSquares::<_, _, f64>::new(FiniteDiff::new(p), SoftL1Loss);
-    fn requires_mixed_declaration<
-        P: ProblemConstraints<Constraints = MixedBox<Vec<f64>>>,
-    >(
+    fn requires_mixed_declaration<P: Constraints<Set = MixedBox<Vec<f64>>>>(
         _: &P,
     ) {
     }
     requires_mixed_declaration(&wrapped);
-    assert_eq!(wrapped.constraint_set().domain.0, [true, false, false]);
+    assert_eq!(wrapped.constraints().domain.0, [true, false, false]);
     let changed = fixture::<_, f64>(|x| x.to_vec())
         .declaration
         .with_bounds(BoxBounds::new(Some(vec![-4.0; 3]), Some(vec![4.0; 3])));
     assert_eq!(changed.domain.0, [true, false, false]);
     let nonlinear = DomainConstraints::new(
-        Constraints::new().with_nonlinear_inequalities(2),
+        ConstraintSet::new().with_nonlinear_inequalities(2),
     )
     .with_domains(IntegerCoordinates(vec![true]))
     .with_bounds(BoxBounds::new(Some(vec![-1.0]), Some(vec![1.0])));
@@ -482,7 +484,7 @@ fn domain_cases<F: Scalar>() {
         BoxBounds::new(None, Some(vec![F::one()])),
         BoxBounds::new(Some(vec![F::zero()]), None),
     ] {
-        let missing = DomainConstraints::new(Constraints::new())
+        let missing = DomainConstraints::new(ConstraintSet::new())
             .with_domains(IntegerCoordinates(vec![true]))
             .with_bounds(bounds);
         assert_eq!(

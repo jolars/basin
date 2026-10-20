@@ -1,11 +1,11 @@
 //! Box relaxation retains robust least-squares evaluation and accounting.
 
 use basin::{
-    BoundedCmaEs, BoundedCmaInject, BoxBounds, Constrained,
+    BoundedCmaEs, BoundedCmaInject, BoxBounds, Constrained, ConstraintSet,
     ConstraintSolveError, Constraints, De, DeInject, DenseMatrix, Executor,
     GaussNewton, HuberLoss, Jacobian, LevenbergMarquardt, LevenbergMarquardtQr,
-    NoConstraints, PointState, PopulationProgress, Problem, ProblemConstraints,
-    RelaxedInner, Residual, RobustLeastSquares, Solver,
+    NoConstraints, PointState, PopulationProgress, Problem, RelaxedInner,
+    Residual, RobustLeastSquares, Solver,
 };
 use std::sync::{
     Arc,
@@ -18,10 +18,10 @@ struct Location {
     jacobian_calls: Arc<AtomicU64>,
     fail: Arc<AtomicBool>,
 }
-impl ProblemConstraints for Location {
-    type Constraints = NoConstraints;
-    fn constraint_set(&self) -> NoConstraints {
-        Constraints::new()
+impl Constraints for Location {
+    type Set = NoConstraints;
+    fn constraints(&self) -> NoConstraints {
+        ConstraintSet::new()
     }
 }
 impl Residual for Location {
@@ -45,7 +45,7 @@ impl Jacobian for Location {
 }
 
 type Objective = RobustLeastSquares<
-    Constrained<Location, Constraints<BoxBounds<Vec<f64>>>>,
+    Constrained<Location, ConstraintSet<BoxBounds<Vec<f64>>>>,
     HuberLoss,
 >;
 
@@ -53,7 +53,7 @@ fn objective(location: Location, upper: f64) -> Objective {
     RobustLeastSquares::new(
         Constrained::new(
             location,
-            Constraints::new().with_bounds(BoxBounds::new(
+            ConstraintSet::new().with_bounds(BoxBounds::new(
                 Some(vec![-1.0]),
                 Some(vec![upper]),
             )),
