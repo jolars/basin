@@ -21,10 +21,11 @@
  * specificity to beat the light-mode `.shiki span` rule, so both sides target
  * spans. The frame (background, border) is a fixed inset that matches the
  * landing page's code panels (stone-50/200 light, stone-900/800 dark) rather
- * than Everforest's own `--shiki-*-bg` — which is a cream/teal-black that
- * wouldn't sit flush with the warm-neutral chrome. All rules are unlayered, so
- * they beat the prose plugin's layered `pre`/`code` styling. */
+ * than the themes' own `--shiki-*-bg`, so they sit flush with the warm-neutral
+ * chrome. All rules are unlayered, so they beat the prose plugin's layered
+ * `pre`/`code` styling. */
 .shiki {
+    color: var(--shiki-light);
     border-radius: 0.5rem;
     border: 1px solid #e7e5e4; /* stone-200 */
     background-color: #fafaf9; /* stone-50 */
@@ -33,6 +34,7 @@
     color: var(--shiki-light);
 }
 .dark .shiki {
+    color: var(--shiki-dark);
     border-color: #292524; /* stone-800 */
     background-color: #1c1917; /* stone-900 */
 }

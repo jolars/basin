@@ -324,40 +324,35 @@
         transition: none;
     }
 
-    /* Prism token theme: the Everforest material palette, matching the
-   build-time Shiki fences (everforest-light/dark) so the in-page playground
-   and the doc code blocks read as one. Forest greens, soft contrast: green
-   functions, yellow types, aqua "water" strings, sage neutrals. Tokens are
-   injected via {@html}, so they need `:global`; colors come from CSS
-   variables on `.rust-hl` (a real template element, so it carries the scope
-   hash and the variables inherit into the injected token spans). One rule
-   set serves both themes: the variables flip under the site's class-based
-   `.dark`. */
+    /* Match the GitHub Light Default and Dark Dimmed palettes used by Shiki.
+     * Tokens injected via {@html} need `:global`; the variables inherit from
+     * `.rust-hl` and follow the site's class-based dark-mode toggle. */
     .rust-hl {
-        --tok-comment: #939f91; /* everforest-light gray */
-        --tok-keyword: #f85552; /* red */
-        --tok-fn: #8da101; /* green */
-        --tok-macro: #df69ba; /* purple */
-        --tok-string: #35a77c; /* aqua */
-        --tok-number: #f57d26; /* orange */
-        --tok-type: #dfa000; /* yellow */
-        --tok-punct: #5c6a72; /* fg/gray */
+        --tok-comment: #6e7781;
+        --tok-keyword: #cf222e;
+        --tok-fn: #8250df;
+        --tok-macro: #8250df;
+        --tok-string: #0a3069;
+        --tok-number: #0550ae;
+        --tok-type: #953800;
+        --tok-fg: #1f2328;
+        color: var(--tok-fg);
     }
     :global(.dark) .rust-hl {
-        --tok-comment: #859289; /* everforest-dark gray */
-        --tok-keyword: #e67e80; /* red */
-        --tok-fn: #a7c080; /* green */
-        --tok-macro: #d699b6; /* purple */
-        --tok-string: #83c092; /* aqua */
-        --tok-number: #e69875; /* orange */
-        --tok-type: #dbbc7f; /* yellow */
-        --tok-punct: #9da9a0; /* gray2 */
+        --tok-comment: #768390;
+        --tok-keyword: #f47067;
+        --tok-fn: #dcbdfb;
+        --tok-macro: #dcbdfb;
+        --tok-string: #96d0ff;
+        --tok-number: #6cb6ff;
+        --tok-type: #f69d50;
+        --tok-fg: #adbac7;
     }
     .rust-hl :global(.token.comment) {
         color: var(--tok-comment);
-        font-style: italic;
     }
-    .rust-hl :global(.token.keyword) {
+    .rust-hl :global(.token.keyword),
+    .rust-hl :global(.token.operator) {
         color: var(--tok-keyword);
     }
     .rust-hl :global(.token.function),
@@ -379,8 +374,7 @@
     .rust-hl :global(.token.namespace) {
         color: var(--tok-type);
     }
-    .rust-hl :global(.token.punctuation),
-    .rust-hl :global(.token.operator) {
-        color: var(--tok-punct);
+    .rust-hl :global(.token.punctuation) {
+        color: var(--tok-fg);
     }
 </style>
