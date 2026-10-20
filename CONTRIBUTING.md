@@ -108,6 +108,13 @@ The dev environment is provided by `devenv.nix` (loaded automatically via
 `allFeatures = true`) and `rustfmt`. Basin's package MSRV remains Rust 1.87.0;
 the dedicated CI job checks every feature compatible with that toolchain.
 
+For the website, devenv supplies Node.js and pnpm. It disables pnpm's automatic
+version switching with `pnpm_config_pm_on_fail=ignore` so commands use the
+Nix-managed executable. Downloaded standalone pnpm binaries cannot run on
+NixOS. Reload devenv after changing its configuration, then run `task web-dev`
+to start the site. Outside devenv, pnpm uses the version pinned in
+`web/package.json`.
+
 Performance tooling includes `hyperfine` for repeated executable timings,
 `taskset` for CPU affinity, `perf`, `cargo-flamegraph`, and `samply` for CPU
 sampling, and `valgrind` for allocation and instruction analysis. Criterion and

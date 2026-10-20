@@ -12,6 +12,9 @@
   # the default `openblas` is ILP64 on 64-bit and segfaults at runtime.
   env.OPENBLAS_LP64_LIB = "${pkgs.openblasCompat}/lib";
 
+  # Nix manages pnpm; downloaded standalone binaries cannot run on NixOS.
+  env.pnpm_config_pm_on_fail = "ignore";
+
   packages = with pkgs; [
     go-task
     llvmPackages.bintools
@@ -68,6 +71,8 @@
 
     javascript = {
       enable = true;
+
+      pnpm.enable = true;
     };
 
     typescript = {
