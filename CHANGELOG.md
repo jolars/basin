@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (Basin 3.0)
+## [3.0.0](https://github.com/jolars/basin/compare/v2.0.0...v3.0.0) (2026-10-20)
 
 Unfortunately, I have realized that the changes to constraints API in Basin 2.0 are much less ergonomic and have decided to switch back to the simpler approach of 1.x. I apologize to anyone who has already migrated, but hope that you find the new (old) API more pleasant to use. In short:
 
@@ -8,6 +8,18 @@ Unfortunately, I have realized that the changes to constraints API in Basin 2.0 
 - Rename the `ProblemConstraints` trait to `Constraints` and the `Constraints` data container to `ConstraintSet`. Rename the associated type to `Set` and the getter to `constraints`. `Constrained::new` accepts plain objectives and uses its supplied set as the complete declaration.
 
 See the [Basin 3.0 migration guide](web/src/routes/docs/migrating-to-v3/+page.svx) for more details.
+
+### Breaking changes
+
+- make constraint declarations optional ([`4e3326e`](https://github.com/jolars/basin/commit/4e3326ec0dc2599204ff44b37280b8ecc92d05aa))
+
+### Features
+
+- make constraint declarations optional ([`4e3326e`](https://github.com/jolars/basin/commit/4e3326ec0dc2599204ff44b37280b8ecc92d05aa))
+
+### Bug Fixes
+
+- **dev:** keep `pnpm` managed by Nix ([`52e7884`](https://github.com/jolars/basin/commit/52e7884b74fbc5efa576db3f68c2858a659c6759))
 
 ## [2.0.0](https://github.com/jolars/basin/compare/v1.15.1...v2.0.0) (2026-10-19)
 
