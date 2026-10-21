@@ -9,6 +9,7 @@
     import IconGithub from "~icons/simple-icons/github";
     import IconRust from "~icons/simple-icons/rust";
     import IconBook from "~icons/lucide/book-open";
+    import DocsSearch from "#lib/docs/DocsSearch.svelte";
     import ThemeToggle from "#lib/ThemeToggle.svelte";
     import { theme } from "#lib/theme.svelte.ts";
     import { NAV_LINKS, activeSection } from "#lib/nav.ts";
@@ -97,7 +98,7 @@
     <header
         class="border-b border-stone-200 dark:border-stone-800 sticky top-0 z-20 bg-white/80 dark:bg-stone-950/80 backdrop-blur"
     >
-        <nav class="nav-container h-14 flex items-center gap-3 sm:gap-6">
+        <nav class="nav-container h-14 flex items-center gap-3 lg:gap-6">
             <!-- Logo slot. Swap this wordmark for an <img> once a logo
                  asset lands in `static/` (e.g.
                  `<img src={asset("logo.svg")} alt="basin" class="h-6" />`). -->
@@ -109,6 +110,8 @@
             </a>
 
             <div class="flex-1"></div>
+
+            <DocsSearch />
 
             <!-- Inline links at sm+; collapse behind the menu button below. -->
             <ul class="hidden sm:flex items-center gap-1 text-sm">
