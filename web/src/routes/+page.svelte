@@ -34,7 +34,7 @@
 
 <Seo
     title="Basin – Numerical Optimization for Rust"
-    description="Basin is a numerical optimization library for Rust: pluggable solvers, multiple linear-algebra backends, first-class constraints, and a wasm-first design."
+    description="Solve optimization problems in Rust with a wide range of algorithms, support for constraints, and your choice of linear-algebra library. Runs natively and in the browser."
 />
 
 <!-- Hero. `flow-root` contains the floated logo so it can't bleed into the
@@ -46,9 +46,7 @@
      no flash): the daytime scene in light mode, the moonlit one in dark.
      Tailwind preflight renders <img> as `display: block`, so `dark:hidden` /
      `hidden dark:block` toggle visibility without changing the layout. -->
-<section
-    class="max-w-screen-2xl mx-auto px-4 md:px-8 pt-16 pb-12 md:pt-24 md:pb-16 flow-root"
->
+<section class="site-container pt-16 pb-12 md:pt-24 md:pb-16 flow-root">
     <img
         src={asset("logo.svg")}
         alt="Visualization of optimization trajectories on the Rosenbrock function, a common test problem in optimization."
@@ -59,22 +57,22 @@
         alt="Visualization of optimization trajectories on the Rosenbrock function, a common test problem in optimization."
         class="hidden dark:block mx-auto mb-8 w-3/4 max-w-sm h-auto md:float-right md:mx-0 md:mb-4 md:ml-10 md:w-2/5 md:max-w-sm"
     />
-    <span
-        class="inline-block text-xs font-mono uppercase tracking-widest text-stone-500 dark:text-stone-400"
-    >
-        Rust
-    </span>
     <h1
-        class="mt-3 text-4xl md:text-6xl font-semibold tracking-tight text-balance"
+        class="text-5xl md:text-7xl font-semibold tracking-tight text-[#3d7c8f] dark:text-[#4ea9bf]"
     >
-        Numerical Optimization in Rust
+        Basin
     </h1>
+    <p
+        class="mt-3 text-2xl md:text-4xl font-semibold tracking-tight text-balance"
+    >
+        Numerical optimization in Rust
+    </p>
     <p
         class="mt-5 max-w-2xl text-lg md:text-xl text-stone-600 dark:text-stone-300 text-pretty"
     >
-        <span class="font-semibold">Basin</span> is a solver framework with a generic
-        executor loop over pluggable solvers, multiple linear-algebra backends, first-class
-        constraints, and a wasm-first design.
+        Solve optimization problems in Rust with a wide range of algorithms,
+        support for constraints, and your choice of linear-algebra library. Runs
+        natively and in the browser.
     </p>
     <div class="mt-8 flex flex-wrap gap-3">
         <a
@@ -101,7 +99,7 @@
 </section>
 
 <!-- Quick taste: interactive code-gen playground -->
-<section class="max-w-screen-2xl mx-auto px-4 md:px-8 pb-16">
+<section class="site-container pb-16">
     <Playground />
     <p class="mt-6 text-sm text-stone-600 dark:text-stone-300">
         If you want to play around with a larger set of problems and solvers,
@@ -117,7 +115,7 @@
 <section
     class="border-t border-stone-200 dark:border-stone-800 bg-stone-50/60 dark:bg-stone-900/40"
 >
-    <div class="max-w-screen-2xl mx-auto px-4 md:px-8 py-16">
+    <div class="site-container py-16">
         <h2 class="text-2xl font-semibold tracking-tight">Features</h2>
         <div class="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {#each features as f}

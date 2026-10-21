@@ -61,20 +61,20 @@ export const DEFAULT_CONFIG: PlaygroundConfig = {
 const COST_IMPL = `impl CostFunction for Rosenbrock {
     type Param = Vec<f64>;
     type Output = f64;
-    type Error = std::convert::Infallible;
-
-    fn cost(&self, x: &Vec<f64>) -> Result<f64, std::convert::Infallible> {
-        Ok((1.0 - x[0]).powi(2) + 100.0 * (x[1] - x[0].powi(2)).powi(2))
+    type Error = Infallible;
+    fn cost(&self, x: &Vec<f64>) -> Result<f64, Infallible> {
+        let residual = x[1] - x[0].powi(2);
+        Ok((1.0 - x[0]).powi(2) + 100.0 * residual.powi(2))
     }
 }`;
 
 const GRADIENT_IMPL = `impl Gradient for Rosenbrock {
     type Gradient = Vec<f64>;
-
-    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, Infallible> {
+        let residual = x[1] - x[0].powi(2);
         Ok(vec![
-            -2.0 * (1.0 - x[0]) - 400.0 * x[0] * (x[1] - x[0].powi(2)),
-            200.0 * (x[1] - x[0].powi(2)),
+            -2.0 * (1.0 - x[0]) - 400.0 * x[0] * residual,
+            200.0 * residual,
         ])
     }
 }`;
@@ -138,13 +138,17 @@ export type RunOutput = {
 export function generateSnippet(cfg: PlaygroundConfig): string {
     let solverExpr = `GradientDescent::new(${rustFloat(cfg.alpha)})`;
     if (cfg.beta > 0) {
-        solverExpr += `.with_momentum(${rustFloat(cfg.beta)})`;
+        solverExpr += `\n        .with_momentum(${rustFloat(cfg.beta)})`;
     }
 
     const startVec = `vec![${rustFloat(cfg.start[0])}, ${rustFloat(cfg.start[1])}]`;
 
     return [
-        "use basin::{FirstOrderState, CostFunction, Executor, Gradient, GradientDescent};",
+        "use std::convert::Infallible;",
+        "use basin::{",
+        "    CostFunction, Executor, FirstOrderState, Gradient",
+        "    GradientDescent,",
+        "};",
         "",
         "struct Rosenbrock;",
         "",
@@ -155,7 +159,6 @@ export function generateSnippet(cfg: PlaygroundConfig): string {
         "fn main() {",
         `    let solver = ${solverExpr};`,
         `    let state = FirstOrderState::new(${startVec});`,
-        "",
         `    let result = Executor::new(Rosenbrock, solver, state)`,
         `        .max_iter(${rustInt(cfg.maxIter)})`,
         "        .run()",

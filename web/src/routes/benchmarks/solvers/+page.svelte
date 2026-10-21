@@ -25,7 +25,7 @@
     description="Basin's general optimizers (GD, Nelder–Mead, BFGS, L-BFGS, SLSQP, CMA-ES) head-to-head on standard benchmark problems, as suboptimality-vs-time convergence traces under a fixed wall-clock budget."
 />
 
-<section class="max-w-screen-2xl mx-auto px-4 md:px-8 py-16">
+<section class="site-container py-16">
     <p class="text-sm text-stone-500 dark:text-stone-400">
         <a
             class="underline decoration-dotted hover:text-stone-900 dark:hover:text-stone-100"

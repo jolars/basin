@@ -86,9 +86,7 @@
     <header
         class="border-b border-stone-200 dark:border-stone-800 sticky top-0 z-20 bg-white/80 dark:bg-stone-950/80 backdrop-blur"
     >
-        <nav
-            class="max-w-screen-2xl mx-auto px-4 md:px-8 h-14 flex items-center gap-3 sm:gap-6"
-        >
+        <nav class="site-container h-14 flex items-center gap-3 sm:gap-6">
             <!-- Logo slot. Swap this wordmark for an <img> once a logo
                  asset lands in `static/` (e.g.
                  `<img src={asset("logo.svg")} alt="basin" class="h-6" />`). -->
@@ -151,7 +149,7 @@
 
     <footer class="border-t border-stone-200 dark:border-stone-800 mt-auto">
         <div
-            class="max-w-screen-2xl mx-auto px-4 md:px-8 py-6 flex flex-wrap items-center justify-between gap-3 text-sm text-stone-500 dark:text-stone-500"
+            class="site-container py-6 flex flex-wrap items-center justify-between gap-3 text-sm text-stone-500 dark:text-stone-500"
         >
             <p class="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span class="font-semibold text-stone-700 dark:text-stone-300"

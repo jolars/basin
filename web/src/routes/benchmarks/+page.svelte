@@ -32,7 +32,7 @@
     description="Benchmarks for the Basin optimization library, along three axes: linear-algebra backends, solver families, and competing libraries including argmin, slsqp, and NLopt."
 />
 
-<section class="max-w-screen-2xl mx-auto px-4 md:px-8 py-16">
+<section class="site-container py-16">
     <h1 class="text-3xl md:text-4xl font-semibold tracking-tight">
         Benchmarks
     </h1>

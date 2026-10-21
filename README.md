@@ -4,14 +4,15 @@
 [![crates.io](https://img.shields.io/crates/v/basin.svg)](https://crates.io/crates/basin)
 [![docs.rs](https://img.shields.io/docsrs/basin)](https://docs.rs/basin)
 
-A numerical optimization library for Rust, inspired by [argmin]. It pairs a
-generic core, problem traits you implement, solver-owned convergence settings,
-and a driver loop (`Executor`), with a set of solvers spanning first-order,
-derivative-free, nonlinear least-squares, and evolutionary methods. Solvers are
-generic over the linear-algebra backend, constraints are first-class, and the
-default build compiles to `wasm32-unknown-unknown` with no BLAS/LAPACK or
-threads. A direct scalar root-finding API covers bracketed equations without
-forcing their signed function values through the optimization state model.
+Basin is a numerical optimization library for Rust. Solve problems with or
+without derivatives, fit models with nonlinear least squares, and handle
+bounds and other constraints with algorithms suited to your problem. Basin
+also provides a solver for bracketed scalar equations.
+
+Define the function you want to minimize, choose a solver, and supply a
+starting point. Use plain Rust vectors or your choice of nalgebra, ndarray, or
+faer. Basin runs natively and in the browser, with no BLAS/LAPACK or threads
+required by the default build. Its design is inspired by [argmin].
 
 Narrative documentation lives at [basin.rs/docs]; the rustdoc reference is at
 [docs.rs/basin]. There is also an in-browser [solver visualizer] and a

@@ -148,7 +148,7 @@
 
 <div class="grid xl:grid-cols-2 gap-8 items-start">
     <div class="min-w-0">
-        <h2 class="text-2xl font-semibold tracking-tight">A Small Example</h2>
+        <h2 class="text-2xl font-semibold tracking-tight">A small example</h2>
         <p class="mt-3 text-stone-600 dark:text-stone-300">
             Implement <code class="font-mono text-sm">CostFunction</code> and
             <code class="font-mono text-sm">Gradient</code>, then hand your

@@ -4,20 +4,17 @@
 
 # Documentation
 
-**Basin** is a numerical optimization library for Rust. It follows the overall
-shape of [argmin](https://argmin-rs.org): a generic *executor* loop drives a
-*solver* over a *state*, calling into the *problem* traits you implement
-(`CostFunction`, `Gradient`, and friends).
+**Basin** is a numerical optimization library for Rust. Solve problems with or
+without derivatives, fit models with nonlinear least squares, and handle
+bounds and other constraints with algorithms suited to your problem. Basin
+runs natively and in the browser. Use plain Rust vectors or your choice of
+nalgebra, ndarray, or faer.
 
-You minimize a function by implementing one trait for your objective, picking a
-solver, and handing both to the `Executor`. Basin covers first-order and
-quasi-Newton methods (gradient descent, BFGS, L-BFGS, L-BFGS-B), derivative-free
-search (Nelder–Mead, Powell's NEWUOA/BOBYQA family, MADS), nonlinear least
-squares (Gauss–Newton, Levenberg–Marquardt, trust-region-reflective), and global
-or stochastic optimizers (CMA-ES, a steady-state GA, memetic hybrids), with box,
-linear, and nonlinear constraints handled problem-side. Every solver is generic
-over the linear-algebra backend, from plain `Vec<f64>` to nalgebra, ndarray, or
-faer.
+To minimize a function, implement `CostFunction`, choose a solver, and supply
+a starting point. Add derivatives when your solver needs them. The
+[solver catalog](solvers/) covers gradient-based methods, derivative-free
+search, nonlinear least squares, and global and stochastic optimization,
+including which solvers support each kind of constraint.
 
 Bracketed scalar equations use the separate `BrentRoot::solve` API. It accepts
 a fallible closure and returns the signed function value and final bracket

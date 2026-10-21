@@ -22,7 +22,7 @@
         "/docs": {
             title: "Documentation – Basin",
             description:
-                "Overview of Basin: a generic executor loop drives a solver over a state, calling the problem traits you implement.",
+                "Learn how to define an optimization problem, choose a solver, and run it with Basin.",
         },
         "/docs/getting-started": {
             title: "Getting Started – Basin",
@@ -61,9 +61,7 @@
 
 <Seo title={meta.title} description={meta.description} />
 
-<div
-    class="max-w-screen-2xl mx-auto px-4 md:px-8 py-10 grid lg:grid-cols-[14rem_1fr] gap-10"
->
+<div class="site-container py-10 grid lg:grid-cols-[14rem_1fr] gap-10">
     <aside class="lg:sticky lg:top-20 lg:self-start">
         <p
             class="text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500 mb-3"

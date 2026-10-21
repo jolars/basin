@@ -35,7 +35,7 @@
     description="Basin versus established Rust optimization crates including argmin, gomez, slsqp, and NLopt on matched problems, as suboptimality-vs-time convergence traces."
 />
 
-<section class="max-w-screen-2xl mx-auto px-4 md:px-8 py-16">
+<section class="site-container py-16">
     <p class="text-sm text-stone-500 dark:text-stone-400">
         <a
             class="underline decoration-dotted hover:text-stone-900 dark:hover:text-stone-100"

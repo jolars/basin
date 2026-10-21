@@ -16,10 +16,10 @@ export function GET() {
 
     const body = `# basin
 
-> A numerical optimization library for Rust, inspired by argmin: a generic
-> executor loop drives a solver over a state, calling into the problem traits
-> you implement (CostFunction, Gradient, and friends). Works on plain
-> Vec<f64> out of the box, with opt-in nalgebra / ndarray / faer backends.
+> Solve optimization problems in Rust with a wide range of algorithms,
+> support for constraints, and your choice of linear-algebra library.
+> Runs natively and in the browser. Use plain Vec<f64> or opt into
+> nalgebra, ndarray, or faer.
 
 ## Docs
 
