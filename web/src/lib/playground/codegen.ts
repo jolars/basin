@@ -146,7 +146,7 @@ export function generateSnippet(cfg: PlaygroundConfig): string {
     return [
         "use std::convert::Infallible;",
         "use basin::{",
-        "    CostFunction, Executor, FirstOrderState, Gradient",
+        "    CostFunction, Executor, FirstOrderState, Gradient,",
         "    GradientDescent,",
         "};",
         "",

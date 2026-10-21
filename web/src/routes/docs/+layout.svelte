@@ -1,17 +1,16 @@
 <script lang="ts">
-    import { resolve } from "$app/paths";
     import { page } from "$app/state";
-    import { DOCS_LINKS } from "#lib/nav.ts";
+    import {
+        DOCS_LINKS,
+        SOLVER_LINKS,
+        type DocsNavItem as NavigationItem,
+    } from "#lib/nav.ts";
     import Seo from "#lib/Seo.svelte";
+    import DocsNavItem from "#lib/docs/DocsNavItem.svelte";
     import PageOutline from "#lib/docs/PageOutline.svelte";
 
     let { children } = $props();
     let content = $state<HTMLElement>();
-
-    // Exact-match active state, tolerant of a missing/extra trailing
-    // slash so highlighting survives either URL form.
-    const strip = (s: string) => s.replace(/\/+$/, "");
-    let path = $derived(strip(page.url.pathname));
 
     // Per-doc-page <title>/description. The docs `.svx` pages set no
     // <svelte:head> of their own, so this layout is the single title
@@ -42,9 +41,14 @@
                 "Upgrade from Basin 1.x to 2.0: migrate problem constraints, progress states, termination reports, solver settings, and checkpoints.",
         },
         "/docs/solvers": {
-            title: "Solvers – Basin",
+            title: "Choosing a Solver – Basin",
             description:
-                "Basin's solver catalog (first-order, derivative-free, nonlinear least-squares, and evolutionary methods) and the backend each supports.",
+                "Choose a Basin solver based on your derivatives, constraints, and problem structure, then browse the full solver catalog.",
+        },
+        "/docs/solvers/quasi-newton/l-bfgs": {
+            title: "L-BFGS – Basin",
+            description:
+                "When to use L-BFGS, how limited-memory quasi-Newton optimization works, and how to configure and run it in Basin, with original references.",
         },
         "/docs/migrating-to-v3": {
             title: "Migrating to Basin 3.0 – Basin",
@@ -63,45 +67,68 @@
 
 <Seo title={meta.title} description={meta.description} />
 
-<div class="nav-container docs-layout py-10 grid gap-8">
-    <aside
-        class="lg:max-w-48 lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto"
-    >
-        <p
+{#snippet navigation(label: string, items: NavigationItem[])}
+    <section>
+        <h2
             class="text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500 mb-3"
         >
-            Documentation
-        </p>
-        <nav class="flex flex-col gap-1 text-sm">
-            {#each DOCS_LINKS as link}
-                <a
-                    href={resolve(link.href)}
-                    aria-current={path === strip(resolve(link.href))
-                        ? "page"
-                        : undefined}
-                    class="px-3 py-1.5 rounded-md transition-colors {path ===
-                    strip(resolve(link.href))
-                        ? 'bg-stone-100 text-stone-900 font-medium dark:bg-stone-800 dark:text-stone-100'
-                        : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100 dark:text-stone-400 dark:hover:text-stone-100 dark:hover:bg-stone-800'}"
-                >
-                    {link.label}
-                </a>
-            {/each}
+            {label}
+        </h2>
+        <nav aria-label={label} class="text-sm">
+            <ul class="space-y-1">
+                {#each items as item (item.label)}
+                    <DocsNavItem {item} />
+                {/each}
+            </ul>
         </nav>
+    </section>
+{/snippet}
+
+{#snippet sidebar()}
+    <div class="space-y-8">
+        {@render navigation("Documentation", DOCS_LINKS)}
+        {@render navigation("Solvers", SOLVER_LINKS)}
+    </div>
+{/snippet}
+
+<div class="nav-container docs-layout py-10 grid gap-8">
+    <aside
+        class="lg:max-w-64 lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto"
+    >
+        <div class="hidden lg:block">
+            {@render sidebar()}
+        </div>
+        <details
+            class="rounded-lg border border-stone-200 dark:border-stone-800 lg:hidden"
+        >
+            <summary class="cursor-pointer px-3 py-2 text-sm font-medium">
+                Navigation
+            </summary>
+            <div class="px-2 pb-2">
+                {@render sidebar()}
+            </div>
+        </details>
     </aside>
 
     <div bind:this={content} class="docs-content min-w-0">
         {@render children()}
     </div>
     <aside
-        class="hidden lg:block sticky top-20 self-start max-h-[calc(100dvh-7rem)] overflow-y-auto"
+        class="hidden xl:block sticky top-20 self-start max-h-[calc(100dvh-7rem)] overflow-y-auto"
     >
         <PageOutline {content} />
     </aside>
 </div>
 
 <style>
-    @media (min-width: 64rem) {
+    @media (min-width: 64rem) and (max-width: 79.999rem) {
+        .docs-layout {
+            grid-template-columns: 14rem minmax(0, 1fr);
+            padding-inline-end: 4rem;
+        }
+    }
+
+    @media (min-width: 80rem) {
         .docs-layout {
             /* Equal side columns keep the article centered in the viewport. */
             grid-template-columns: minmax(0, 1fr) minmax(0, 44rem) minmax(
@@ -111,14 +138,7 @@
         }
     }
 
-    .docs-content :global(h2),
-    .docs-content :global(h3) {
+    .docs-content :global([id]) {
         scroll-margin-top: 6rem;
-    }
-
-    @media (min-width: 64rem) and (max-width: 79.999rem) {
-        .docs-layout {
-            grid-template-columns: 11rem minmax(0, 1fr) 11rem;
-        }
     }
 </style>

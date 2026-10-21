@@ -2,10 +2,10 @@
  * Compile-check for public website snippets.
  *
  * The landing-page programs come from their code generator. Migration-guide
- * programs are extracted from specially marked Rust fences in the rendered
- * source, so CI checks the exact code readers see. Backend examples run in
- * isolated Cargo packages: feature unification must not let a newer backend
- * implementation hide a broken exact-version feature.
+ * programs and solver examples are extracted from specially marked Rust
+ * fences in the page source, so CI checks the exact code readers see. Backend
+ * examples run in isolated Cargo packages: feature unification must not let a
+ * newer backend implementation hide a broken exact-version feature.
  *
  * Run with: `pnpm run check:snippets` (uses tsx).
  *
@@ -17,6 +17,7 @@ import { execFileSync } from "node:child_process";
 import {
     mkdirSync,
     mkdtempSync,
+    readdirSync,
     readFileSync,
     rmSync,
     writeFileSync,
@@ -94,8 +95,8 @@ function checkMigrationDependencyVersions(): void {
 checkMigrationDependencyVersions();
 if (process.argv.includes("--dependencies-only")) process.exit(0);
 
-function extractMigrationSnippets(): Map<string, string> {
-    const page = readFileSync(migrationPage, "utf8");
+function extractSnippets(pagePath: string): Map<string, string> {
+    const page = readFileSync(pagePath, "utf8");
     const pattern =
         /<!--\s*compile:\s*([a-z0-9-]+)\s*-->\s*```rust\s*\n([\s\S]*?)\n```/g;
     const snippets = new Map<string, string>();
@@ -103,7 +104,7 @@ function extractMigrationSnippets(): Map<string, string> {
     for (const match of page.matchAll(pattern)) {
         const [, name, source] = match;
         if (snippets.has(name)) {
-            throw new Error(`duplicate migration snippet marker: ${name}`);
+            throw new Error(`duplicate snippet marker in ${pagePath}: ${name}`);
         }
         snippets.set(name, `${source}\n`);
     }
@@ -111,7 +112,22 @@ function extractMigrationSnippets(): Map<string, string> {
     return snippets;
 }
 
-const migrationSnippets = extractMigrationSnippets();
+const migrationSnippets = extractSnippets(migrationPage);
+
+function extractSolverSnippets(directory: string): Snippet[] {
+    const snippets: Snippet[] = [];
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        const path = join(directory, entry.name);
+        if (entry.isDirectory()) {
+            snippets.push(...extractSolverSnippets(path));
+        } else if (entry.name === "+page.svx") {
+            for (const [name, source] of extractSnippets(path)) {
+                snippets.push({ name, source });
+            }
+        }
+    }
+    return snippets;
+}
 
 function migrationSnippet(name: string): Snippet {
     const source = migrationSnippets.get(name);
@@ -159,6 +175,14 @@ const checks: PackageCheck[] = [
             migrationSnippet("basin-observer-cancellation"),
             migrationSnippet("basin-backend-vec"),
         ],
+        run: true,
+    },
+    {
+        name: "solver-guides",
+        dependencies: basinDependency(),
+        snippets: extractSolverSnippets(
+            resolve(webDir, "src/routes/docs/solvers"),
+        ),
         run: true,
     },
 ];

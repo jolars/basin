@@ -1,0 +1,37 @@
+<script lang="ts">
+    import {
+        formatAuthors,
+        formatEdition,
+        getReference,
+    } from "./references.ts";
+
+    let { entries }: { entries: string[] } = $props();
+</script>
+
+<section aria-labelledby="references">
+    <h2 id="references">References</h2>
+    <ol>
+        {#each entries as id (id)}
+            {@const reference = getReference(id)}
+            <li id={`ref-${id}`}>
+                {formatAuthors(reference.author)}
+                ({reference.issued["date-parts"][0][0]}).
+                {#if reference.type === "book"}
+                    <cite>{reference.title}</cite>
+                    {#if reference.edition}
+                        ({formatEdition(reference.edition)})
+                    {/if}.
+                    {reference.publisher}.
+                {:else}
+                    {reference.title}.
+                    <cite>{reference["container-title"]}</cite>,
+                    {reference.volume}{#if reference.issue}({reference.issue}){/if},
+                    {reference.page?.replaceAll("-", "–")}.
+                {/if}
+                <a href={`https://doi.org/${reference.DOI}`}
+                    >doi:{reference.DOI}</a
+                >.
+            </li>
+        {/each}
+    </ol>
+</section>

@@ -1,0 +1,160 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# L-BFGS
+
+L-BFGS is a local optimizer for smooth functions when you can compute a
+gradient. It learns how to scale and combine gradient directions from recent
+steps, often making more progress than steepest descent without requiring a
+Hessian. Its limited memory makes it useful when a full BFGS matrix would be too
+large.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/lbfgs/struct.Lbfgs.html) ·
+[Compare solvers](../../)
+
+  | Property    | Requirement                                                        |
+  | ----------- | ------------------------------------------------------------------ |
+  | Objective   | A smooth scalar function                                           |
+  | Evaluations | `CostFunction` and `Gradient`                                      |
+  | Search      | Local, from one starting point                                     |
+  | Constraints | Unconstrained; use [L-BFGS-B](../../#lbfgsb) for box bounds        |
+  | Parameters  | Contiguous vectors on all four dense backends, with `f32` or `f64` |
+
+## When to Use It
+
+Consider L-BFGS when the gradient is available and storing a dense approximation
+to the inverse Hessian would be expensive. The history length lets you trade
+memory for additional curvature information. The original numerical study is
+[Liu and Nocedal (1989)](#ref-liu-nocedal-1989).
+
+For a smaller problem where a dense approximation is affordable,
+[BFGS](../../#bfgs) is another option. If you can supply useful Hessian-vector
+products, consider [trust-region Newton](../../#trust-region). For curve fitting
+expressed through residuals and a Jacobian, compare the [nonlinear least-squares
+methods](../../#nonlinear-least-squares).
+
+L-BFGS follows local descent directions, so different starting points can lead
+to different minima. Its curvature estimates also depend on changes in the
+gradient. If your objective is noisy or nonsmooth, compare [derivative-free
+methods](../../#derivative-free) instead of assuming those estimates will be
+reliable.
+
+## How It Works
+
+After an accepted step, L-BFGS forms two vectors: the change in the parameters
+and the change in the gradient. Together, they describe how the local slope
+changed as the solver moved. It retains at most `m` of these pairs.
+
+The next iteration uses this history to transform the negative gradient into a
+search direction. A two-loop recursion applies the inverse-Hessian approximation
+without constructing a dense matrix. Basin follows Algorithm 7.4 in [Nocedal and
+Wright (2006)](#ref-nocedal-wright-2006).
+
+A line search then chooses how far to move along that direction. Basin uses the
+[Moré–Thuente line
+search](https://docs.rs/basin/latest/basin/line_search/more_thuente/struct.MoreThuente.html)
+by default, which seeks sufficient decrease and a strong Wolfe curvature
+condition ([Moré and Thuente, 1994](#ref-more-thuente-1994)). One solver
+iteration can therefore require several objective and gradient evaluations.
+
+## Example
+
+This quadratic has its minimum at `[1.0, -2.0]`. The example supplies an
+analytic gradient, sets a gradient tolerance on the solver, and limits
+iterations through the executor.
+
+<!-- compile: solver-lbfgs -->
+```rust
+use basin::{CostFunction, Executor, Gradient, Lbfgs, Termination};
+use std::convert::Infallible;
+
+struct Quadratic;
+
+impl CostFunction for Quadratic {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok((x[0] - 1.0).powi(2) + 4.0 * (x[1] + 2.0).powi(2))
+    }
+}
+
+impl Gradient for Quadratic {
+    type Gradient = Vec<f64>;
+
+    fn gradient(&self, x: &Self::Param) -> Result<Self::Gradient, Self::Error> {
+        Ok(vec![2.0 * (x[0] - 1.0), 8.0 * (x[1] + 2.0)])
+    }
+}
+
+fn main() {
+    let solver = Lbfgs::new()
+        .unbounded()
+        .with_m_capacity(10)
+        .with_absolute_gradient_tolerance(1e-8);
+
+    let result = Executor::from_start(Quadratic, solver, vec![-3.0, 5.0])
+        .max_iter(200)
+        .run()
+        .unwrap();
+
+    assert!(matches!(
+        result.report.termination,
+        Termination::Converged(_)
+    ));
+    assert!((result.param()[0] - 1.0).abs() < 1e-7);
+    assert!((result.param()[1] + 2.0).abs() < 1e-7);
+}
+```
+
+Call `.unbounded()` to select L-BFGS. `Lbfgs::new()` alone selects the
+box-constrained L-BFGS-B mode, also available through the `Lbfgsb` alias.
+
+## Practical Considerations
+
+**Scale the parameters.** When parameter units differ greatly, rescaling can
+make the curvature information and gradient tolerance easier to interpret. An
+absolute tolerance of `1e-8` is a choice for the example above; choose your
+threshold for the units, precision, and derivative accuracy of your problem.
+
+**Start with the default history length.** Basin retains up to ten curvature
+pairs by default. `with_m_capacity(m)` changes this capacity for a fresh solve.
+Increasing it stores more information and uses more memory, but does not
+guarantee faster convergence.
+
+**Choose a stopping test.** Unconstrained L-BFGS has no default optimality
+check. Use `with_absolute_gradient_tolerance` to test the Euclidean gradient
+norm, or configure a relative gradient tolerance. Keep iteration and evaluation
+budgets on the executor. Reaching a budget means the run stopped; inspect the
+termination report to see whether a convergence test passed.
+
+**Check numerical derivatives.** You can wrap the objective in
+[`FiniteDiff`](https://docs.rs/basin/latest/basin/core/numdiff/struct.FiniteDiff.html)
+when an analytic gradient is unavailable. This adds objective evaluations and
+introduces derivative error, so account for both when choosing a tolerance.
+
+## Basin Implementation
+
+The unconstrained mode uses the two-loop recursion with a scaled identity
+initial approximation. Basin skips curvature updates that fail its curvature
+safeguard. It publishes the current point, objective, and gradient through
+`FirstOrderState`; the solver retains the curvature history.
+
+The default line search is a port of MINPACK-2's `dcsrch` and `dcstep` routines.
+You can supply another strategy through
+`Lbfgs::with_line_search(search).unbounded()`. The related L-BFGS-B mode is a
+port of the L-BFGS-B 3.0 Fortran implementation and adds box-specific steps; it
+is a distinct algorithm from unconstrained L-BFGS.
+
+Supported parameter types are `Vec<F>`, `nalgebra::DVector<F>`,
+`ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`. Parameter
+storage must be contiguous; strided ndarray views are unsupported. See the API's
+[Backends
+section](https://docs.rs/basin/latest/basin/solver/lbfgs/struct.Lbfgs.html#backends)
+for the exact capability requirements.
+
+<References
+entries={["liu-nocedal-1989", "nocedal-wright-2006", "more-thuente-1994"]} />

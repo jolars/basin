@@ -28,7 +28,8 @@ export function GET() {
 - [Migrating from Argmin](${docs}/migrating-from-argmin/): map Argmin 0.11 problem traits, solvers, errors, bounds, observers, and backends to Basin
 - [Migrating to Basin 2.0](${docs}/migrating-to-v2/): upgrade from Basin 1.x, including constraints, states, termination reports, solver settings, and checkpoints
 - [Migrating to Basin 3.0](${docs}/migrating-to-v3/): development API with optional constraint declarations and standalone objective and residual traits
-- [Solvers](${docs}/solvers/): catalog of optimization solvers, including SLSQP for nonlinear constraints, and direct scalar root finding
+- [Choosing a solver](${docs}/solvers/): selection guide and full catalog grouped by algorithm family, including constraint support and scalar root finding
+- [L-BFGS](${docs}/solvers/quasi-newton/l-bfgs/): when to use limited-memory BFGS, a Rust example, convergence settings, backend requirements, and original references
 
 ## Reference
 

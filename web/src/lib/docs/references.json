@@ -1,0 +1,45 @@
+[
+    {
+        "id": "liu-nocedal-1989",
+        "type": "article-journal",
+        "title": "On the limited memory BFGS method for large scale optimization",
+        "author": [
+            { "family": "Liu", "given": "Dong C." },
+            { "family": "Nocedal", "given": "Jorge" }
+        ],
+        "issued": { "date-parts": [[1989]] },
+        "container-title": "Mathematical Programming",
+        "volume": "45",
+        "page": "503-528",
+        "DOI": "10.1007/BF01589116"
+    },
+    {
+        "id": "nocedal-wright-2006",
+        "type": "book",
+        "title": "Numerical Optimization",
+        "author": [
+            { "family": "Nocedal", "given": "Jorge" },
+            { "family": "Wright", "given": "Stephen J." }
+        ],
+        "issued": { "date-parts": [[2006]] },
+        "edition": "2",
+        "publisher": "Springer",
+        "publisher-place": "New York, NY",
+        "DOI": "10.1007/978-0-387-40065-5"
+    },
+    {
+        "id": "more-thuente-1994",
+        "type": "article-journal",
+        "title": "Line search algorithms with guaranteed sufficient decrease",
+        "author": [
+            { "family": "Moré", "given": "Jorge J." },
+            { "family": "Thuente", "given": "David J." }
+        ],
+        "issued": { "date-parts": [[1994, 9]] },
+        "container-title": "ACM Transactions on Mathematical Software",
+        "volume": "20",
+        "issue": "3",
+        "page": "286-307",
+        "DOI": "10.1145/192115.192132"
+    }
+]

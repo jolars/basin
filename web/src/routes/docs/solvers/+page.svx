@@ -1,61 +1,61 @@
-# Solvers
+# Choosing a Solver
 
-Basin ships a large catalog of optimization solvers driven by the same
-`Executor` loop, plus a direct scalar root-finding API. Pick an optimization
-solver based on what your problem provides (a gradient? only costs? residuals?)
-and whether it is constrained.
+Start with the information your problem provides: objective values, gradients,
+or residuals and a Jacobian. Then check which methods support your constraints.
+The table below gives starting points; the sidebar groups every solver by
+algorithm family.
 
-Each algorithm name links to its API page on [docs.rs](https://docs.rs/basin);
-the trailing note cites the paper it implements (or the source it ports).
+## Where to Start
+
+| Your problem | Solvers to consider | What guides the choice |
+| --- | --- | --- |
+| Smooth, unconstrained, with a gradient | [L-BFGS](quasi-newton/l-bfgs/) or [BFGS](#bfgs) | L-BFGS keeps a short history; BFGS stores a dense inverse-Hessian approximation. |
+| Box bounds, with a gradient | [L-BFGS-B](#lbfgsb) or [projected gradient descent](#projected-gradient-descent) | Both enforce the box; L-BFGS-B also builds a curvature model. |
+| A Hessian or Hessian-vector products | [Trust-region Newton](#trust-region) | Use second-order information; the matrix-free mode needs only products. |
+| Residuals and a Jacobian | [Levenberg–Marquardt](#levenberg-marquardt) or its [QR variant](#levenberg-marquardt-qr) | Use the least-squares structure; QR avoids forming the Gram matrix. |
+| Least squares with box bounds | [Trust-region reflective](#trust-region-reflective) or [bounded Levenberg–Marquardt](#bounded-levenberg-marquardt) | Both combine the residual model with bound-aware steps. |
+| Objective values only, with a locally smooth function | [NEWUOA](#newuoa), or [BOBYQA](#bobyqa) with box bounds | Build a quadratic model without gradients. |
+| Objective values only, with linear constraints | [LINCOA](#lincoa) | Build a quadratic objective model while handling linear inequalities. |
+| Objective values only, with nonlinear constraints | [COBYLA](#cobyla) or [constrained MADS](#mads) | COBYLA uses linear interpolation models; MADS uses polling and a progressive barrier. Check each method's supported constraint blocks. |
+| Gradients and general nonlinear constraints | [SLSQP](#slsqp) | Solve local constrained subproblems using objective and constraint derivatives. |
+| Several local minima to explore | [CMA-ES](#cma-es), [differential evolution](#de), or [DIRECT](#direct) | Search across a region; check whether the method needs sampling bounds or enforces constraints. |
+| One scalar variable to minimize | [Brent](#brent) or [golden-section search](#golden-section) | Start with an interval bracketing a minimum. |
+| A scalar equation to solve | [Brent root finding](#brent-root) or [TOMS 748](#toms748-root) | Start with a sign-changing bracket; these solve for a zero rather than minimize a cost. |
+
+These choices are starting points for comparison. A local method depends on
+its starting point, and a global search does not guarantee that a finite run
+will find the global minimum. Compare evaluation counts and the quality of
+the returned point on your own problem.
+
+## Constraints and Derivatives
+
+Choose a solver that handles every constraint block your problem declares.
+Box bounds, linear constraints, and nonlinear constraints are different
+capabilities. An unconstrained solver ignores constraint declarations.
+Projection, barrier, and penalty adapters are explicit choices.
+
+When derivatives are unavailable, you can use a derivative-free solver or
+synthesize derivatives with
+[`FiniteDiff`](https://docs.rs/basin/latest/basin/core/numdiff/struct.FiniteDiff.html).
+Finite differences add evaluations and introduce approximation error; take
+both into account when choosing a method and its stopping tolerances.
+
+## Reading the Catalog
+
+Each entry below links to the authoritative API reference on
+[docs.rs](https://docs.rs/basin). The [L-BFGS guide](quasi-newton/l-bfgs/)
+also explains when to use the method, how it works, and how to configure it,
+with citations and full references.
+
 Backend support applies to every enabled version of the listed backend.
 Multiple versions can be used in the same build; see the
-[backend migration notes](/docs/migrating-from-argmin/) for feature selection
-and the shared `FirstOrderState` used by quasi-Newton solvers.
-
-## Root Finding
-
-- **[`BrentRoot`](https://docs.rs/basin/latest/basin/root/brent/struct.BrentRoot.html)**:
-  bracketed scalar root finding by bisection, secant steps, and inverse
-  quadratic interpolation (Brent, 1971). It uses a direct fallible-closure API
-  rather than `Executor`, preserving the signed function value and final
-  bracket in a root-specific result.
-- **[`SecantRoot`](https://docs.rs/basin/latest/basin/root/secant/struct.SecantRoot.html)**:
-  secant iteration with bracket preservation and bisection safeguards (SciPy
-  1.16.3, `scipy.optimize.newton`, secant update; Basin adds bracketing and
-  bracket-based termination).
-- **[`NewtonRoot`](https://docs.rs/basin/latest/basin/root/newton/struct.NewtonRoot.html)**:
-  safeguarded Newton iteration using first derivatives (Boost.Math 1.89.0,
-  "Root Finding With Derivatives: Newton-Raphson, Halley & Schroeder"; Basin
-  adds secant fallback, a two-trial contraction safeguard, and bracket-based
-  termination).
-- **[`HalleyRoot`](https://docs.rs/basin/latest/basin/root/halley/struct.HalleyRoot.html)**:
-  safeguarded Halley iteration using first and second derivatives (Boost.Math
-  1.89.0, "Root Finding With Derivatives: Newton-Raphson, Halley & Schroeder";
-  Basin adds secant fallback, a two-trial contraction safeguard, and
-  bracket-based termination).
-- **[`Toms748Root`](https://docs.rs/basin/latest/basin/root/toms748/struct.Toms748Root.html)**:
-  derivative-free bracketed root finding using Algorithm 4.2 (`k = 2`,
-  `μ = 0.5`) from Alefeld, Potra, and Shi (1995), "Algorithm 748: Enclosing
-  Zeros of Continuous Functions," _ACM Transactions on Mathematical Software_,
-  21(3), 327–344, [doi:10.1145/210089.210111](https://doi.org/10.1145/210089.210111).
-
-All five use direct fallible callbacks and preserve signed function values and
-the final bracket. Newton and Halley accept separate or combined derivative
-callbacks. Convergence requires an exact zero or a sufficiently narrow bracket.
-
-[`RootBracketer`](https://docs.rs/basin/latest/basin/bracket/root/struct.RootBracketer.html)
-and
-[`MinimumBracketer`](https://docs.rs/basin/latest/basin/bracket/minimum/struct.MinimumBracketer.html)
-provide automatic geometric bracket searches with optional domain limits.
-Bracketing is a separate stage with its own evaluation counts. Pass a root
-bracket to a root solver, or put a minimum bracket's outer endpoints on the
-problem's `BoxBounds` declaration and use its middle point to seed a scalar minimizer.
-Both searches follow the scalar recurrences in SciPy 1.16.3's elementwise
-bracketing routines.
+[backend migration notes](../migrating-from-argmin/) for feature selection.
+Most optimization solvers run through the common `Executor` loop. Scalar root
+finding uses a direct callback API and a separate result type.
 
 ## First-Order
 
-- **[`NonlinearCg`](https://docs.rs/basin/latest/basin/solver/nonlinear_cg/struct.NonlinearCg.html)**:
+- **<span id="nonlinear-cg"></span>[`NonlinearCg`](https://docs.rs/basin/latest/basin/solver/nonlinear_cg/struct.NonlinearCg.html)**:
   nonlinear conjugate gradient with selectable Hager–Zhang (default) and
   Polak–Ribière+ updates, O(n) storage, a pluggable line search, and optional
   periodic restarts. Select PR+ with
@@ -76,30 +76,45 @@ bracketing routines.
   Conjugate Gradient Methods for Optimization,” _SIAM Journal on Optimization_
   2(1), 1992, pp. 21–42,
   [doi:10.1137/0802003](https://doi.org/10.1137/0802003).
-- **[`GradientDescent`](https://docs.rs/basin/latest/basin/solver/gradient_descent/struct.GradientDescent.html)**:
+- **<span id="gradient-descent"></span>[`GradientDescent`](https://docs.rs/basin/latest/basin/solver/gradient_descent/struct.GradientDescent.html)**:
   steepest descent with a pluggable step rule (`Constant`, `Backtracking`,
   `MoreThuente`, `Wolfe`, or `HagerZhang` line searches) and optional
   heavy-ball momentum (Polyak, 1964). Supports all four dense backends with
   `f32` or `f64` and publishes `FirstOrderState`.
-- **[`Sgd`](https://docs.rs/basin/latest/basin/solver/sgd/struct.Sgd.html)**:
+- **<span id="sgd"></span>[`Sgd`](https://docs.rs/basin/latest/basin/solver/sgd/struct.Sgd.html)**:
   mini-batch stochastic gradient descent with a constant learning rate and
   optional Polyak (1964) heavy-ball momentum. Supports all four dense backends
   with `f32` or `f64` and publishes the last fully evaluated point in
   `PointState`; the solver retains the working iterate between objective
   refreshes.
-- **[`ProjectedGradientDescent`](https://docs.rs/basin/latest/basin/solver/projected_gradient_descent/struct.ProjectedGradientDescent.html)**:
+- **<span id="projected-gradient-descent"></span>[`ProjectedGradientDescent`](https://docs.rs/basin/latest/basin/solver/projected_gradient_descent/struct.ProjectedGradientDescent.html)**:
   gradient descent for box-constrained problems, projecting each step back onto
   the feasible box. Supports all four dense backends with `f32` or `f64` and
   publishes `FirstOrderState`.
-- **[`BrentDerivative`](https://docs.rs/basin/latest/basin/solver/brent_derivative/struct.BrentDerivative.html)**:
-  Brent's method using first derivatives ("dbrent"): 1-D minimization on a
-  bracketed interval, the gradient-using sibling of `Brent`/`GoldenSection`
-  (uses the sign of `f'` to bracket and secant extrapolation on `f'` to step;
-  Brent, 1973, as transcribed in *Numerical Recipes* §10.3).
+
+## Quasi-Newton
+
+- **<span id="bfgs"></span>[`Bfgs`](https://docs.rs/basin/latest/basin/solver/bfgs/struct.Bfgs.html)**:
+  dense quasi-Newton with a full inverse-Hessian approximation (Nocedal &
+  Wright, 2006). Supports all four dense backends with `f32` or `f64`.
+  Optional fixed initial matrices require cloning and entry access; closure
+  initializers require entry access. Named initializers enforce their own
+  seed contracts.
+- **<span id="lbfgs"></span>[`Lbfgs`](https://docs.rs/basin/latest/basin/solver/lbfgs/struct.Lbfgs.html)**:
+  limited-memory BFGS for larger problems (two-loop recursion, Nocedal & Wright
+  Alg. 7.4). [Read the L-BFGS guide](quasi-newton/l-bfgs/).
+  Supports all four dense backends with `f32` or `f64`; parameter storage must
+  be contiguous (including ndarray).
+- **<span id="lbfgsb"></span>[`Lbfgsb`](https://docs.rs/basin/latest/basin/solver/lbfgs/struct.Lbfgs.html)**:
+  L-BFGS with box bounds; a faithful port of the Nocedal–Zhu L-BFGS-B v3.0
+  Fortran source (Byrd, Lu & Nocedal, 1995; Zhu, Byrd, Lu & Nocedal, 1997, ACM
+  TOMS Alg. 778; Nocedal & Morales, 2011). Supports all four dense backends
+  with `f32` or `f64` and contiguous parameter storage. A custom line search
+  must implement bounded steps.
 
 ## Derivative-Free
 
-- **[`NelderMead`](https://docs.rs/basin/latest/basin/solver/nelder_mead/struct.NelderMead.html)**:
+- **<span id="nelder-mead"></span>[`NelderMead`](https://docs.rs/basin/latest/basin/solver/nelder_mead/struct.NelderMead.html)**:
   the classic reflection, expansion, and contraction simplex; needs only a
   `CostFunction`. Implements Lagarias et al. (1998); `NelderMead::adaptive()`
   uses the dimension-aware coefficients of Gao & Han (2012). Its projected
@@ -111,7 +126,7 @@ bracketing routines.
   and cost-spread tests are enabled by default in Basin 2.0; see the
   [Basin 2.0 migration guide](../migrating-to-v2/#nelder-mead-convergence-defaults) and API reference
   for tolerance settings and scaling limits.
-- **[`Mads`](https://docs.rs/basin/latest/basin/solver/mads/struct.Mads.html)**:
+- **<span id="mads"></span>[`Mads`](https://docs.rs/basin/latest/basin/solver/mads/struct.Mads.html)**:
   mesh adaptive direct search (the deterministic OrthoMADS instance): polls a
   positive spanning set of `2n` directions on a shrinking mesh, generated from
   the Halton sequence and a scaled Householder reflection. Unlike Nelder-Mead it
@@ -129,7 +144,7 @@ bracketing routines.
   without additional evaluations or changes to solver convergence.
   Implements Audet & Dennis (2006), OrthoMADS (Abramson, Audet, Dennis &
   Le Digabel 2009), and the progressive barrier (Audet & Dennis 2009).
-- **[`Newuoa`](https://docs.rs/basin/latest/basin/solver/newuoa/struct.Newuoa.html)**:
+- **<span id="newuoa"></span>[`Newuoa`](https://docs.rs/basin/latest/basin/solver/newuoa/struct.Newuoa.html)**:
   Powell's model-based trust-region method: maintains a quadratic surrogate
   interpolating the objective on `2n+1` points and updates it by the
   least-Frobenius-norm rule, so each iteration needs only one new value. Needs
@@ -137,7 +152,7 @@ bracketing routines.
   supported dense backend release; model and radius diagnostics live on the
   solver. Implements Powell (2006), cross-validated against PRIMA
   v0.7.2.
-- **[`Bobyqa`](https://docs.rs/basin/latest/basin/solver/bobyqa/struct.Bobyqa.html)**:
+- **<span id="bobyqa"></span>[`Bobyqa`](https://docs.rs/basin/latest/basin/solver/bobyqa/struct.Bobyqa.html)**:
   the bound-constrained sibling of `Newuoa`: the same least-Frobenius-norm
   quadratic model, with a box-aware trust-region step (TRSBOX) and geometry step
   (ALTMOV), plus the RESCUE restoration procedure. Needs a `CostFunction` and
@@ -145,7 +160,7 @@ bracketing routines.
   dense backend release; the solver owns the model and radius schedule.
   Implements Powell (2009), cross-validated against PRIMA
   v0.7.2.
-- **[`Lincoa`](https://docs.rs/basin/latest/basin/solver/lincoa/struct.Lincoa.html)**:
+- **<span id="lincoa"></span>[`Lincoa`](https://docs.rs/basin/latest/basin/solver/lincoa/struct.Lincoa.html)**:
   the linearly-constrained sibling of `Newuoa`: the same least-Frobenius-norm
   quadratic model, with a projected truncated-CG trust-region step (TRSTEP) and
   active-set QR (GETACT) that keep every iterate feasible under `A x ≤ b`. Needs
@@ -155,7 +170,7 @@ bracketing routines.
   matrices require `MatrixShape`, `MatrixFinite`, and `MatTransposeVecInto`. Infeasible starts relax the constraints.
   Implements Powell
   (2015), ported from PRIMA v0.7.2.
-- **[`Cobyla`](https://docs.rs/basin/latest/basin/solver/cobyla/struct.Cobyla.html)**:
+- **<span id="cobyla"></span>[`Cobyla`](https://docs.rs/basin/latest/basin/solver/cobyla/struct.Cobyla.html)**:
   Powell's nonlinearly-constrained solver: it builds **linear** models by
   interpolation at the `n+1` vertices of a simplex and steers by an L-infinity
   exact-penalty merit function. Supply a `CostFunction` with a canonical
@@ -172,7 +187,7 @@ bracketing routines.
   Only present linear blocks require `MatrixShape`, `MatrixFinite`, and
   `MatVecInto`; nonlinear-only input needs no matrix type. Nonempty nonlinear
   callbacks count as residual evaluations. Implements Powell (1994), ported from PRIMA.
-- **[`SolisWets`](https://docs.rs/basin/latest/basin/solver/solis_wets/struct.SolisWets.html)**:
+- **<span id="solis-wets"></span>[`SolisWets`](https://docs.rs/basin/latest/basin/solver/solis_wets/struct.SolisWets.html)**:
   adaptive random local search: a randomized hill-climber testing `x + b + d`
   and `x − b − d` with `d ~ N(0, ρ²I)`, a success-direction bias `b`, and a step
   size `ρ` that expands after 5 successive successes and contracts after 3
@@ -181,39 +196,13 @@ bracketing routines.
   `CostFunction`. Supports all four dense backends with `f32` or `f64` and
   publishes `PointState`; the solver owns its bias and adaptive step size.
   Implements Solis & Wets (1981).
-- **[`Brent`](https://docs.rs/basin/latest/basin/solver/brent/struct.Brent.html)**:
-  robust 1-D minimization on a bracketed interval (Brent, 1973, as transcribed
-  in *Numerical Recipes* §10.2); also used inside line searches.
-- **[`GoldenSection`](https://docs.rs/basin/latest/basin/solver/golden_section/struct.GoldenSection.html)**:
-  golden-section search: 1-D minimization on a bracketed interval, the robust
-  linearly-converging companion to `Brent` (Kiefer, 1953; *Numerical Recipes*
-  §10.1).
-
-## Quasi-Newton
-
-- **[`Bfgs`](https://docs.rs/basin/latest/basin/solver/bfgs/struct.Bfgs.html)**:
-  dense quasi-Newton with a full inverse-Hessian approximation (Nocedal &
-  Wright, 2006). Supports all four dense backends with `f32` or `f64`.
-  Optional fixed initial matrices require cloning and entry access; closure
-  initializers require entry access. Named initializers enforce their own
-  seed contracts.
-- **[`Lbfgs`](https://docs.rs/basin/latest/basin/solver/lbfgs/struct.Lbfgs.html)**:
-  limited-memory BFGS for larger problems (two-loop recursion, Nocedal & Wright
-  Alg. 7.4). Supports all four dense backends with `f32` or `f64`; parameter
-  storage must be contiguous (including ndarray).
-- **[`Lbfgsb`](https://docs.rs/basin/latest/basin/solver/lbfgs/struct.Lbfgs.html)**:
-  L-BFGS with box bounds; a faithful port of the Nocedal–Zhu L-BFGS-B v3.0
-  Fortran source (Byrd, Lu & Nocedal, 1995; Zhu, Byrd, Lu & Nocedal, 1997, ACM
-  TOMS Alg. 778; Nocedal & Morales, 2011). Supports all four dense backends
-  with `f32` or `f64` and contiguous parameter storage. A custom line search
-  must implement bounded steps.
 
 ## Trust Region
 
 For problems exposing a `Hessian` or, matrix-free, a `HessianProduct` (either
 analytic, or synthesized by `FiniteDiff`):
 
-- **[`TrustRegion`](https://docs.rs/basin/latest/basin/solver/trust_region/struct.TrustRegion.html)**:
+- **<span id="trust-region-newton"></span>[`TrustRegion`](https://docs.rs/basin/latest/basin/solver/trust_region/struct.TrustRegion.html)**:
   second-order trust-region Newton minimizer (Nocedal & Wright, 2006, Alg. 4.1).
   The subproblem strategy is pluggable: `Steihaug` (truncated CG, the default),
   `Dogleg`, `MoreSorensen` (the near-exact secular solve with hard-case
@@ -242,9 +231,9 @@ backends and also exposes the objective to general optimizers. See the
 for the safeguarded curvature formula, following Triggs et al. (1999),
 _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
 
-- **[`GaussNewton`](https://docs.rs/basin/latest/basin/solver/gauss_newton/struct.GaussNewton.html)**:
+- **<span id="gauss-newton"></span>[`GaussNewton`](https://docs.rs/basin/latest/basin/solver/gauss_newton/struct.GaussNewton.html)**:
   undamped normal-equations solver (Madsen, Nielsen & Tingleff, 2004, §3.1).
-- **[`LevenbergMarquardt`](https://docs.rs/basin/latest/basin/solver/levenberg_marquardt/struct.LevenbergMarquardt.html)**:
+- **<span id="levenberg-marquardt"></span>[`LevenbergMarquardt`](https://docs.rs/basin/latest/basin/solver/levenberg_marquardt/struct.LevenbergMarquardt.html)**:
   damped least squares; the workhorse for curve fitting. Marquardt (1963) with
   Moré (1978)/MINPACK column scaling and scaled trust-region damping by default
   for both `f32` and `f64`. `LmDamping::Nielsen` selects Nielsen's (1999) smooth
@@ -253,7 +242,7 @@ _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
   MINPACK's
   [`lmder`](https://netlib.org/minpack/lmder.f) radius updates with a bracketed
   parameter search. Both damping strategies retain Basin's stopping tests.
-- **[`LevenbergMarquardtQr`](https://docs.rs/basin/latest/basin/solver/levenberg_marquardt/struct.LevenbergMarquardtQr.html)**:
+- **<span id="levenberg-marquardt-qr"></span>[`LevenbergMarquardtQr`](https://docs.rs/basin/latest/basin/solver/levenberg_marquardt/struct.LevenbergMarquardtQr.html)**:
   opt-in pivoted QR with the same configurable damping and stopping rules as
   `LevenbergMarquardt`. Avoids forming the Gram matrix; supports all four dense
   backends, with numerical rank checks after regularization. Sparse QR is not
@@ -264,7 +253,7 @@ _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
   The default trust-region damping follows MINPACK's
   [`lmder`](https://netlib.org/minpack/lmder.f) radius updates, using bracketed
   parameter selection instead of [`lmpar`](https://netlib.org/minpack/lmpar.f).
-- **[`BoundedLevenbergMarquardt`](https://docs.rs/basin/latest/basin/solver/bounded_levenberg_marquardt/struct.BoundedLevenbergMarquardt.html)**:
+- **<span id="bounded-levenberg-marquardt"></span>[`BoundedLevenbergMarquardt`](https://docs.rs/basin/latest/basin/solver/bounded_levenberg_marquardt/struct.BoundedLevenbergMarquardt.html)**:
   bounded Levenberg–Marquardt with Coleman–Li affine scaling, Nielsen damping,
   and strictly feasible steps. Supports all four dense backends, nalgebra-sparse,
   and faer-sparse, for `f32` and `f64`. Sparse Jacobians require the diagonal of
@@ -273,7 +262,7 @@ _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
   Bound-Constrained Minimization Problems,” _SIAM Journal on Scientific
   Computing_ 21(1), 1–23
   ([doi:10.1137/S1064827595289108](https://doi.org/10.1137/S1064827595289108)).
-- **[`TrustRegionReflective`](https://docs.rs/basin/latest/basin/solver/trust_region_reflective/struct.TrustRegionReflective.html)**:
+- **<span id="trust-region-reflective"></span>[`TrustRegionReflective`](https://docs.rs/basin/latest/basin/solver/trust_region_reflective/struct.TrustRegionReflective.html)**:
   dense trust-region-reflective least squares with an explicit radius, reflected
   steps, a rank-aware SVD solve, and fixed-parameter elimination. Supports all
   four dense backends in pure Rust, including `f32` and `f64`. Branch, Coleman &
@@ -288,7 +277,7 @@ _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
 
 ## Global & Stochastic
 
-- **[`Direct`](https://docs.rs/basin/latest/basin/solver/direct/struct.Direct.html)**:
+- **<span id="direct"></span>[`Direct`](https://docs.rs/basin/latest/basin/solver/direct/struct.Direct.html)**:
   original DIRECT for deterministic global optimization over finite box bounds.
   It selects potentially optimal rectangles by their center costs and
   half-diagonals, then trisects every longest axis. Fixed coordinates are
@@ -301,7 +290,7 @@ _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
   _Journal of Optimization Theory and Applications_ 79, 157–181 (1993),
   especially pp. 169–170, the subdivision procedure and Definition 4.1,
   [doi:10.1007/BF00941892](https://doi.org/10.1007/BF00941892).
-- **[`Gbnm`](https://docs.rs/basin/latest/basin/solver/gbnm/struct.Gbnm.html)**:
+- **<span id="gbnm"></span>[`Gbnm`](https://docs.rs/basin/latest/basin/solver/gbnm/struct.Gbnm.html)**:
   Globalized Bounded Nelder-Mead over a feasible box. It combines projected
   local simplex searches with Parzen-density probabilistic restarts and the
   small-, flat-, and degenerate-simplex restart state machine. It retains the
@@ -312,7 +301,7 @@ _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
   method for engineering optimization,” _Computers & Structures_ 82 (2004),
   2251–2260
   ([doi:10.1016/j.compstruc.2004.03.072](https://doi.org/10.1016/j.compstruc.2004.03.072)).
-- **[`SimulatedAnnealing`](https://docs.rs/basin/latest/basin/solver/simulated_annealing/struct.SimulatedAnnealing.html)**:
+- **<span id="simulated-annealing"></span>[`SimulatedAnnealing`](https://docs.rs/basin/latest/basin/solver/simulated_annealing/struct.SimulatedAnnealing.html)**:
   classical single-proposal simulated annealing with a user-supplied `Neighbor`,
   explicit geometric, reciprocal, or normalized-log cooling, and optional
   independently composable schedule restart triggers. `ProposalState` retains
@@ -324,14 +313,14 @@ _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
   Uses Metropolis et al. (1953; DOI 10.1063/1.1699114), implements Kirkpatrick,
   Gelatt & Vecchi (1983; DOI 10.1126/science.220.4598.671), and takes its
   logarithmic-schedule context from Hajek (1988; DOI 10.1287/moor.13.2.311).
-- **[`CmaEs`](https://docs.rs/basin/latest/basin/solver/cma_es/struct.CmaEs.html)**/**[`BoundedCmaEs`](https://docs.rs/basin/latest/basin/solver/bounded_cma_es/struct.BoundedCmaEs.html)**:
+- **<span id="cma-es"></span><span id="bounded-cma-es"></span>[`CmaEs`](https://docs.rs/basin/latest/basin/solver/cma_es/struct.CmaEs.html)**/**[`BoundedCmaEs`](https://docs.rs/basin/latest/basin/solver/bounded_cma_es/struct.BoundedCmaEs.html)**:
   covariance-matrix adaptation evolution strategy (Hansen, 2016), unconstrained
   and box-bounded; the bounded variant uses Hansen's adaptive `BoundPenalty`
   (the `pycma` default). Publishes `PopulationProgress` with an evaluated mean;
   distributions and penalty history live on the solver. The bounded variant
   publishes repaired points and raw costs, retaining penalized rankings in its
   model. All four dense backends support `f32` and `f64`.
-- **[`De`](https://docs.rs/basin/latest/basin/solver/de/struct.De.html)**:
+- **<span id="de"></span>[`De`](https://docs.rs/basin/latest/basin/solver/de/struct.De.html)**:
   differential evolution over a feasible box, with six mutation rules,
   independently selected binomial or exponential crossover, and optional
   generation-wise mutation dithering. Defaults to `DE/rand/1/bin` and supports
@@ -343,7 +332,7 @@ _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
   [SciPy 1.16.2 differential evolution](https://docs.scipy.org/doc/scipy-1.16.2/reference/generated/scipy.optimize.differential_evolution.html),
   which also supplies the donor and solution references. Publishes
   `PopulationProgress` and supports all four dense backends with `f32` or `f64`.
-- **[`GlobalBestPso`](https://docs.rs/basin/latest/basin/solver/global_best_pso/struct.GlobalBestPso.html)**:
+- **<span id="global-best-pso"></span>[`GlobalBestPso`](https://docs.rs/basin/latest/basin/solver/global_best_pso/struct.GlobalBestPso.html)**:
   synchronous inertia-weight global-best particle swarm optimization over a
   feasible box, with independent boundary-response and velocity-limit policies.
   Implements Kennedy & Eberhart's (1995; DOI 10.1109/ICNN.1995.488968) update
@@ -356,17 +345,17 @@ _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
   10.1109/CEC.2013.6557848). Publishes `PopulationProgress`; the solver owns
   particle velocities, personal bests, and RNG state. Supports all four dense
   backends with `f32` or `f64` and requires solver-aware exact checkpoints.
-- **[`RandomSearch`](https://docs.rs/basin/latest/basin/solver/random_search/struct.RandomSearch.html)**:
+- **<span id="random-search"></span>[`RandomSearch`](https://docs.rs/basin/latest/basin/solver/random_search/struct.RandomSearch.html)**:
   elitist (1+λ) uniform sampling over a box. Publishes `PopulationProgress`,
   accepts explicit initial members, and supports all four dense backends with
   `f32` or `f64`.
-- **[`Ssga`](https://docs.rs/basin/latest/basin/solver/ssga/struct.Ssga.html)**:
+- **<span id="ssga"></span>[`Ssga`](https://docs.rs/basin/latest/basin/solver/ssga/struct.Ssga.html)**:
   steady-state real-coded genetic algorithm (replace-worst) with BLX-α crossover
   (Eshelman & Schaffer, 1993), negative assortative mating (Fernandes & Rosa,
   2001), and BGA mutation (Mühlenbein & Schlierkamp-Voosen, 1993); the SSGA
   component of Molina et al. (2010), §4.4. Publishes `PopulationProgress` and
   supports all four dense backends with `f32` or `f64`.
-- **[`BasinHopping`](https://docs.rs/basin/latest/basin/solver/basin_hopping/struct.BasinHopping.html)**:
+- **<span id="basin-hopping"></span>[`BasinHopping`](https://docs.rs/basin/latest/basin/solver/basin_hopping/struct.BasinHopping.html)**:
   basin-hopping (Wales & Doye, 1997): a Metropolis Monte-Carlo walk over the
   `Ẽ(x) = min{f(x)}` transform, wrapping any local solver with a pluggable step
   taker and acceptance test; adaptive step size on by default. Publishes
@@ -382,13 +371,13 @@ support. Bounded CMA and DE injection require `RelaxedInner::new(inner)`
 when an unconstrained local solver explores the bounded objective. Local
 solvers that enforce the same box can be supplied directly.
 
-- **[`CmaInject`](https://docs.rs/basin/latest/basin/solver/cma_inject/struct.CmaInject.html)**/**[`BoundedCmaInject`](https://docs.rs/basin/latest/basin/solver/bounded_cma_inject/struct.BoundedCmaInject.html)**:
+- **<span id="cma-inject"></span><span id="bounded-cma-inject"></span>[`CmaInject`](https://docs.rs/basin/latest/basin/solver/cma_inject/struct.CmaInject.html)**/**[`BoundedCmaInject`](https://docs.rs/basin/latest/basin/solver/bounded_cma_inject/struct.BoundedCmaInject.html)**:
   CMA-ES with per-generation local polishing of the best individuals,
   re-injected via Hansen's (2011) injection mechanism. Publishes
   `PopulationProgress` and preserves all six evaluation categories. All four
   dense backends support `f32` and `f64` with a compatible inner solver;
   custom inners can narrow that support.
-- **[`DeInject`](https://docs.rs/basin/latest/basin/solver/de_inject/struct.DeInject.html)**:
+- **<span id="de-inject"></span>[`DeInject`](https://docs.rs/basin/latest/basin/solver/de_inject/struct.DeInject.html)**:
   differential evolution with per-generation top-*k* local refinement and
   conditional write-back. References: Noman & Iba, *Accelerating Differential
   Evolution Using an Adaptive Local Search* (IEEE TEC, 2008); Neri & Tirronen,
@@ -398,7 +387,7 @@ solvers that enforce the same box can be supplied directly.
   Computing, 2009). Publishes `PopulationProgress` and supports all four dense
   backends with `f32` or `f64` when the chosen inner solver does. Nelder-Mead
   with `RelaxedInner` and L-BFGS-B cover all four; custom inners or strategies can narrow support.
-- **[`MaLsCh`](https://docs.rs/basin/latest/basin/solver/ma_ls_ch/struct.MaLsCh.html)**/**[`MaLsChCma`](https://docs.rs/basin/latest/basin/solver/ma_ls_ch/struct.MaLsCh.html)**:
+- **<span id="ma-ls-ch"></span><span id="ma-ls-ch-cma"></span>[`MaLsCh`](https://docs.rs/basin/latest/basin/solver/ma_ls_ch/struct.MaLsCh.html)**/**[`MaLsChCma`](https://docs.rs/basin/latest/basin/solver/ma_ls_ch/struct.MaLsCh.html)**:
   a memetic framework with persistent local-search chains and its CMA-ES
   configuration. Molina, Lozano, García-Martínez, and Herrera (2010),
   *Memetic algorithms for continuous optimisation based on local search chains*,
@@ -408,7 +397,7 @@ solvers that enforce the same box can be supplied directly.
   `SamplingBounds` on an unconstrained objective, or `SamplingDomain::new(problem)`
   for an existing box-only objective. Local chains and accepted points may leave
   the sampling box.
-- **[`MaLsChSw`](https://docs.rs/basin/latest/basin/solver/ma_ls_ch/struct.MaLsCh.html)**:
+- **<span id="ma-ls-ch-sw"></span>[`MaLsChSw`](https://docs.rs/basin/latest/basin/solver/ma_ls_ch/struct.MaLsCh.html)**:
   the high-dimensional sibling of `MaLsChCma`: the same local-search-chain
   framework with a Solis-Wets inner, whose O(n) chain snapshots keep
   chain-memetic search viable when the dimension grows (MA-SW-Chains: Molina,
@@ -421,7 +410,7 @@ solvers that enforce the same box can be supplied directly.
 
 ## Constrained
 
-- **[`Slsqp`](https://docs.rs/basin/latest/basin/solver/slsqp/struct.Slsqp.html)**:
+- **<span id="slsqp"></span>[`Slsqp`](https://docs.rs/basin/latest/basin/solver/slsqp/struct.Slsqp.html)**:
   dense Han–Powell sequential least-squares programming with damped BFGS,
   constrained least-squares subproblems, and an inexact L1 merit line search.
   Supports box bounds, linear and nonlinear equalities, and linear and nonlinear
@@ -443,7 +432,7 @@ solvers that enforce the same box can be supplied directly.
 The following wrap a gradient inner solver in an outer loop for linear
 constraints:
 
-- **[`BarrierMethod`](https://docs.rs/basin/latest/basin/solver/barrier_method/struct.BarrierMethod.html)**:
+- **<span id="barrier-method"></span>[`BarrierMethod`](https://docs.rs/basin/latest/basin/solver/barrier_method/struct.BarrierMethod.html)**:
   two-phase log-barrier interior-point continuation for linear inequality
   constraints (`A x ≤ b`); automatically finds a strictly feasible start when
   one exists (Boyd & Vandenberghe, *Convex Optimization*, §§11.3–11.4.1).
@@ -451,7 +440,7 @@ constraints:
   domain and a rejection cost of positive infinity outside it. Incumbents
   contain only strictly feasible points. Supports all four dense backends
   with `f32` or `f64`; custom inner solvers can require additional capabilities.
-- **[`AugmentedLagrangianMethod`](https://docs.rs/basin/latest/basin/solver/augmented_lagrangian_method/struct.AugmentedLagrangianMethod.html)**:
+- **<span id="augmented-lagrangian-method"></span>[`AugmentedLagrangianMethod`](https://docs.rs/basin/latest/basin/solver/augmented_lagrangian_method/struct.AugmentedLagrangianMethod.html)**:
   quadratic penalty plus multiplier updates for linear equality constraints
   (`A x = b`); tolerates an infeasible start (Nocedal & Wright, §17.3, Alg.
   17.4, LANCELOT-style). Publishes `SelectedState` with the objective and
@@ -469,6 +458,64 @@ The pluggable line searches are documented alongside the first-order solvers:
 [`HagerZhang`](https://docs.rs/basin/latest/basin/line_search/hager_zhang/struct.HagerZhang.html)
 (ordinary and approximate Wolfe; Hager & Zhang, 2005, DOI
 10.1137/030601880).
+
+## Scalar Minimization
+
+For a scalar objective on a bracketed interval:
+
+- **<span id="brent-derivative"></span>[`BrentDerivative`](https://docs.rs/basin/latest/basin/solver/brent_derivative/struct.BrentDerivative.html)**:
+  Brent's method using first derivatives ("dbrent"): 1-D minimization on a
+  bracketed interval, the gradient-using sibling of `Brent`/`GoldenSection`
+  (uses the sign of `f'` to bracket and secant extrapolation on `f'` to step;
+  Brent, 1973, as transcribed in *Numerical Recipes* §10.3).
+- **<span id="brent"></span>[`Brent`](https://docs.rs/basin/latest/basin/solver/brent/struct.Brent.html)**:
+  robust 1-D minimization on a bracketed interval (Brent, 1973, as transcribed
+  in *Numerical Recipes* §10.2); also used inside line searches.
+- **<span id="golden-section"></span>[`GoldenSection`](https://docs.rs/basin/latest/basin/solver/golden_section/struct.GoldenSection.html)**:
+  golden-section search: 1-D minimization on a bracketed interval, the robust
+  linearly-converging companion to `Brent` (Kiefer, 1953; *Numerical Recipes*
+  §10.1).
+
+## Root Finding
+
+- **<span id="brent-root"></span>[`BrentRoot`](https://docs.rs/basin/latest/basin/root/brent/struct.BrentRoot.html)**:
+  bracketed scalar root finding by bisection, secant steps, and inverse
+  quadratic interpolation (Brent, 1971). It uses a direct fallible-closure API
+  rather than `Executor`, preserving the signed function value and final
+  bracket in a root-specific result.
+- **<span id="secant-root"></span>[`SecantRoot`](https://docs.rs/basin/latest/basin/root/secant/struct.SecantRoot.html)**:
+  secant iteration with bracket preservation and bisection safeguards (SciPy
+  1.16.3, `scipy.optimize.newton`, secant update; Basin adds bracketing and
+  bracket-based termination).
+- **<span id="newton-root"></span>[`NewtonRoot`](https://docs.rs/basin/latest/basin/root/newton/struct.NewtonRoot.html)**:
+  safeguarded Newton iteration using first derivatives (Boost.Math 1.89.0,
+  "Root Finding With Derivatives: Newton-Raphson, Halley & Schroeder"; Basin
+  adds secant fallback, a two-trial contraction safeguard, and bracket-based
+  termination).
+- **<span id="halley-root"></span>[`HalleyRoot`](https://docs.rs/basin/latest/basin/root/halley/struct.HalleyRoot.html)**:
+  safeguarded Halley iteration using first and second derivatives (Boost.Math
+  1.89.0, "Root Finding With Derivatives: Newton-Raphson, Halley & Schroeder";
+  Basin adds secant fallback, a two-trial contraction safeguard, and
+  bracket-based termination).
+- **<span id="toms748-root"></span>[`Toms748Root`](https://docs.rs/basin/latest/basin/root/toms748/struct.Toms748Root.html)**:
+  derivative-free bracketed root finding using Algorithm 4.2 (`k = 2`,
+  `μ = 0.5`) from Alefeld, Potra, and Shi (1995), "Algorithm 748: Enclosing
+  Zeros of Continuous Functions," _ACM Transactions on Mathematical Software_,
+  21(3), 327–344, [doi:10.1145/210089.210111](https://doi.org/10.1145/210089.210111).
+
+All five use direct fallible callbacks and preserve signed function values and
+the final bracket. Newton and Halley accept separate or combined derivative
+callbacks. Convergence requires an exact zero or a sufficiently narrow bracket.
+
+[`RootBracketer`](https://docs.rs/basin/latest/basin/bracket/root/struct.RootBracketer.html)
+and
+[`MinimumBracketer`](https://docs.rs/basin/latest/basin/bracket/minimum/struct.MinimumBracketer.html)
+provide automatic geometric bracket searches with optional domain limits.
+Bracketing is a separate stage with its own evaluation counts. Pass a root
+bracket to a root solver, or put a minimum bracket's outer endpoints on the
+problem's `BoxBounds` declaration and use its middle point to seed a scalar minimizer.
+Both searches follow the scalar recurrences in SciPy 1.16.3's elementwise
+bracketing routines.
 
 ## Backends and Constraints
 
