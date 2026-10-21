@@ -242,7 +242,7 @@
 </script>
 
 <section
-    class="min-h-[calc(100dvh-9rem)] site-container py-6 flex flex-col gap-6"
+    class="min-h-[calc(100dvh-9rem)] site-container [container-type:inline-size] py-6 flex flex-col gap-6"
 >
     <header class="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -265,10 +265,10 @@
         <p class="text-stone-500 dark:text-stone-400">Loading wasm…</p>
     {:else}
         <div
-            class="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 flex-1 min-h-0"
+            class="grid grid-cols-1 lg:grid-cols-[2fr_1fr] lg:h-[clamp(36rem,calc((100cqw-1.5rem)*2/3),48rem)] lg:grid-rows-[minmax(0,1fr)] gap-6 min-h-0"
         >
             <div
-                class="relative bg-stone-100 dark:bg-stone-900 rounded-lg overflow-hidden aspect-square lg:aspect-auto lg:min-h-[36rem]"
+                class="relative bg-stone-100 dark:bg-stone-900 rounded-lg overflow-hidden w-full aspect-square max-h-[48rem] lg:aspect-auto lg:h-full"
             >
                 <ContourPlot
                     problem={problemMeta}
@@ -283,8 +283,10 @@
                     monochrome
                 />
             </div>
-            <aside class="flex flex-col gap-6 min-w-0">
-                <div class="bg-stone-100 dark:bg-stone-900 rounded-lg p-4">
+            <aside class="flex flex-col gap-6 min-w-0 min-h-0">
+                <div
+                    class="bg-stone-100 dark:bg-stone-900 rounded-lg p-4 lg:min-h-0 lg:overflow-y-auto"
+                >
                     <Controls
                         {problemKind}
                         {solverKind}
@@ -297,7 +299,7 @@
                     />
                 </div>
                 <div
-                    class="bg-stone-100 dark:bg-stone-900 rounded-lg p-3 h-56 lg:h-auto lg:min-h-40 lg:flex-1"
+                    class="bg-stone-100 dark:bg-stone-900 rounded-lg p-3 h-56 lg:h-auto lg:min-h-40 lg:flex-1 lg:shrink-0"
                 >
                     <CostChart
                         {costs}

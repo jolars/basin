@@ -1,5 +1,6 @@
 <script lang="ts">
     import "../app.css";
+    import { fade } from "svelte/transition";
     import { resolve } from "$app/paths";
     import { page } from "$app/state";
     import { afterNavigate } from "$app/navigation";
@@ -16,8 +17,8 @@
 
     let current = $derived(activeSection(page.route.id));
 
-    // Mobile nav disclosure. The links live inline at `md+`; below that
-    // they collapse behind a menu button into the panel under the header.
+    // Keep the disclosure outside page flow so opening it preserves the
+    // current reading position.
     // Close on navigation (afterNavigate also fires once on mount) and on
     // Escape so the panel never lingers across pages or traps focus.
     let menuOpen = $state(false);
@@ -83,6 +84,16 @@
 {/snippet}
 
 <div class="min-h-screen flex flex-col">
+    {#if menuOpen}
+        <button
+            type="button"
+            aria-label="Close navigation menu"
+            tabindex="-1"
+            onclick={() => (menuOpen = false)}
+            transition:fade={{ duration: 150 }}
+            class="fixed inset-0 z-10 bg-black/30 sm:hidden motion-reduce:!duration-0"
+        ></button>
+    {/if}
     <header
         class="border-b border-stone-200 dark:border-stone-800 sticky top-0 z-20 bg-white/80 dark:bg-stone-950/80 backdrop-blur"
     >
@@ -136,7 +147,8 @@
         {#if menuOpen}
             <ul
                 id="mobile-nav"
-                class="sm:hidden border-t border-stone-200 dark:border-stone-800 px-4 py-2 flex flex-col gap-1 text-sm"
+                transition:fade={{ duration: 150 }}
+                class="absolute inset-x-0 top-full sm:hidden border-b border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 shadow-lg px-4 py-3 flex flex-col gap-1 text-sm"
             >
                 {@render navItems("block")}
             </ul>

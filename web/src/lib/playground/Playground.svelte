@@ -44,6 +44,9 @@
     // landing page prerenders the default snippet as real HTML. Reactivity
     // (and the clipboard copy) take over after hydration.
     let cfg = $state<PlaygroundConfig>({ ...DEFAULT_CONFIG });
+    let codeExpanded = $state(false);
+    let snippetElement: HTMLDivElement | undefined = $state();
+    const snippetId = $props.id();
 
     const code = $derived(generateSnippet(cfg));
     // One element per line so we can flash the ones that change. The snippet's
@@ -163,7 +166,7 @@
              above) so the wasm never weighs on the hero's initial load. -->
         <div
             bind:this={contourEl}
-            class="relative mt-6 w-full max-w-2xl aspect-[3/2] mx-auto xl:max-w-none xl:mx-0 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-100 dark:bg-stone-900 overflow-hidden"
+            class="relative mt-6 w-full aspect-[3/2] rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-100 dark:bg-stone-900 overflow-hidden"
         >
             {#if ContourComp}
                 <ContourComp
@@ -183,7 +186,7 @@
             {/if}
         </div>
 
-        <div class="mt-6 flex flex-col gap-4 text-sm">
+        <div class="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
             <label class="flex flex-col gap-1">
                 <span
                     class="text-stone-700 dark:text-stone-300 uppercase text-xs tracking-wide"
@@ -260,7 +263,7 @@
 
     <div class="flex flex-col gap-4 min-w-0">
         <div
-            class="rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900 overflow-hidden"
+            class="rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900 overflow-hidden [overflow-anchor:none]"
         >
             <div
                 class="px-4 py-2 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between gap-3"
@@ -277,8 +280,24 @@
                     {copied ? "Copied!" : "Copy"}
                 </button>
             </div>
-            <!-- prettier-ignore -->
-            <pre class="p-4 overflow-x-auto text-sm leading-relaxed"><code class="rust-hl font-mono">{#each highlightedLines as html, i (i)}<span class="code-line" class:flash={flashed.has(i)}>{@html html}</span>{/each}</code></pre>
+            <div
+                id={snippetId}
+                class={codeExpanded
+                    ? ""
+                    : "max-h-72 overflow-hidden sm:max-h-none"}
+            >
+                <!-- prettier-ignore -->
+                <pre class="p-4 overflow-x-auto text-sm leading-relaxed"><code class="rust-hl font-mono">{#each highlightedLines as html, i (i)}<span class="code-line" class:flash={flashed.has(i)}>{@html html}</span>{/each}</code></pre>
+            </div>
+            <button
+                type="button"
+                aria-expanded={codeExpanded}
+                aria-controls={snippetId}
+                onclick={() => (codeExpanded = !codeExpanded)}
+                class="sm:hidden w-full border-t border-stone-200 dark:border-stone-800 px-4 py-3 text-sm font-medium text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+            >
+                {codeExpanded ? "Show less code" : "Show full code"}
+            </button>
         </div>
 
         <!-- Live program output. The values are Rust-formatted in wasm
