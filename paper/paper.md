@@ -29,22 +29,21 @@ function, and it is a fundamental element across the sciences: fitting a model
 to data, calibrating a simulation, training a machine learning model, or
 choosing engineering parameters that minimize cost. Basin gives users a single,
 consistent way to both state and solve such problems, with a broad catalog of
-solvers and first-class support for constraints. This paper describes Basin 3.0.
+solvers and first-class support for constraints.
 
 To use Basin, a user implements one or more small traits describing their
-objective: `CostFunction` for scalar costs or `Residual` for least-squares
-problems, together with derivatives required by the chosen solver (`Gradient`,
-`Jacobian`, `Hessian`, or `HessianProduct`). Finite-difference adapters can
-provide derivatives when analytic ones are unavailable. The user then hands the
+objective: `CostFunction` for scalar cost functions or `Residual` for
+least-squares problems, together with derivatives required by the chosen solver
+(such as `Gradient`, `Jacobian`, and `Hessian`). And when analytical derivatives
+are unavailable, Basin offers numerical algorithms. The user then hands the
 problem, a solver, and an initial state to an `Executor`, which drives the
-optimization loop, checks solver convergence and execution limits, and returns
-the result. Basin works out of the box on plain Rust vectors, with optional
-linear-algebra backends available behind feature flags. The default build
-compiles to WebAssembly, so the compiled module can run in a browser without
-BLAS/LAPACK or other native libraries. Documentation is published at
-[basin.rs](https://basin.rs), which includes a user guide, interactive
-visualizer, and a benchmark suite comparing Basin to other optimization
-libraries.
+optimization loop, decides when to stop, and returns the result. Basin works out
+of the box on plain Rust vectors, with optional linear-algebra backends
+available behind feature flags. The default build compiles to WebAssembly, so
+the compiled module can run in a browser without BLAS/LAPACK or other native
+libraries. The documentation is available at [basin.rs](https://basin.rs), which
+includes a user guide, interactive visualizer, and a benchmark suite comparing
+Basin to other optimization libraries.
 
 # Statement of Need
 
@@ -54,15 +53,14 @@ optimization libraries may need to combine local and global methods,
 constraints, different linear-algebra backends, and deployment in a browser.
 Basin brings these capabilities together and targets four concrete needs.
 
-First, Basin includes a broad catalog of solvers. Real problems rarely announce
-in advance what optimization algorithm they need, so Basin includes a large set
-of solvers behind a single, consistent API. The catalog includes
+First, Basin includes a broad catalog of solvers behind a single, consistent
+API. The catalog includes
 
 - first-order, quasi-Newton, and Newton methods (gradient descent, projected
   gradient descent, SGD, nonlinear conjugate gradient\ [@hager2005], BFGS,
   L-BFGS, L-BFGS-B, and trust-region Newton methods, including a matrix-free
   mode)\ [@nocedal2006; @byrd1995; @zhu1997];
-- derivative-free methods (Nelder--Mead\ [@nelder1965], one-dimensional
+- derivative-free methods\ (Nelder--Mead\ [@nelder1965], one-dimensional
   Brent\ [@brent2013] and golden-section searches, NEWUOA\ [@powell2006],
   BOBYQA\ [@powell2009], LINCOA\ [@powell2015], COBYLA\ [@powell1994], and mesh
   adaptive direct search\ [@audet2006]), together with Solis--Wets random local
