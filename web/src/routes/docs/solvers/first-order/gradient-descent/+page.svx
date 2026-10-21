@@ -1,0 +1,158 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# Gradient Descent
+
+Gradient descent is a local optimizer for smooth functions when you can compute
+a gradient. Each step moves opposite the gradient, using a fixed step size or a
+line search to choose the distance. It uses little memory and offers a simple
+baseline before trying a method that learns more from previous steps.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/gradient_descent/struct.GradientDescent.html)
+· [Compare solvers](../../)
+
+  | Property    | Requirement                                                                                    |
+  | ----------- | ---------------------------------------------------------------------------------------------- |
+  | Objective   | A smooth scalar function                                                                       |
+  | Evaluations | `CostFunction` and `Gradient`                                                                  |
+  | Search      | Local, from one starting point                                                                 |
+  | Constraints | Unconstrained; use [projected gradient descent](../projected-gradient-descent/) for box bounds |
+  | Parameters  | All four dense backends, with `f32` or `f64`                                                   |
+
+## When to Use It
+
+Consider gradient descent when you want a straightforward method with little
+storage beyond the parameters and gradient. A fixed step is useful when you
+already know an appropriate scale for your problem. A line search can help when
+a single step size would be difficult to choose.
+
+On a narrow, curved valley, successive gradient directions can zigzag across the
+valley while making little progress along it. Compare [nonlinear conjugate
+gradient](../nonlinear-cg/) or [L-BFGS](../../quasi-newton/l-bfgs/) when plain
+descent takes too many steps. Both use information from earlier iterations to
+construct their directions.
+
+Gradient descent follows a local path, so different starting points can lead to
+different minima. For gradients computed from samples or minibatches, compare
+[SGD](../sgd/), which provides mini-batch updates with seeded sampling.
+
+## How It Works
+
+At the current point, the negative gradient is the direction of steepest local
+decrease in the Euclidean norm. Gradient descent chooses a step length `alpha`
+and updates the parameters with `x_next = x - alpha * gradient`. [Nocedal and
+Wright (2006)](#ref-nocedal-wright-2006) describe this approach and the role of
+line searches.
+
+`GradientDescent::new(alpha)` uses the same step length at every iteration. You
+can instead supply a line search through
+`GradientDescent::with_line_search(search)`. For example, the [backtracking line
+search](https://docs.rs/basin/latest/basin/line_search/backtracking/struct.Backtracking.html)
+reduces a trial step until the objective decreases enough to satisfy the Armijo
+condition. One solver iteration can then require several objective evaluations.
+
+Optional heavy-ball momentum adds a fraction of the previous displacement to the
+next step. Basin uses `velocity_next = beta * velocity - alpha * gradient`, then
+adds that velocity to the parameters, starting from zero velocity. This is the
+method of [Polyak (1964)](#ref-polyak-1964) when the step length is fixed. The
+default momentum coefficient is zero, which gives plain gradient descent.
+
+## Example
+
+This quadratic has its minimum at `[1.0, -2.0]`. The example supplies an
+analytic gradient, chooses a fixed step, sets a gradient tolerance on the
+solver, and limits iterations through the executor.
+
+<!-- compile: solver-gradient-descent -->
+```rust
+use basin::{CostFunction, Executor, Gradient, GradientDescent, Termination};
+use std::convert::Infallible;
+
+struct Quadratic;
+
+impl CostFunction for Quadratic {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok((x[0] - 1.0).powi(2) + 4.0 * (x[1] + 2.0).powi(2))
+    }
+}
+
+impl Gradient for Quadratic {
+    type Gradient = Vec<f64>;
+
+    fn gradient(&self, x: &Self::Param) -> Result<Self::Gradient, Self::Error> {
+        Ok(vec![2.0 * (x[0] - 1.0), 8.0 * (x[1] + 2.0)])
+    }
+}
+
+fn main() {
+    let solver =
+        GradientDescent::new(0.1).with_absolute_gradient_tolerance(1e-8);
+
+    let result = Executor::from_start(Quadratic, solver, vec![-3.0, 5.0])
+        .max_iter(1_000)
+        .run()
+        .unwrap();
+
+    assert!(matches!(
+        result.report.termination,
+        Termination::Converged(_)
+    ));
+    assert!((result.param()[0] - 1.0).abs() < 1e-7);
+    assert!((result.param()[1] + 2.0).abs() < 1e-7);
+}
+```
+
+To choose the step through backtracking instead, construct the solver with
+`GradientDescent::with_line_search(basin::Backtracking::new())`.
+
+## Practical Considerations
+
+**Choose the step for your scale.** A fixed step does not check whether the
+objective decreases. A step that is too large can overshoot or diverge, while a
+small step can make progress slow. Rescale parameters with very different units,
+or try a line search when you cannot choose a useful fixed step.
+
+**Add momentum carefully.** `with_momentum(beta)` carries a fraction of the
+previous velocity into each update. Coefficients between zero and one can help
+on elongated valleys, but can also cause overshoot. Reduce the fixed step when
+adding momentum. With a line search, the acceptance condition applies to the
+trial along the negative gradient; the additional velocity changes the point
+Basin actually takes.
+
+**Choose a stopping test.** Gradient descent has no default optimality check.
+Use `with_absolute_gradient_tolerance` to test the Euclidean gradient norm, or
+configure a relative gradient tolerance. Choose a threshold for your parameter
+units, scalar precision, and derivative accuracy. Keep iteration and evaluation
+budgets on the executor, and inspect the termination report to see whether a
+convergence test passed.
+
+**Check numerical derivatives.** You can wrap the objective in
+[`FiniteDiff`](https://docs.rs/basin/latest/basin/core/numdiff/struct.FiniteDiff.html)
+when an analytic gradient is unavailable. This adds objective evaluations and
+introduces derivative error, so account for both when choosing a tolerance.
+
+## Basin Implementation
+
+Basin publishes the current point, objective, and gradient through
+`FirstOrderState`. Fresh initialization evaluates the starting point and resets
+the line search and momentum velocity. The solver stores a persistent velocity
+vector only when momentum is enabled.
+
+Without momentum, the solver reuses an accepted point's objective and gradient
+when the line search provides them. With momentum, it evaluates the actual point
+after adding the velocity. A failed line search returns a numerical failure
+termination while retaining the previous point.
+
+Supported parameter types are `Vec<F>`, `nalgebra::DVector<F>`,
+`ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`. Custom line
+searches can require additional vector operations. See the API's [Backends
+section](https://docs.rs/basin/latest/basin/solver/gradient_descent/struct.GradientDescent.html#backends)
+for the exact capability requirements.
+
+<References entries={["nocedal-wright-2006", "polyak-1964"]} />

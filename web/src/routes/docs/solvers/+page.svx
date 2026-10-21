@@ -10,7 +10,7 @@ algorithm family.
 | Your problem | Solvers to consider | What guides the choice |
 | --- | --- | --- |
 | Smooth, unconstrained, with a gradient | [L-BFGS](quasi-newton/l-bfgs/) or [BFGS](#bfgs) | L-BFGS keeps a short history; BFGS stores a dense inverse-Hessian approximation. |
-| Box bounds, with a gradient | [L-BFGS-B](#lbfgsb) or [projected gradient descent](#projected-gradient-descent) | Both enforce the box; L-BFGS-B also builds a curvature model. |
+| Box bounds, with a gradient | [L-BFGS-B](#lbfgsb) or [projected gradient descent](first-order/projected-gradient-descent/) | Both enforce the box; L-BFGS-B also builds a curvature model. |
 | A Hessian or Hessian-vector products | [Trust-region Newton](#trust-region) | Use second-order information; the matrix-free mode needs only products. |
 | Residuals and a Jacobian | [Levenberg–Marquardt](#levenberg-marquardt) or its [QR variant](#levenberg-marquardt-qr) | Use the least-squares structure; QR avoids forming the Gram matrix. |
 | Least squares with box bounds | [Trust-region reflective](#trust-region-reflective) or [bounded Levenberg–Marquardt](#bounded-levenberg-marquardt) | Both combine the residual model with bound-aware steps. |
@@ -43,9 +43,9 @@ both into account when choosing a method and its stopping tolerances.
 ## Reading the Catalog
 
 Each entry below links to the authoritative API reference on
-[docs.rs](https://docs.rs/basin). The [L-BFGS guide](quasi-newton/l-bfgs/)
-also explains when to use the method, how it works, and how to configure it,
-with citations and full references.
+[docs.rs](https://docs.rs/basin). The first-order guides and the
+[L-BFGS guide](quasi-newton/l-bfgs/) also explain when to use each method,
+how it works, and how to configure it, with citations and full references.
 
 Backend support applies to every enabled version of the listed backend.
 Multiple versions can be used in the same build; see the
@@ -63,6 +63,7 @@ finding uses a direct callback API and a separate result type.
   to zero and restarts when the next direction fails its descent safeguard.
   Selecting an update leaves the line search unchanged. This minimizes smooth
   unconstrained objectives; Steihaug's linear CG solves a trust-region subproblem.
+  [Read the nonlinear CG guide](first-order/nonlinear-cg/).
   References: William W. Hager and Hongchao Zhang,
   “A new conjugate gradient method with guaranteed descent and an efficient
   line search,” _SIAM Journal on Optimization_ 16(1), 2005, pp. 170–192,
@@ -81,16 +82,19 @@ finding uses a direct callback API and a separate result type.
   `MoreThuente`, `Wolfe`, or `HagerZhang` line searches) and optional
   heavy-ball momentum (Polyak, 1964). Supports all four dense backends with
   `f32` or `f64` and publishes `FirstOrderState`.
+  [Read the gradient descent guide](first-order/gradient-descent/).
 - **<span id="sgd"></span>[`Sgd`](https://docs.rs/basin/latest/basin/solver/sgd/struct.Sgd.html)**:
   mini-batch stochastic gradient descent with a constant learning rate and
   optional Polyak (1964) heavy-ball momentum. Supports all four dense backends
   with `f32` or `f64` and publishes the last fully evaluated point in
   `PointState`; the solver retains the working iterate between objective
   refreshes.
+  [Read the SGD guide](first-order/sgd/).
 - **<span id="projected-gradient-descent"></span>[`ProjectedGradientDescent`](https://docs.rs/basin/latest/basin/solver/projected_gradient_descent/struct.ProjectedGradientDescent.html)**:
   gradient descent for box-constrained problems, projecting each step back onto
   the feasible box. Supports all four dense backends with `f32` or `f64` and
   publishes `FirstOrderState`.
+  [Read the projected gradient descent guide](first-order/projected-gradient-descent/).
 
 ## Quasi-Newton
 

@@ -5,11 +5,13 @@ import { sveltekit } from "@sveltejs/kit/vite";
 import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
 import tailwindcss from "@tailwindcss/vite";
 import { escapeSvelte, type MdsvexOptions, mdsvex } from "mdsvex";
+import remarkMath from "remark-math";
 import { createHighlighter } from "shiki";
 import Icons from "unplugin-icons/vite";
 import { defineConfig } from "vite";
 import wasm from "vite-plugin-wasm";
 import { headingIds } from "./scripts/heading-ids.js";
+import { renderMath } from "./scripts/math.js";
 
 // Production serves basin.rs at the root. Alternate deployments can set
 // BASIN_BASE_PATH when they need a URL prefix.
@@ -27,7 +29,8 @@ const highlighter = await createHighlighter({
 });
 
 const mdsvexConfig: MdsvexOptions = {
-    remarkPlugins: [headingIds],
+    // mdsvex uses remark-parse 8; remark-math 3 supports that parser API.
+    remarkPlugins: [remarkMath, headingIds, renderMath],
     extensions: [".svx", ".md"],
     // Every `.svx`/`.md` page is wrapped in this layout, which applies
     // the `prose` typography styling once instead of per-page.

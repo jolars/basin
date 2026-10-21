@@ -41,5 +41,89 @@
         "issue": "3",
         "page": "286-307",
         "DOI": "10.1145/192115.192132"
+    },
+    {
+        "id": "polyak-1964",
+        "type": "article-journal",
+        "title": "Some methods of speeding up the convergence of iteration methods",
+        "author": [{ "family": "Polyak", "given": "Boris T." }],
+        "issued": { "date-parts": [[1964]] },
+        "container-title": "USSR Computational Mathematics and Mathematical Physics",
+        "volume": "4",
+        "issue": "5",
+        "page": "1-17",
+        "DOI": "10.1016/0041-5553(64)90137-5"
+    },
+    {
+        "id": "hager-zhang-2005",
+        "type": "article-journal",
+        "title": "A new conjugate gradient method with guaranteed descent and an efficient line search",
+        "author": [
+            { "family": "Hager", "given": "William W." },
+            { "family": "Zhang", "given": "Hongchao" }
+        ],
+        "issued": { "date-parts": [[2005]] },
+        "container-title": "SIAM Journal on Optimization",
+        "volume": "16",
+        "issue": "1",
+        "page": "170-192",
+        "DOI": "10.1137/030601880"
+    },
+    {
+        "id": "polak-ribiere-1969",
+        "type": "article-journal",
+        "title": "Note sur la convergence de méthodes de directions conjuguées",
+        "author": [
+            { "family": "Polak", "given": "Elijah" },
+            { "family": "Ribière", "given": "Gérard" }
+        ],
+        "issued": { "date-parts": [[1969]] },
+        "container-title": "Revue française d'informatique et de recherche opérationnelle, Série rouge",
+        "volume": "3",
+        "issue": "R1",
+        "page": "35-43",
+        "DOI": "10.1051/m2an/196903R100351"
+    },
+    {
+        "id": "gilbert-nocedal-1992",
+        "type": "article-journal",
+        "title": "Global Convergence Properties of Conjugate Gradient Methods for Optimization",
+        "author": [
+            { "family": "Gilbert", "given": "Jean Charles" },
+            { "family": "Nocedal", "given": "Jorge" }
+        ],
+        "issued": { "date-parts": [[1992]] },
+        "container-title": "SIAM Journal on Optimization",
+        "volume": "2",
+        "issue": "1",
+        "page": "21-42",
+        "DOI": "10.1137/0802003"
+    },
+    {
+        "id": "robbins-monro-1951",
+        "type": "article-journal",
+        "title": "A stochastic approximation method",
+        "author": [
+            { "family": "Robbins", "given": "Herbert" },
+            { "family": "Monro", "given": "Sutton" }
+        ],
+        "issued": { "date-parts": [[1951]] },
+        "container-title": "The Annals of Mathematical Statistics",
+        "volume": "22",
+        "issue": "3",
+        "page": "400-407",
+        "DOI": "10.1214/aoms/1177729586"
+    },
+    {
+        "id": "bottou-2012",
+        "type": "chapter",
+        "title": "Stochastic gradient descent tricks",
+        "author": [{ "family": "Bottou", "given": "Léon" }],
+        "issued": { "date-parts": [[2012]] },
+        "container-title": "Neural Networks: Tricks of the Trade",
+        "edition": "2",
+        "page": "421-436",
+        "publisher": "Springer",
+        "DOI": "10.1007/978-3-642-35289-8_25"
     }
 ]

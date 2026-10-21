@@ -22,6 +22,12 @@
                         ({formatEdition(reference.edition)})
                     {/if}.
                     {reference.publisher}.
+                {:else if reference.type === "chapter"}
+                    {reference.title}. In
+                    <cite>{reference["container-title"]}</cite>
+                    ({#if reference.edition}{formatEdition(reference.edition)},
+                    {/if}pp. {reference.page?.replaceAll("-", "–")}).
+                    {reference.publisher}.
                 {:else}
                     {reference.title}.
                     <cite>{reference["container-title"]}</cite>,

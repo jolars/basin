@@ -1,4 +1,5 @@
 <script lang="ts">
+    import "katex/dist/katex.min.css";
     import { page } from "$app/state";
     import {
         DOCS_LINKS,
@@ -44,6 +45,26 @@
             title: "Choosing a Solver – Basin",
             description:
                 "Choose a Basin solver based on your derivatives, constraints, and problem structure, then browse the full solver catalog.",
+        },
+        "/docs/solvers/first-order/gradient-descent": {
+            title: "Gradient Descent – Basin",
+            description:
+                "When to use gradient descent, how fixed steps, line searches, and heavy-ball momentum work, and how to run it in Basin, with references.",
+        },
+        "/docs/solvers/first-order/nonlinear-cg": {
+            title: "Nonlinear Conjugate Gradient – Basin",
+            description:
+                "When to use nonlinear conjugate gradient, how Hager–Zhang and Polak–Ribière+ updates work, and how to run it in Basin, with references.",
+        },
+        "/docs/solvers/first-order/sgd": {
+            title: "Stochastic Gradient Descent – Basin",
+            description:
+                "When to use SGD, how mini-batch sampling, momentum, and cost refreshes work, and how to run it in Basin, with references.",
+        },
+        "/docs/solvers/first-order/projected-gradient-descent": {
+            title: "Projected Gradient Descent – Basin",
+            description:
+                "When to use projected gradient descent, how box bounds and projected stationarity work, and how to run it in Basin, with references.",
         },
         "/docs/solvers/quasi-newton/l-bfgs": {
             title: "L-BFGS – Basin",
@@ -140,5 +161,10 @@
 
     .docs-content :global([id]) {
         scroll-margin-top: 6rem;
+    }
+
+    .docs-content :global(.katex-display) {
+        overflow-x: auto;
+        overflow-y: hidden;
     }
 </style>

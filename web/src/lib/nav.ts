@@ -60,10 +60,22 @@ export const SOLVER_LINKS: DocsNavItem[] = [
     {
         label: "First-order",
         children: [
-            solver("Gradient descent", "gradient-descent"),
-            solver("Nonlinear CG", "nonlinear-cg"),
-            solver("Stochastic gradient descent", "sgd"),
-            solver("Projected gradient descent", "projected-gradient-descent"),
+            {
+                label: "Gradient descent",
+                href: "docs/solvers/first-order/gradient-descent/",
+            },
+            {
+                label: "Nonlinear CG",
+                href: "docs/solvers/first-order/nonlinear-cg/",
+            },
+            {
+                label: "Stochastic gradient descent",
+                href: "docs/solvers/first-order/sgd/",
+            },
+            {
+                label: "Projected gradient descent",
+                href: "docs/solvers/first-order/projected-gradient-descent/",
+            },
         ],
     },
     {

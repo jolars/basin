@@ -1,0 +1,182 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# Nonlinear Conjugate Gradient
+
+Nonlinear conjugate gradient is a local optimizer for smooth functions when you
+can compute a gradient. It combines the negative gradient with the previous
+search direction to carry information between steps. It needs only a few
+vectors, making it useful when memory limits rule out storing a matrix or a long
+history of curvature pairs.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/nonlinear_cg/struct.NonlinearCg.html)
+· [Compare solvers](../../)
+
+  | Property    | Requirement                                             |
+  | ----------- | ------------------------------------------------------- |
+  | Objective   | A smooth scalar function                                |
+  | Evaluations | `CostFunction` and `Gradient` with the same vector type |
+  | Search      | Local, from one starting point                          |
+  | Constraints | Unconstrained                                           |
+  | Parameters  | All four dense backends, with `f32` or `f64`            |
+
+## When to Use It
+
+Consider nonlinear conjugate gradient for a large, smooth problem when you want
+to use gradient information while keeping memory proportional to the number of
+parameters. Basin defaults to the safeguarded method of [Hager and Zhang
+(2005)](#ref-hager-zhang-2005).
+
+[Gradient descent](../gradient-descent/) is a simpler baseline that starts from
+the negative gradient every iteration. [L-BFGS](../../quasi-newton/l-bfgs/)
+retains several recent curvature pairs, which may justify its additional memory
+on your problem. Compare their objective and gradient evaluation counts as well
+as their iteration counts, since line searches can require several evaluations
+per step.
+
+The method expects consistent gradients of a smooth objective. For stochastic
+gradient estimates, compare [SGD](../sgd/). For a feasible-set projection,
+consider [projected gradient descent](../projected-gradient-descent/). Nonlinear
+conjugate gradient does not enforce bounds or other constraints, and different
+starting points can lead to different local minima.
+
+## How It Works
+
+The first search direction is the negative gradient. After a line search accepts
+a step, the solver forms the next direction by adding a multiple of the old
+direction to the new negative gradient:
+
+$$
+  \mathbf{d}_{k+1} = -\mathbf{g}_{k+1} + \beta_k \mathbf{d}_k.
+$$
+
+Here, $\mathbf{g}_k = \nabla f(\mathbf{x}_k)$ is the gradient at iteration $k$.
+The update rule chooses $\beta_k$ from the gradients and the previous direction.
+The default Hager–Zhang rule includes a lower bound on this coefficient to
+preserve a descent property. Basin checks the computed direction and restarts
+with the negative gradient if the update becomes numerically unreliable or fails
+its descent test.
+
+You can instead select `CgUpdate::PolakRibierePlus`. This uses the coefficient
+from [Polak and Ribière (1969)](#ref-polak-ribiere-1969), truncated below at
+zero, with a separate descent safeguard. [Gilbert and Nocedal
+(1992)](#ref-gilbert-nocedal-1992) study convergence properties of this family
+of nonlinear conjugate-gradient methods.
+
+A line search chooses how far to move along each direction. Basin uses the
+[Hager–Zhang line
+search](https://docs.rs/basin/latest/basin/line_search/hager_zhang/struct.HagerZhang.html)
+by default. The direction update and line search are separate choices: selecting
+Polak–Ribière+ leaves that line search unchanged. The convergence result in
+Hager and Zhang's paper assumes the Wolfe conditions and the paper's regularity
+assumptions; it does not extend automatically to an arbitrary custom step rule.
+
+## Example
+
+This quadratic has its minimum at `[1.0, -2.0]`. The example uses the default
+Hager–Zhang update and line search, sets a gradient tolerance on the solver, and
+limits iterations through the executor.
+
+<!-- compile: solver-nonlinear-cg -->
+```rust
+use basin::{CostFunction, Executor, Gradient, NonlinearCg, Termination};
+use std::convert::Infallible;
+
+struct Quadratic;
+
+impl CostFunction for Quadratic {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok((x[0] - 1.0).powi(2) + 4.0 * (x[1] + 2.0).powi(2))
+    }
+}
+
+impl Gradient for Quadratic {
+    type Gradient = Vec<f64>;
+
+    fn gradient(&self, x: &Self::Param) -> Result<Self::Gradient, Self::Error> {
+        Ok(vec![2.0 * (x[0] - 1.0), 8.0 * (x[1] + 2.0)])
+    }
+}
+
+fn main() {
+    let solver = NonlinearCg::new().with_absolute_gradient_tolerance(1e-8);
+
+    let result = Executor::from_start(Quadratic, solver, vec![-3.0, 5.0])
+        .max_iter(200)
+        .run()
+        .unwrap();
+
+    assert!(matches!(
+        result.report.termination,
+        Termination::Converged(_)
+    ));
+    assert!((result.param()[0] - 1.0).abs() < 1e-7);
+    assert!((result.param()[1] + 2.0).abs() < 1e-7);
+}
+```
+
+To try Polak–Ribière+, import `CgUpdate` and add
+`.with_update(CgUpdate::PolakRibierePlus)` to the solver configuration.
+
+## Practical Considerations
+
+**Scale the parameters.** Large differences in parameter units can make a
+gradient-based direction less useful and an absolute gradient tolerance harder
+to interpret. Choose a threshold for your parameterization, precision, and
+derivative accuracy; `1e-8` is a choice for the example above.
+
+**Choose a stopping test.** An exactly zero gradient at a finite point with
+finite cost always terminates successfully. Other gradient, step, and
+cost-change tolerances are disabled by default. Configure an absolute or
+relative tolerance on the solver and put iteration or evaluation budgets on the
+executor. Inspect the termination report to distinguish convergence from
+reaching a budget.
+
+**Use restarts deliberately.** Safety restarts are always active. Optional
+periodic restarts discard the previous direction after a chosen number of
+accepted steps; configure them with `with_restart_interval(Some(k))`. They are
+disabled by default, and `Some(1)` makes every direction steepest descent. The
+Hager–Zhang coefficient parameter `eta` controls its update safeguard, rather
+than a stopping tolerance, and has no effect on Polak–Ribière+.
+
+**Check gradient accuracy.** The direction update uses differences between
+gradients, and the line search depends on directional derivatives. If you use
+[`FiniteDiff`](https://docs.rs/basin/latest/basin/core/numdiff/struct.FiniteDiff.html),
+account for derivative error and its additional objective evaluations when
+choosing tolerances and budgets.
+
+## Basin Implementation
+
+Basin stores the search direction and restart bookkeeping on `NonlinearCg` and
+publishes the current point, objective, and gradient through `FirstOrderState`.
+The method uses vector operations and O(n) memory, without constructing a
+Hessian approximation. It implements the safeguarded Hager–Zhang recurrence,
+rather than every heuristic of the CG_DESCENT implementation.
+
+Accepted line-search evaluations are reused. If a line search fails along a
+conjugate direction, Basin retries once from the same point along the negative
+gradient. Failure along steepest descent ends the solve with `SolverFailed` and
+preserves the previous current record. You can supply another search with
+`NonlinearCg::with_line_search(search)`.
+
+For Polak–Ribière+, Basin checks the candidate direction after accepting the
+step and restarts if it fails the descent safeguard. This safeguard does not
+provide an unconditional convergence guarantee for every custom line search.
+Changing the update rule clears the direction history.
+
+Supported parameter types are `Vec<F>`, `nalgebra::DVector<F>`,
+`ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`. No matrix
+operations or BLAS/LAPACK provider are required. A custom line search or an
+optional convergence check can impose additional capabilities. See the API's
+[Backends
+section](https://docs.rs/basin/latest/basin/solver/nonlinear_cg/struct.NonlinearCg.html#backends)
+for the exact requirements.
+
+<References
+entries={["hager-zhang-2005", "polak-ribiere-1969", "gilbert-nocedal-1992"]} />

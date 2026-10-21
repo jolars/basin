@@ -29,6 +29,10 @@ export function GET() {
 - [Migrating to Basin 2.0](${docs}/migrating-to-v2/): upgrade from Basin 1.x, including constraints, states, termination reports, solver settings, and checkpoints
 - [Migrating to Basin 3.0](${docs}/migrating-to-v3/): development API with optional constraint declarations and standalone objective and residual traits
 - [Choosing a solver](${docs}/solvers/): selection guide and full catalog grouped by algorithm family, including constraint support and scalar root finding
+- [Gradient descent](${docs}/solvers/first-order/gradient-descent/): fixed steps, line searches, heavy-ball momentum, and a Rust example
+- [Nonlinear conjugate gradient](${docs}/solvers/first-order/nonlinear-cg/): Hager–Zhang and Polak–Ribière+ updates, restarts, and a Rust example
+- [Stochastic gradient descent](${docs}/solvers/first-order/sgd/): mini-batch gradients, seeded sampling, momentum, cost refreshes, and a Rust example
+- [Projected gradient descent](${docs}/solvers/first-order/projected-gradient-descent/): problem-side box bounds, projection, stationarity tests, and a Rust example
 - [L-BFGS](${docs}/solvers/quasi-newton/l-bfgs/): when to use limited-memory BFGS, a Rust example, convergence settings, backend requirements, and original references
 
 ## Reference

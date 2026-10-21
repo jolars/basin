@@ -1,4 +1,7 @@
 flavor = "gfm"
 
+[extensions.mdsvex]
+tex-math-dollars = true
+
 [formatters]
 rust = "rustfmt"
