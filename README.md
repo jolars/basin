@@ -5,8 +5,8 @@
 [![docs.rs](https://img.shields.io/docsrs/basin)](https://docs.rs/basin)
 
 A numerical optimization library for Rust, inspired by [argmin]. It pairs a
-generic core, problem traits you implement, solver-owned convergence settings, and a
-driver loop (`Executor`), with a set of solvers spanning first-order,
+generic core, problem traits you implement, solver-owned convergence settings,
+and a driver loop (`Executor`), with a set of solvers spanning first-order,
 derivative-free, nonlinear least-squares, and evolutionary methods. Solvers are
 generic over the linear-algebra backend, constraints are first-class, and the
 default build compiles to `wasm32-unknown-unknown` with no BLAS/LAPACK or
@@ -18,24 +18,8 @@ Narrative documentation lives at [basin.rs/docs]; the rustdoc reference is at
 [benchmarks site] comparing Basin against competing crates and across backends
 and solvers.
 
-To port an existing Argmin project, see
-[Migrating from Argmin](https://basin.rs/docs/migrating-from-argmin/).
-
-## Release support
-
-Development of Basin 3.0 takes place on `main`. Basin 2.0 remains available
-on crates.io with its published API. The `v1` branch receives
-correctness, regression, and security fixes for the latest 1.x release through
-at least April 19, 2027, and for at least six months after 2.0.0 is released,
-whichever is later. The constraint API changes on `main` target 3.0. To stay on
-the supported 1.x line, use `basin = "1"` and keep its patch version current. See the
-[maintenance policy](MAINTENANCE.md) for the support window, backport procedure,
-and release workflow.
-
-For breaking changes on `main`, see
-[Migrating to Basin 3.0](web/src/routes/docs/migrating-to-v3/+page.svx).
-The [Basin 2.0 migration guide](https://basin.rs/docs/migrating-to-v2/)
-remains available for upgrades from 1.x, including checkpoint changes.
+To port an existing Argmin project, see [Migrating from
+Argmin](https://basin.rs/docs/migrating-from-argmin/).
 
 ## Install
 
@@ -51,10 +35,10 @@ cargo add basin --features nalgebra  # or: ndarray, faer
 ```
 
 Exact version features, such as `nalgebra_v0_34`, keep dependency resolution
-stable. Basin's package minimum supported Rust version (MSRV) is **1.87.0**.
-The one exception is nalgebra 0.35: `nalgebra_v0_35` and `nalgebra`
-require Rust 1.89. The development environment uses Rust 1.89, while CI checks
-the Rust 1.87-compatible feature set separately.
+stable. Basin's package minimum supported Rust version (MSRV) is **1.87.0**. The
+one exception is nalgebra 0.35: `nalgebra_v0_35` and `nalgebra` require Rust
+1.89. The development environment uses Rust 1.89, while CI checks the Rust
+1.87-compatible feature set separately.
 
 ## Example
 
@@ -62,7 +46,9 @@ Implement `CostFunction` (and `Gradient` when the solver needs derivatives),
 then hand the problem, a solver, and an initial state to the `Executor`:
 
 ```rust
-use basin::{CostFunction, Executor, FirstOrderState, Gradient, GradientDescent};
+use basin::{
+    CostFunction, Executor, FirstOrderState, Gradient, GradientDescent,
+};
 use std::convert::Infallible;
 
 struct Rosenbrock;
@@ -109,9 +95,9 @@ fn main() {
 
 Configure convergence on the solver and execution budgets on the executor.
 Optional tolerance setters accept a scalar or `None`; enabled tests usually
-combine with OR. See the
-[Basin 2.0 migration guide](https://basin.rs/docs/migrating-to-v2/#stopping-conditions)
-for replacements and numerical conventions.
+combine with OR. See the [Basin 2.0 migration
+guide](https://basin.rs/docs/migrating-to-v2/#stopping-conditions) for
+replacements and numerical conventions.
 
 ## Solvers
 
@@ -142,30 +128,30 @@ Parameters and linear algebra are generic over the backend. `Vec<f64>` needs no
 features. Each external backend has exact version features and an unversioned
 alias that tracks the newest supported release:
 
-| Backend    | Exact features                            | Moving alias |
-| ---------- | ----------------------------------------- | ------------ |
-| [nalgebra] | `nalgebra_v0_32` through `nalgebra_v0_35` | `nalgebra`   |
-| [ndarray]  | `ndarray_v0_15` through `ndarray_v0_17`   | `ndarray`    |
-| [faer]     | `faer_v0_22` through `faer_v0_24`         | `faer`       |
+  | Backend    | Exact features                            | Moving alias |
+  | ---------- | ----------------------------------------- | ------------ |
+  | [nalgebra] | `nalgebra_v0_32` through `nalgebra_v0_35` | `nalgebra`   |
+  | [ndarray]  | `ndarray_v0_15` through `ndarray_v0_17`   | `ndarray`    |
+  | [faer]     | `faer_v0_22` through `faer_v0_24`         | `faer`       |
 
 The deprecated `nalgebra_latest`, `ndarray_latest`, and `faer_latest` features
 remain as synonyms for the unversioned aliases. `nalgebra` selects 0.35,
 `ndarray` selects 0.17, and `faer` selects 0.24. If dependency feature
 unification enables several releases of the same backend, Basin provides
 implementations for every enabled release. First-order and derivative-free
-solvers run on any backend; linear-algebra-heavy solvers may require a specific one and say so in
-their docs.
+solvers run on any backend; linear-algebra-heavy solvers may require a specific
+one and say so in their docs.
 
 BFGS uses `FirstOrderState` and owns its inverse-Hessian model. The
-`DenseBackend` association selects the matrix belonging to the starting
-point's backend version, including when Cargo enables several versions.
+`DenseBackend` association selects the matrix belonging to the starting point's
+backend version, including when Cargo enables several versions.
 
 Every nalgebra feature includes its matching `nalgebra-sparse` release:
 0.32/0.9, 0.33/0.10, 0.34/0.11, and 0.35/0.12. Exact acceleration features
-follow the same naming scheme—`nalgebra_v0_34-lapack` and
-`ndarray_v0_16-blas`, for example. The moving aliases are
-`nalgebra-lapack` and `ndarray-blas`. The deprecated
-`nalgebra_latest-lapack` and `ndarray_latest-blas` spellings remain as synonyms.
+follow the same naming scheme—`nalgebra_v0_34-lapack` and `ndarray_v0_16-blas`,
+for example. The moving aliases are `nalgebra-lapack` and `ndarray-blas`. The
+deprecated `nalgebra_latest-lapack` and `ndarray_latest-blas` spellings remain
+as synonyms.
 
 BLAS/LAPACK acceleration is off by default and is not wasm-compatible. These
 features expect you to supply the BLAS/LAPACK symbols at link time. The default
