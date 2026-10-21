@@ -223,22 +223,19 @@ its shared math traits independently for each release. Adding support for a new
 backend release therefore does not require replacing the existing
 implementations or bumping Basin's major version.
 
-## Compile-Time Correctness
+## Convergence and Execution Control
 
-Numerical convergence settings belong to the solver. Convergence checks use
-shared internal calculations for optional absolute and relative gradient, step,
-and cost-change tests. Each check requires only the state and backend
-capabilities it uses. Unsupported settings, such as a gradient tolerance on
-Nelder--Mead, are absent from the solver's API. `None` disables an optional
-check, while zero requests an exact-zero threshold. Distinct enabled checks
-generally combine with OR; Nelder--Mead's native simplex-size and cost-spread
-tests form an AND group.
+Each solver defines its numerical convergence criteria, such as tolerances on
+gradients, steps, or changes in cost. Its API exposes only criteria appropriate
+to the algorithm: Nelder--Mead, for example, has no gradient-tolerance setting.
+Trait bounds ensure that convergence checks have the state and backend
+capabilities they require.
 
-The `Executor` separately owns iteration, evaluation, and time budgets, target
-values, stagnation stops, cancellation, and application hooks. The executor
-checks evaluation budgets after initialization and between iterations, so an
-iteration can exceed the remaining budget. Termination reports distinguish
-numerical convergence from execution limits and other stops.
+The `Executor` controls resource limits and application-level stopping
+conditions, including iteration, evaluation, and time budgets, target values,
+stagnation, and cancellation. Termination reports distinguish these stops from
+numerical convergence. Evaluation budgets are checked after initialization and
+between iterations, so they may be exceeded within an iteration.
 
 ## Constraints
 
