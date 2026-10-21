@@ -289,6 +289,21 @@ are also made by the author.] It is also used in the R package
 balancing\ [@barrett2026], which calculates optimization-based balancing weights
 for causal inference.
 
+Other optimization frameworks also build on Basin. GlobalSearch-rs\ [@heim2025]
+uses Basin for local minimization within its scatter-search multistart
+algorithm. The egobox toolbox\ [@lafage2022] uses Basin in `egobox-gp` to fit
+Gaussian process hyperparameters and in `egobox-ego` to optimize acquisition
+functions. The library stochastic-rs\ [@boros2026] uses Basin for model
+calibration and maximum-likelihood estimation in quantitative finance.
+Midas\ [@jerryshell2026], an application for backtesting moving-average
+strategies on Chinese index funds, depends on Basin indirectly through
+`stochastic-rs-stats`.
+
+Basin is an optional optimizer backend for fitting mixed-effects models in
+lme-rs\ [@huck2026]. The Sci family of scientific computing crates also builds
+on Basin in its `sci-optimize`\ [@pornsiriprasert2026a] and
+`sci-stats`\ [@pornsiriprasert2026b] modules.
+
 Benchmarks against competitors are available at
 [basin.rs](https://basin.rs/benchmarks/), comparing Basin with argmin, gomez,
 nlopt, and other implementations on matched test problems. The published
