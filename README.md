@@ -37,8 +37,7 @@ cargo add basin --features nalgebra  # or: ndarray, faer
 Exact version features, such as `nalgebra_v0_34`, keep dependency resolution
 stable. Basin's package minimum supported Rust version (MSRV) is **1.87.0**. The
 one exception is nalgebra 0.35: `nalgebra_v0_35` and `nalgebra` require Rust
-1.89. The development environment uses Rust 1.89, while CI checks the Rust
-1.87-compatible feature set separately.
+1.89.
 
 ## Example
 
@@ -93,12 +92,6 @@ fn main() {
 }
 ```
 
-Configure convergence on the solver and execution budgets on the executor.
-Optional tolerance setters accept a scalar or `None`; enabled tests usually
-combine with OR. See the [Basin 2.0 migration
-guide](https://basin.rs/docs/migrating-to-v2/#stopping-conditions) for
-replacements and numerical conventions.
-
 ## Solvers
 
 - **First-order, quasi-Newton, and Newton:** gradient descent (with momentum and
@@ -134,13 +127,10 @@ alias that tracks the newest supported release:
   | [ndarray]  | `ndarray_v0_15` through `ndarray_v0_17`   | `ndarray`    |
   | [faer]     | `faer_v0_22` through `faer_v0_24`         | `faer`       |
 
-The deprecated `nalgebra_latest`, `ndarray_latest`, and `faer_latest` features
-remain as synonyms for the unversioned aliases. `nalgebra` selects 0.35,
-`ndarray` selects 0.17, and `faer` selects 0.24. If dependency feature
-unification enables several releases of the same backend, Basin provides
-implementations for every enabled release. First-order and derivative-free
-solvers run on any backend; linear-algebra-heavy solvers may require a specific
-one and say so in their docs.
+If dependency feature unification enables several releases of the same backend,
+Basin provides implementations for every enabled release. First-order and
+derivative-free solvers run on any backend; linear-algebra-heavy solvers may
+require a specific one and say so in their docs.
 
 BFGS uses `FirstOrderState` and owns its inverse-Hessian model. The
 `DenseBackend` association selects the matrix belonging to the starting point's
@@ -149,9 +139,7 @@ backend version, including when Cargo enables several versions.
 Every nalgebra feature includes its matching `nalgebra-sparse` release:
 0.32/0.9, 0.33/0.10, 0.34/0.11, and 0.35/0.12. Exact acceleration features
 follow the same naming scheme—`nalgebra_v0_34-lapack` and `ndarray_v0_16-blas`,
-for example. The moving aliases are `nalgebra-lapack` and `ndarray-blas`. The
-deprecated `nalgebra_latest-lapack` and `ndarray_latest-blas` spellings remain
-as synonyms.
+for example. The moving aliases are `nalgebra-lapack` and `ndarray-blas`.
 
 BLAS/LAPACK acceleration is off by default and is not wasm-compatible. These
 features expect you to supply the BLAS/LAPACK symbols at link time. The default
@@ -205,11 +193,11 @@ form, and [basin.rs/docs] renders it in APA, BibTeX, and BibLaTeX.
 
 ## Acknowledgements
 
-Basin owes a substantial intellectual debt to [argmin]: the overall shape of the
-crate: the `Executor` driver loop, the `Solver`/`Problem` trait split, and
-per-solver `State` are borrowed from it, and several solver implementations and
-test-problem conventions were modeled on argmin's. Thanks to the argmin authors
-and contributors for a library that is a pleasure to learn from.
+Basin owes a substantial intellectual debt to [argmin]: the `Executor` driver
+loop, the `Solver`/`Problem` trait split, and per-solver `State` are borrowed
+from it, and several solver implementations and test-problem conventions were
+modeled on argmin's. Thanks to the argmin authors and contributors for a library
+that is a pleasure to learn from.
 
 The Powell-family derivative-free solvers (COBYLA, NEWUOA, BOBYQA, LINCOA) are
 derived from [PRIMA], Zaikun Zhang's modern-Fortran reference implementation of M. J. D.
