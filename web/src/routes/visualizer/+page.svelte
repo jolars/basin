@@ -25,7 +25,7 @@
     <Visualizer />
 {:else}
     <section
-        class="min-h-[calc(100vh-8rem)] site-container w-full py-6 flex flex-col gap-6"
+        class="min-h-[calc(100dvh-9rem)] site-container py-6 flex flex-col gap-6"
     >
         <header>
             <h1 class="text-2xl md:text-3xl font-semibold tracking-tight">

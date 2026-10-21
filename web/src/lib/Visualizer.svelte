@@ -242,7 +242,7 @@
 </script>
 
 <section
-    class="min-h-[calc(100vh-8rem)] max-w-screen-2xl w-full mx-auto px-4 md:px-8 py-6 flex flex-col gap-6"
+    class="min-h-[calc(100dvh-9rem)] site-container py-6 flex flex-col gap-6"
 >
     <header class="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -268,7 +268,7 @@
             class="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 flex-1 min-h-0"
         >
             <div
-                class="relative bg-stone-100 dark:bg-stone-900 rounded-lg overflow-hidden aspect-square lg:aspect-auto lg:min-h-[360px]"
+                class="relative bg-stone-100 dark:bg-stone-900 rounded-lg overflow-hidden aspect-square lg:aspect-auto lg:min-h-[36rem]"
             >
                 <ContourPlot
                     problem={problemMeta}
@@ -280,6 +280,7 @@
                     {startPoint}
                     theme={theme.effective}
                     onPick={handlePick}
+                    monochrome
                 />
             </div>
             <aside class="flex flex-col gap-6 min-w-0">
@@ -296,7 +297,7 @@
                     />
                 </div>
                 <div
-                    class="bg-stone-100 dark:bg-stone-900 rounded-lg p-3 h-56 lg:flex-1"
+                    class="bg-stone-100 dark:bg-stone-900 rounded-lg p-3 h-56 lg:h-auto lg:min-h-40 lg:flex-1"
                 >
                     <CostChart
                         {costs}

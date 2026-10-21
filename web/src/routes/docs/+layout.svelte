@@ -3,8 +3,10 @@
     import { page } from "$app/state";
     import { DOCS_LINKS } from "#lib/nav.ts";
     import Seo from "#lib/Seo.svelte";
+    import PageOutline from "#lib/docs/PageOutline.svelte";
 
     let { children } = $props();
+    let content = $state<HTMLElement>();
 
     // Exact-match active state, tolerant of a missing/extra trailing
     // slash so highlighting survives either URL form.
@@ -61,8 +63,10 @@
 
 <Seo title={meta.title} description={meta.description} />
 
-<div class="site-container py-10 grid lg:grid-cols-[14rem_1fr] gap-10">
-    <aside class="lg:sticky lg:top-20 lg:self-start">
+<div class="nav-container docs-layout py-10 grid gap-8">
+    <aside
+        class="lg:max-w-48 lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto"
+    >
         <p
             class="text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500 mb-3"
         >
@@ -86,7 +90,35 @@
         </nav>
     </aside>
 
-    <div class="min-w-0">
+    <div bind:this={content} class="docs-content min-w-0">
         {@render children()}
     </div>
+    <aside
+        class="hidden lg:block sticky top-20 self-start max-h-[calc(100dvh-7rem)] overflow-y-auto"
+    >
+        <PageOutline {content} />
+    </aside>
 </div>
+
+<style>
+    @media (min-width: 64rem) {
+        .docs-layout {
+            /* Equal side columns keep the article centered in the viewport. */
+            grid-template-columns: minmax(0, 1fr) minmax(0, 44rem) minmax(
+                    0,
+                    1fr
+                );
+        }
+    }
+
+    .docs-content :global(h2),
+    .docs-content :global(h3) {
+        scroll-margin-top: 6rem;
+    }
+
+    @media (min-width: 64rem) and (max-width: 79.999rem) {
+        .docs-layout {
+            grid-template-columns: 11rem minmax(0, 1fr) 11rem;
+        }
+    }
+</style>

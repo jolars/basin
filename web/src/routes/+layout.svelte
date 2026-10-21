@@ -86,7 +86,7 @@
     <header
         class="border-b border-stone-200 dark:border-stone-800 sticky top-0 z-20 bg-white/80 dark:bg-stone-950/80 backdrop-blur"
     >
-        <nav class="site-container h-14 flex items-center gap-3 sm:gap-6">
+        <nav class="nav-container h-14 flex items-center gap-3 sm:gap-6">
             <!-- Logo slot. Swap this wordmark for an <img> once a logo
                  asset lands in `static/` (e.g.
                  `<img src={asset("logo.svg")} alt="basin" class="h-6" />`). -->

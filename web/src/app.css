@@ -56,6 +56,13 @@ body {
     height: 100%;
 }
 
+.nav-container {
+    width: 100%;
+    max-width: 90rem;
+    margin-inline: auto;
+    padding-inline: 1.5rem;
+}
+
 /* Match VitePress's content width while keeping gutters inside the container. */
 .site-container {
     width: 100%;
@@ -65,6 +72,10 @@ body {
 }
 
 @media (min-width: 40rem) {
+    .nav-container {
+        padding-inline: 2rem;
+    }
+
     .site-container {
         max-width: calc(72rem + 6rem);
         padding-inline: 3rem;
