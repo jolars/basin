@@ -2,13 +2,13 @@
 
 ## Supported release lines
 
-Basin prepares 3.0 on `main` and maintains the latest 1.x release on `v1`,
-which starts from v1.15.1. The optional constraint API on `main` is a breaking
-change and must ship as 3.0.0. Keep published 2.x versions available; do not
-yank or replace them for this redesign. The 1.x line receives correctness,
-regression, and security fixes through at least April 19, 2027, and for at least
-six months after the first stable 2.0.0 release, whichever is later. We will announce the end of
-support in the release notes.
+Basin prepares 3.0 on `main` and maintains the latest 1.x release on `v1`, which
+starts from v1.15.1. The optional constraint API on `main` is a breaking change
+and must ship as 3.0.0. Keep published 2.x versions available; do not yank or
+replace them for this redesign. The 1.x line receives correctness, regression,
+and security fixes through at least April 19, 2027, and for at least six months
+after the first stable 2.0.0 release, whichever is later. We will announce the
+end of support in the release notes.
 
 Only the latest 1.x patch release is maintained; earlier minor releases do not
 have separate maintenance branches. Applications can use `basin = "1"` and
@@ -65,19 +65,6 @@ Latest designation unchanged. The setting does not turn a release into a
 prerelease or prevent crates.io publication. Publishing beta or RC versions
 needs a separate prerelease policy.
 
-## Publishing 2.0.0
-
-Before merging the first stable 2.0 release PR:
-
-1. Set `release-latest` to `false` in `versionary.jsonc` on the `v1` branch, and
-   finish any in-flight 1.x release jobs. Keep it `true` on `main`. Later 1.x
-   patches will then leave 2.x marked as Latest.
-2. Record the earliest end-of-support date for 1.x here, at least six months
-   after the 2.0.0 release date, and update both branches' README policy.
-3. Publish migration guidance and retain links to the 1.x API reference.
-4. Merge the reviewed 2.0.0 release PR after all required checks pass, then
-   verify crate publication and website deployment.
-
 ## Website deployment
 
 The Website workflow builds and checks both branches. Deployment starts from a
@@ -87,17 +74,17 @@ published release, after its GitHub metadata exists. Only a stable
 maintenance release cannot replace the current stable documentation. Deployments
 are serialized and recheck Latest immediately before deploying.
 
-The build job uploads the checked static site as an artifact. The deployment
-job publishes that artifact and the Worker together, using the
-`cloudflare-workers` environment. It needs the `CLOUDFLARE_API_TOKEN` repository
-secret and `CLOUDFLARE_ACCOUNT_ID` repository variable. See the
-[hosting guide](web/worker/README.md) for local preview, credentials, and domain
+The build job uploads the checked static site as an artifact. The deployment job
+publishes that artifact and the Worker together, using the `cloudflare-workers`
+environment. It needs the `CLOUDFLARE_API_TOKEN` repository secret and
+`CLOUDFLARE_ACCOUNT_ID` repository variable. See the [hosting
+guide](web/worker/README.md) for local preview, credentials, and domain
 migration. Keep the deployment workflow and Worker configuration synchronized
 between `main` and `v1`.
 
 To redeploy, manually run the Website workflow on `main` or `v1` and set
 `release_tag` to the current stable tag. The workflow builds the tagged site's
 sources with the selected branch's hosting tools, then rechecks Latest before
-publishing. Leave the input empty to build and check the selected branch
-without deploying. Tags that already contain the Workers workflow can also be
-dispatched directly. Do not rerun older tags' GitHub Pages deployment workflows.
+publishing. Leave the input empty to build and check the selected branch without
+deploying. Tags that already contain the Workers workflow can also be dispatched
+directly. Do not rerun older tags' GitHub Pages deployment workflows.
