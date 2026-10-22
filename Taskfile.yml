@@ -182,11 +182,17 @@ tasks:
       - cd web && pnpm collect:benchmarks
 
   bench:competitors:
-    desc: "Run the competitor-axis trace harness and refresh the /benchmarks/competitors data."
+    desc: "Measure competitor convergence traces and refresh the website data."
+    env:
+      RAYON_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
     summary: |
-      Runs the `trace` harness — basin vs argmin on GD / Nelder-Mead / L-BFGS
-      over Rosenbrock, recording suboptimality against wall-clock time at every
-      iteration — then wraps the traces with run metadata into
+      Runs the `trace` harness, including LM exponential fitting against
+      levenberg-marquardt and constrained quadratic optimization against cobyla.
+      Records convergence against wall-clock time, then wraps the traces with
+      compiler, revision, dependency versions, and machine metadata into
       web/src/lib/data/competitor-benchmarks.json, which the
       /benchmarks/competitors page imports.
 
@@ -194,7 +200,7 @@ tasks:
       regenerated JSON. Deliberately not wired into CI — shared runners are too
       noisy for trustworthy timings.
     cmds:
-      - cargo run -p competitor-bench --release --bin trace > target/competitor-traces.json
+      - cargo run --locked -p competitor-bench --release --bin trace > target/competitor-traces.json
       - cd web && pnpm collect:competitors
 
   bench:solvers:

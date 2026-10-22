@@ -4,7 +4,7 @@
 //! Three contestants per problem:
 //!   * `lm-crate`:      the external crate (nalgebra 0.34).
 //!   * `basin/nalgebra`: basin on nalgebra 0.34 (same LA library as the
-//!     lm crate, so this isolates *solver-loop* overhead).
+//!     lm crate, holding the backend fixed while trajectories can differ).
 //!   * `basin/faer`:    basin on faer 0.24 (adds the backend variable).
 //!
 //! QR variants use the same Basin damping and stopping rules. Equal named

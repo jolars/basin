@@ -13,10 +13,16 @@
  * machine-specific and shared runners are noisy. Refresh locally and commit
  * the regenerated JSON.
  */
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { cpus } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+    COMPETITOR_CASES as CASE_ORDER,
+    LIBRARY_ORDER,
+    validateCompetitorResults,
+} from "../src/lib/data/competitors";
 
 const scriptDir = fileURLToPath(new URL(".", import.meta.url));
 const repoRoot = resolve(scriptDir, "..", "..");
@@ -33,65 +39,8 @@ const outFile = resolve(
 /** Iteration budget the harness caps each solve at (`MAX_ITERS`). */
 const ITERATIONS = 200;
 
-const LIBRARY_ORDER = ["basin", "argmin", "gomez", "slsqp", "nlopt"] as const;
-type Library = (typeof LIBRARY_ORDER)[number];
-
-/**
- * Curated (solver, problem, libraries) cases, in page order. Drives the
- * deterministic sort and the expected-count sanity check. Not every case has
- * every library: argmin has no NLLS so it's absent from those; gomez only
- * lines up with the derivative-free NM case; nlopt joins NM, L-BFGS, and the
- * NEWUOA case (where it and basin are the same algorithm) but has no GD entry
- * (its `Lbfgs` is the closest first-order analog). The NEWUOA case is the only
- * one off Rosenbrock: Styblinski–Tang at n = 5. Keep in sync with
- * `COMPETITOR_CASES` in `src/lib/data/competitors.ts` and the cases in the
- * `trace` bench (`crates/competitor-bench/src/bin/trace.rs`). SLSQP compares
- * Basin, the `slsqp` crate, and NLopt on unconstrained Rosenbrock.
- */
-const CASE_ORDER: { solver: string; problem: string; libraries: Library[] }[] =
-    [
-        {
-            solver: "slsqp",
-            problem: "rosenbrock",
-            libraries: ["basin", "slsqp", "nlopt"],
-        },
-        { solver: "gd", problem: "rosenbrock", libraries: ["basin", "argmin"] },
-        {
-            solver: "nm",
-            problem: "rosenbrock",
-            libraries: ["basin", "argmin", "gomez", "nlopt"],
-        },
-        {
-            solver: "lbfgs",
-            problem: "rosenbrock",
-            libraries: ["basin", "argmin", "nlopt"],
-        },
-        {
-            solver: "newuoa",
-            problem: "styblinski",
-            libraries: ["basin", "nlopt"],
-        },
-    ];
-
 const caseIndex = (solver: string, problem: string) =>
     CASE_ORDER.findIndex((c) => c.solver === solver && c.problem === problem);
-
-const caseAllowsLibrary = (solver: string, problem: string, lib: Library) =>
-    CASE_ORDER.some(
-        (c) =>
-            c.solver === solver &&
-            c.problem === problem &&
-            c.libraries.includes(lib),
-    );
-
-type TracePoint = { tNs: number; subopt: number };
-type CompetitorResult = {
-    solver: string;
-    problem: string;
-    n: number;
-    library: Library;
-    points: TracePoint[];
-};
 
 if (!existsSync(tracesFile)) {
     console.error(`✗ no trace output at ${tracesFile}`);
@@ -102,23 +51,9 @@ if (!existsSync(tracesFile)) {
     process.exit(1);
 }
 
-const raw = JSON.parse(readFileSync(tracesFile, "utf8")) as CompetitorResult[];
-
-// Keep only curated (solver, problem, library) rows: robust to stale traces
-// from an earlier case layout.
-const results = raw.filter(
-    (r) =>
-        caseIndex(r.solver, r.problem) >= 0 &&
-        LIBRARY_ORDER.includes(r.library) &&
-        caseAllowsLibrary(r.solver, r.problem, r.library),
+const results = validateCompetitorResults(
+    JSON.parse(readFileSync(tracesFile, "utf8")),
 );
-
-if (results.length === 0) {
-    console.error(
-        "✗ trace file had no curated (solver, problem, library) rows—is it stale?",
-    );
-    process.exit(1);
-}
 
 // Deterministic order (curated case → library) so the committed JSON has a
 // stable diff.
@@ -128,13 +63,48 @@ results.sort(
         LIBRARY_ORDER.indexOf(a.library) - LIBRARY_ORDER.indexOf(b.library),
 );
 
+const packages = readFileSync(join(repoRoot, "Cargo.lock"), "utf8").split(
+    "[[package]]",
+);
+const versions = Object.fromEntries(
+    [
+        "basin",
+        "argmin",
+        "gomez",
+        "slsqp",
+        "nlopt",
+        "cobyla",
+        "levenberg-marquardt",
+        "nalgebra",
+    ].map((name) => {
+        const entry = packages.find(
+            (p) =>
+                p.includes(`\nname = "${name}"\n`) &&
+                (name !== "nalgebra" || /\nversion = "0\.34\./.test(p)),
+        );
+        const version = entry?.match(/\nversion = "([^"]+)"/)?.[1];
+        if (!version) throw new Error(`Missing locked version: ${name}`);
+        return [name, version];
+    }),
+);
+const git = (...args: string[]) =>
+    execFileSync("git", args, { cwd: repoRoot, encoding: "utf8" }).trim();
+
 const data = {
     generatedAt: new Date().toISOString().slice(0, 10),
     env: {
+        compiler: execFileSync("rustc", ["--version"], {
+            encoding: "utf8",
+        }).trim(),
+        revision: git("rev-parse", "HEAD"),
+        dirty: git("status", "--porcelain").length > 0,
+        threads: 1,
         os: process.platform,
         arch: process.arch,
         cpu: cpus()[0]?.model.trim() ?? "unknown",
     },
+    repetitions: 11,
+    versions,
     iterations: ITERATIONS,
     results,
 };
@@ -144,9 +114,4 @@ writeFileSync(outFile, `${JSON.stringify(data, null, 2)}\n`);
 
 const expected = CASE_ORDER.reduce((acc, c) => acc + c.libraries.length, 0);
 console.log(`✓ wrote ${results.length} result(s) to ${outFile}`);
-if (results.length !== expected) {
-    console.warn(
-        `  note: expected ${expected} rows (sum of curated libraries per case); ` +
-            "is the harness run complete?",
-    );
-}
+if (results.length !== expected) throw new Error("Unexpected result count");

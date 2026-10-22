@@ -16,6 +16,7 @@
         "deploy": "wrangler deploy",
         "deploy:check": "wrangler deploy --dry-run",
         "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+        "test:competitors": "tsx --test scripts/collect-competitors.test.ts",
         "test:markdown": "node --test scripts/html-to-markdown.test.js scripts/math.test.js worker/markdown-negotiation.test.js",
         "format": "biome check --write --linter-enabled=false . && prettier --write \"**/*.svelte\"",
         "format:check": "biome check --linter-enabled=false . && prettier --check \"**/*.svelte\"",

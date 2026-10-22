@@ -15,11 +15,30 @@ import rawData from "./competitor-benchmarks.json";
 export { PROBLEM_LABELS, SOLVER_LABELS, type Solver };
 
 /** Competing libraries a case is run against. */
-export type Library = "basin" | "argmin" | "gomez" | "nlopt" | "slsqp";
+export type Library =
+    | "basin"
+    | "argmin"
+    | "gomez"
+    | "nlopt"
+    | "slsqp"
+    | "levenberg-marquardt"
+    | "cobyla";
+
+export interface RunSummary {
+    point: (number | null)[];
+    cost: number | null;
+    violation: number | null;
+    objectiveCalls: number;
+    residualCalls: number;
+    jacobianCalls: number;
+    constraintCalls: number;
+    status: string;
+    verified: boolean;
+}
 
 /** One `(time, suboptimality)` sample on a convergence trace. */
 export interface TracePoint {
-    /** Wall-clock time, nanoseconds (median over reps). SLSQP includes initialization. */
+    /** Wall-clock time, nanoseconds (median over reps). SLSQP, LM, and COBYLA include initialization. */
     tNs: number;
     /** Suboptimality `f(x) − f*`, floored at a small positive value. */
     subopt: number;
@@ -31,12 +50,24 @@ export interface CompetitorResult {
     n: number;
     library: Library;
     points: TracePoint[];
+    violations?: { tNs: number; violation: number }[];
+    summary?: RunSummary;
 }
 
 export interface CompetitorBenchmarks {
     /** ISO date (YYYY-MM-DD) the results were measured. */
     generatedAt: string;
-    env: { os: string; arch: string; cpu: string };
+    env: {
+        os: string;
+        arch: string;
+        cpu: string;
+        compiler: string;
+        revision: string;
+        dirty: boolean;
+        threads: number;
+    };
+    repetitions: number;
+    versions: Record<string, string>;
     /** Iteration budget the harness capped each solve at. */
     iterations: number;
     results: CompetitorResult[];
@@ -50,6 +81,8 @@ export const LIBRARY_ORDER: Library[] = [
     "gomez",
     "slsqp",
     "nlopt",
+    "levenberg-marquardt",
+    "cobyla",
 ];
 
 export const LIBRARY_LABELS: Record<Library, string> = {
@@ -58,6 +91,8 @@ export const LIBRARY_LABELS: Record<Library, string> = {
     gomez: "gomez",
     slsqp: "slsqp",
     nlopt: "nlopt",
+    "levenberg-marquardt": "LM crate",
+    cobyla: "cobyla",
 };
 
 /** Line and legend colors per library, legible on light and dark backgrounds.
@@ -69,6 +104,8 @@ export const LIBRARY_COLORS: Record<Library, string> = {
     gomez: "#14b8a6",
     slsqp: "#0ea5e9",
     nlopt: "#e11d48",
+    "levenberg-marquardt": "#f59e0b",
+    cobyla: "#14b8a6",
 };
 
 /** One curated competitor case. */
@@ -77,6 +114,7 @@ export interface CompetitorCase {
     problem: string;
     /** One line on what the case demonstrates. Shown under the card title. */
     blurb: string;
+    libraries: Library[];
 }
 
 /**
@@ -86,27 +124,44 @@ export interface CompetitorCase {
  */
 export const COMPETITOR_CASES: CompetitorCase[] = [
     {
+        solver: "lm",
+        problem: "exp_fit",
+        libraries: ["basin", "levenberg-marquardt"],
+        blurb: "Levenberg–Marquardt with analytic Jacobians: fit a·exp(b·t) to 10 exact observations, from (50000, −0.3) toward (100000, −1). Both implementations use nalgebra 0.34, scaled trust regions, and pivoted QR. The curve shows the best objective seen at residual evaluations, including rejected trials.",
+    },
+    {
+        solver: "cobyla",
+        problem: "quadratic_2d",
+        libraries: ["basin", "cobyla"],
+        blurb: "Minimize (x−1)² + (y−1)² with 0 ≤ x,y ≤ 2 and x+y ≤ 1.5, from (0.5, 0.5). The optimum is (0.75, 0.75), with cost 0.125. The main curve shows the best feasible objective; the second plot shows each trial’s maximum constraint violation.",
+    },
+    {
         solver: "slsqp",
+        libraries: ["basin", "slsqp", "nlopt"],
         problem: "rosenbrock",
         blurb: "SLSQP with analytic gradients on unconstrained Rosenbrock (n = 2), from (−1.2, 1). Basin versus slsqp 1.0.2 (a Rust translation of NLopt 2.7.1) and NLopt 2.9.1. This case does not measure constraint handling.",
     },
     {
         solver: "gd",
+        libraries: ["basin", "argmin"],
         problem: "rosenbrock",
         blurb: "Steepest descent with a More–Thuente line search: first-order, identical configuration on both sides.",
     },
     {
         solver: "nm",
+        libraries: ["basin", "argmin", "gomez", "nlopt"],
         problem: "rosenbrock",
         blurb: "Derivative-free Nelder–Mead. Basin and argmin run from a bit-identical initial simplex (standard coefficients); gomez and nlopt construct their own simplex with their default coefficients.",
     },
     {
         solver: "lbfgs",
+        libraries: ["basin", "argmin", "nlopt"],
         problem: "rosenbrock",
         blurb: "Limited-memory BFGS (m = 10), quasi-Newton; Basin and argmin both use a More–Thuente line search; nlopt uses its bundled L-BFGS (no line-search knob exposed).",
     },
     {
         solver: "newuoa",
+        libraries: ["basin", "nlopt"],
         problem: "styblinski",
         blurb: "Powell's model-based derivative-free NEWUOA. Basin's implementation is based on the modernized version from PRIMA, whereas nlopt uses Powell's reference.",
     },
@@ -122,4 +177,101 @@ export function librariesFor(solver: Solver, problem: string): Library[] {
                 r.library === lib,
         ),
     );
+}
+
+/** Reject incomplete or malformed measurements before replacing published data. */
+export function validateCompetitorResults(raw: unknown): CompetitorResult[] {
+    if (!Array.isArray(raw))
+        throw new Error("Expected an array of competitor results");
+    const rows = raw as CompetitorResult[];
+    const keys = new Set<string>();
+    for (const row of rows) {
+        const c = COMPETITOR_CASES.find(
+            (c) => c.solver === row?.solver && c.problem === row?.problem,
+        );
+        const key = `${row?.solver}/${row?.problem}/${row?.library}`;
+        if (!c?.libraries.includes(row.library) || keys.has(key))
+            throw new Error(`Unexpected or duplicate result: ${key}`);
+        keys.add(key);
+        if (!Number.isInteger(row.n) || row.n < 1)
+            throw new Error(`Invalid dimension: ${key}`);
+        validatePoints(row.points, "subopt", key);
+        if (row.violations !== undefined)
+            validatePoints(row.violations, "violation", key);
+        if (c.solver === "lm" || c.solver === "cobyla") {
+            const s = row.summary;
+            if (
+                row.n !== 2 ||
+                !s ||
+                typeof s.status !== "string" ||
+                typeof s.verified !== "boolean"
+            )
+                throw new Error(`Missing run diagnostics: ${key}`);
+            for (const count of [
+                s.objectiveCalls,
+                s.residualCalls,
+                s.jacobianCalls,
+                s.constraintCalls,
+            ]) {
+                if (!Number.isInteger(count) || count < 0)
+                    throw new Error(`Invalid callback count: ${key}`);
+            }
+            if (
+                !Array.isArray(s.point) ||
+                s.point.length !== row.n ||
+                [...s.point, s.cost, s.violation].some(
+                    (v) => v !== null && !Number.isFinite(v),
+                )
+            )
+                throw new Error(`Invalid returned solution: ${key}`);
+            if (s.violation !== null && s.violation < 0)
+                throw new Error(`Negative violation: ${key}`);
+            if (
+                s.verified &&
+                ([...s.point, s.cost, s.violation].includes(null) ||
+                    row.points.length === 0)
+            )
+                throw new Error(`Invalid verified solution: ${key}`);
+            if (
+                s.verified &&
+                c.solver === "lm" &&
+                (s.residualCalls < 1 || s.jacobianCalls < 1)
+            )
+                throw new Error(`Missing derivative counts: ${key}`);
+            if (
+                s.verified &&
+                c.solver === "cobyla" &&
+                (s.objectiveCalls < 1 || !row.violations?.length)
+            )
+                throw new Error(`Missing constrained measurements: ${key}`);
+        }
+    }
+    for (const c of COMPETITOR_CASES) {
+        for (const library of c.libraries) {
+            const key = `${c.solver}/${c.problem}/${library}`;
+            if (!keys.has(key)) throw new Error(`Missing result: ${key}`);
+        }
+    }
+    return rows;
+}
+
+function validatePoints(
+    points: unknown,
+    valueKey: "subopt" | "violation",
+    key: string,
+) {
+    if (!Array.isArray(points)) throw new Error(`Missing trace: ${key}`);
+    let previous = -1;
+    for (const point of points) {
+        if (
+            !point ||
+            !Number.isFinite(point.tNs) ||
+            point.tNs < previous ||
+            point.tNs < 0 ||
+            !Number.isFinite(point[valueKey]) ||
+            (valueKey === "subopt" ? point[valueKey] <= 0 : point[valueKey] < 0)
+        )
+            throw new Error(`Invalid trace point: ${key}`);
+        previous = point.tNs;
+    }
 }

@@ -79,7 +79,9 @@ use basin::{
     IntoInitialSimplex, Lbfgsb, MoreThuente, NelderMead, Newuoa, PointState,
     SimplexProgress, Solver, State as BasinState, StepOutcome,
 };
-use competitor_bench::{ArgminProblem, GomezProblem, slsqp};
+use competitor_bench::{
+    ArgminProblem, GomezProblem, cobyla, convergence, lm, slsqp,
+};
 use gomez::OptimizerDriver;
 use gomez::algo::NelderMead as GomezNelderMead;
 
@@ -402,6 +404,8 @@ struct Trace {
     f_opt: f64,
     library: &'static str,
     points: Vec<(u128, f64)>,
+    violations: Vec<(u128, f64)>,
+    summary: Option<convergence::Summary>,
 }
 
 fn print_traces(traces: &[Trace]) {
@@ -427,6 +431,36 @@ fn print_traces(traces: &[Trace]) {
             out.push_str(&format!("{{\"tNs\":{t_ns},\"subopt\":{subopt}}}"));
         }
         out.push(']');
+        if !t.violations.is_empty() {
+            out.push_str(",\"violations\":[");
+            for (i, &(time, violation)) in t.violations.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                out.push_str(&format!(
+                    "{{\"tNs\":{time},\"violation\":{violation}}}"
+                ));
+            }
+            out.push(']');
+        }
+        if let Some(summary) = &t.summary {
+            let point = format!(
+                "[{}]",
+                summary
+                    .point
+                    .iter()
+                    .map(|&x| json_number(x))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            );
+            out.push_str(&format!(
+                ",\"summary\":{{\"point\":{},\"cost\":{},\"violation\":{},\"objectiveCalls\":{},\"residualCalls\":{},\"jacobianCalls\":{},\"constraintCalls\":{},\"status\":{:?},\"verified\":{}}}",
+                point,
+                json_number(summary.cost), json_number(summary.violation),
+                summary.objective_calls, summary.residual_calls, summary.jacobian_calls,
+                summary.constraint_calls, summary.status, summary.verified,
+            ));
+        }
         out.push('}');
         out.push_str(if ti + 1 < traces.len() { ",\n" } else { "\n" });
     }
@@ -434,13 +468,47 @@ fn print_traces(traces: &[Trace]) {
     println!("{out}");
 }
 
+fn json_number(value: f64) -> String {
+    if value.is_finite() {
+        value.to_string()
+    } else {
+        "null".into()
+    }
+}
+
+fn published_trace(
+    solver: &'static str,
+    problem: &'static str,
+    f_opt: f64,
+    library: &'static str,
+    run: convergence::Run,
+) -> Trace {
+    eprintln!("{solver}/{library}: {:?}", run.summary);
+    Trace {
+        solver,
+        problem,
+        n: run.summary.point.len(),
+        f_opt,
+        library,
+        points: run.points,
+        violations: run.violations,
+        summary: Some(run.summary),
+    }
+}
+
 fn main() {
+    assert!(
+        !cfg!(feature = "parallel") && !cfg!(feature = "basin-latest"),
+        "Publish competitor traces with the default, serial nalgebra 0.34 configuration"
+    );
     // Cost at the shared start, used to give argmin's curve a finite t = 0.
     let f0 = rosenbrock(&start());
 
     let mut traces = vec![
         // ---- gradient descent (steepest + More-Thuente) ----
         Trace {
+            violations: Vec::new(),
+            summary: None,
             solver: "gd",
             problem: "rosenbrock",
             n: N,
@@ -458,6 +526,8 @@ fn main() {
             }),
         },
         Trace {
+            violations: Vec::new(),
+            summary: None,
             solver: "gd",
             problem: "rosenbrock",
             n: N,
@@ -483,6 +553,8 @@ fn main() {
         },
         // ---- Nelder-Mead (standard coeffs, identical initial simplex) ----
         Trace {
+            violations: Vec::new(),
+            summary: None,
             solver: "nm",
             problem: "rosenbrock",
             n: N,
@@ -500,6 +572,8 @@ fn main() {
             }),
         },
         Trace {
+            violations: Vec::new(),
+            summary: None,
             solver: "nm",
             problem: "rosenbrock",
             n: N,
@@ -527,6 +601,8 @@ fn main() {
             ),
         },
         Trace {
+            violations: Vec::new(),
+            summary: None,
             solver: "nm",
             problem: "rosenbrock",
             n: N,
@@ -535,6 +611,8 @@ fn main() {
             points: median_reps(|| gomez_trace_nm(f0)),
         },
         Trace {
+            violations: Vec::new(),
+            summary: None,
             solver: "nm",
             problem: "rosenbrock",
             n: N,
@@ -551,6 +629,8 @@ fn main() {
         },
         // ---- L-BFGS (limited memory m = 10, More-Thuente) ----
         Trace {
+            violations: Vec::new(),
+            summary: None,
             solver: "lbfgs",
             problem: "rosenbrock",
             n: N,
@@ -568,6 +648,8 @@ fn main() {
             }),
         },
         Trace {
+            violations: Vec::new(),
+            summary: None,
             solver: "lbfgs",
             problem: "rosenbrock",
             n: N,
@@ -598,6 +680,8 @@ fn main() {
             ),
         },
         Trace {
+            violations: Vec::new(),
+            summary: None,
             solver: "lbfgs",
             problem: "rosenbrock",
             n: N,
@@ -617,6 +701,8 @@ fn main() {
         //      ρ_beg/ρ_end and `npt = 2n+1`, on Styblinski–Tang at n = 5 from the
         //      origin. Both run to natural ρ-convergence (not the iter cap). ----
         Trace {
+            violations: Vec::new(),
+            summary: None,
             solver: "newuoa",
             problem: "styblinski",
             n: N_ST,
@@ -636,6 +722,8 @@ fn main() {
             }),
         },
         Trace {
+            violations: Vec::new(),
+            summary: None,
             solver: "newuoa",
             problem: "styblinski",
             n: N_ST,
@@ -663,6 +751,8 @@ fn main() {
             verified.status,
         );
         traces.push(Trace {
+            violations: Vec::new(),
+            summary: None,
             solver: "slsqp",
             problem: "rosenbrock",
             n: slsqp::START.len(),
@@ -676,5 +766,26 @@ fn main() {
         });
     }
 
+    for library in [lm::Library::Basin, lm::Library::Reference] {
+        traces.push(published_trace(
+            "lm",
+            "exp_fit",
+            0.0,
+            library.name(),
+            convergence::median_run(|| lm::run(library), REPS),
+        ));
+    }
+    for library in [cobyla::Library::Basin, cobyla::Library::Reference] {
+        traces.push(published_trace(
+            "cobyla",
+            "quadratic_2d",
+            0.125,
+            library.name(),
+            convergence::median_run(
+                || cobyla::Case::Quadratic.trace(library),
+                REPS,
+            ),
+        ));
+    }
     print_traces(&traces);
 }

@@ -4,10 +4,30 @@
 //! budgets and final radii do not imply equal trajectories or numerical work.
 
 use basin::{Cobyla, CostFunction, Executor, SelectedState, TerminationCode};
-use std::{cell::Cell, convert::Infallible};
+use std::{
+    cell::{Cell, RefCell},
+    convert::Infallible,
+};
+
+use crate::convergence::{Log, Run, Summary};
 
 const FINAL_RADIUS: f64 = 7.450_580_596_923_828e-9;
-const FEASIBILITY_TOLERANCE: f64 = 1.490_116_119_384_765_6e-8;
+pub const FEASIBILITY_TOLERANCE: f64 = 1.490_116_119_384_765_6e-8;
+
+#[derive(Clone, Copy)]
+pub enum Library {
+    Basin,
+    Reference,
+}
+
+impl Library {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Basin => "basin",
+            Self::Reference => "cobyla",
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub enum Case {
@@ -26,6 +46,7 @@ pub const CASES: [(Case, &str); 3] = [
 pub enum Stop {
     Budget,
     Radius,
+    Other(String),
 }
 
 #[derive(Debug)]
@@ -80,6 +101,9 @@ impl Case {
     }
 
     pub fn violation(self, x: &[f64]) -> f64 {
+        if x.iter().any(|v| !v.is_finite()) {
+            return f64::INFINITY;
+        }
         let mut violation = 0.0_f64;
         for (&v, (lower, upper)) in x.iter().zip(self.bounds()) {
             violation = violation.max(lower - v).max(v - upper);
@@ -109,13 +133,22 @@ impl Case {
     }
 
     pub fn solve_basin(self) -> Outcome {
-        let problem = Problem::new(self);
+        self.solve_basin_logged(None)
+    }
+
+    fn solve_basin_logged(self, log: Option<&RefCell<Log>>) -> Outcome {
+        let mut problem = Problem::new(self);
+        problem.log = log;
+        let start = self.start();
+        if let Some(log) = log {
+            log.borrow_mut().restart();
+        }
         let result = Executor::new(
             &problem,
             Cobyla::new()
                 .with_initial_radius(0.5)
                 .with_final_radius(FINAL_RADIUS),
-            SelectedState::new(self.start()),
+            SelectedState::new(start),
         )
         .max_cost_evals(self.budget() as u64)
         .run()
@@ -130,13 +163,18 @@ impl Case {
             stop: match result.report.code() {
                 TerminationCode::MaxCostEvals => Stop::Budget,
                 TerminationCode::SolverConverged => Stop::Radius,
-                other => panic!("unexpected Basin termination: {other:?}"),
+                other => Stop::Other(format!("{other:?}")),
             },
         }
     }
 
     pub fn solve_reference(self) -> Outcome {
-        let problem = Problem::new(self);
+        self.solve_reference_logged(None)
+    }
+
+    fn solve_reference_logged(self, log: Option<&RefCell<Log>>) -> Outcome {
+        let mut problem = Problem::new(self);
+        problem.log = log;
         let start = self.start();
         let constraint = |x: &[f64], _: &mut ()| {
             problem
@@ -150,7 +188,10 @@ impl Case {
         } else {
             &[]
         };
-        let (status, point, cost) = ::cobyla::minimize(
+        if let Some(log) = log {
+            log.borrow_mut().restart();
+        }
+        let result = ::cobyla::minimize(
             |x: &[f64], _: &mut ()| problem.objective(x),
             &start,
             &problem.bounds,
@@ -162,47 +203,106 @@ impl Case {
                 xtol_abs: vec![FINAL_RADIUS; start.len()],
                 ..Default::default()
             }),
-        )
-        .expect("reference COBYLA failed");
+        );
+        let (point, cost, stop) = match result {
+            Ok((status, point, cost)) => (
+                point,
+                cost,
+                match status {
+                    ::cobyla::SuccessStatus::MaxEvalReached => Stop::Budget,
+                    ::cobyla::SuccessStatus::XtolReached => Stop::Radius,
+                    other => Stop::Other(format!("{other:?}")),
+                },
+            ),
+            Err((status, point, cost)) => {
+                (point, cost, Stop::Other(format!("{status:?}")))
+            }
+        };
         Outcome {
             point,
             cost,
             objective_calls: problem.objective_calls.get(),
             constraint_calls: problem.constraint_calls.get(),
             iterations: None,
-            stop: match status {
-                ::cobyla::SuccessStatus::MaxEvalReached => Stop::Budget,
-                ::cobyla::SuccessStatus::XtolReached => Stop::Radius,
-                other => panic!("unexpected reference termination: {other:?}"),
-            },
+            stop,
         }
+    }
+
+    pub fn trace(self, library: Library) -> Run {
+        let log = RefCell::new(Log::new());
+        let result = match library {
+            Library::Basin => self.solve_basin_logged(Some(&log)),
+            Library::Reference => self.solve_reference_logged(Some(&log)),
+        };
+        let elapsed = log.borrow().elapsed();
+        let violation = self.violation(&result.point);
+        let cost = self.objective(&result.point);
+        let target = match self {
+            Self::Camel => -1.031_628_453_489_877,
+            Self::Sphere => 0.0,
+            Self::Quadratic => 0.125,
+        };
+        let verified = result.point.iter().all(|x| x.is_finite())
+            && result.cost.is_finite()
+            && (cost - result.cost).abs() <= 1e-13 * cost.abs().max(1.0)
+            && (cost - target).abs() < 1e-6
+            && violation <= FEASIBILITY_TOLERANCE;
+        let status = match (library, &result.stop) {
+            (Library::Basin, Stop::Budget) => "MaxCostEvals".into(),
+            (Library::Basin, Stop::Radius) => "SolverConverged".into(),
+            (Library::Reference, Stop::Budget) => "MaxEvalReached".into(),
+            (Library::Reference, Stop::Radius) => "XtolReached".into(),
+            (_, Stop::Other(status)) => status.clone(),
+        };
+        log.into_inner().finish(
+            elapsed,
+            Summary {
+                point: result.point,
+                cost: result.cost,
+                violation,
+                objective_calls: result.objective_calls,
+                residual_calls: 0,
+                jacobian_calls: 0,
+                constraint_calls: result.constraint_calls,
+                status,
+                verified,
+            },
+            Some(FEASIBILITY_TOLERANCE),
+            |x| self.violation(x),
+        )
     }
 }
 
-struct Problem {
+struct Problem<'a> {
     case: Case,
     bounds: Vec<(f64, f64)>,
     objective_calls: Cell<usize>,
     constraint_calls: Cell<usize>,
+    log: Option<&'a RefCell<Log>>,
 }
 
-impl Problem {
+impl Problem<'_> {
     fn new(case: Case) -> Self {
         Self {
             case,
             bounds: case.bounds(),
             objective_calls: Cell::new(0),
             constraint_calls: Cell::new(0),
+            log: None,
         }
     }
 
     fn objective(&self, x: &[f64]) -> f64 {
         self.objective_calls.set(self.objective_calls.get() + 1);
-        self.case.objective(x)
+        let cost = self.case.objective(x);
+        if let Some(log) = self.log {
+            log.borrow_mut().record(cost, x);
+        }
+        cost
     }
 }
 
-impl basin::Constraints for &Problem {
+impl basin::Constraints for &Problem<'_> {
     type Set = basin::ConstraintSet<
         basin::NoBounds,
         basin::NoLinearConstraints,
@@ -217,7 +317,7 @@ impl basin::Constraints for &Problem {
         })
     }
 }
-impl CostFunction for &Problem {
+impl CostFunction for &Problem<'_> {
     type Param = Vec<f64>;
     type Output = f64;
     type Error = Infallible;
@@ -233,7 +333,7 @@ impl CostFunction for &Problem {
     }
 }
 
-impl basin::NonlinearInequalityValues for &Problem {
+impl basin::NonlinearInequalityValues for &Problem<'_> {
     type Param = Vec<f64>;
     type Values = Vec<f64>;
     type Error = Infallible;
@@ -264,6 +364,26 @@ impl basin::NonlinearInequalityValues for &Problem {
 #[cfg(test)]
 mod tests {
     use super::{CASES, Stop};
+
+    #[test]
+    fn quadratic_tracing_preserves_solutions_and_raw_callback_counts() {
+        use super::{Case, Library};
+        for library in [Library::Basin, Library::Reference] {
+            let plain = match library {
+                Library::Basin => Case::Quadratic.solve_basin(),
+                Library::Reference => Case::Quadratic.solve_reference(),
+            };
+            let traced = Case::Quadratic.trace(library);
+            assert!(traced.summary.verified);
+            assert_eq!(plain.point, traced.summary.point);
+            assert_eq!(plain.cost, traced.summary.cost);
+            assert_eq!(plain.objective_calls, traced.summary.objective_calls);
+            assert_eq!(plain.constraint_calls, traced.summary.constraint_calls);
+            assert_eq!(traced.violations.len(), plain.objective_calls + 1);
+            assert!(traced.violations.iter().any(|p| p.1 > 0.0));
+            assert!(traced.points.iter().all(|p| p.1 >= 0.125 - 1e-8));
+        }
+    }
 
     #[test]
     fn migration_comparison_preserves_quality_budgets_and_stops() {

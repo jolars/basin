@@ -14,8 +14,8 @@
 #
 # The lm crate (0.15) and basin both use nalgebra ^0.34, so the shared
 # workspace lockfile pins them to the *same* nalgebra patch: comparing
-# the lm crate against basin's nalgebra backend isolates pure
-# solver-loop overhead with zero linear-algebra-library confound. argmin
+# the lm crate against basin's nalgebra backend holds the backend fixed.
+# Algorithm trajectories can still differ. argmin
 # and gomez are compared on the `Vec<f64>` backend, which basin, argmin,
 # and gomez (via its bundled `gomez::nalgebra` re-export, 0.32) all
 # support natively, so NM/GD run on identical param types.

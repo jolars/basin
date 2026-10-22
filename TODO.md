@@ -263,13 +263,12 @@ compatibility and numerical behavior still need verification.
 
 ### First additions
 
-- [ ] **Publish the existing LM and COBYLA comparisons.** Reuse `compare`,
-  `lm_defaults`, `verify_lm_defaults`, and `gd_nm`, with the existing Rust
-  `levenberg-marquardt` and `cobyla` dependencies. Start with a curated
-  fitting case and a constrained derivative-free case, backed by aggregate
-  results. Keep LM's damping, scaling, factorization, stopping rules, and
-  nalgebra version explicit. Sharing a backend does not make different
-  numerical trajectories a measurement of framework overhead alone.
+- [x] **Publish the existing LM and COBYLA comparisons.** The competitor page
+  shows exponential-fit LM against `levenberg-marquardt` and a constrained
+  quadratic against `cobyla`, using 11 repeated convergence traces. Exposed
+  settings match where possible, with algorithm differences documented. COBYLA
+  reports best feasible objective and trial violation separately. Broader
+  aggregate reporting remains part of the publication prerequisites above.
 - [ ] **Expand comparisons using existing argmin and NLopt dependencies.**
   [Argmin](https://docs.rs/argmin/0.11.0/argmin/solver/index.html) supplies
   BFGS, nonlinear CG with PR+, trust-region Steihaug and dogleg, particle

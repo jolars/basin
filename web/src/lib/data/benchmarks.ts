@@ -8,8 +8,8 @@
  */
 import rawData from "./backend-benchmarks.json";
 
-/** Solvers exercised by the curated backend cases (plus `newuoa`, which
- * appears only on the competitor page, not the backend benchmarks). */
+/** Solvers exercised by the curated backend cases, plus `newuoa` and
+ * `cobyla`, which appear only on the competitor page. */
 export type Solver =
     | "gd"
     | "nm"
@@ -19,7 +19,8 @@ export type Solver =
     | "lm"
     | "slsqp"
     | "gn"
-    | "newuoa";
+    | "newuoa"
+    | "cobyla";
 /** Linear-algebra backends. */
 export type Backend = "vec" | "nalgebra" | "ndarray" | "faer";
 
@@ -68,11 +69,14 @@ export const SOLVER_LABELS: Record<Solver, string> = {
     gn: "Gauss–Newton",
     slsqp: "SLSQP",
     newuoa: "NEWUOA",
+    cobyla: "COBYLA",
 };
 
 /** Display names for the problems referenced by the curated cases. */
 export const PROBLEM_LABELS: Record<string, string> = {
     rosenbrock: "Rosenbrock",
+    exp_fit: "Exponential fit",
+    quadratic_2d: "Constrained quadratic",
     ackley: "Ackley",
     styblinski: "Styblinski–Tang",
     levy: "Levy",

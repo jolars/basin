@@ -22,7 +22,7 @@
         {
             title: "Competitors",
             href: "benchmarks/competitors/",
-            body: "Basin compared against argmin, gomez, slsqp, and NLopt on matched problems.",
+            body: "Basin compared against levenberg-marquardt, cobyla, argmin, gomez, slsqp, and NLopt on matched problems.",
         },
     ];
 </script>

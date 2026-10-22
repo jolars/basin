@@ -8,6 +8,7 @@
     let {
         series,
         ariaLabel = "convergence chart",
+        yLabel = "suboptimality f(x) − f*",
         /** Drop the per-chart axis titles ("suboptimality f(x) − f*",
          * "wall-clock time"). For multi-panel grids where the caller provides
          * shared labels around the grid edges. Tightens the left + bottom
@@ -21,6 +22,7 @@
     }: {
         series: Series[];
         ariaLabel?: string;
+        yLabel?: string;
         compact?: boolean;
         directLabels?: boolean;
     } = $props();
@@ -51,16 +53,24 @@
         const allT = series
             .flatMap((s) => s.points.map((p) => p.tNs))
             .filter((v) => v > 0);
-        const xLo = Math.floor(Math.log10(Math.min(...allT)));
-        const xHi = Math.max(Math.ceil(Math.log10(Math.max(...allT))), xLo + 1);
+        const xLo = Math.floor(Math.log10(allT.length ? Math.min(...allT) : 1));
+        const xHi = Math.max(
+            Math.ceil(Math.log10(allT.length ? Math.max(...allT) : 1000)),
+            xLo + 1,
+        );
         const xSpan = xHi - xLo;
         const tFloor = 10 ** xLo;
 
         const allY = series
             .flatMap((s) => s.points.map((p) => p.subopt))
             .filter((v) => v > 0);
-        const yLo = Math.floor(Math.log10(Math.min(...allY)));
-        const yHi = Math.max(Math.ceil(Math.log10(Math.max(...allY))), yLo + 1);
+        const yLo = Math.floor(
+            Math.log10(allY.length ? Math.min(...allY) : 1e-16),
+        );
+        const yHi = Math.max(
+            Math.ceil(Math.log10(allY.length ? Math.max(...allY) : 1)),
+            yLo + 1,
+        );
         const ySpan = yHi - yLo;
 
         const xPx = (t: number) =>
@@ -261,7 +271,7 @@
                 class="fill-stone-500 dark:fill-stone-400"
                 transform="rotate(-90)"
                 text-anchor="middle"
-                dominant-baseline="middle">suboptimality f(x) − f*</text
+                dominant-baseline="middle">{yLabel}</text
             >
         </g>
         <text
