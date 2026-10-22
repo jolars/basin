@@ -372,35 +372,6 @@ production solvers.
 
 ## General design
 
-### State API additions for Basin 1.x
-
-Ship these in order, preserving existing public APIs and behavior:
-
-- [x] **Add owned checkpoint and result extraction.** Add a consuming
-  `Stepper::into_checkpoint()` using `ExactCheckpoint`, then an opt-in run
-  method returning the final solver, state, counts, and termination reason.
-  Require neither `Clone` nor serialization.
-- [x] **Introduce shared progress storage.** Start with point and first-order
-  states for external and new solvers. Keep existing solver/state types,
-  constructors, associated types, and serialized representations compatible.
-- [x] **Add opt-in state capabilities.** Use new interfaces for checked record
-  access, raw evaluation counts, and explicit incumbent-selection semantics.
-  Bind new controls to the capabilities they need; preserve existing readers
-  and stopping behavior.
-- [x] **Expose which native stopping tests caused termination.** Added
-  `NativeConvergenceDiagnostics` and `NativeConvergenceTest` for both LM
-  factorizations and full TRF, including their convergence wrappers.
-  `run_with_solver()` results expose all passing native tests at the
-  stopping stage, including LM's trust-radius test and TRF's all-fixed case.
-  Navette can distinguish these without inferring a cause from the final
-  iterate. Existing stopping behavior, termination values, and fieldless
-  enum numeric casts remain unchanged. Numerical safeguards retain their
-  distinct reasons. Fresh runs clear records, exact checkpoints retain them,
-  and the result accessor excludes earlier native diagnostics when
-  continuation stops on a budget or another non-native reason. Tests cover
-  simultaneous tests, rejected trials, robust objectives, continuation, and
-  all dense backends with both scalar types.
-
 ### Iterative-TRF API prototype
 
 - [x] **Prove an operator-only reflective model and robust composition.** The
@@ -591,10 +562,9 @@ The prototype establishes these contracts:
   trait bounds. Compile-time checks cover continuous DE, projected Nelder-Mead,
   `DeInject`, and `RelaxedInner`, including relaxed injection. Ordinary
   unconstrained solvers ignore these declarations and may evaluate fractional
-  coordinates. The
-  box-relaxation adapter is not permission to discard an integer domain. Future
-  constraint transformations must consume only blocks they support and retain
-  any unconsumed domain declaration.
+  coordinates. The box-relaxation adapter is not permission to discard an
+  integer domain. Future constraint transformations must consume only blocks
+  they support and retain any unconsumed domain declaration.
 - Initialization validates finite, ordered bounds and requires
   `ceil(lower) <= floor(upper)` for every integer coordinate. The effective
   integer endpoints must lie in the consecutive exactly representable range:
