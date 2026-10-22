@@ -1,0 +1,79 @@
+<script>
+    import Seo from "#lib/Seo.svelte";
+    import SolverResults from "#lib/benchmarks/SolverResults.svelte";
+    import { formatDuration } from "#lib/data/benchmarks.ts";
+    import { BY_PROBLEM, SOLVER_BENCHMARKS as data } from "#lib/data/solvers.ts";
+
+    const rosenbrock = "rosenbrock";
+</script>
+
+<Seo
+    title="Solver Benchmarks – Basin"
+    description="Compare Basin's optimization algorithms from shared starting points: target attainment, time to target, and complete convergence traces, with interpretation and methodology."
+/>
+
+# Comparing Solvers
+
+Solver choice affects both how quickly the objective improves and which solution
+a run approaches. These comparisons run Basin's optimizers from shared, randomly
+sampled starting points and track the objective gap $f(\mathbf{x}) - f^\star$
+against elapsed time.
+
+Each run has a {formatDuration(data.budgetNs)} time budget and stops early on
+reaching a gap of $10^{-10}$. The summaries report how often each solver reaches
+that target and how long the successful runs take. Expand the starting-point
+figures to inspect every run. For derivative and constraint requirements, read
+the [solver selection guide](../../docs/solvers/).
+
+{#each BY_PROBLEM as group (group.problem)}
+<section aria-labelledby={group.problem}>
+<h2 id={group.problem}>{group.label}</h2>
+
+This case has {group.n} parameters, with starting points sampled uniformly from
+$[-2, 2]^n$. Every solver uses the same coordinates for a given seed, so
+differences within a panel reflect the solver's behavior from that start.
+
+{#if group.problem === rosenbrock}
+
+Rosenbrock's curved valley tests how an algorithm follows changing curvature.
+In this snapshot, BFGS and L-BFGS reach the target in tens of microseconds when
+successful, while several algorithms plateau at a positive objective gap on some
+starts. Fast progress on one start therefore needs to be read alongside target
+attainment across all starts.
+
+{/if}
+
+<SolverResults {group} />
+
+</section>
+{/each}
+
+## Methodology and Reproduction
+
+Measured {data.generatedAt} on {data.env.cpu} ({data.env.os}/{data.env.arch}).
+Every solver uses `Vec<f64>` and the same {formatDuration(data.budgetNs)} budget
+per starting point. Each per-iteration timestamp is the median over 11
+repetitions of the same deterministic run. The objective gap is floored at
+$10^{-10}$ for display, which is also the target used in the summary.
+
+Absolute times are machine-specific. These inexpensive test objectives also
+make solver implementation costs more visible than they would be when each
+evaluation takes substantial time. Use the
+[library comparisons](../competitors/) to compare
+implementations of an algorithm, or the
+[backend comparisons](../backends/) to examine vector
+and matrix representations.
+
+From the repository root, run the harness and collect its output:
+
+```sh
+mkdir -p target
+cargo run -p competitor-bench --release --bin solver_compare > target/solver-traces.json
+pnpm --dir web collect:solvers
+```
+
+The [solver harness](https://github.com/jolars/basin/blob/main/crates/competitor-bench/src/bin/solver_compare.rs)
+defines the starts and configurations. The
+[collection script](https://github.com/jolars/basin/blob/main/web/scripts/collect-solvers.ts)
+saves the traces and machine metadata used by this page. You can also explore
+the algorithms in the [interactive visualizer](../../visualizer/).

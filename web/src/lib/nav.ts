@@ -29,6 +29,14 @@ export const NAV_LINKS: NavLink[] = [
     { label: "Benchmarks", href: "benchmarks/", section: "benchmarks" },
 ];
 
+/** Sidebar links for the benchmark guides. */
+export const BENCHMARK_LINKS: NavLink[] = [
+    { label: "Overview", href: "benchmarks/" },
+    { label: "Comparing solvers", href: "benchmarks/solvers/" },
+    { label: "Comparing libraries", href: "benchmarks/competitors/" },
+    { label: "Choosing a backend", href: "benchmarks/backends/" },
+];
+
 /** Sidebar links for the docs section. */
 export const DOCS_LINKS: NavLink[] = [
     { label: "Overview", href: "docs/", section: "docs" },

@@ -43,7 +43,10 @@ export function GET() {
 
 ## Optional
 
-- [Benchmarks](${SITE_ORIGIN}/benchmarks/): performance against competing libraries, across backends and solvers
+- [Benchmarks](${SITE_ORIGIN}/benchmarks/): how to read the solver, library, and backend comparisons
+- [Comparing solvers](${SITE_ORIGIN}/benchmarks/solvers/): convergence from shared starting points under a time budget
+- [Comparing libraries](${SITE_ORIGIN}/benchmarks/competitors/): solver-by-solver comparisons with setup, interpretation, and methodology
+- [Choosing a backend](${SITE_ORIGIN}/benchmarks/backends/): measured scaling for vector methods, dense matrices, and sparse least squares
 - [Visualizer](${SITE_ORIGIN}/visualizer/): interactive in-browser solver visualization (WASM)
 `;
 
