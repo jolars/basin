@@ -90,10 +90,11 @@ fn rosenbrock_allocations_preserve_the_reference_work() {
     assert_eq!(result.gradient_evals, 36);
     assert!((result.cost - 1.543_632_681_658_564_5e-16).abs() < 1e-25);
     // Include callbacks and trace storage, but reject renewed scratch copies
-    // throughout the least-squares reduction and BFGS update. Final reporting
+    // throughout the least-squares reduction and BFGS update, including the
+    // exhausted QP step. Final reporting
     // owns evidence in SLSQP, the returned report, and the stepper's stop record.
     assert!(
-        requests <= 140 + 3 * report_requests,
+        requests <= 104 + 3 * report_requests,
         "{requests} allocation requests"
     );
 }

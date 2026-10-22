@@ -444,6 +444,11 @@ impl<F: Scalar> Work<F> {
             &mut scratch.ls,
             &mut scratch.ls_rhs,
         );
+        if meq == 0 && iq.rows == 0 {
+            // The previous direction is exhausted before the next QP, so its
+            // allocation can hold the unconstrained least-squares solution.
+            scratch.least_squares.recycle_solution(&mut self.direction);
+        }
         let (mut step, mut multipliers) = Lsei {
             c: eq,
             d,
@@ -1040,11 +1045,12 @@ where
         work.c = c;
         work.a = a;
         work.last_change = Some((cost - old_cost).abs());
-        work.last_step = Some(norm(&work.direction));
+        let step_norm = norm(&work.direction);
+        work.last_step = Some(step_norm);
         work.converged = !work.inconsistent
             && below(work.violation(), self.accuracy)
             && (below((cost - old_cost).abs(), self.accuracy)
-                || below(norm(&work.direction), self.accuracy));
+                || below(step_norm, self.accuracy));
         work.convergence = work.change_convergence(self.accuracy, false);
         if !work.converged
             && (work.factor.update(

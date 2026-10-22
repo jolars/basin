@@ -62,18 +62,46 @@ pub(super) fn dot<F: Scalar>(x: &[F], y: &[F]) -> F {
 pub(super) fn norm<F: Scalar>(x: &[F]) -> F {
     norm_iter(x.iter().copied())
 }
-fn norm_iter<F: Scalar>(mut values: impl Iterator<Item = F>) -> F {
-    // The first hypot(0, x) is exactly |x|, including subnormals and infinities.
-    let first = values.next().unwrap_or_else(F::zero).abs();
-    values.fold(first, |a, b| a.hypot(b))
+#[inline]
+fn norm_iter<F: Scalar>(mut values: impl ExactSizeIterator<Item = F>) -> F {
+    if values.len() <= 2 {
+        let first = values.next().unwrap_or_else(F::zero).abs();
+        values.fold(first, |a, b| a.hypot(b))
+    } else {
+        scaled_norm(values)
+    }
+}
+
+fn scaled_norm<F: Scalar>(values: impl Iterator<Item = F>) -> F {
+    // Scaling avoids overflow and underflow without a libm call per entry.
+    let mut scale = F::zero();
+    let mut sum = F::one();
+    let mut nan = false;
+    for value in values {
+        let magnitude = value.abs();
+        if magnitude.is_infinite() {
+            // Like hypot, infinity dominates NaN regardless of their order.
+            return F::infinity();
+        } else if magnitude.is_nan() {
+            nan = true;
+        } else if magnitude > scale {
+            let ratio = scale / magnitude;
+            sum = F::one() + sum * ratio * ratio;
+            scale = magnitude;
+        } else if magnitude != F::zero() {
+            let ratio = magnitude / scale;
+            sum = sum + ratio * ratio;
+        }
+    }
+    if nan { F::nan() } else { scale * sum.sqrt() }
 }
 pub(super) fn number<F: Scalar>(x: f64) -> F {
     F::from_f64(x).unwrap()
 }
 
-struct Reflection<F> {
+struct Reflection<F, V = Vec<F>> {
     start: usize,
-    v: Vec<F>,
+    v: V,
     beta: F,
     factor: F,
 }
@@ -91,8 +119,12 @@ impl<F: Scalar> Reflection<F> {
         v.extend((start..a.rows).map(|i| a.get(i, j)));
         Self::from_tail(v, start)
     }
-    fn from_tail(mut v: Vec<F>, start: usize) -> Self {
-        let scale = v.iter().fold(F::zero(), |a, &b| a.max(b.abs()));
+}
+
+impl<F: Scalar, V: AsRef<[F]> + AsMut<[F]>> Reflection<F, V> {
+    fn from_tail(mut v: V, start: usize) -> Self {
+        let values = v.as_mut();
+        let scale = values.iter().fold(F::zero(), |a, &b| a.max(b.abs()));
         if scale == F::zero() {
             return Self {
                 start,
@@ -101,11 +133,11 @@ impl<F: Scalar> Reflection<F> {
                 factor: F::zero(),
             };
         }
-        if v.len() == 1 && scale.is_finite() {
+        if values.len() == 1 && scale.is_finite() {
             // A scalar reflection only changes sign. These are exactly the
             // scaled coefficients, without normalization or division.
-            let beta = -v[0];
-            v[0] = if v[0] > F::zero() {
+            let beta = -values[0];
+            values[0] = if values[0] > F::zero() {
                 number(2.0)
             } else {
                 number(-2.0)
@@ -117,13 +149,17 @@ impl<F: Scalar> Reflection<F> {
                 factor: number(-0.5),
             };
         }
-        for value in &mut v {
+        for value in values.iter_mut() {
             *value = *value / scale;
         }
-        let length = norm(&v);
-        let beta = if v[0] > F::zero() { -length } else { length };
-        v[0] = v[0] - beta;
-        let factor = F::one() / (beta * v[0]);
+        let length = norm(values);
+        let beta = if values[0] > F::zero() {
+            -length
+        } else {
+            length
+        };
+        values[0] = values[0] - beta;
+        let factor = F::one() / (beta * values[0]);
         Self {
             start,
             v,
@@ -135,8 +171,8 @@ impl<F: Scalar> Reflection<F> {
         if self.factor == F::zero() {
             return;
         }
-        let alpha = dot(&self.v, &x[self.start..]) * self.factor;
-        for (value, &v) in x[self.start..].iter_mut().zip(&self.v) {
+        let alpha = dot(self.v.as_ref(), &x[self.start..]) * self.factor;
+        for (value, &v) in x[self.start..].iter_mut().zip(self.v.as_ref()) {
             *value = *value + alpha * v;
         }
     }
@@ -146,12 +182,13 @@ impl<F: Scalar> Reflection<F> {
         }
         let alpha = self
             .v
+            .as_ref()
             .iter()
             .enumerate()
             .map(|(i, &v)| v * a.get(self.start + i, j))
             .sum::<F>()
             * self.factor;
-        for (i, &v) in self.v.iter().enumerate() {
+        for (i, &v) in self.v.as_ref().iter().enumerate() {
             let row = self.start + i;
             a.set(row, j, a.get(row, j) + alpha * v);
         }
@@ -324,6 +361,14 @@ pub(super) struct Workspace<F> {
     bounds: Vec<F>,
     permutation: Vec<usize>,
     reflection: Vec<F>,
+    column_norms: Vec<ColumnNorm<F>>,
+    solution: Vec<F>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ColumnNorm<F> {
+    value: F,
+    reference: F,
 }
 
 impl<F> Default for Workspace<F> {
@@ -333,11 +378,17 @@ impl<F> Default for Workspace<F> {
             bounds: Vec::new(),
             permutation: Vec::new(),
             reflection: Vec::new(),
+            column_norms: Vec::new(),
+            solution: Vec::new(),
         }
     }
 }
 
 impl<F: Scalar> Workspace<F> {
+    pub fn recycle_solution(&mut self, solution: &mut Vec<F>) {
+        std::mem::swap(&mut self.solution, solution);
+    }
+
     fn set_rhs(&mut self, f: &[F], h: &[F]) {
         self.rhs.clear();
         self.rhs.extend_from_slice(f);
@@ -346,13 +397,23 @@ impl<F: Scalar> Workspace<F> {
     }
 }
 
+#[inline]
 fn qr<F: Scalar>(
     e: &mut Matrix<F>,
     f: &mut [F],
     pivot: bool,
     permutation: &mut Vec<usize>,
     buffer: &mut Vec<F>,
+    column_norms: &mut Vec<ColumnNorm<F>>,
 ) {
+    if e.cols == 2 && e.rows == 2 {
+        qr_two(e, f, pivot, permutation);
+        return;
+    }
+    if pivot && e.cols > 2 {
+        qr_pivoted(e, f, permutation, buffer, column_norms);
+        return;
+    }
     let n = e.cols;
     permutation.clear();
     permutation.extend(0..n);
@@ -388,6 +449,106 @@ fn qr<F: Scalar>(
     }
 }
 
+#[inline]
+fn qr_two<F: Scalar>(
+    e: &mut Matrix<F>,
+    f: &mut [F],
+    pivot: bool,
+    permutation: &mut Vec<usize>,
+) {
+    permutation.clear();
+    permutation.extend(0..2);
+    if pivot && e.column_norm(1, 0, 2) > e.column_norm(0, 0, 2).max(F::zero()) {
+        permutation.swap(0, 1);
+        for i in 0..2 {
+            let value = e.get(i, 0);
+            e.set(i, 0, e.get(i, 1));
+            e.set(i, 1, value);
+        }
+    }
+    // Fixed-size reflections keep the same arithmetic while avoiding vector
+    // bookkeeping in the small QPs common to two-parameter problems.
+    let first = Reflection::from_tail([e.get(0, 0), e.get(1, 0)], 0);
+    first.apply_column(e, 1);
+    first.apply(f);
+    e.set(0, 0, first.beta);
+    e.set(1, 0, F::zero());
+    let last = Reflection::from_tail([e.get(1, 1)], 1);
+    last.apply(f);
+    e.set(1, 1, last.beta);
+}
+
+fn qr_pivoted<F: Scalar>(
+    e: &mut Matrix<F>,
+    f: &mut [F],
+    permutation: &mut Vec<usize>,
+    buffer: &mut Vec<F>,
+    column_norms: &mut Vec<ColumnNorm<F>>,
+) {
+    let n = e.cols;
+    permutation.clear();
+    permutation.extend(0..n);
+    column_norms.clear();
+    column_norms.extend((0..n).map(|j| {
+        let value = e.column_norm(j, 0, e.rows);
+        ColumnNorm {
+            value,
+            reference: value,
+        }
+    }));
+    for k in 0..n {
+        let mut selected = k;
+        let mut largest = F::zero();
+        for j in k..n {
+            if column_norms[j].value > largest {
+                largest = column_norms[j].value;
+                selected = j;
+            }
+        }
+        permutation.swap(k, selected);
+        column_norms.swap(k, selected);
+        if selected != k {
+            for i in 0..e.rows {
+                let value = e.get(i, k);
+                e.set(i, k, e.get(i, selected));
+                e.set(i, selected, value);
+            }
+        }
+        let reflection =
+            Reflection::from_column(e, k, k, std::mem::take(buffer));
+        for j in k + 1..n {
+            reflection.apply_column(e, j);
+            if column_norms[j].value != F::zero() {
+                let current = column_norms[j].value;
+                let ratio = e.get(k, j).abs() / current;
+                let remaining =
+                    ((F::one() - ratio) * (F::one() + ratio)).max(F::zero());
+                let relative = current / column_norms[j].reference;
+                let reliability = remaining * relative * relative;
+                // As in LAPACK's QR downdates, recompute after cancellation
+                // rather than letting a stale norm hide a dependent column.
+                if !reliability.is_finite()
+                    || reliability <= F::epsilon().sqrt()
+                {
+                    let value = e.column_norm(j, k + 1, e.rows);
+                    column_norms[j] = ColumnNorm {
+                        value,
+                        reference: value,
+                    };
+                } else {
+                    column_norms[j].value = current * remaining.sqrt();
+                }
+            }
+        }
+        reflection.apply(f);
+        e.set(k, k, reflection.beta);
+        for i in k + 1..e.rows {
+            e.set(i, k, F::zero());
+        }
+        *buffer = reflection.v;
+    }
+}
+
 fn lsi<F: Scalar>(
     e: &mut Matrix<F>,
     g: &mut Matrix<F>,
@@ -400,9 +561,11 @@ fn lsi<F: Scalar>(
         bounds,
         permutation,
         reflection,
+        column_norms,
+        solution,
     } = workspace;
     let (f, h) = (rhs, bounds);
-    qr(e, f, g.rows == 0, permutation, reflection);
+    qr(e, f, g.rows == 0, permutation, reflection, column_norms);
     let rank_threshold = if g.rows == 0 {
         F::epsilon().sqrt()
     } else {
@@ -420,7 +583,18 @@ fn lsi<F: Scalar>(
         }
         h[i] = h[i] - dot(g.row(i), &f[..n]);
     }
-    let (mut x, multipliers) = ldp(g, h, limit)?;
+    let (mut x, multipliers) = if g.rows == 0 {
+        let mut x = std::mem::take(solution);
+        if x.capacity() < n {
+            x = vec![F::zero(); n];
+        } else {
+            x.clear();
+            x.resize(n, F::zero());
+        }
+        (x, Vec::new())
+    } else {
+        ldp(g, h, limit)?
+    };
     for i in (0..n).rev() {
         let previous = (i + 1..n).map(|j| e.get(i, j) * x[j]).sum::<F>();
         x[i] = (x[i] + f[i] - previous) / e.get(i, i);
@@ -611,6 +785,39 @@ mod tests {
     }
 
     #[test]
+    fn scaled_norms_preserve_small_components_and_extreme_scales() {
+        fn check<F: Scalar>(scales: &[F]) {
+            for &scale in scales {
+                let expected = number::<F>(13.0) * scale;
+                for values in [
+                    [number::<F>(3.0), number(4.0), number(12.0)],
+                    [number::<F>(12.0), number(-3.0), number(-4.0)],
+                ] {
+                    let values = values.map(|v| v * scale);
+                    let result = norm(&values);
+                    assert!(
+                        (result / expected - F::one()).abs()
+                            <= number::<F>(4.0) * F::epsilon()
+                    );
+                }
+            }
+            assert_eq!(norm(&[F::zero(); 3]), F::zero());
+            assert_eq!(norm(&[F::max_value(); 3]), F::infinity());
+            assert!(norm(&[F::zero(), F::nan(), F::one()]).is_nan());
+            for values in [
+                [F::nan(), F::one(), F::infinity()],
+                [F::infinity(), F::nan(), F::one()],
+            ] {
+                assert_eq!(norm(&values), F::infinity());
+            }
+        }
+        check(&[1.0_f64, 1e200, 1e-200, f64::from_bits(1)]);
+        check(&[1.0_f32, 1e30, 1e-30, f32::from_bits(1)]);
+        let tiny = f64::MIN_POSITIVE.sqrt();
+        assert!(norm(&[tiny, tiny, tiny]) > tiny);
+    }
+
+    #[test]
     fn scalar_reflections_preserve_extreme_scales() {
         for value in [1.0, 1e-200, 1e200, f64::from_bits(1), f64::MAX] {
             for value in [value, -value] {
@@ -650,7 +857,7 @@ mod tests {
                 }
             }
             let f: Vec<_> = (0..n).map(|i| dot(e.row(i), &expected)).collect();
-            let (x, multipliers) = Lsei {
+            let (mut x, multipliers) = Lsei {
                 c: &mut Matrix::zeros(0, n),
                 d: &[],
                 e: &mut e,
@@ -664,6 +871,7 @@ mod tests {
             for (x, expected) in x.iter().zip(expected) {
                 assert!((x - expected).abs() < 1e-12);
             }
+            workspace.recycle_solution(&mut x);
             let result = Lsei {
                 c: &mut Matrix::zeros(0, n),
                 d: &[],
@@ -675,6 +883,103 @@ mod tests {
             .solve(None, &mut workspace);
             assert_eq!(result.unwrap_err(), SlsqpFailure::SingularSubproblem);
         }
+    }
+
+    #[test]
+    fn pivot_norm_downdates_refresh_nearly_dependent_columns() {
+        fn check<F: Scalar>() {
+            let threshold = F::epsilon().sqrt();
+            let expected = [F::one(), number(-2.0), number(3.0), number(-4.0)];
+            let mut workspace = Workspace::default();
+            for scale in [number::<F>(4.0), number(0.25), number(4.0)] {
+                let mut e = Matrix::zeros(4, 4);
+                e.set(0, 0, number(2.0));
+                e.set(0, 1, F::one());
+                e.set(1, 1, scale * threshold);
+                e.set(2, 2, number(0.5));
+                e.set(3, 3, number(0.25));
+                let f: Vec<_> =
+                    (0..4).map(|i| dot(e.row(i), &expected)).collect();
+                let result = Lsei {
+                    c: &mut Matrix::zeros(0, 4),
+                    d: &[],
+                    e: &mut e,
+                    f: &f,
+                    g: &mut Matrix::zeros(0, 4),
+                    h: &[],
+                }
+                .solve(None, &mut workspace);
+                if scale < F::one() {
+                    assert_eq!(
+                        result.unwrap_err(),
+                        SlsqpFailure::SingularSubproblem
+                    );
+                } else {
+                    let (mut x, _) = result.unwrap();
+                    for (&x, &expected) in x.iter().zip(&expected) {
+                        let tolerance = number::<F>(32.0) * F::epsilon()
+                            / (scale * threshold);
+                        assert!((x - expected).abs() <= tolerance);
+                    }
+                    let actual = [
+                        number::<F>(2.0) * x[0] + x[1],
+                        scale * threshold * x[1],
+                        number::<F>(0.5) * x[2],
+                        number::<F>(0.25) * x[3],
+                    ];
+                    for (&actual, &expected) in actual.iter().zip(&f) {
+                        assert!(
+                            (actual - expected).abs()
+                                <= number::<F>(32.0) * F::epsilon()
+                        );
+                    }
+                    workspace.recycle_solution(&mut x);
+                }
+            }
+        }
+        check::<f64>();
+        check::<f32>();
+    }
+
+    #[test]
+    fn cached_pivots_solve_dense_orthogonal_systems() {
+        fn check<F: Scalar>() {
+            for (rows, n) in [(4, 4), (8, 4), (8, 8)] {
+                let mut e = Matrix::zeros(rows, n);
+                let expected: Vec<_> =
+                    (0..n).map(|j| number::<F>(j as f64 - 2.0)).collect();
+                for i in 0..rows {
+                    for j in 0..n {
+                        let sign = if (i & j).count_ones() % 2 == 0 {
+                            F::one()
+                        } else {
+                            -F::one()
+                        };
+                        e.set(i, j, sign * number::<F>((j + 1) as f64));
+                    }
+                }
+                let f: Vec<_> =
+                    (0..rows).map(|i| dot(e.row(i), &expected)).collect();
+                let (x, _) = lsei(
+                    Matrix::zeros(0, n),
+                    &[],
+                    e,
+                    &f,
+                    Matrix::zeros(0, n),
+                    &[],
+                    None,
+                )
+                .unwrap();
+                for (&x, &expected) in x.iter().zip(&expected) {
+                    assert!(
+                        (x - expected).abs()
+                            <= number::<F>(128.0) * F::epsilon()
+                    );
+                }
+            }
+        }
+        check::<f64>();
+        check::<f32>();
     }
 
     #[test]
@@ -704,25 +1009,69 @@ mod tests {
             (f64::NAN, 1.0),
             (f64::INFINITY, 1.0),
         ] {
-            let e = Matrix {
-                rows: 1,
-                cols: 1,
-                data: vec![diagonal],
-            };
-            assert_eq!(
-                lsei(
-                    Matrix::zeros(0, 1),
-                    &[],
-                    e,
-                    &[rhs],
-                    Matrix::zeros(0, 1),
-                    &[],
-                    None,
-                )
-                .unwrap_err(),
-                SlsqpFailure::SingularSubproblem,
-            );
+            for n in [1, 2] {
+                let mut e = Matrix::zeros(n, n);
+                for i in 0..n {
+                    e.set(i, i, 1.0);
+                }
+                e.set(0, 0, diagonal);
+                assert_eq!(
+                    lsei(
+                        Matrix::zeros(0, n),
+                        &[],
+                        e,
+                        &vec![rhs; n],
+                        Matrix::zeros(0, n),
+                        &[],
+                        None,
+                    )
+                    .unwrap_err(),
+                    SlsqpFailure::SingularSubproblem,
+                );
+            }
         }
+    }
+
+    #[test]
+    fn two_column_qr_solves_dense_and_pivoted_systems() {
+        fn check<F: Scalar>() {
+            let expected = [F::one(), number::<F>(-2.0)];
+            for entries in [
+                [1.0, 0.0, 0.0, 1.0],
+                [2.0, 3.0, 1.0, 4.0],
+                [0.0, 2.0, 1.0, 3.0],
+            ] {
+                for constrained in [false, true] {
+                    let e = Matrix {
+                        rows: 2,
+                        cols: 2,
+                        data: entries.into_iter().map(number::<F>).collect(),
+                    };
+                    let f: Vec<_> =
+                        (0..2).map(|i| dot(e.row(i), &expected)).collect();
+                    let mut g = Matrix::zeros(usize::from(constrained), 2);
+                    if constrained {
+                        g.set(0, 0, F::one());
+                    }
+                    let h = if constrained {
+                        vec![number::<F>(-10.0)]
+                    } else {
+                        vec![]
+                    };
+                    let (x, _) =
+                        lsei(Matrix::zeros(0, 2), &[], e, &f, g, &h, None)
+                            .unwrap();
+                    for (&x, &expected) in x.iter().zip(&expected) {
+                        assert!(
+                            (x - expected).abs()
+                                <= number::<F>(64.0) * F::epsilon()
+                        );
+                    }
+                }
+            }
+        }
+        check::<f64>();
+        check::<f32>();
     }
 
     #[test]
