@@ -26,6 +26,10 @@ updates:
     directory: "/web/"
     schedule:
       interval: "weekly"
+    ignore:
+      # mdsvex uses remark-parse 8, which requires remark-math 3.
+      - dependency-name: "remark-math"
+        update-types: ["version-update:semver-major"]
     groups:
       npm:
         patterns:
