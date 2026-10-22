@@ -15,6 +15,18 @@
     content: '';
 }
 
+/* Distinguish inline code without adding weight to the surrounding prose. */
+.prose :where(:not(pre) > code):not(:where(.not-prose, .not-prose *)) {
+    border-radius: 0.25rem;
+    background-color: var(--color-stone-100);
+    padding: 0.1875rem 0.375rem;
+    font-weight: inherit;
+}
+
+.dark .prose :where(:not(pre) > code):not(:where(.not-prose, .not-prose *)) {
+    background-color: var(--color-stone-800);
+}
+
 /* Shiki (build-time fence highlighting in vite.config.ts) emits dual-theme
  * CSS variables with `defaultColor: false`: `--shiki-light`/`--shiki-dark` per
  * token. Map them to the active theme here; the `.dark span` rule needs `span`
