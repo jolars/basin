@@ -220,6 +220,156 @@ probe found no integration requirement that needs a breaking Basin change before
   optional integrations before expanding the core or adding heavy solver
   dependencies, preserving the default pure-Rust WASM build.
 
+## Competitor benchmarks
+
+Investigation dated 2026-10-22. Scope: Rust solver packages, with C libraries
+considered when they already have Rust bindings. Keep every comparison in a Rust
+harness. A C interface to a Fortran or C++ implementation does not by itself put
+that implementation in scope.
+
+The site's competitor page currently covers gradient descent, Nelder-Mead,
+L-BFGS, NEWUOA, and unconstrained SLSQP. Four cases use Rosenbrock at `n = 2`;
+NEWUOA uses Styblinski-Tang at `n = 5`. LM and COBYLA comparisons, all 27 NIST
+regression datasets with two starts, and constrained SLSQP workloads already
+exist in `crates/competitor-bench`, but are not exposed on the competitor page.
+Prioritize those assets and uncovered algorithm families before adding more
+libraries to the same cases. New packages below are research candidates; build
+compatibility and numerical behavior still need verification.
+
+### Measurement and publication prerequisites
+
+- [ ] **Extend competitor results beyond objective-versus-time traces.** Record
+  package and native-library versions or commits, algorithm variants,
+  dimensions, starts, settings, thread counts, and timing boundaries. Give
+  each configuration a stable case ID; the current solver/problem key cannot
+  distinguish dimensions or starts. Include initialization consistently and
+  report repeated solve timings separately from instrumented traces. Record
+  actual objective, derivative, residual, and constraint calls, termination,
+  independent solution checks, and budget overruns. Basin's iteration limits
+  and NLopt's evaluation limits do not establish equal work. For constrained
+  curves, track the best feasible objective and violation separately; an
+  infeasible trial with a low cost must not look like a successful solve.
+- [ ] **Broaden workloads and summarize reliability.** Keep a few readable
+  convergence examples, then add time and evaluations to common accuracy and
+  feasibility targets, success rates, and performance profiles across cases.
+  Retain failures. Reuse NIST's certified values and both starts for
+  fitting; add active-bound, rank-deficient, ill-conditioned, nonsmooth, and
+  multimodal cases from existing fixtures. Sweep dimensions appropriate to
+  each method and use multiple starts. For stochastic solvers, use a
+  recorded seed set and uncertainty intervals; equal seed integers across
+  different RNGs do not imply identical random draws. Start with serial runs
+  and record backend versions, BLAS providers, and any unavoidable adapter
+  work.
+
+### First additions
+
+- [ ] **Publish the existing LM and COBYLA comparisons.** Reuse `compare`,
+  `lm_defaults`, `verify_lm_defaults`, and `gd_nm`, with the existing Rust
+  `levenberg-marquardt` and `cobyla` dependencies. Start with a curated
+  fitting case and a constrained derivative-free case, backed by aggregate
+  results. Keep LM's damping, scaling, factorization, stopping rules, and
+  nalgebra version explicit. Sharing a backend does not make different
+  numerical trajectories a measurement of framework overhead alone.
+- [ ] **Expand comparisons using existing argmin and NLopt dependencies.**
+  [Argmin](https://docs.rs/argmin/0.11.0/argmin/solver/index.html) supplies
+  BFGS, nonlinear CG with PR+, trust-region Steihaug and dogleg, particle
+  swarm, Gauss-Newton, and scalar methods. Match Basin's CG update
+  explicitly: its default is Hager-Zhang, while argmin 0.11 has no built-in
+  Hager-Zhang update. Reuse the argmin PSO reference fixture, checking
+  initialization, topology, and boundary handling before claiming a matched
+  comparison. The existing [`nlopt` Rust
+  bindings](https://docs.rs/nlopt/0.8.1/nlopt/) provide access to C
+  implementations of BOBYQA, COBYLA, SLSQP, DIRECT, and augmented Lagrangian
+  methods. Add bounded BOBYQA and genuinely constrained SLSQP first, reusing
+  HS71 and an analytic constrained quadratic. Check feasibility,
+  stationarity, and complementarity where available. Distinguish DIRECT
+  variants and match augmented-Lagrangian inner solvers and all nested
+  evaluation work. Retain the `slsqp` crate as another Rust reference, but
+  record its shared NLopt lineage.
+- [ ] **Benchmark actual L-BFGS-B with active bounds.** The [`lbfgsb`
+  crate](https://github.com/ybyygu/rust-lbfgsb) wraps Stephen Becker's C
+  translation of L-BFGS-B and is the preferred C-backed candidate. Its build
+  uses a C compiler and bindgen/libclang. Also assess the native
+  [`lbfgsb-rs-pure` crate](https://docs.rs/crate/lbfgsb-rs-pure/0.1.2),
+  which advertises a v3.0 port; verify its numerical behavior before using
+  it as a reference. Reuse existing parity inputs and certified solutions,
+  including optima on box faces, fixed coordinates, and larger dimensions.
+  Match memory size, line-search settings, and projected-gradient checks.
+  The existing unconstrained L-BFGS chart and NLopt's L-BFGS are not
+  coverage of Basin's L-BFGS-B algorithm.
+- [ ] **Add active CMA-ES against the Rust `cmaes` crate.** [`cmaes`
+  0.2.2](https://docs.rs/cmaes/0.2.2/cmaes/) supplies active covariance
+  adaptation and automatic restart strategies. Explicitly select negative
+  recombination weights to match Basin's active update. Match population
+  size, initial mean, sigma, and stopping policy, recording the differing
+  nalgebra versions. Test ill-conditioned and nonseparable problems as well
+  as multimodal problems over multiple seeds. Compare standalone CMA-ES
+  first; report IPOP/BIPOP restarts and local injections separately. Do not
+  infer bounded-CMA equivalence from unconstrained CMA-ES results.
+- [ ] **Add bounded least squares against `rmpfit`.** [`rmpfit`
+  2.0.0](https://docs.rs/rmpfit/2.0.0/rmpfit/) is a pure-Rust CMPFIT port
+  with analytic or numerical derivatives, parameter bounds, and fixed
+  parameters. Compare with Basin's LM and bounded LM using existing NIST
+  fixtures plus fitting cases with active bounds and fixed coordinates.
+  Normalize half-RSS versus RSS, derivative settings, scaling, and stopping
+  tests. Compare TRF on the same problems for solver effectiveness, while
+  keeping the algorithm distinction explicit: CMPFIT is bounded LM, not TRF.
+
+### Additional Rust packages
+
+- [ ] **Compare constrained optimization with `optimization_engine`.**
+  [`optimization_engine`
+  0.12.0](https://docs.rs/optimization_engine/0.12.0/optimization_engine/)
+  implements PANOC and augmented Lagrangian methods in Rust. Compare its
+  rectangle-constrained solves with Basin's projected gradient and L-BFGS-B,
+  and its outer constrained solves with Basin's augmented Lagrangian method.
+  Match problem definitions, feasibility targets, and all inner work, while
+  labeling different inner algorithms. This would cover practical
+  constrained performance beyond the current unconstrained SLSQP example.
+- [ ] **Evaluate Rust differential-evolution competitors.**
+  [`math-differential-evolution`
+  0.3.3](https://docs.rs/math-differential-evolution/0.3.3/math_audio_differential_evolution/)
+  exposes classical strategies, binomial and exponential crossover, seeded
+  runs, deferred updates, and SHADE/L-SHADE variants. Start with matched
+  `rand/1/bin`, fixed mutation and crossover settings, population sizes, and
+  no local polishing. Check initialization and bound repair in source. Its
+  released manifest enables ndarray BLAS and Rayon, so establish the link
+  provider and serial thread settings during preflight. Treat adaptive DE
+  and population reduction as separate effectiveness comparisons. The older
+  [`differential-evolution`
+  crate](https://docs.rs/differential-evolution/0.2.2/differential_evolution/)
+  is another self-adaptive candidate if its seed and precision controls fit
+  reproducible comparisons.
+- [ ] **Evaluate the Rust `dogleg` least-squares solver.** [`dogleg`
+  0.1.1](https://docs.rs/dogleg/0.1.1/dogleg/) implements Powell's
+  least-squares dogleg method with nalgebra and faer backends and an adapter
+  for `levenberg-marquardt` problems. Reuse NIST fixtures and analytic
+  Jacobians. Compare with Basin LM for solver effectiveness; a matched
+  dogleg comparison needs a Gauss-Newton model rather than blindly using an
+  exact objective Hessian with Basin's general trust-region solver. Keep
+  this distinct from rectangular dogbox and reflective least squares.
+- [ ] **Assess the native Rust `liblbfgs` port as a specialist baseline.**
+  [`liblbfgs` 0.1.0](https://docs.rs/crate/liblbfgs/0.1.0) is a Rust
+  implementation derived from the C library, despite its name. It offers
+  L-BFGS and OWL-QN. Add an unconstrained L-BFGS comparison only if it
+  contributes beyond argmin and NLopt, matching memory, line search, and
+  fused objective/gradient callbacks. An OWL-QN comparison would require an
+  explicit L1-regularized workload and is a different algorithm.
+
+### Algorithm gaps to revisit after comparisons
+
+Most immediate gaps are in benchmark coverage. Within this shortlist, no
+matching reference has been verified for Basin's full TRF, LINCOA, or MADS;
+comparisons with other algorithms should be labeled as solver effectiveness.
+Keep existing correctness fixtures separate from the in-scope benchmark
+contestants. The existing solver backlog already tracks sparse iterative TRF,
+Jacobian coloring, COBYQA, general sparse constrained optimization, and dogbox.
+Potential additions motivated by Rust competitors are CMA-ES restart policies,
+adaptive DE, PANOC, least-squares-specific dogleg, and OWL-QN. Promote these
+only when workloads show useful coverage beyond existing methods. These are
+investigation leads, not measured performance findings or commitments to new
+production solvers.
+
 ## General design
 
 ### State API additions for Basin 1.x
