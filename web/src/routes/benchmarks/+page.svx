@@ -16,25 +16,25 @@ through the results, and describe the limits of each measurement.
 
 ## Comparing Solvers
 
-**Which algorithm makes useful progress on my kind of problem?** The
-[solver comparisons](./solvers/) run Basin's optimizers from shared starting
-points and plot the objective gap against elapsed time. They show both the speed
-of convergence and the effect of the starting point.
+**Which algorithm makes useful progress on my kind of problem?** The [solver
+comparisons](./solvers/) run Basin's optimizers from shared starting points and
+plot the objective gap against elapsed time. They show both the speed of
+convergence and the effect of the starting point.
 
 Start here when choosing between algorithms. Read the results alongside the
-[solver selection guide](../docs/solvers/), which covers derivative requirements,
-constraints, and problem structure.
+[solver selection guide](../docs/solvers/), which covers derivative
+requirements, constraints, and problem structure.
 
 ## Comparing Libraries
 
-**How does Basin compare with other implementations?** The
-[library comparisons](./competitors/) examine individual solvers, including
-L-BFGS, Nelder–Mead, Levenberg–Marquardt, and COBYLA. Each section explains what
-the harness matches and where the implementations differ.
+**How does Basin compare with other implementations?** The [library
+comparisons](./competitors/) examine individual solvers, including L-BFGS,
+Nelder–Mead, Levenberg–Marquardt, and COBYLA. Each section explains what the
+harness matches and where the implementations differ.
 
 These curves measure the complete optimization path recorded by each harness.
-Differences in line searches, stopping rules, and numerical safeguards can affect
-both the work performed and the result.
+Differences in line searches, stopping rules, and numerical safeguards can
+affect both the work performed and the result.
 
 ## Choosing a Backend
 
@@ -45,29 +45,3 @@ matrix methods, and sparse least squares.
 
 Use these results to compare backends within a case. The cases use different
 problems and stopping rules, so their solve times do not rank the algorithms.
-
-## Reading the Results
-
-| Comparison | What varies | What the figures show |
-| ---------- | ----------- | --------------------- |
-| Solvers | Basin's optimization algorithm | Objective gap against time, with a shared time budget |
-| Libraries | The solver implementation | Objective gap against time, with case-specific stopping rules |
-| Backends | The vector and matrix representation | Mean solve time against problem size |
-
-In convergence figures, the **objective gap**, also called suboptimality, is
-$f(\mathbf{x}) - f^\star$, where $f^\star$ is the known optimum. A smaller gap
-means a better objective value. For constrained problems, check feasibility as
-well: a low objective at an infeasible point does not solve the problem.
-
-The figures use logarithmic axes where indicated. Equal distances then represent
-equal ratios, and tiny positive display floors keep zero objective gaps visible.
-Reaching a display floor does not establish that a solver's convergence test
-passed. An endpoint can also reflect a budget limit or another stopping rule.
-
-Each guide records its measurement date, machine, and timing procedure and
-includes reproduction commands. Absolute times depend on the machine, and these
-selected problems provide evidence for the measured cases. Benchmark your own
-objective before making a performance-sensitive choice.
-
-To explore how the algorithms move through a landscape, try the
-[interactive visualizer](../visualizer/).
