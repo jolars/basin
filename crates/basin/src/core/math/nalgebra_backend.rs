@@ -771,20 +771,20 @@ impl<F: Scalar + nalgebra::RealField> super::FactorizePivotedQr<DVector<F>, F>
         qr.q_tr_mul(&mut rhs);
         let mut permutation = DVector::from_iterator(n, 0..n);
         qr.p().permute_rows(&mut permutation);
-        let upper = qr.r();
+        let upper = qr.unpack_r();
         let mut r = vec![F::zero(); n * n];
         for i in 0..m.min(n) {
             for j in i..n {
                 r[i * n + j] = upper[(i, j)] * norms[permutation[j]];
             }
         }
-        let mut qtb = rhs.as_slice().to_vec();
+        let mut qtb: Vec<F> = rhs.data.into();
         qtb.resize(n, F::zero());
         super::QrFactorization::from_parts(
             m,
             r,
             qtb,
-            permutation.as_slice().to_vec(),
+            permutation.data.into(),
             norms,
         )
     }

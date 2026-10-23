@@ -611,7 +611,8 @@ impl<F: Scalar + faer_traits::ComplexField> super::FactorizePivotedQr<Col<F>, F>
         // A zero Jacobian has Q = I. Faer's reflector coefficients are
         // undefined for this case, so retain the exact identity transform.
         if norms.iter().all(|&x| x == F::zero()) {
-            let mut rhs: Vec<_> = b.iter().copied().collect();
+            let mut rhs = Vec::with_capacity(n);
+            rhs.extend(b.iter().take(n).copied());
             rhs.resize(n, F::zero());
             return super::QrFactorization::from_parts(
                 m,
@@ -640,7 +641,8 @@ impl<F: Scalar + faer_traits::ComplexField> super::FactorizePivotedQr<Col<F>, F>
                 r[i * n + j] = qr.R()[(i, j)] * norms[qr.P().arrays().0[j]];
             }
         }
-        let mut qtb: Vec<_> = rhs.iter().copied().collect();
+        let mut qtb = Vec::with_capacity(n);
+        qtb.extend(rhs.iter().take(n).copied());
         qtb.resize(n, F::zero());
         super::QrFactorization::from_parts(
             m,

@@ -1,25 +1,10 @@
-//! Backend-vs-backend microbenchmark for the Levenberg-Marquardt hot
-//! path (issue #9): on small dense problems, basin's faer backend was
-//! reported ~10× slower per solve than the `levenberg-marquardt` crate
-//! (nalgebra 0.32). This isolates whether that's a *backend* cost by
-//! pitting basin's own faer path against its own nalgebra path on the
-//! identical work: same f64 arithmetic, same iteration counts, only the
-//! linear-algebra library differs.
+//! Backend microbenchmarks for the Levenberg-Marquardt hot path.
 //!
-//! Two layers:
-//!
-//! 1. **Primitive ops**: the three operations LM runs every iteration:
-//!    `gram()` (forms `JᵀJ`), `mat_transpose_vec()` (`Jᵀr`), and
-//!    `solve_spd()` (Cholesky on the damped normal equations), at the
-//!    Jacobian shapes from eunoia's ellipse corpus (`m × n` with
-//!    `(m, n) ∈ {(4,10), (16,20), (64,30)}`; the solve is on the `n × n`
-//!    system). This is where the issue suspects faer's fixed per-call
-//!    overhead (alloc/dyn-stack/SIMD dispatch) dominates.
-//! 2. **End-to-end solve**: a full `LevenbergMarquardt::run()` to
-//!    convergence on the problems that exist for both backends
-//!    (`ExponentialFit`, `PowellSingular`). Iteration counts are
-//!    identical across backends, so the ratio is pure per-solve backend
-//!    cost.
+//! Matrix kernels use identical deterministic inputs across backends. QR
+//! measurements separate preparation from undamped and regularized solves,
+//! covering the tiny exponential-fit shape, a tall Jacobian, and a larger
+//! parameter count. End-to-end solves also capture solver and callback work;
+//! use the competitor harness's verification binaries to compare trajectories.
 //!
 //! Run with
 //! `cargo bench --features nalgebra,faer,problems --bench lm_backends`.
@@ -28,8 +13,8 @@ use std::hint::black_box;
 
 use basin::problems::{ExponentialFit, PowellSingular};
 use basin::{
-    Executor, GramMatrix, LevenbergMarquardt, LinearSolveSpd, MatTransposeVec,
-    PointState,
+    DenseMatrix, Executor, FactorizePivotedQr, GramMatrix, LevenbergMarquardt,
+    LinearSolveSpd, MatTransposeVec, PointState, RegularizedQrSolve,
 };
 use criterion::{
     BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main,
@@ -80,6 +65,86 @@ fn spd_data(n: usize) -> Vec<f64> {
 /// residuals, `n = 5·n_sets` parameters, so the normal equations are
 /// `n × n ≤ 30 × 30`.
 const SHAPES: [(usize, usize); 3] = [(4, 10), (16, 20), (64, 30)];
+
+fn bench_qr(c: &mut Criterion) {
+    for preparation in [true, false] {
+        let mut group = c.benchmark_group(if preparation {
+            "lm_qr_prepare"
+        } else {
+            "lm_qr_solve"
+        });
+        for (m, n) in [(10, 2), (1000, 2), (64, 30)] {
+            let data = jac_data(m, n);
+            let rhs = vec_data(m, 1 << 20);
+            macro_rules! backend {
+                ($name:literal, $vector_type:ty, $matrix:expr, $vector:expr) => {{
+                    let matrix = $matrix;
+                    let rhs = $vector;
+                    if preparation {
+                        group.bench_function(
+                            BenchmarkId::new($name, format!("{m}x{n}")),
+                            |b| {
+                                b.iter(|| {
+                                    black_box(
+                                        black_box(&matrix)
+                                            .factorize_pivoted_qr(black_box(
+                                                &rhs,
+                                            ))
+                                            .unwrap(),
+                                    )
+                                })
+                            },
+                        );
+                    } else {
+                        let factor = matrix.factorize_pivoted_qr(&rhs).unwrap();
+                        let diagonal: $vector_type =
+                            factor.column_norms_squared();
+                        for mu in [0., 1e-3] {
+                            group.bench_function(
+                                BenchmarkId::new(
+                                    $name,
+                                    format!("{m}x{n}_mu{mu}"),
+                                ),
+                                |b| {
+                                    b.iter(|| {
+                                        black_box(
+                                            factor
+                                                .solve_regularized(
+                                                    black_box(mu),
+                                                    black_box(&diagonal),
+                                                    None,
+                                                )
+                                                .unwrap(),
+                                        )
+                                    })
+                                },
+                            );
+                        }
+                    }
+                }};
+            }
+            backend!(
+                "vec",
+                Vec<f64>,
+                DenseMatrix::from_fn(m, n, |i, j| data[j * m + i]),
+                rhs.clone()
+            );
+            backend!(
+                "nalgebra",
+                DVector<f64>,
+                DMatrix::from_column_slice(m, n, &data),
+                DVector::from_column_slice(&rhs)
+            );
+            backend!(
+                "faer",
+                Col<f64>,
+                Mat::from_fn(m, n, |i, j| data[j * m + i]),
+                Col::from_fn(m, |i| rhs[i])
+            );
+        }
+        group.finish();
+    }
+}
 
 fn bench_gram(c: &mut Criterion) {
     let mut g = c.benchmark_group("lm_gram");
@@ -236,6 +301,7 @@ criterion_group!(
     bench_gram,
     bench_mat_transpose_vec,
     bench_solve_spd,
+    bench_qr,
     bench_full_solve
 );
 criterion_main!(benches);

@@ -32,13 +32,8 @@ pub(super) fn column_norms<F: Scalar>(
     );
     let mut norms = vec![F::zero(); cols];
     for (j, norm) in norms.iter_mut().enumerate() {
-        for i in 0..rows {
-            let value = entry(i, j);
-            if !value.is_finite() {
-                return Err(QrSolveError::NonFinite);
-            }
-            *norm = norm.hypot(value);
-        }
+        // Scaled accumulation retains tiny components without a hypot per entry.
+        *norm = super::norm_l2((0..rows).map(|i| entry(i, j)));
         // LM's unchanged scaling and gradient tests use squared norms.
         if !(*norm * *norm).is_finite() {
             return Err(QrSolveError::NonFinite);
@@ -94,6 +89,9 @@ impl<F: Scalar> QrFactorization<F> {
             || diagonal.iter().any(|&x| x < F::zero())
         {
             return Err(QrSolveError::InvalidRegularization);
+        }
+        if mu == F::zero() {
+            return self.solve_undamped(tolerance);
         }
         let mut r = self.r.clone();
         let mut rhs = self.qtb.clone();
@@ -160,6 +158,38 @@ impl<F: Scalar> QrFactorization<F> {
         }
         Ok(x)
     }
+
+    fn solve_undamped(&self, tolerance: F) -> Result<Vec<F>, QrSolveError> {
+        let n = self.norms.len();
+        if self.norms.contains(&F::zero())
+            || (0..n).any(|j| {
+                (self.r[j * n + j] / self.norms[self.permutation[j]]).abs()
+                    <= tolerance
+            })
+        {
+            return Err(QrSolveError::RankDeficient);
+        }
+        // The undamped factor already is triangular. Apply the same column
+        // scaling during substitution without copying or rotating the factor.
+        let mut x = vec![F::zero(); n];
+        for j in (0..n).rev() {
+            let original = self.permutation[j];
+            let mut value = self.qtb[j];
+            for k in j + 1..n {
+                let column = self.permutation[k];
+                value = value
+                    - (self.r[j * n + k] / self.norms[column]) * x[column];
+            }
+            x[original] = value / (self.r[j * n + j] / self.norms[original]);
+        }
+        for (value, &scale) in x.iter_mut().zip(&self.norms) {
+            *value = *value / scale;
+        }
+        if x.iter().any(|x| !x.is_finite()) {
+            return Err(QrSolveError::NonFinite);
+        }
+        Ok(x)
+    }
 }
 
 impl<F: Scalar> RegularizedQrSolve<Vec<F>, F> for QrFactorization<F> {
@@ -204,8 +234,7 @@ pub(super) fn factorize<F: Scalar>(
         let mut pivot = k;
         let mut best = F::zero();
         for j in k..cols {
-            let norm =
-                (k..rows).fold(F::zero(), |acc, i| acc.hypot(a[i * cols + j]));
+            let norm = super::norm_l2((k..rows).map(|i| a[i * cols + j]));
             if norm > best {
                 best = norm;
                 pivot = j;
@@ -255,4 +284,125 @@ pub(super) fn factorize<F: Scalar>(
     }
     rhs.resize(cols, F::zero());
     QrFactorization::from_parts(rows, r, rhs, permutation, norms)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn check_column_norms<F: Scalar>() {
+        for scale in [
+            F::one(),
+            F::min_positive_value() / F::from_f64(16.).unwrap(),
+            F::max_value().sqrt() / F::from_f64(8.).unwrap(),
+        ] {
+            for values in [[3., 4., 0.], [0., 4., 3.]] {
+                let values = values.map(|x| F::from_f64(x).unwrap() * scale);
+                let norms = column_norms(3, 2, |i, j| {
+                    if j == 0 { values[i] } else { F::zero() }
+                })
+                .unwrap();
+                let expected = F::from_f64(5.).unwrap() * scale;
+                assert!(norms[0] > F::zero());
+                assert!(
+                    (norms[0] / expected - F::one()).abs()
+                        <= F::from_f64(8.).unwrap() * F::epsilon()
+                );
+                assert_eq!(norms[1], F::zero());
+            }
+        }
+        for invalid in [F::nan(), F::infinity(), F::neg_infinity()] {
+            assert_eq!(
+                column_norms(2, 1, |i, _| {
+                    if i == 0 { F::one() } else { invalid }
+                }),
+                Err(QrSolveError::NonFinite)
+            );
+        }
+        // A finite norm still cannot feed LM's squared column scaling.
+        assert_eq!(
+            column_norms(2, 1, |_, _| F::max_value().sqrt()),
+            Err(QrSolveError::NonFinite)
+        );
+    }
+
+    #[test]
+    fn f32_column_norms_preserve_scale_and_reject_invalid_models() {
+        check_column_norms::<f32>();
+    }
+
+    #[test]
+    fn f64_column_norms_preserve_scale_and_reject_invalid_models() {
+        check_column_norms::<f64>();
+    }
+
+    fn check_undamped_solve<F: Scalar>() {
+        let norms = vec![
+            F::min_positive_value(),
+            F::from_f64(3.).unwrap(),
+            F::max_value().sqrt() / F::from_f64(4.).unwrap(),
+        ];
+        let permutation = vec![2, 0, 1];
+        let upper = [1., 0.6, 0., 0., 0.8, 0.8, 0., 0., 0.6];
+        let r = upper
+            .iter()
+            .enumerate()
+            .map(|(i, &value)| {
+                F::from_f64(value).unwrap() * norms[permutation[i % 3]]
+            })
+            .collect();
+        // The equilibrated solution in original column order is (1, -2, 3).
+        let qr = QrFactorization::from_parts(
+            3,
+            r,
+            [3.6, -0.8, -1.2].map(|x| F::from_f64(x).unwrap()).to_vec(),
+            permutation,
+            norms,
+        )
+        .unwrap();
+        let d = vec![F::one(); 3];
+        let x = qr.solve(F::zero(), &d, None).unwrap();
+        for ((&value, &scale), expected) in
+            x.iter().zip(&qr.norms).zip([1., -2., 3.])
+        {
+            assert!(
+                (value * scale - F::from_f64(expected).unwrap()).abs()
+                    <= F::from_f64(16.).unwrap() * F::epsilon()
+            );
+        }
+        qr.solve(F::one(), &d, None).unwrap();
+        assert_eq!(qr.solve(F::zero(), &d, None).unwrap(), x);
+
+        for diagonal in [F::nan(), F::infinity(), -F::one()] {
+            assert!(qr.solve(F::zero(), &[diagonal; 3], None).is_err());
+        }
+        assert_eq!(
+            qr.solve(F::zero(), &d, Some(F::from_f64(0.9).unwrap())),
+            Err(QrSolveError::RankDeficient)
+        );
+
+        let tiny = F::min_positive_value() * F::epsilon();
+        let overflow = QrFactorization::from_parts(
+            1,
+            vec![tiny],
+            vec![F::one()],
+            vec![0],
+            vec![tiny],
+        )
+        .unwrap();
+        assert_eq!(
+            overflow.solve(F::zero(), &[F::one()], None),
+            Err(QrSolveError::NonFinite)
+        );
+    }
+
+    #[test]
+    fn f32_undamped_solve_preserves_scaling_rank_and_validation() {
+        check_undamped_solve::<f32>();
+    }
+
+    #[test]
+    fn f64_undamped_solve_preserves_scaling_rank_and_validation() {
+        check_undamped_solve::<f64>();
+    }
 }
