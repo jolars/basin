@@ -10,6 +10,17 @@ tasks:
       - cargo clippy --workspace --all-targets --all-features -- -D warnings
       - cd web && pnpm check
 
+  coverage:
+    desc: "Run Basin tests with coverage and generate an HTML report."
+    env:
+      CARGO_PROFILE_TEST_DEBUG: line-tables-only
+    cmds:
+      - mkdir -p target/coverage
+      - >-
+        cargo llvm-cov -p basin --locked
+        --features nalgebra,ndarray,faer,problems,parallel,serde
+        --html --output-dir target/coverage
+
   logo:
     desc: "Watch the logo example; rebuild day + dark SVG/PNGs and sync to web/static on save."
     summary: |

@@ -1,0 +1,61 @@
+name: Coverage
+
+on:
+  push:
+    branches: [main, v1]
+  pull_request:
+    branches: [main, v1]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+  # Coverage needs source locations, so omit the larger type-level debug data.
+  CARGO_PROFILE_TEST_DEBUG: line-tables-only
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install LLVM tools
+        run: rustup component add llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: coverage
+          workspaces: . -> target/llvm-cov-target
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      - name: Collect coverage
+        run: |
+          mkdir -p target/coverage
+          cargo llvm-cov -p basin --locked \
+            --features nalgebra,ndarray,faer,problems,parallel,serde \
+            --lcov --skip-functions --output-path target/coverage/lcov.info
+      - name: Generate HTML report
+        run: >-
+          cargo llvm-cov report -p basin
+          --html --output-dir target/coverage
+      - name: Preserve coverage reports
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage
+          path: target/coverage
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          files: target/coverage/lcov.info
+          disable_search: true
+          use_oidc: true
+          fail_ci_if_error: false

@@ -50,6 +50,33 @@ fit optimization state.
   Run this before committing any rustdoc changes.
 - `cargo fmt`: format (also enforced by pre-commit).
 
+### Code coverage
+
+Run `task coverage` to collect coverage and generate
+`target/coverage/html/index.html`. The dev environment supplies
+`cargo-llvm-cov` and the pinned toolchain's `llvm-tools-preview` component;
+reload devenv after changing the toolchain configuration. Outside devenv,
+install `cargo-llvm-cov` with `cargo install cargo-llvm-cov --locked` and add
+the LLVM tools with `rustup component add llvm-tools-preview`.
+
+Coverage measures the `basin` crate with the latest pure-Rust nalgebra,
+ndarray, and faer backends, plus `problems`, `parallel`, and `serde`. Integration
+test sources, examples, and dependencies are excluded from the report. Doctest
+and branch coverage require nightly and are not collected. The existing CI
+matrix separately tests older backend versions and BLAS/LAPACK features.
+
+The Coverage workflow preserves LCOV and HTML reports as Actions artifacts
+for 14 days and uploads LCOV to [Codecov](https://app.codecov.io/gh/jolars/basin).
+Project and patch coverage checks are informational. Tests and report
+generation must succeed, while a Codecov upload failure leaves the reports
+available in Actions and does not fail the job.
+
+For the initial Codecov setup, sign in, activate the existing `jolars/basin`
+repository, and ensure the [Codecov GitHub app](https://github.com/apps/codecov)
+has access to Basin. Uploads authenticate with GitHub OIDC and do not need a
+`CODECOV_TOKEN` secret. The README badge starts showing coverage after the
+first successful upload from `main`.
+
 ### Website links
 
 The Website workflow checks the rendered HTML with

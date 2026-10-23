@@ -1,6 +1,7 @@
 # Basin <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/jolars/basin/main/images/logo-dark.png" /><img src="https://raw.githubusercontent.com/jolars/basin/main/images/logo.png" align="right" width="189" alt="basin logo" /></picture>
 
 [![CI](https://github.com/jolars/basin/actions/workflows/ci.yml/badge.svg)](https://github.com/jolars/basin/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/jolars/basin/branch/main/graph/badge.svg)](https://app.codecov.io/gh/jolars/basin/tree/main)
 [![crates.io](https://img.shields.io/crates/v/basin.svg)](https://crates.io/crates/basin)
 [![docs.rs](https://img.shields.io/docsrs/basin)](https://docs.rs/basin)
 
