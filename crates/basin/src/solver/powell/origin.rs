@@ -21,7 +21,7 @@
 //! dominated by the `Y Ω`/`Y Ω Yᵀ` products, so the driver only shifts on the
 //! small fraction of iterations that trip eq. 7.10.
 
-use crate::core::math::Scalar;
+use crate::core::math::{DenseMatrix, Scalar};
 use crate::solver::powell::model::QuadraticModel;
 
 impl<F: Scalar> QuadraticModel<F> {
@@ -63,86 +63,86 @@ impl<F: Scalar> QuadraticModel<F> {
             }
         }
         for a in 0..n {
-            for b in 0..n {
-                let add = v[a] * s[b] + s[a] * v[b];
-                self.gamma_explicit.set(
-                    a,
-                    b,
-                    self.gamma_explicit.get(a, b) + add,
-                );
+            for ((entry, sb), vb) in
+                self.gamma_explicit.row_mut(a).iter_mut().zip(&s).zip(&v)
+            {
+                *entry = *entry + (v[a] * *sb + s[a] * *vb);
             }
         }
 
         // Y (n × m): columns y_j = {sᵀ(x_j − x_av)}(x_j − x_av) + ¼‖s‖² s (7.11).
-        let mut y: Vec<Vec<F>> = Vec::with_capacity(m);
-        for j in 0..m {
-            let row = self.xpt.row(j);
-            let wj: Vec<F> = (0..n).map(|i| row[i] - half * s[i]).collect();
-            let s_dot_w = dot(&s, &wj);
-            let yj: Vec<F> = (0..n)
-                .map(|i| s_dot_w * wj[i] + quarter * s_sq * s[i])
-                .collect();
-            y.push(yj);
-        }
+        // Store rows contiguously for the products with Ξ and Z below.
+        let weights: Vec<F> = (0..m)
+            .map(|j| {
+                s.iter()
+                    .zip(self.xpt.row(j))
+                    .map(|(si, x)| *si * (*x - half * *si))
+                    .sum()
+            })
+            .collect();
+        let y = DenseMatrix::from_fn(n, m, |a, j| {
+            weights[j] * (self.xpt.get(j, a) - half * s[a])
+                + quarter * s_sq * s[a]
+        });
 
         // Yz_k = Y z_k (n-vector) for each Ω-factorization column k.
-        let mut yz: Vec<Vec<F>> = Vec::with_capacity(rank);
-        for k in 0..rank {
-            let mut col = vec![F::zero(); n];
-            for j in 0..m {
-                let zjk = self.zmat.get(j, k);
-                for i in 0..n {
-                    col[i] = col[i] + y[j][i] * zjk;
+        let mut yz = DenseMatrix::from_fn(n, rank, |_, _| F::zero());
+        for a in 0..n {
+            for (j, yj) in y.row(a).iter().enumerate() {
+                for (entry, z) in yz.row_mut(a).iter_mut().zip(self.zmat.row(j))
+                {
+                    *entry = *entry + *yj * *z;
                 }
             }
-            yz.push(col);
         }
 
         // Υ += Y Ξ_redᵀ + Ξ_red Yᵀ + Y Ω Yᵀ, using the OLD Ξ_red (`bmat_xi`):
         //   (Y Ξ_redᵀ)[a,b] = Σ_i y_i[a] Ξ_red[b,i],
         //   (Y Ω Yᵀ)[a,b]   = Σ_k s_k Yz_k[a] Yz_k[b].
-        let mut ups_add = vec![vec![F::zero(); n]; n];
         for a in 0..n {
             for b in 0..n {
-                let mut yxt = F::zero(); // (Y Ξ_redᵀ)[a,b]
-                let mut xyt = F::zero(); // (Ξ_red Yᵀ)[a,b] = (Y Ξ_redᵀ)[b,a]
-                for i in 0..m {
-                    yxt = yxt + y[i][a] * self.bmat_xi.get(b, i);
-                    xyt = xyt + y[i][b] * self.bmat_xi.get(a, i);
-                }
-                let mut yomyt = F::zero();
-                for k in 0..rank {
-                    yomyt = yomyt + self.zsign[k] * yz[k][a] * yz[k][b];
-                }
-                ups_add[a][b] = yxt + xyt + yomyt;
-            }
-        }
-        for a in 0..n {
-            for b in 0..n {
-                self.bmat_ups.set(
-                    a,
-                    b,
-                    self.bmat_ups.get(a, b) + ups_add[a][b],
-                );
+                let yxt = y
+                    .row(a)
+                    .iter()
+                    .zip(self.bmat_xi.row(b))
+                    .fold(F::zero(), |acc, (y, xi)| acc + *y * *xi);
+                let xyt = y
+                    .row(b)
+                    .iter()
+                    .zip(self.bmat_xi.row(a))
+                    .fold(F::zero(), |acc, (y, xi)| acc + *y * *xi);
+                let yomyt = self
+                    .zsign
+                    .iter()
+                    .zip(yz.row(a))
+                    .zip(yz.row(b))
+                    .fold(F::zero(), |acc, ((sign, ya), yb)| {
+                        acc + *sign * *ya * *yb
+                    });
+                let entry = &mut self.bmat_ups.row_mut(a)[b];
+                *entry = *entry + (yxt + xyt + yomyt);
             }
         }
 
         // Ξ_red += Y Ω = Σ_k s_k Yz_k z_kᵀ ⇒ (Y Ω)[a,i] = Σ_k s_k Yz_k[a] z_k[i].
         for a in 0..n {
-            for i in 0..m {
-                let mut yom = F::zero();
-                for k in 0..rank {
-                    yom = yom + self.zsign[k] * yz[k][a] * self.zmat.get(i, k);
-                }
-                self.bmat_xi.set(a, i, self.bmat_xi.get(a, i) + yom);
+            for (i, entry) in self.bmat_xi.row_mut(a).iter_mut().enumerate() {
+                let yom = self
+                    .zsign
+                    .iter()
+                    .zip(yz.row(a))
+                    .zip(self.zmat.row(i))
+                    .fold(F::zero(), |acc, ((sign, y), z)| {
+                        acc + *sign * *y * *z
+                    });
+                *entry = *entry + yom;
             }
         }
 
         // Displacements: x_j − x0_new = (x_j − x0) − s; then x0_new = x0 + s.
         for j in 0..m {
-            for i in 0..n {
-                let val = self.xpt.get(j, i) - s[i];
-                self.xpt.set(j, i, val);
+            for (entry, si) in self.xpt.row_mut(j).iter_mut().zip(&s) {
+                *entry = *entry - *si;
             }
         }
         for i in 0..n {

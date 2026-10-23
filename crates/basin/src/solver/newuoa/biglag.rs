@@ -76,12 +76,6 @@ impl<F: Scalar> QuadraticModel<F> {
         let h_xopt = self.lagrange_hessian_matvec(&lambda, &xopt);
         let grad_opt: Vec<F> = (0..n).map(|i| g_x0[i] + h_xopt[i]).collect();
 
-        // ℓ_t(x_opt + d) via eq. 6.11, shifted by the constant ℓ_t(x_opt).
-        let ell = |d: &[F]| -> F {
-            let hd = self.lagrange_hessian_matvec(&lambda, d);
-            base + dot(d, &grad_opt) + half * dot(d, &hd)
-        };
-
         // ---- d_0 (eq. 6.9): ±Δ̄ (x_t − x_opt)/‖x_t − x_opt‖, sign for larger |ℓ|.
         let xt = self.xpt_row(t).to_vec();
         let mut u0: Vec<F> = (0..n).map(|i| xt[i] - xopt[i]).collect();
@@ -100,16 +94,23 @@ impl<F: Scalar> QuadraticModel<F> {
         }
         let scale0 = delta_bar / u0_norm;
         let dpos: Vec<F> = (0..n).map(|i| scale0 * u0[i]).collect();
-        let ell_pos = ell(&dpos);
-        let ell_neg = ell(&dpos.iter().map(|x| -*x).collect::<Vec<_>>());
-        let mut d: Vec<F> = if ell_pos.abs() >= ell_neg.abs() {
-            dpos
+        // H(-d) = -Hd, so both signs share the same quadratic term. Reuse
+        // this product for the selected step's initial gradient as well.
+        let mut hd0 = self.lagrange_hessian_matvec(&lambda, &dpos);
+        let quadratic = half * dot(&dpos, &hd0);
+        let ell_pos = base + dot(&dpos, &grad_opt) + quadratic;
+        let neg_linear: F =
+            dpos.iter().zip(&grad_opt).map(|(d, g)| -*d * *g).sum();
+        let ell_neg = base + neg_linear + quadratic;
+        let (mut d, mut ell_d) = if ell_pos.abs() >= ell_neg.abs() {
+            (dpos, ell_pos)
         } else {
-            dpos.iter().map(|x| -*x).collect()
+            for value in &mut hd0 {
+                *value = -*value;
+            }
+            (dpos.iter().map(|x| -*x).collect(), ell_neg)
         };
-        let mut ell_d = ell(&d); // ℓ_t(x_opt + d), signed
         // ∇ℓ_t(x_opt + d) = ∇ℓ_t(x_opt) + ∇²ℓ_t d.
-        let hd0 = self.lagrange_hessian_matvec(&lambda, &d);
         let mut grad_cur: Vec<F> =
             (0..n).map(|i| grad_opt[i] + hd0[i]).collect();
 

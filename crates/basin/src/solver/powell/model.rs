@@ -139,14 +139,7 @@ impl<F: Scalar> QuadraticModel<F> {
                 .fold(F::zero(), |acc, (a, b)| acc + *a * *b);
         }
         // y += Σ_k γ_k (x_k − x0) · ((x_k − x0)·v).
-        for k in 0..self.m {
-            let row = self.xpt.row(k);
-            let dot = dot(row, v);
-            let coef = self.gamma[k] * dot;
-            for (yi, xi) in y.iter_mut().zip(row) {
-                *yi = *yi + coef * *xi;
-            }
-        }
+        add_implicit_product(&self.xpt, &self.gamma, v, &mut y);
         y
     }
 
@@ -170,13 +163,7 @@ impl<F: Scalar> QuadraticModel<F> {
         );
         assert_eq!(u.len(), self.n, "lagrange_hessian_matvec: |u| must be n");
         let mut y = vec![F::zero(); self.n];
-        for k in 0..self.m {
-            let row = self.xpt.row(k);
-            let coef = lambda[k] * dot(row, u);
-            for (yi, xi) in y.iter_mut().zip(row) {
-                *yi = *yi + coef * *xi;
-            }
-        }
+        add_implicit_product(&self.xpt, lambda, u, &mut y);
         y
     }
 
@@ -191,6 +178,41 @@ impl<F: Scalar> QuadraticModel<F> {
         let quad = dot(d, &hd);
         let half = F::from_f64(0.5).expect("0.5 representable");
         lin + half * quad
+    }
+}
+
+/// Interleave independent dot products to expose vector operations without
+/// changing the summation order of either the dots or the rank-one updates.
+fn add_implicit_product<F: Scalar>(
+    xpt: &DenseMatrix<F>,
+    coefficients: &[F],
+    v: &[F],
+    y: &mut [F],
+) {
+    let grouped = coefficients.len() / 4 * 4;
+    for k in (0..grouped).step_by(4) {
+        let rows = [xpt.row(k), xpt.row(k + 1), xpt.row(k + 2), xpt.row(k + 3)];
+        let mut products = [F::zero(); 4];
+        for (i, vi) in v.iter().enumerate() {
+            for j in 0..4 {
+                products[j] = products[j] + rows[j][i] * *vi;
+            }
+        }
+        for j in 0..4 {
+            products[j] = coefficients[k + j] * products[j];
+        }
+        for (i, yi) in y.iter_mut().enumerate() {
+            for j in 0..4 {
+                *yi = *yi + products[j] * rows[j][i];
+            }
+        }
+    }
+    for (k, coefficient) in coefficients.iter().enumerate().skip(grouped) {
+        let row = xpt.row(k);
+        let coef = *coefficient * dot(row, v);
+        for (yi, xi) in y.iter_mut().zip(row) {
+            *yi = *yi + coef * *xi;
+        }
     }
 }
 
@@ -258,6 +280,83 @@ impl<F: Scalar> QuadraticModel<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn check_hessian_products<F: Scalar>() {
+        for n in [1, 2, 3, 4, 7] {
+            for m in [n + 2, 2 * n + 1, (n + 1) * (n + 2) / 2] {
+                let scalar = |v| F::from_f64(v).unwrap();
+                let rank = m - n - 1;
+                let model = QuadraticModel::from_parts(
+                    n,
+                    m,
+                    vec![F::zero(); n],
+                    DenseMatrix::from_fn(m, n, |i, j| {
+                        scalar(((i * 7 + j * 3) % 11) as f64 - 5.0)
+                            / scalar(8.0)
+                    }),
+                    vec![F::zero(); m],
+                    0,
+                    vec![F::zero(); n],
+                    DenseMatrix::from_fn(n, n, |i, j| {
+                        if i == j { scalar(2.0) } else { scalar(0.125) }
+                    }),
+                    (0..m)
+                        .map(|i| scalar((i % 5) as f64 - 2.0) / scalar(4.0))
+                        .collect(),
+                    DenseMatrix::from_fn(n, m, |_, _| F::zero()),
+                    DenseMatrix::from_fn(n, n, |_, _| F::zero()),
+                    DenseMatrix::from_fn(m, rank, |_, _| F::zero()),
+                    vec![F::one(); rank],
+                );
+                let v: Vec<F> = (0..n)
+                    .map(|i| scalar(i as f64 - 2.0) / scalar(7.0))
+                    .collect();
+
+                // A dense assembly provides an independent reference for both
+                // the explicit-plus-implicit and purely implicit products.
+                for implicit_only in [false, true] {
+                    let dense = if implicit_only {
+                        DenseMatrix::from_fn(n, n, |i, j| {
+                            (0..m)
+                                .map(|k| {
+                                    model.gamma[k]
+                                        * model.xpt.get(k, i)
+                                        * model.xpt.get(k, j)
+                                })
+                                .sum()
+                        })
+                    } else {
+                        model.dense_hessian()
+                    };
+                    let product = if implicit_only {
+                        model.lagrange_hessian_matvec(&model.gamma, &v)
+                    } else {
+                        model.hessian_matvec(&v)
+                    };
+                    for (i, value) in product.iter().enumerate() {
+                        let expected = dot(dense.row(i), &v);
+                        let tolerance = scalar(128.0)
+                            * F::epsilon()
+                            * (F::one() + expected.abs());
+                        assert!(
+                            (*value - expected).abs() <= tolerance,
+                            "n={n}, m={m}, implicit_only={implicit_only}: {value:?} vs {expected:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn hessian_products_match_dense_f64() {
+        check_hessian_products::<f64>();
+    }
+
+    #[test]
+    fn hessian_products_match_dense_f32() {
+        check_hessian_products::<f32>();
+    }
 
     /// Build a model on `n` variables, `m` interpolation points, with the given
     /// `Γ`, `γ`, `∇Q` and interpolation displacements. The `H`-factorization
