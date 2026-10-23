@@ -10,6 +10,7 @@ pub struct Summary {
     pub objective_calls: usize,
     pub residual_calls: usize,
     pub jacobian_calls: usize,
+    pub gradient_calls: usize,
     pub constraint_calls: usize,
     pub status: String,
     /// Independent solution accuracy, separate from the solver's termination.
@@ -38,6 +39,7 @@ impl Summary {
             && self.objective_calls == other.objective_calls
             && self.residual_calls == other.residual_calls
             && self.jacobian_calls == other.jacobian_calls
+            && self.gradient_calls == other.gradient_calls
             && self.constraint_calls == other.constraint_calls
             && self.status == other.status
             && self.verified == other.verified
@@ -167,6 +169,7 @@ mod tests {
                     objective_calls: 0,
                     residual_calls: 0,
                     jacobian_calls: 0,
+                    gradient_calls: 0,
                     constraint_calls: 0,
                     status: "SolverFailed".into(),
                     verified: false,
@@ -194,6 +197,7 @@ mod tests {
                 objective_calls: 2,
                 residual_calls: 0,
                 jacobian_calls: 0,
+                gradient_calls: 0,
                 constraint_calls: 2,
                 status: "Radius".into(),
                 verified: true,

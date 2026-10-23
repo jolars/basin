@@ -9,10 +9,19 @@
  * the solver and problem vocabulary from `./benchmarks`.
  */
 
-import { PROBLEM_LABELS, SOLVER_LABELS, type Solver } from "./benchmarks";
+import {
+    PROBLEM_LABELS as BASE_PROBLEM_LABELS,
+    SOLVER_LABELS,
+    type Solver,
+} from "./benchmarks";
 import rawData from "./competitor-benchmarks.json";
 
-export { PROBLEM_LABELS, SOLVER_LABELS, type Solver };
+export { SOLVER_LABELS, type Solver };
+export const PROBLEM_LABELS: Record<string, string> = {
+    ...BASE_PROBLEM_LABELS,
+    quadratic_30d: "Constrained quadratic",
+    constrained_quadratic: "Ball-constrained quadratic",
+};
 
 /** Competing libraries a case is run against. */
 export type Library =
@@ -31,6 +40,7 @@ export interface RunSummary {
     objectiveCalls: number;
     residualCalls: number;
     jacobianCalls: number;
+    gradientCalls: number;
     constraintCalls: number;
     status: string;
     verified: boolean;
@@ -38,7 +48,7 @@ export interface RunSummary {
 
 /** One `(time, suboptimality)` sample on a convergence trace. */
 export interface TracePoint {
-    /** Wall-clock time, nanoseconds (median over reps). SLSQP, LM, and COBYLA include initialization. */
+    /** Wall-clock time, nanoseconds, including initialization (median over repetitions). */
     tNs: number;
     /** Suboptimality `f(x) − f*`, floored at a small positive value. */
     subopt: number;
@@ -68,7 +78,7 @@ export interface CompetitorBenchmarks {
     };
     repetitions: number;
     versions: Record<string, string>;
-    /** Iteration budget the harness capped each solve at. */
+    /** Safety cap for GD, Nelder–Mead, and L-BFGS; other caps are documented per case. */
     iterations: number;
     results: CompetitorResult[];
 }
@@ -114,6 +124,7 @@ export interface CompetitorCase {
     problem: string;
     /** One line on what the case demonstrates. Shown under the card title. */
     blurb: string;
+    n: number;
     libraries: Library[];
 }
 
@@ -126,43 +137,50 @@ export const COMPETITOR_CASES: CompetitorCase[] = [
     {
         solver: "lm",
         problem: "exp_fit",
+        n: 32,
         libraries: ["basin", "levenberg-marquardt"],
-        blurb: "Levenberg–Marquardt with analytic Jacobians: fit a·exp(b·t) to 10 exact observations, from (50000, −0.3) toward (100000, −1). Both implementations use nalgebra 0.34, scaled trust regions, and pivoted QR. The curve shows the best objective seen at residual evaluations, including rejected trials.",
+        blurb: "Fit 16 exponential response curves jointly: 32 parameters and 4,096 residuals, with analytic Jacobians, scaled trust regions, and pivoted QR on nalgebra 0.34.",
     },
     {
         solver: "cobyla",
-        problem: "quadratic_2d",
+        problem: "quadratic_30d",
+        n: 30,
         libraries: ["basin", "cobyla"],
-        blurb: "Minimize (x−1)² + (y−1)² with 0 ≤ x,y ≤ 2 and x+y ≤ 1.5, from (0.5, 0.5). The optimum is (0.75, 0.75), with cost 0.125. The main curve shows the best feasible objective; the second plot shows each trial’s maximum constraint violation.",
+        blurb: "A coupled quadratic in 30 variables with box bounds and an active sum constraint. The optimum has every coordinate equal to 0.75. Objective progress includes only feasible trials.",
     },
     {
         solver: "slsqp",
         libraries: ["basin", "slsqp", "nlopt"],
-        problem: "rosenbrock",
-        blurb: "SLSQP with analytic gradients on unconstrained Rosenbrock (n = 2), from (−1.2, 1). Basin versus slsqp 1.0.2 (a Rust translation of NLopt 2.7.1) and NLopt 2.9.1. This case does not measure constraint handling.",
+        problem: "constrained_quadratic",
+        n: 100,
+        blurb: "A coupled quadratic in 100 variables with an active nonlinear ball constraint, analytic objective gradients, and an analytic constraint Jacobian. Returned-point checks remain separate from termination status.",
     },
     {
         solver: "gd",
         libraries: ["basin", "argmin"],
         problem: "rosenbrock",
+        n: 100,
         blurb: "Steepest descent with a More–Thuente line search: first-order, identical configuration on both sides.",
     },
     {
         solver: "nm",
         libraries: ["basin", "argmin", "gomez", "nlopt"],
         problem: "rosenbrock",
+        n: 12,
         blurb: "Derivative-free Nelder–Mead. Basin and argmin run from a bit-identical initial simplex (standard coefficients); gomez and nlopt construct their own simplex with their default coefficients.",
     },
     {
         solver: "lbfgs",
         libraries: ["basin", "argmin", "nlopt"],
         problem: "rosenbrock",
-        blurb: "Limited-memory BFGS (m = 10), quasi-Newton; Basin and argmin both use a More–Thuente line search; nlopt uses its bundled L-BFGS (no line-search knob exposed).",
+        n: 100,
+        blurb: "Limited-memory BFGS (m = 10 in all three libraries); Basin and argmin both use a More–Thuente line search; nlopt uses its bundled L-BFGS (no line-search knob exposed).",
     },
     {
         solver: "newuoa",
         libraries: ["basin", "nlopt"],
         problem: "styblinski",
+        n: 30,
         blurb: "Powell's model-based derivative-free NEWUOA. Basin's implementation is based on the modernized version from PRIMA, whereas nlopt uses Powell's reference.",
     },
 ];
@@ -193,15 +211,14 @@ export function validateCompetitorResults(raw: unknown): CompetitorResult[] {
         if (!c?.libraries.includes(row.library) || keys.has(key))
             throw new Error(`Unexpected or duplicate result: ${key}`);
         keys.add(key);
-        if (!Number.isInteger(row.n) || row.n < 1)
+        if (!Number.isInteger(row.n) || row.n !== c.n)
             throw new Error(`Invalid dimension: ${key}`);
         validatePoints(row.points, "subopt", key);
         if (row.violations !== undefined)
             validatePoints(row.violations, "violation", key);
-        if (c.solver === "lm" || c.solver === "cobyla") {
+        if (["lm", "cobyla", "slsqp"].includes(c.solver)) {
             const s = row.summary;
             if (
-                row.n !== 2 ||
                 !s ||
                 typeof s.status !== "string" ||
                 typeof s.verified !== "boolean"
@@ -211,6 +228,7 @@ export function validateCompetitorResults(raw: unknown): CompetitorResult[] {
                 s.objectiveCalls,
                 s.residualCalls,
                 s.jacobianCalls,
+                s.gradientCalls,
                 s.constraintCalls,
             ]) {
                 if (!Number.isInteger(count) || count < 0)
@@ -240,7 +258,7 @@ export function validateCompetitorResults(raw: unknown): CompetitorResult[] {
                 throw new Error(`Missing derivative counts: ${key}`);
             if (
                 s.verified &&
-                c.solver === "cobyla" &&
+                (c.solver === "cobyla" || c.solver === "slsqp") &&
                 (s.objectiveCalls < 1 || !row.violations?.length)
             )
                 throw new Error(`Missing constrained measurements: ${key}`);

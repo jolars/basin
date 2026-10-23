@@ -1,4 +1,4 @@
-//! Public COBYLA comparisons on the three GlobalSearch migration workloads.
+//! Public COBYLA comparisons on migration workloads and a larger coupled quadratic.
 //!
 //! Basin follows PRIMA; the `cobyla` crate is derived from NLopt. Equal objective
 //! budgets and final radii do not imply equal trajectories or numerical work.
@@ -34,6 +34,7 @@ pub enum Case {
     Camel,
     Sphere,
     Quadratic,
+    QuadraticNd(usize),
 }
 
 pub const CASES: [(Case, &str); 3] = [
@@ -69,6 +70,9 @@ impl Case {
                 vec![2.5, -2.0, 1.5, -1.0, 0.5, 2.25, -1.75, 1.25, -0.75, 0.25]
             }
             Self::Quadratic => vec![0.5, 0.5],
+            Self::QuadraticNd(n) => {
+                (0..n).map(|i| 0.3 + 0.4 * i as f64 / n as f64).collect()
+            }
         }
     }
 
@@ -77,6 +81,7 @@ impl Case {
             Self::Camel => vec![(-3.0, 3.0), (-2.0, 2.0)],
             Self::Sphere => vec![(-5.0, 5.0); 10],
             Self::Quadratic => vec![(0.0, 2.0); 2],
+            Self::QuadraticNd(n) => vec![(0.0, 2.0); n],
         }
     }
 
@@ -85,6 +90,7 @@ impl Case {
             Self::Camel => 50,
             Self::Sphere => 200,
             Self::Quadratic => 100,
+            Self::QuadraticNd(_) => 10_000,
         }
     }
 
@@ -97,6 +103,10 @@ impl Case {
             }
             Self::Sphere => x.iter().map(|v| v * v).sum(),
             Self::Quadratic => (x[0] - 1.0).powi(2) + (x[1] - 1.0).powi(2),
+            Self::QuadraticNd(_) => {
+                x.iter().map(|v| (v - 1.0).powi(2)).sum::<f64>()
+                    + x.windows(2).map(|w| (w[1] - w[0]).powi(2)).sum::<f64>()
+            }
         }
     }
 
@@ -108,8 +118,9 @@ impl Case {
         for (&v, (lower, upper)) in x.iter().zip(self.bounds()) {
             violation = violation.max(lower - v).max(v - upper);
         }
-        if matches!(self, Self::Quadratic) {
-            violation = violation.max(-(1.5 - x[0] - x[1]));
+        if matches!(self, Self::Quadratic | Self::QuadraticNd(_)) {
+            violation =
+                violation.max(x.iter().sum::<f64>() - 0.75 * x.len() as f64);
         }
         violation
     }
@@ -128,6 +139,7 @@ impl Case {
             Self::Camel => (-1.031_628_453_489_877, 1e-5),
             Self::Sphere => (0.0, 1e-5),
             Self::Quadratic => (0.125, 1e-6),
+            Self::QuadraticNd(n) => (n as f64 / 16.0, 1e-6),
         };
         assert!((cost - target).abs() < tolerance);
     }
@@ -150,6 +162,7 @@ impl Case {
                 .with_final_radius(FINAL_RADIUS),
             SelectedState::new(start),
         )
+        .max_iter(self.budget() as u64)
         .max_cost_evals(self.budget() as u64)
         .run()
         .unwrap();
@@ -181,13 +194,14 @@ impl Case {
                 .constraint_calls
                 .set(problem.constraint_calls.get() + 1);
             // The reference accepts nonnegative constraints.
-            1.5 - x[0] - x[1]
+            0.75 * x.len() as f64 - x.iter().sum::<f64>()
         };
-        let constraints = if matches!(self, Self::Quadratic) {
-            std::slice::from_ref(&constraint)
-        } else {
-            &[]
-        };
+        let constraints =
+            if matches!(self, Self::Quadratic | Self::QuadraticNd(_)) {
+                std::slice::from_ref(&constraint)
+            } else {
+                &[]
+            };
         if let Some(log) = log {
             log.borrow_mut().restart();
         }
@@ -241,6 +255,7 @@ impl Case {
             Self::Camel => -1.031_628_453_489_877,
             Self::Sphere => 0.0,
             Self::Quadratic => 0.125,
+            Self::QuadraticNd(n) => n as f64 / 16.0,
         };
         let verified = result.point.iter().all(|x| x.is_finite())
             && result.cost.is_finite()
@@ -263,6 +278,7 @@ impl Case {
                 objective_calls: result.objective_calls,
                 residual_calls: 0,
                 jacobian_calls: 0,
+                gradient_calls: 0,
                 constraint_calls: result.constraint_calls,
                 status,
                 verified,
@@ -313,7 +329,10 @@ impl basin::Constraints for &Problem<'_> {
     ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
         basin::ConstraintSet::new().with_nonlinear_inequalities({
             2 * self.bounds.len()
-                + usize::from(matches!(self.case, Case::Quadratic))
+                + usize::from(matches!(
+                    self.case,
+                    Case::Quadratic | Case::QuadraticNd(_)
+                ))
         })
     }
 }
@@ -349,8 +368,8 @@ impl basin::NonlinearInequalityValues for &Problem<'_> {
                     .inequalities()
                     .count(),
             );
-            if matches!(self.case, Case::Quadratic) {
-                values.push(-(1.5 - x[0] - x[1]));
+            if matches!(self.case, Case::Quadratic | Case::QuadraticNd(_)) {
+                values.push(-(0.75 * x.len() as f64 - x.iter().sum::<f64>()));
             }
             for (&v, &(lower, upper)) in x.iter().zip(&self.bounds) {
                 values.extend([lower - v, v - upper]);
@@ -364,6 +383,23 @@ impl basin::NonlinearInequalityValues for &Problem<'_> {
 #[cfg(test)]
 mod tests {
     use super::{CASES, Stop};
+
+    #[test]
+    fn larger_coupled_quadratic_recovers_the_constrained_optimum() {
+        let case = super::Case::QuadraticNd(30);
+        for library in [super::Library::Basin, super::Library::Reference] {
+            let result = case.trace(library);
+            assert!(result.summary.verified);
+            assert_eq!(result.summary.point.len(), 30);
+            assert!(result.summary.objective_calls <= case.budget());
+            assert!(
+                result
+                    .violations
+                    .iter()
+                    .any(|p| p.1 > super::FEASIBILITY_TOLERANCE)
+            );
+        }
+    }
 
     #[test]
     fn quadratic_tracing_preserves_solutions_and_raw_callback_counts() {

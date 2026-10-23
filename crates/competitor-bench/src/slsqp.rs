@@ -1,4 +1,4 @@
-//! SLSQP comparison on unconstrained Rosenbrock with analytic derivatives.
+//! SLSQP comparisons on Rosenbrock and a nonlinear constrained quadratic.
 //!
 //! All three implementations record objective improvements at callback
 //! granularity and include solve initialization in the elapsed time. Basin's
@@ -17,8 +17,6 @@ use basin::{
     CostFunction, CountsMirror, Executor, Gradient, Problem,
     SelectedFirstOrderState, Slsqp, Solver, State, TerminationCode,
 };
-
-use crate::unconstrained::Unconstrained;
 
 pub const START: [f64; 2] = [-1.2, 1.0];
 pub const ACCURACY: f64 = 1e-10;
@@ -52,6 +50,8 @@ pub struct Run {
     pub iterations: Option<u64>,
     pub status: String,
     pub converged: bool,
+    pub constraint_evals: usize,
+    pub violations: Vec<(u128, f64)>,
 }
 
 impl Run {
@@ -71,23 +71,109 @@ impl Run {
     }
 }
 
+impl Run {
+    pub fn verify_constrained(&self) -> bool {
+        let n = self.x.len();
+        let violation = (self.x.iter().map(|v| v * v).sum::<f64>() / n as f64
+            - 0.5625)
+            .max(0.0);
+        self.x
+            .iter()
+            .all(|v| v.is_finite() && (v - 0.75).abs() < 1e-4)
+            && self.cost.is_finite()
+            && (quadratic(&self.x) - self.cost).abs() < 1e-10
+            && (self.cost - n as f64 / 16.0).abs() < 1e-6
+            && violation <= 1e-8
+    }
+}
+
 struct Log {
     start: Instant,
     best: f64,
     points: Vec<(u128, f64)>,
     cost_evals: usize,
     gradient_evals: usize,
+    constraint_evals: usize,
+    trials: Vec<(u128, f64, Vec<f64>)>,
 }
 
 #[derive(Clone)]
-struct Objective(Rc<RefCell<Log>>);
+struct Objective(Rc<RefCell<Log>>, bool);
 
 impl basin::Constraints for Objective {
-    type Set = basin::NoConstraints;
+    type Set = basin::ConstraintSet<
+        basin::NoBounds,
+        basin::NoLinearConstraints,
+        basin::NonlinearBlocks<basin::NoNonlinearBlock, basin::NonlinearBlock>,
+    >;
     fn constraints(
         &self,
     ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
         basin::ConstraintSet::new()
+            .with_nonlinear_inequalities(usize::from(self.1))
+    }
+}
+
+fn quadratic(x: &[f64]) -> f64 {
+    x.iter().map(|v| (v - 1.0).powi(2)).sum::<f64>()
+        + x.windows(2).map(|w| (w[1] - w[0]).powi(2)).sum::<f64>()
+}
+
+fn quadratic_gradient(x: &[f64], g: &mut [f64]) {
+    for i in 0..x.len() {
+        g[i] = 2.0 * (x[i] - 1.0);
+        if i > 0 {
+            g[i] += 2.0 * (x[i] - x[i - 1]);
+        }
+        if i + 1 < x.len() {
+            g[i] += 2.0 * (x[i] - x[i + 1]);
+        }
+    }
+}
+
+fn ball(x: &[f64], g: Option<&mut [f64]>, obj: &mut Objective) -> f64 {
+    obj.0.borrow_mut().constraint_evals += 1;
+    if let Some(g) = g {
+        for (g, v) in g.iter_mut().zip(x) {
+            *g = 2.0 * v / x.len() as f64;
+        }
+    }
+    x.iter().map(|v| v * v).sum::<f64>() / x.len() as f64 - 0.5625
+}
+
+impl basin::NonlinearInequalityValues for Objective {
+    type Param = Vec<f64>;
+    type Values = Vec<f64>;
+    type Error = Infallible;
+    fn nonlinear_inequalities(
+        &self,
+        x: &Vec<f64>,
+    ) -> Result<Vec<f64>, basin::ConstraintSolveError<Infallible>> {
+        Ok(if self.1 {
+            vec![ball(x, None, &mut self.clone())]
+        } else {
+            vec![]
+        })
+    }
+}
+
+impl basin::ConstraintJacobian for Objective {
+    type Param = Vec<f64>;
+    type Jacobian = basin::DenseMatrix;
+    type Error = Infallible;
+    fn constraint_jacobian(
+        &self,
+        x: &Vec<f64>,
+    ) -> Result<Self::Jacobian, basin::ConstraintSolveError<Infallible>> {
+        Ok(basin::DenseMatrix::from_row_slice(
+            usize::from(self.1),
+            x.len(),
+            &if self.1 {
+                x.iter().map(|v| 2.0 * v / x.len() as f64).collect()
+            } else {
+                vec![]
+            },
+        ))
     }
 }
 impl CostFunction for Objective {
@@ -105,7 +191,11 @@ impl Gradient for Objective {
 
     fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, Infallible> {
         let mut g = vec![0.0; x.len()];
-        rosenbrock_gradient(x, &mut g);
+        if self.1 {
+            quadratic_gradient(x, &mut g);
+        } else {
+            rosenbrock_gradient(x, &mut g);
+        }
         self.0.borrow_mut().gradient_evals += 1;
         Ok(g)
     }
@@ -117,14 +207,20 @@ fn callback(x: &[f64], g: Option<&mut [f64]>, obj: &mut Objective) -> f64 {
 
 impl Objective {
     fn evaluate(&self, x: &[f64], g: Option<&mut [f64]>) -> f64 {
-        let f = rosenbrock(x);
+        let f = if self.1 { quadratic(x) } else { rosenbrock(x) };
         let mut log = self.0.borrow_mut();
         log.cost_evals += 1;
         if let Some(g) = g {
-            rosenbrock_gradient(x, g);
+            if self.1 {
+                quadratic_gradient(x, g);
+            } else {
+                rosenbrock_gradient(x, g);
+            }
             log.gradient_evals += 1;
         }
         assert!(f.is_finite(), "non-finite SLSQP objective");
+        let time = log.start.elapsed().as_nanos();
+        log.trials.push((time, f, x.to_vec()));
         if f < log.best {
             log.best = f;
             let elapsed = log.start.elapsed().as_nanos();
@@ -136,11 +232,12 @@ impl Objective {
 
 fn manual(
     obj: Objective,
+    start: Vec<f64>,
 ) -> (SelectedFirstOrderState<Vec<f64>>, TerminationCode) {
-    let mut problem = Problem::new(Unconstrained(obj));
+    let mut problem = Problem::new(obj);
     let mut solver = Slsqp::new().with_absolute_accuracy_tolerance(ACCURACY);
     let mut state = solver
-        .init(&mut problem, SelectedFirstOrderState::new(START.to_vec()))
+        .init(&mut problem, SelectedFirstOrderState::new(start))
         .unwrap();
     state.mirror(problem.counts());
     state.update_best();
@@ -167,25 +264,44 @@ fn manual(
 }
 
 pub fn run(library: Library) -> Run {
-    let f0 = rosenbrock(&START);
+    run_case(library, 2, false)
+}
+
+pub fn run_constrained(library: Library, n: usize) -> Run {
+    run_case(library, n, true)
+}
+
+fn run_case(library: Library, n: usize, constrained: bool) -> Run {
+    let start = if constrained {
+        (0..n).map(|i| 0.3 + 0.4 * i as f64 / n as f64).collect()
+    } else {
+        START.to_vec()
+    };
+    let f0 = if constrained {
+        quadratic(&start)
+    } else {
+        rosenbrock(&start)
+    };
     let log = Rc::new(RefCell::new(Log {
         start: Instant::now(),
         best: f0,
         points: vec![(0, f0)],
         cost_evals: 0,
         gradient_evals: 0,
+        constraint_evals: 0,
+        trials: Vec::new(),
     }));
-    let obj = Objective(Rc::clone(&log));
+    let obj = Objective(Rc::clone(&log), constrained);
     let mut iterations = None;
     let (x, cost, status, converged) = match library {
         Library::Basin | Library::BasinManual => {
             let (state, reason) = if matches!(library, Library::BasinManual) {
-                manual(obj)
+                manual(obj, start.clone())
             } else {
                 let result = Executor::new(
-                    Unconstrained(obj),
+                    obj,
                     Slsqp::new().with_absolute_accuracy_tolerance(ACCURACY),
-                    SelectedFirstOrderState::new(START.to_vec()),
+                    SelectedFirstOrderState::new(start.clone()),
                 )
                 .max_iter(BUDGET as u64)
                 .run()
@@ -201,11 +317,16 @@ pub fn run(library: Library) -> Run {
             )
         }
         Library::Slsqp => {
-            let constraints: [&dyn slsqp::Func<Objective>; 0] = [];
+            let constraint: &dyn slsqp::Func<Objective> = &ball;
+            let constraints = if constrained {
+                vec![constraint]
+            } else {
+                vec![]
+            };
             let result = slsqp::minimize(
                 callback,
-                &START,
-                &[(f64::NEG_INFINITY, f64::INFINITY); 2],
+                &start,
+                &vec![(f64::NEG_INFINITY, f64::INFINITY); n],
                 &constraints,
                 obj,
                 BUDGET,
@@ -227,14 +348,17 @@ pub fn run(library: Library) -> Run {
         Library::Nlopt => {
             let mut opt = nlopt::Nlopt::new(
                 nlopt::Algorithm::Slsqp,
-                START.len(),
+                n,
                 callback,
                 nlopt::Target::Minimize,
-                obj,
+                obj.clone(),
             );
+            if constrained {
+                opt.add_inequality_constraint(ball, obj, 1e-8).unwrap();
+            }
             opt.set_maxeval(BUDGET as u32).unwrap();
             opt.set_ftol_abs(ACCURACY).unwrap();
-            let mut x = START.to_vec();
+            let mut x = start;
             let result = opt.optimize(&mut x);
             match result {
                 Ok((status, f)) => (
@@ -252,7 +376,34 @@ pub fn run(library: Library) -> Run {
     let elapsed = log.start.elapsed().as_nanos();
     let best = log.best;
     log.points.push((elapsed, best));
+    let mut violations = Vec::new();
+    if constrained {
+        let mut best = f64::INFINITY;
+        let mut points = Vec::new();
+        for (time, f, x) in &log.trials {
+            let violation = (x.iter().map(|v| v * v).sum::<f64>() / n as f64
+                - 0.5625)
+                .max(0.0);
+            violations.push((*time, violation));
+            if violation <= 1e-8 {
+                best = best.min(*f);
+            }
+            if best.is_finite() {
+                points.push((*time, best));
+            }
+        }
+        if best.is_finite() {
+            points.push((elapsed, best));
+        }
+        violations.push((
+            elapsed,
+            (x.iter().map(|v| v * v).sum::<f64>() / n as f64 - 0.5625).max(0.0),
+        ));
+        log.points = points;
+    }
     Run {
+        constraint_evals: log.constraint_evals,
+        violations,
         points: std::mem::take(&mut log.points),
         x,
         cost,
@@ -267,6 +418,39 @@ pub fn run(library: Library) -> Run {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn constrained_derivatives_and_known_optimum_agree() {
+        let x = vec![0.3, 0.6, 0.5, 0.8];
+        let mut gradient = vec![0.0; x.len()];
+        quadratic_gradient(&x, &mut gradient);
+        for col in 0..x.len() {
+            let mut plus = x.clone();
+            let mut minus = x.clone();
+            plus[col] += 1e-6;
+            minus[col] -= 1e-6;
+            let numeric = (quadratic(&plus) - quadratic(&minus)) / 2e-6;
+            assert!((numeric - gradient[col]).abs() < 1e-8);
+        }
+        assert_eq!(quadratic(&[0.75; 100]), 6.25);
+        for library in [Library::Basin, Library::Slsqp, Library::Nlopt] {
+            let result = run_constrained(library, 100);
+            assert!(
+                result.verify_constrained(),
+                "{}: {}",
+                library.name(),
+                result.status
+            );
+            assert!(result.constraint_evals > 0);
+            assert!(result.violations.iter().any(|p| p.1 > 1e-8));
+            assert!(
+                result
+                    .points
+                    .windows(2)
+                    .all(|p| p[0].0 <= p[1].0 && p[0].1 >= p[1].1)
+            );
+        }
+    }
 
     #[test]
     fn manual_loop_matches_executor_work_and_trace() {

@@ -12,20 +12,23 @@ function fixture(): CompetitorResult[] {
             solver: c.solver,
             problem: c.problem,
             library,
-            n: 2,
+            n: c.n,
             points: [{ tNs: 10, subopt: 1 }],
-            ...(c.solver === "cobyla"
+            ...(c.solver === "cobyla" || c.solver === "slsqp"
                 ? { violations: [{ tNs: 10, violation: 1e-16 }] }
                 : {}),
-            ...(c.solver === "cobyla" || c.solver === "lm"
+            ...(c.solver === "cobyla" ||
+            c.solver === "slsqp" ||
+            c.solver === "lm"
                 ? {
                       summary: {
-                          point: [0.75, 0.75],
+                          point: Array(c.n).fill(0.75),
                           cost: 0.125,
                           violation: 0,
                           objectiveCalls: 5,
                           residualCalls: 5,
                           jacobianCalls: 3,
+                          gradientCalls: 3,
                           constraintCalls: 5,
                           status: "Converged",
                           verified: true,
@@ -47,6 +50,12 @@ test("collects exactly one measured row per curated case and library", () => {
         () => validateCompetitorResults([...rows, rows[0]]),
         /duplicate/,
     );
+});
+
+test("rejects measurements from stale problem dimensions", () => {
+    const rows = fixture();
+    rows[0].n = 2;
+    assert.throws(() => validateCompetitorResults(rows), /Invalid dimension/);
 });
 
 test("rejects malformed, nonfinite, or reversed trace points", () => {
@@ -104,7 +113,7 @@ test("retains failed runs without treating them as verified solutions", () => {
     rows[0].summary.verified = false;
     rows[0].summary.status = "SolverFailed";
     rows[0].summary.cost = null;
-    rows[0].summary.point = [null, null];
+    rows[0].summary.point = Array(rows[0].n).fill(null);
     rows[0].summary.residualCalls = 0;
     rows[0].summary.jacobianCalls = 0;
     rows[0].points = [];

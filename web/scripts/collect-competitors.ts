@@ -36,8 +36,8 @@ const outFile = resolve(
     "competitor-benchmarks.json",
 );
 
-/** Iteration budget the harness caps each solve at (`MAX_ITERS`). */
-const ITERATIONS = 200;
+/** Safety cap for GD, Nelder–Mead, and L-BFGS; other caps are documented per case. */
+const ITERATIONS = 10_000;
 
 const caseIndex = (solver: string, problem: string) =>
     CASE_ORDER.findIndex((c) => c.solver === solver && c.problem === problem);

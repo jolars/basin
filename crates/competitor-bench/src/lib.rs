@@ -146,10 +146,6 @@ pub struct LmExponentialFit {
 }
 
 impl LmExponentialFit {
-    pub(crate) fn param_slice(&self) -> &[f64] {
-        self.p.as_slice()
-    }
-
     /// Same exact-data instance as `ExponentialFit::sampled`
     /// (`tᵢ = i·dt`, `yᵢ = a·exp(b·tᵢ)`), starting at `x0 = [a0, b0]`.
     pub fn sampled(
