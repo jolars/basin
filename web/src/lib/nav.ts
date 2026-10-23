@@ -1,8 +1,8 @@
 // Shared navigation model. `href` is an app path without a leading slash.
 // Calling `resolve()` prefixes the configured base, so links also work in
 // deployments under a URL prefix. `section` is the first path segment, used
-// for active-state matching across a whole section (e.g. any `/docs/*` page
-// lights up the "Docs" link).
+// for active-state matching across a whole section (e.g. any `/guide/*` page
+// lights up the "Guide" link).
 
 import { resolve } from "$app/paths";
 import type { Path, ResolvedPathname } from "$app/types";
@@ -29,7 +29,7 @@ export type DocsNavItem =
 
 /** Top-level site navigation, shown in the header. */
 export const NAV_LINKS: NavLink[] = [
-    { label: "Docs", href: "docs/getting-started/", section: "docs" },
+    { label: "Guide", href: "guide/getting-started/", section: "guide" },
     { label: "Visualizer", href: "visualizer/", section: "visualizer" },
     { label: "Benchmarks", href: "benchmarks/", section: "benchmarks" },
 ];
@@ -42,52 +42,52 @@ export const BENCHMARK_LINKS: NavLink[] = [
     { label: "Choosing a backend", href: "benchmarks/backends/" },
 ];
 
-/** Sidebar links for the docs section. */
+/** Sidebar links for the guide section. */
 export const DOCS_LINKS: NavLink[] = [
-    { label: "Overview", href: "docs/", section: "docs" },
+    { label: "Overview", href: "guide/", section: "guide" },
     {
         label: "Getting started",
-        href: "docs/getting-started/",
-        section: "docs",
+        href: "guide/getting-started/",
+        section: "guide",
     },
     {
         label: "Migrating from Argmin",
-        href: "docs/migrating-from-argmin/",
-        section: "docs",
+        href: "guide/migrating-from-argmin/",
+        section: "guide",
     },
     {
         label: "Migrating to Basin 2.0",
-        href: "docs/migrating-to-v2/",
-        section: "docs",
+        href: "guide/migrating-to-v2/",
+        section: "guide",
     },
     {
         label: "Migrating to Basin 3.0",
-        href: "docs/migrating-to-v3/",
-        section: "docs",
+        href: "guide/migrating-to-v3/",
+        section: "guide",
     },
 ];
 
 /** Sidebar links grouped by solver family. */
 export const SOLVER_LINKS: DocsNavItem[] = [
-    { label: "Choosing a solver", href: "docs/solvers/", fragment: "" },
+    { label: "Choosing a solver", href: "guide/solvers/", fragment: "" },
     {
         label: "First-order",
         children: [
             {
                 label: "Gradient descent",
-                href: "docs/solvers/first-order/gradient-descent/",
+                href: "guide/solvers/first-order/gradient-descent/",
             },
             {
                 label: "Nonlinear CG",
-                href: "docs/solvers/first-order/nonlinear-cg/",
+                href: "guide/solvers/first-order/nonlinear-cg/",
             },
             {
                 label: "Stochastic gradient descent",
-                href: "docs/solvers/first-order/sgd/",
+                href: "guide/solvers/first-order/sgd/",
             },
             {
                 label: "Projected gradient descent",
-                href: "docs/solvers/first-order/projected-gradient-descent/",
+                href: "guide/solvers/first-order/projected-gradient-descent/",
             },
         ],
     },
@@ -96,15 +96,15 @@ export const SOLVER_LINKS: DocsNavItem[] = [
         children: [
             {
                 label: "BFGS",
-                href: "docs/solvers/quasi-newton/bfgs/",
+                href: "guide/solvers/quasi-newton/bfgs/",
             },
             {
                 label: "L-BFGS",
-                href: "docs/solvers/quasi-newton/l-bfgs/",
+                href: "guide/solvers/quasi-newton/l-bfgs/",
             },
             {
                 label: "L-BFGS-B",
-                href: "docs/solvers/quasi-newton/l-bfgs-b/",
+                href: "guide/solvers/quasi-newton/l-bfgs-b/",
             },
         ],
     },
@@ -113,31 +113,31 @@ export const SOLVER_LINKS: DocsNavItem[] = [
         children: [
             {
                 label: "Nelder–Mead",
-                href: "docs/solvers/derivative-free/nelder-mead/",
+                href: "guide/solvers/derivative-free/nelder-mead/",
             },
             {
                 label: "MADS",
-                href: "docs/solvers/derivative-free/mads/",
+                href: "guide/solvers/derivative-free/mads/",
             },
             {
                 label: "NEWUOA",
-                href: "docs/solvers/derivative-free/newuoa/",
+                href: "guide/solvers/derivative-free/newuoa/",
             },
             {
                 label: "BOBYQA",
-                href: "docs/solvers/derivative-free/bobyqa/",
+                href: "guide/solvers/derivative-free/bobyqa/",
             },
             {
                 label: "LINCOA",
-                href: "docs/solvers/derivative-free/lincoa/",
+                href: "guide/solvers/derivative-free/lincoa/",
             },
             {
                 label: "COBYLA",
-                href: "docs/solvers/derivative-free/cobyla/",
+                href: "guide/solvers/derivative-free/cobyla/",
             },
             {
                 label: "Solis–Wets",
-                href: "docs/solvers/derivative-free/solis-wets/",
+                href: "guide/solvers/derivative-free/solis-wets/",
             },
         ],
     },
@@ -213,15 +213,15 @@ export const SOLVER_LINKS: DocsNavItem[] = [
 ];
 
 function solver(label: string, fragment: string): DocsNavItem {
-    return { label, href: "docs/solvers/", fragment };
+    return { label, href: "guide/solvers/", fragment };
 }
 
 /**
  * The active section for a route. Returns the first path segment
- * (`'docs'`, `'visualizer'`, …) or `''` for the landing page.
+ * (`'guide'`, `'visualizer'`, …) or `''` for the landing page.
  *
  * Derived from `page.route.id`, which is already base-independent
- * (`/docs/solvers`, never `/basin/...`), so there's no `base` prefix to
+ * (`/guide/solvers`, never `/basin/...`), so there's no `base` prefix to
  * strip, unlike `page.url.pathname`.
  */
 export function activeSection(routeId: string | null): string {

@@ -23,7 +23,7 @@ Each run has a {formatDuration(data.budgetNs)} time budget and stops early on
 reaching a gap of $10^{-10}$. The summaries report how often each solver reaches
 that target and how long the successful runs take. Expand the starting-point
 figures to inspect every run. For derivative and constraint requirements, read
-the [solver selection guide](../../docs/solvers/).
+the [solver selection guide](../../guide/solvers/).
 
 {#each BY_PROBLEM as group (group.problem)}
 <section aria-labelledby={group.problem}>

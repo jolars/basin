@@ -168,7 +168,7 @@ All three curves reach the display floor in this snapshot. Basin and NLopt do
 so at similar elapsed times, ahead of argmin. This is evidence for a small,
 smooth problem with cheap evaluations; it does not establish the same ordering
 for higher-dimensional problems or expensive objectives. See the
-[L-BFGS guide](../../docs/solvers/quasi-newton/l-bfgs/) for algorithm selection
+[L-BFGS guide](../../guide/solvers/quasi-newton/l-bfgs/) for algorithm selection
 and configuration.
 
 ## NEWUOA

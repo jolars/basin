@@ -57,9 +57,9 @@ and deploys the assets and Worker together.
 Check HTML, Markdown, redirects, and missing pages:
 
 ```sh
-curl -i https://basin.rs/docs/
-curl -i -H 'Accept: text/markdown' https://basin.rs/docs/
-curl -I https://basin.rs/docs
-curl -I https://www.basin.rs/docs/
+curl -i https://basin.rs/guide/
+curl -i -H 'Accept: text/markdown' https://basin.rs/guide/
+curl -I https://basin.rs/guide
+curl -I https://www.basin.rs/guide/
 curl -I https://basin.rs/does-not-exist/
 ```

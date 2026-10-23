@@ -12,7 +12,7 @@ const SITE_ORIGIN = "https://basin.rs";
 export const prerender = true;
 
 export function GET() {
-    const docs = `${SITE_ORIGIN}/docs`;
+    const guide = `${SITE_ORIGIN}/guide`;
 
     const body = `# basin
 
@@ -21,28 +21,28 @@ export function GET() {
 > Runs natively and in the browser. Use plain Vec<f64> or opt into
 > nalgebra, ndarray, or faer.
 
-## Docs
+## Guide
 
-- [Overview](${docs}/): how the problem, solver, state, and executor pieces fit together
-- [Getting started](${docs}/getting-started/): install, backend features, and a first solve
-- [Migrating from Argmin](${docs}/migrating-from-argmin/): map Argmin 0.11 problem traits, solvers, errors, bounds, observers, and backends to Basin
-- [Migrating to Basin 2.0](${docs}/migrating-to-v2/): upgrade from Basin 1.x, including constraints, states, termination reports, solver settings, and checkpoints
-- [Migrating to Basin 3.0](${docs}/migrating-to-v3/): development API with optional constraint declarations and standalone objective and residual traits
-- [Choosing a solver](${docs}/solvers/): selection guide and full catalog grouped by algorithm family, including constraint support and scalar root finding
-- [Gradient descent](${docs}/solvers/first-order/gradient-descent/): fixed steps, line searches, heavy-ball momentum, and a Rust example
-- [Nonlinear conjugate gradient](${docs}/solvers/first-order/nonlinear-cg/): Hager–Zhang and Polak–Ribière+ updates, restarts, and a Rust example
-- [Stochastic gradient descent](${docs}/solvers/first-order/sgd/): mini-batch gradients, seeded sampling, momentum, cost refreshes, and a Rust example
-- [Projected gradient descent](${docs}/solvers/first-order/projected-gradient-descent/): problem-side box bounds, projection, stationarity tests, and a Rust example
-- [BFGS](${docs}/solvers/quasi-newton/bfgs/): dense inverse-Hessian models, initialization, stopping tests, and a Rust example
-- [L-BFGS](${docs}/solvers/quasi-newton/l-bfgs/): when to use limited-memory BFGS, a Rust example, convergence settings, backend requirements, and original references
-- [L-BFGS-B](${docs}/solvers/quasi-newton/l-bfgs-b/): problem-side box bounds, limited-memory curvature, stopping tests, and a Rust example
-- [Nelder–Mead](${docs}/solvers/derivative-free/nelder-mead/): simplex search, adaptive coefficients, box projection, stopping tests, and a Rust example
-- [MADS](${docs}/solvers/derivative-free/mads/): OrthoMADS polling, box and nonlinear constraints, poll-size stopping, and a Rust example
-- [NEWUOA](${docs}/solvers/derivative-free/newuoa/): unconstrained quadratic interpolation, trust-region radii, and a Rust example
-- [BOBYQA](${docs}/solvers/derivative-free/bobyqa/): quadratic interpolation with box bounds, trust-region radii, and a Rust example
-- [LINCOA](${docs}/solvers/derivative-free/lincoa/): quadratic models with linear constraints, feasible starts, and a Rust example
-- [COBYLA](${docs}/solvers/derivative-free/cobyla/): linear interpolation models, general constraints, feasibility caveats, and a Rust example
-- [Solis–Wets](${docs}/solvers/derivative-free/solis-wets/): seeded random local search, adaptive step sizes, stopping tests, and a Rust example
+- [Overview](${guide}/): how the problem, solver, state, and executor pieces fit together
+- [Getting started](${guide}/getting-started/): install, backend features, and a first solve
+- [Migrating from Argmin](${guide}/migrating-from-argmin/): map Argmin 0.11 problem traits, solvers, errors, bounds, observers, and backends to Basin
+- [Migrating to Basin 2.0](${guide}/migrating-to-v2/): upgrade from Basin 1.x, including constraints, states, termination reports, solver settings, and checkpoints
+- [Migrating to Basin 3.0](${guide}/migrating-to-v3/): development API with optional constraint declarations and standalone objective and residual traits
+- [Choosing a solver](${guide}/solvers/): selection guide and full catalog grouped by algorithm family, including constraint support and scalar root finding
+- [Gradient descent](${guide}/solvers/first-order/gradient-descent/): fixed steps, line searches, heavy-ball momentum, and a Rust example
+- [Nonlinear conjugate gradient](${guide}/solvers/first-order/nonlinear-cg/): Hager–Zhang and Polak–Ribière+ updates, restarts, and a Rust example
+- [Stochastic gradient descent](${guide}/solvers/first-order/sgd/): mini-batch gradients, seeded sampling, momentum, cost refreshes, and a Rust example
+- [Projected gradient descent](${guide}/solvers/first-order/projected-gradient-descent/): problem-side box bounds, projection, stationarity tests, and a Rust example
+- [BFGS](${guide}/solvers/quasi-newton/bfgs/): dense inverse-Hessian models, initialization, stopping tests, and a Rust example
+- [L-BFGS](${guide}/solvers/quasi-newton/l-bfgs/): when to use limited-memory BFGS, a Rust example, convergence settings, backend requirements, and original references
+- [L-BFGS-B](${guide}/solvers/quasi-newton/l-bfgs-b/): problem-side box bounds, limited-memory curvature, stopping tests, and a Rust example
+- [Nelder–Mead](${guide}/solvers/derivative-free/nelder-mead/): simplex search, adaptive coefficients, box projection, stopping tests, and a Rust example
+- [MADS](${guide}/solvers/derivative-free/mads/): OrthoMADS polling, box and nonlinear constraints, poll-size stopping, and a Rust example
+- [NEWUOA](${guide}/solvers/derivative-free/newuoa/): unconstrained quadratic interpolation, trust-region radii, and a Rust example
+- [BOBYQA](${guide}/solvers/derivative-free/bobyqa/): quadratic interpolation with box bounds, trust-region radii, and a Rust example
+- [LINCOA](${guide}/solvers/derivative-free/lincoa/): quadratic models with linear constraints, feasible starts, and a Rust example
+- [COBYLA](${guide}/solvers/derivative-free/cobyla/): linear interpolation models, general constraints, feasibility caveats, and a Rust example
+- [Solis–Wets](${guide}/solvers/derivative-free/solis-wets/): seeded random local search, adaptive step sizes, stopping tests, and a Rust example
 
 ## Reference
 

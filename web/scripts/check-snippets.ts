@@ -47,7 +47,7 @@ const migrationPage = resolve(
     webDir,
     "src",
     "routes",
-    "docs",
+    "guide",
     "migrating-from-argmin",
     "+page.svx",
 );
@@ -57,7 +57,7 @@ function checkMigrationDependencyVersions(): void {
     // Versionary bumps the manifest in its release PR, after main already
     // documents the new API. The upgrade guide names that API's target version.
     const upgradePage = readFileSync(
-        resolve(webDir, "src/routes/docs/migrating-to-v3/+page.svx"),
+        resolve(webDir, "src/routes/guide/migrating-to-v3/+page.svx"),
         "utf8",
     );
     const expectedMajor = upgradePage.match(
@@ -181,7 +181,7 @@ const checks: PackageCheck[] = [
         name: "solver-guides",
         dependencies: basinDependency(),
         snippets: extractSolverSnippets(
-            resolve(webDir, "src/routes/docs/solvers"),
+            resolve(webDir, "src/routes/guide/solvers"),
         ),
         run: true,
     },

@@ -5,7 +5,7 @@
 Basin 3.0 development takes place on `main`. The optional constraint API
 requires a major release; do not publish it as a Basin 2.x fix. Follow
 [Maintenance and releases](MAINTENANCE.md) for release procedures and
-[the migration guide](web/src/routes/docs/migrating-to-v3/+page.svx) for API changes.
+[the migration guide](web/src/routes/guide/migrating-to-v3/+page.svx) for API changes.
 
 Basin follows [semantic versioning]. Breaking changes ship only in a major
 release, while new solvers, backends, and opt-in features arrive in minor

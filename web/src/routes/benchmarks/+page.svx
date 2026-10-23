@@ -22,7 +22,7 @@ plot the objective gap against elapsed time. They show both the speed of
 convergence and the effect of the starting point.
 
 Start here when choosing between algorithms. Read the results alongside the
-[solver selection guide](../docs/solvers/), which covers derivative
+[solver selection guide](../guide/solvers/), which covers derivative
 requirements, constraints, and problem structure.
 
 ## Comparing libraries

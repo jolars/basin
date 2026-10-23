@@ -76,7 +76,7 @@
     </p>
     <div class="mt-8 flex flex-wrap gap-3">
         <a
-            href={resolve("docs/getting-started/")}
+            href={resolve("guide/getting-started/")}
             class="px-5 py-2.5 rounded-lg bg-stone-900 text-white font-medium hover:bg-stone-700 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white transition-colors"
         >
             Get started

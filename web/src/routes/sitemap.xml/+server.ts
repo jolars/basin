@@ -8,7 +8,7 @@ const SITE_ORIGIN = "https://basin.rs";
 
 // Discover every page route at build time so the sitemap can't drift when
 // routes are added or removed. Glob keys look like
-// `/src/routes/docs/solvers/+page.svx`; map them to URL paths below.
+// `/src/routes/guide/solvers/+page.svx`; map them to URL paths below.
 const pageModules = import.meta.glob("/src/routes/**/+page.{svelte,svx,md}");
 
 function routePaths(): string[] {

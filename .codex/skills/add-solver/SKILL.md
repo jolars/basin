@@ -140,7 +140,7 @@ section whose claims are verified by tests. Give complete research references,
 including DOI or stable source URL when available, and identify the reference
 implementation and version when parity was used.
 
-Synchronize `web/src/routes/docs/solvers/+page.svx` in the same change:
+Synchronize `web/src/routes/guide/solvers/+page.svx` in the same change:
 
 - add the solver to the appropriate prose family with the same reference;
 - use the canonical docs.rs URL containing the defining snake-case module;

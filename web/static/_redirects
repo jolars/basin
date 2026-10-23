@@ -1,2 +1,5 @@
-/docs/migrating-convergence /docs/migrating-to-v2/#stopping-conditions 301
-/docs/migrating-convergence/ /docs/migrating-to-v2/#stopping-conditions 301
+/docs/migrating-convergence /guide/migrating-to-v2/#stopping-conditions 301
+/docs/migrating-convergence/ /guide/migrating-to-v2/#stopping-conditions 301
+/docs /guide/ 301
+/docs/ /guide/ 301
+/docs/* /guide/:splat 301

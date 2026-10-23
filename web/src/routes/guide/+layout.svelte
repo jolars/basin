@@ -9,97 +9,97 @@
     // Per-doc-page <title>/description. The docs `.svx` pages set no
     // <svelte:head> of their own, so this layout is the single title
     // source for the whole section (one tag per page, no duplicates).
-    // Keyed by `page.route.id`, which is base-independent (`/docs/solvers`,
+    // Keyed by `page.route.id`, which is base-independent (`/guide/solvers`,
     // never `/basin/...`), unlike `resolve()` from `$app/paths`, which
     // returns a page-relative string (`../..`) under the default
     // `paths.relative`.
     const DOCS_META: Record<string, { title: string; description: string }> = {
-        "/docs": {
+        "/guide": {
             title: "Documentation – Basin",
             description:
                 "Learn how to define an optimization problem, choose a solver, and run it with Basin.",
         },
-        "/docs/getting-started": {
+        "/guide/getting-started": {
             title: "Getting started – Basin",
             description:
                 "Install Basin and run your first solve: implement CostFunction, add a Gradient when needed, then drive a solver with the Executor.",
         },
-        "/docs/migrating-from-argmin": {
+        "/guide/migrating-from-argmin": {
             title: "Migrating from Argmin – Basin",
             description:
                 "Migrate an Argmin 0.11 application to Basin, including executors, solvers, typed errors, finite differences, bounds, observers, and backends.",
         },
-        "/docs/migrating-to-v2": {
+        "/guide/migrating-to-v2": {
             title: "Migrating to Basin 2.0 – Basin",
             description:
                 "Upgrade from Basin 1.x to 2.0: migrate problem constraints, progress states, termination reports, solver settings, and checkpoints.",
         },
-        "/docs/solvers": {
+        "/guide/solvers": {
             title: "Choosing a solver – Basin",
             description:
                 "Choose a Basin solver based on your derivatives, constraints, and problem structure, then browse the full solver catalog.",
         },
-        "/docs/solvers/first-order/gradient-descent": {
+        "/guide/solvers/first-order/gradient-descent": {
             title: "Gradient descent – Basin",
             description:
                 "When to use gradient descent, how fixed steps, line searches, and heavy-ball momentum work, and how to run it in Basin, with references.",
         },
-        "/docs/solvers/first-order/nonlinear-cg": {
+        "/guide/solvers/first-order/nonlinear-cg": {
             title: "Nonlinear conjugate gradient – Basin",
             description:
                 "When to use nonlinear conjugate gradient, how Hager–Zhang and Polak–Ribière+ updates work, and how to run it in Basin, with references.",
         },
-        "/docs/solvers/first-order/sgd": {
+        "/guide/solvers/first-order/sgd": {
             title: "Stochastic gradient descent – Basin",
             description:
                 "When to use SGD, how mini-batch sampling, momentum, and cost refreshes work, and how to run it in Basin, with references.",
         },
-        "/docs/solvers/first-order/projected-gradient-descent": {
+        "/guide/solvers/first-order/projected-gradient-descent": {
             title: "Projected gradient descent – Basin",
             description:
                 "When to use projected gradient descent, how box bounds and projected stationarity work, and how to run it in Basin, with references.",
         },
-        "/docs/solvers/quasi-newton/l-bfgs": {
+        "/guide/solvers/quasi-newton/l-bfgs": {
             title: "L-BFGS – Basin",
             description:
                 "When to use L-BFGS, how limited-memory quasi-Newton optimization works, and how to configure and run it in Basin, with original references.",
         },
-        "/docs/solvers/derivative-free/nelder-mead": {
+        "/guide/solvers/derivative-free/nelder-mead": {
             title: "Nelder–Mead – Basin",
             description:
                 "When to use Nelder–Mead, how simplex search and box projection work, and how to configure and run it in Basin, with references.",
         },
-        "/docs/solvers/derivative-free/mads": {
+        "/guide/solvers/derivative-free/mads": {
             title: "MADS – Basin",
             description:
                 "When to use mesh adaptive direct search, how OrthoMADS polling and constraint barriers work, and how to run it in Basin, with references.",
         },
-        "/docs/solvers/derivative-free/newuoa": {
+        "/guide/solvers/derivative-free/newuoa": {
             title: "NEWUOA – Basin",
             description:
                 "When to use NEWUOA, how quadratic interpolation and trust regions work, and how to configure and run it in Basin, with references.",
         },
-        "/docs/solvers/derivative-free/bobyqa": {
+        "/guide/solvers/derivative-free/bobyqa": {
             title: "BOBYQA – Basin",
             description:
                 "When to use BOBYQA, how quadratic models handle box bounds, and how to configure and run it in Basin, with references.",
         },
-        "/docs/solvers/derivative-free/lincoa": {
+        "/guide/solvers/derivative-free/lincoa": {
             title: "LINCOA – Basin",
             description:
                 "When to use LINCOA, how quadratic models handle linear constraints, and how to configure and run it in Basin, with references.",
         },
-        "/docs/solvers/derivative-free/cobyla": {
+        "/guide/solvers/derivative-free/cobyla": {
             title: "COBYLA – Basin",
             description:
                 "When to use COBYLA, how linear interpolation models handle constraints, and how to configure and run it in Basin, with references.",
         },
-        "/docs/solvers/derivative-free/solis-wets": {
+        "/guide/solvers/derivative-free/solis-wets": {
             title: "Solis–Wets – Basin",
             description:
                 "When to use Solis–Wets, how adaptive random local search works, and how to configure and run it in Basin, with references.",
         },
-        "/docs/migrating-to-v3": {
+        "/guide/migrating-to-v3": {
             title: "Migrating to Basin 3.0 – Basin",
             description:
                 "Upgrade from Basin 2.0 to 3.0: optional constraint declarations, standalone evaluation traits, and unconstrained solver behavior.",

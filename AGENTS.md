@@ -12,7 +12,7 @@ prepares Basin 3.0, while `v1` maintains the latest 1.x release. Each branch
 owns its release configuration, versions, changelog, and baseline manifest.
 The Basin 1.x compatibility requirements in this guide and `CONTRIBUTING.md`
 apply to the `v1` branch. On `main`, implement the optional constraint API for Basin 3.0 and document
-migration in `web/src/routes/docs/migrating-to-v3/+page.svx`. Do not release
+migration in `web/src/routes/guide/migrating-to-v3/+page.svx`. Do not release
 these breaking changes as a Basin 2.x patch or minor update.
 
 ## Project priorities
@@ -166,7 +166,7 @@ slashes. The sitemap discovers pages automatically.
 ### Solver catalogue
 
 When a solver is added, removed, renamed, or changes backend support or
-references, update `web/src/routes/docs/solvers/+page.svx` in the same change:
+references, update `web/src/routes/guide/solvers/+page.svx` in the same change:
 
 - The prose catalogue must equal the public solver re-exports in
   `crates/basin/src/lib.rs`.

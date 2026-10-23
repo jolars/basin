@@ -14,13 +14,13 @@ starting point. Use plain Rust vectors or your choice of nalgebra, ndarray, or
 faer. Basin runs natively and in the browser, with no BLAS/LAPACK or threads
 required by the default build. Its design is inspired by [argmin].
 
-Narrative documentation lives at [basin.rs/docs]; the rustdoc reference is at
+Narrative documentation lives at [basin.rs/guide]; the rustdoc reference is at
 [docs.rs/basin]. There is also an in-browser [solver visualizer] and a
 [benchmarks site] comparing Basin against competing crates and across backends
 and solvers.
 
 To port an existing Argmin project, see [Migrating from
-Argmin](https://basin.rs/docs/migrating-from-argmin/).
+Argmin](https://basin.rs/guide/migrating-from-argmin/).
 
 ## Install
 
@@ -190,7 +190,7 @@ If you use Basin in your research, please cite the paper:
 </details>
 
 [CITATION.cff](CITATION.cff) carries the same reference in machine-readable
-form, and [basin.rs/docs] renders it in APA, BibTeX, and BibLaTeX.
+form, and [basin.rs/guide] renders it in APA, BibTeX, and BibLaTeX.
 
 ## Acknowledgements
 
@@ -238,8 +238,8 @@ dual licensed as above, without any additional terms or conditions.
 [nalgebra]: https://nalgebra.rs
 [ndarray]: https://github.com/rust-ndarray/ndarray
 [faer]: https://faer.veganb.tw
-[basin.rs/docs]: https://basin.rs/docs/
+[basin.rs/guide]: https://basin.rs/guide/
 [docs.rs/basin]: https://docs.rs/basin
 [solver visualizer]: https://basin.rs/visualizer/
 [benchmarks site]: https://basin.rs/benchmarks/
-[Solvers]: https://basin.rs/docs/solvers/
+[Solvers]: https://basin.rs/guide/solvers/

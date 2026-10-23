@@ -1,6 +1,6 @@
 import type { Path } from "$app/types";
 
-const pages = import.meta.glob<string>("/src/routes/docs/**/+page.svx", {
+const pages = import.meta.glob<string>("/src/routes/guide/**/+page.svx", {
     query: "?raw",
     import: "default",
     eager: true,
