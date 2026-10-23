@@ -11,8 +11,7 @@ Hessian. Its limited memory makes it useful when a full BFGS matrix would be too
 large.
 
 [API
-reference](https://docs.rs/basin/latest/basin/solver/lbfgs/struct.Lbfgs.html) ·
-[Compare solvers](../../)
+reference](https://docs.rs/basin/latest/basin/solver/lbfgs/struct.Lbfgs.html)
 
   | Property    | Requirement                                                        |
   | ----------- | ------------------------------------------------------------------ |
@@ -115,28 +114,20 @@ box-constrained L-BFGS-B mode, also available through the `Lbfgsb` alias.
 
 ## Practical considerations
 
-**Scale the parameters.** When parameter units differ greatly, rescaling can
-make the curvature information and gradient tolerance easier to interpret. An
-absolute tolerance of `1e-8` is a choice for the example above; choose your
-threshold for the units, precision, and derivative accuracy of your problem.
+### Scale the parameters
 
-**Start with the default history length.** Basin retains up to ten curvature
-pairs by default. `with_m_capacity(m)` changes this capacity for a fresh solve.
-Increasing it stores more information and uses more memory, but does not
-guarantee faster convergence.
+When parameter units differ greatly, rescaling can make the curvature
+information and gradient tolerance easier to interpret. An absolute tolerance of
+`1e-8` is a choice for the example above; choose your threshold for the units,
+precision, and derivative accuracy of your problem.
 
-**Choose a stopping test.** Unconstrained L-BFGS has no default optimality
-check. Use `with_absolute_gradient_tolerance` to test the Euclidean gradient
-norm, or configure a relative gradient tolerance. Keep iteration and evaluation
-budgets on the executor. Reaching a budget means the run stopped; inspect the
-termination report to see whether a convergence test passed.
+### Start with the default history length
 
-**Check numerical derivatives.** You can wrap the objective in
-[`FiniteDiff`](https://docs.rs/basin/latest/basin/core/numdiff/struct.FiniteDiff.html)
-when an analytic gradient is unavailable. This adds objective evaluations and
-introduces derivative error, so account for both when choosing a tolerance.
+Basin retains up to ten curvature pairs by default. `with_m_capacity(m)` changes
+this capacity for a fresh solve. Increasing it stores more information and uses
+more memory, but does not guarantee faster convergence.
 
-## Basin implementation
+## Implementation
 
 The unconstrained mode uses the two-loop recursion with a scaled identity
 initial approximation. Basin skips curvature updates that fail its curvature

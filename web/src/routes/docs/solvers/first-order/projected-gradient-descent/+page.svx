@@ -11,7 +11,6 @@ without storing a Hessian approximation.
 
 [API
 reference](https://docs.rs/basin/latest/basin/solver/projected_gradient_descent/struct.ProjectedGradientDescent.html)
-· [Compare solvers](../../)
 
   | Property    | Requirement                                             |
   | ----------- | ------------------------------------------------------- |
@@ -134,29 +133,35 @@ The starting point lies outside the box. Initialization projects it to
 
 ## Practical considerations
 
-**Choose a step for your objective's scale.** A small fixed step can make
-progress slow, while an overly large one can cause oscillation or repeated jumps
-between bounds. Rescale parameters and check objective values as you tune the
-step. The value `0.1` is appropriate for the example's curvature; it is not a
-general default.
+### Choose a step for your objective's scale
 
-**Use a projected stationarity test.** Configure
-`with_absolute_projected_gradient_tolerance` for the infinity norm of
+A small fixed step can make progress slow, while an overly large one can cause
+oscillation or repeated jumps between bounds. Rescale parameters and check
+objective values as you tune the step. The value `0.1` is appropriate for the
+example's curvature; it is not a general default.
+
+### Use a projected stationarity test
+
+Configure `with_absolute_projected_gradient_tolerance` for the infinity norm of
 `x - projection(x - gradient)`. The check is disabled by default; zero tests
 exact stationarity. Choose the tolerance for your parameter units and derivative
 accuracy. Optional step and cost-change checks can also stop a run, but a small
 observed change alone does not establish stationarity.
 
-**Keep budgets on the executor.** Set iteration and evaluation limits there,
-then inspect the termination report. Reaching a budget and satisfying a
-convergence test give different reasons for stopping.
+### Keep budgets on the executor
 
-**Check where the objective is defined.** The fixed-step strategy evaluates the
-projected iterates. A custom line search may call your objective and gradient
-outside the box. If those evaluations are invalid, use a fixed step or a solver
-with a bound-aware search, such as L-BFGS-B.
+Set iteration and evaluation limits there, then inspect the termination report.
+Reaching a budget and satisfying a convergence test give different reasons for
+stopping.
 
-## Basin implementation
+### Check where the objective is defined
+
+The fixed-step strategy evaluates the projected iterates. A custom line search
+may call your objective and gradient outside the box. If those evaluations are
+invalid, use a fixed step or a solver with a bound-aware search, such as
+L-BFGS-B.
+
+## Implementation
 
 Bounds belong to the problem through `Constraints`, using a box-only
 `ConstraintSet<BoxBounds<V>>`. The solver requires this declaration and rejects

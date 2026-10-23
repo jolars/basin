@@ -149,7 +149,7 @@ makes every direction steepest descent. The Hager–Zhang coefficient parameter
 `eta` controls its update safeguard, rather than a stopping tolerance, and has
 no effect on Polak–Ribière+.
 
-## Basin implementation
+## Implementation
 
 Basin stores the search direction and restart bookkeeping on `NonlinearCg` and
 publishes the current point, objective, and gradient through `FirstOrderState`.

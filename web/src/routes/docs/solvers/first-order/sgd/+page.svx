@@ -9,8 +9,7 @@ average a loss over many samples. Each step uses the gradient from a small
 batch, so you can update the parameters without computing the full gradient.
 Basin uses a constant learning rate and offers optional heavy-ball momentum.
 
-[API reference](https://docs.rs/basin/latest/basin/solver/sgd/struct.Sgd.html) ·
-[Compare solvers](../../)
+[API reference](https://docs.rs/basin/latest/basin/solver/sgd/struct.Sgd.html)
 
   | Property    | Requirement                                                 |
   | ----------- | ----------------------------------------------------------- |
@@ -128,29 +127,28 @@ does not establish convergence.
 
 ## Practical considerations
 
-**Tune the learning rate.** A large rate can produce unstable steps, while a
-small rate can make progress slow. Scale the input features and parameters, and
-compare a few rates on a representative subset. Basin does not decay the rate
-automatically. The decreasing-rate convergence discussion in [Bottou
-(2012)](#ref-bottou-2012) does not directly apply to this fixed-rate solver.
+### Tune the learning rate
 
-**Choose the batch size deliberately.** Larger batches reduce the variation in
-the gradient but require more work per step. The batch size must be positive;
-Basin clamps it to the number of samples if necessary. Use a size that divides
-the sample count when every sample must participate in each epoch.
+A large rate can produce unstable steps, while a small rate can make progress
+slow. Scale the input features and parameters, and compare a few rates on a
+representative subset. Basin does not decay the rate automatically. The
+decreasing-rate convergence discussion in [Bottou (2012)](#ref-bottou-2012) does
+not directly apply to this fixed-rate solver.
 
-**Retune when adding momentum.** `with_momentum(beta)` can carry progress
-through successive directions, but it also changes stability. Reduce the
-learning rate if the parameters oscillate or diverge. Momentum does not remove
-batch noise or guarantee faster convergence.
+### Choose the batch size deliberately
 
-**Match stopping rules to reporting.** Use executor iteration or gradient
-evaluation budgets to limit mini-batch work. SGD has no gradient-tolerance
-setting because its state does not publish a full gradient. Optional cost- and
-step-change checks observe objective refreshes, so choose their thresholds and
-any executor stall patience with the refresh period in mind.
+Larger batches reduce the variation in the gradient but require more work per
+step. The batch size must be positive; Basin clamps it to the number of samples
+if necessary. Use a size that divides the sample count when every sample must
+participate in each epoch.
 
-## Basin implementation
+### Retune when adding momentum
+
+`with_momentum(beta)` can carry progress through successive directions, but it
+also changes stability. Reduce the learning rate if the parameters oscillate or
+diverge. Momentum does not remove batch noise or guarantee faster convergence.
+
+## Implementation
 
 Basin evaluates the full objective at the starting point, then refreshes it
 every `n_samples / batch_size` mini-batch steps by default, using the clamped
