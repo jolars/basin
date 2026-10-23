@@ -2,6 +2,7 @@
 //!
 //! Run with the default serial features:
 //! `cargo run --release -p competitor-bench --bin trace`.
+//! Append `-- --nm` to run only the shared-simplex Nelder-Mead comparison.
 //! Cases, starts, targets, and remaining comparison asymmetries are documented
 //! on the website's library-benchmark page. These traces measure solver
 //! effectiveness, including differences in trajectories and stopping rules.
@@ -22,15 +23,14 @@ use basin::problems::{
     styblinski_tang,
 };
 use basin::{
-    CountsMirror, Executor, FirstOrderState, GradientDescent,
-    IntoInitialSimplex, Lbfgsb, MoreThuente, NelderMead, Newuoa, PointState,
-    SimplexProgress, Solver, State as BasinState, StepOutcome,
+    CountsMirror, Executor, FirstOrderState, GradientDescent, Lbfgsb,
+    MoreThuente, NelderMead, Newuoa, PointState, SimplexProgress, Solver,
+    State as BasinState, StepOutcome,
 };
 use competitor_bench::{
-    ArgminProblem, GomezProblem, cobyla, convergence, lm, slsqp,
+    ArgminProblem, GomezProblem, cobyla, convergence, lm, nm, slsqp,
 };
 use gomez::OptimizerDriver;
-use gomez::algo::NelderMead as GomezNelderMead;
 
 /// Safety cap, not a prescription of equal work across libraries.
 const MAX_ITERS: u64 = 10_000;
@@ -181,9 +181,7 @@ fn finite_start(mut pts: Vec<(u128, f64)>, f0: f64) -> Vec<(u128, f64)> {
 }
 
 fn nm_start() -> Vec<f64> {
-    (0..NM_N)
-        .map(|i| if i % 2 == 0 { -1.2 } else { 1.0 })
-        .collect()
+    nm::start(NM_N)
 }
 
 fn gomez_trace_nm(f0: f64) -> Vec<(u128, f64)> {
@@ -191,7 +189,7 @@ fn gomez_trace_nm(f0: f64) -> Vec<(u128, f64)> {
     let problem = GomezProblem::new(rosenbrock, NM_N);
     let mut optimizer = OptimizerDriver::builder(&problem)
         .with_initial(nm_start())
-        .with_algo(GomezNelderMead::new)
+        .with_algo(nm::gomez_solver)
         .build();
     let mut pts = Vec::with_capacity(MAX_ITERS as usize + 1);
     pts.push((0u128, f0));
@@ -262,6 +260,9 @@ fn nlopt_trace(
     );
     if matches!(algo, nlopt::Algorithm::Lbfgs) {
         opt.set_vector_storage(Some(10)).unwrap();
+    }
+    if matches!(algo, nlopt::Algorithm::Neldermead) {
+        opt.set_initial_step(&nm::initial_steps(NM_N)).unwrap();
     }
     opt.set_maxeval(MAX_ITERS as u32).unwrap();
     opt.set_stopval(1e-10).unwrap();
@@ -469,14 +470,100 @@ fn published_trace(
     }
 }
 
+fn nm_traces() -> Vec<Trace> {
+    let nm_f0 = rosenbrock(&nm_start());
+    vec![
+        // ---- Nelder-Mead (standard coeffs, identical initial simplex) ----
+        Trace {
+            violations: Vec::new(),
+            summary: None,
+            solver: "nm",
+            problem: "rosenbrock",
+            n: NM_N,
+            f_opt: F_OPT,
+            library: "basin",
+            points: median_reps(|| {
+                basin_trace(
+                    Executor::new(
+                        Rosenbrock::<Vec<f64>>::default(),
+                        NelderMead::new(),
+                        SimplexProgress::from_simplex(nm::initial_simplex(
+                            NM_N,
+                        )),
+                    ),
+                    MAX_ITERS,
+                )
+            }),
+        },
+        Trace {
+            violations: Vec::new(),
+            summary: None,
+            solver: "nm",
+            problem: "rosenbrock",
+            n: NM_N,
+            f_opt: F_OPT,
+            library: "argmin",
+            points: finite_start(
+                median_reps(|| {
+                    let simplex = nm::initial_simplex(NM_N);
+                    let nm = ArgminNelderMead::new(simplex)
+                        .with_sd_tolerance(0.0)
+                        .unwrap();
+                    let (obs, points) = observer();
+                    ArgminExecutor::new(
+                        ArgminProblem::new(rosenbrock, rosenbrock_gradient),
+                        nm,
+                    )
+                    .configure(|s| s.max_iters(MAX_ITERS).target_cost(1e-10))
+                    .add_observer(obs, ObserverMode::Always)
+                    .run()
+                    .unwrap();
+                    drain(&points)
+                }),
+                nm_f0,
+            ),
+        },
+        Trace {
+            violations: Vec::new(),
+            summary: None,
+            solver: "nm",
+            problem: "rosenbrock",
+            n: NM_N,
+            f_opt: F_OPT,
+            library: "gomez",
+            points: median_reps(|| gomez_trace_nm(nm_f0)),
+        },
+        Trace {
+            violations: Vec::new(),
+            summary: None,
+            solver: "nm",
+            problem: "rosenbrock",
+            n: NM_N,
+            f_opt: F_OPT,
+            library: "nlopt",
+            points: median_reps(|| {
+                nlopt_trace(
+                    nlopt::Algorithm::Neldermead,
+                    rosenbrock,
+                    noop_grad,
+                    nm_f0,
+                )
+            }),
+        },
+    ]
+}
+
 fn main() {
     assert!(
         !cfg!(feature = "parallel") && !cfg!(feature = "basin-latest"),
         "Publish competitor traces with the default, serial nalgebra 0.34 configuration"
     );
+    if std::env::args().nth(1).as_deref() == Some("--nm") {
+        print_traces(&nm_traces());
+        return;
+    }
     // Cost at the shared start, used to give argmin's curve a finite t = 0.
     let f0 = rosenbrock(&start());
-    let nm_f0 = rosenbrock(&nm_start());
 
     let mut traces = vec![
         // ---- gradient descent (steepest + More-Thuente) ----
@@ -526,84 +613,6 @@ fn main() {
                 }),
                 f0,
             ),
-        },
-        // ---- Nelder-Mead (standard coeffs, identical initial simplex) ----
-        Trace {
-            violations: Vec::new(),
-            summary: None,
-            solver: "nm",
-            problem: "rosenbrock",
-            n: NM_N,
-            f_opt: F_OPT,
-            library: "basin",
-            points: median_reps(|| {
-                basin_trace(
-                    Executor::new(
-                        Rosenbrock::<Vec<f64>>::default(),
-                        NelderMead::new(),
-                        SimplexProgress::new(nm_start()),
-                    ),
-                    MAX_ITERS,
-                )
-            }),
-        },
-        Trace {
-            violations: Vec::new(),
-            summary: None,
-            solver: "nm",
-            problem: "rosenbrock",
-            n: NM_N,
-            f_opt: F_OPT,
-            library: "argmin",
-            points: finite_start(
-                median_reps(|| {
-                    let simplex = IntoInitialSimplex::into_initial_simplex(
-                        nm_start(),
-                        0.05,
-                    );
-                    let nm = ArgminNelderMead::new(simplex)
-                        .with_sd_tolerance(0.0)
-                        .unwrap();
-                    let (obs, points) = observer();
-                    ArgminExecutor::new(
-                        ArgminProblem::new(rosenbrock, rosenbrock_gradient),
-                        nm,
-                    )
-                    .configure(|s| s.max_iters(MAX_ITERS).target_cost(1e-10))
-                    .add_observer(obs, ObserverMode::Always)
-                    .run()
-                    .unwrap();
-                    drain(&points)
-                }),
-                nm_f0,
-            ),
-        },
-        Trace {
-            violations: Vec::new(),
-            summary: None,
-            solver: "nm",
-            problem: "rosenbrock",
-            n: NM_N,
-            f_opt: F_OPT,
-            library: "gomez",
-            points: median_reps(|| gomez_trace_nm(nm_f0)),
-        },
-        Trace {
-            violations: Vec::new(),
-            summary: None,
-            solver: "nm",
-            problem: "rosenbrock",
-            n: NM_N,
-            f_opt: F_OPT,
-            library: "nlopt",
-            points: median_reps(|| {
-                nlopt_trace(
-                    nlopt::Algorithm::Neldermead,
-                    rosenbrock,
-                    noop_grad,
-                    nm_f0,
-                )
-            }),
         },
         // ---- L-BFGS (limited memory m = 10, More-Thuente) ----
         Trace {
@@ -714,6 +723,8 @@ fn main() {
             }),
         },
     ];
+
+    traces.extend(nm_traces());
 
     for library in [
         slsqp::Library::Basin,

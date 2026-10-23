@@ -3,7 +3,10 @@
 use std::cell::Cell;
 
 use basin::problems::{Rosenbrock, rosenbrock};
-use basin::{Executor, NelderMead, SimplexProgress, State, StepOutcome};
+use basin::{
+    Executor, IntoInitialSimplex, NelderMead, SimplexProgress, State,
+    StepOutcome,
+};
 use gomez::nalgebra::{Dyn, IsContiguous, Storage, Vector};
 use gomez::{Domain, Function, OptimizerDriver, Problem};
 
@@ -16,6 +19,26 @@ pub fn start(n: usize) -> Vec<f64> {
     (0..n)
         .map(|i| if i % 2 == 0 { -1.2 } else { 1.0 })
         .collect()
+}
+
+pub fn initial_simplex(n: usize) -> Vec<Vec<f64>> {
+    start(n).into_initial_simplex(0.05)
+}
+
+/// Derive additive offsets from the shared vertices, preserving their rounding.
+pub fn initial_steps(n: usize) -> Vec<f64> {
+    let simplex = initial_simplex(n);
+    (0..n).map(|i| simplex[i + 1][i] - simplex[0][i]).collect()
+}
+
+pub fn gomez_solver<P: Problem<Field = f64>>(
+    problem: &P,
+    domain: &Domain<f64>,
+) -> gomez::algo::NelderMead<P> {
+    // Gomez copies the domain scale as additive simplex offsets at construction.
+    // Derive them from Basin's vertices instead of its unit-step default.
+    let domain = domain.clone().with_scale(initial_steps(domain.dim()));
+    gomez::algo::NelderMead::new(problem, &domain)
 }
 
 #[derive(Debug)]
@@ -42,7 +65,7 @@ pub fn solve_basin(n: usize) -> Summary {
     let mut stepper = Executor::new(
         Rosenbrock::<Vec<f64>>::default(),
         NelderMead::new(),
-        SimplexProgress::new(start(n)),
+        SimplexProgress::from_simplex(initial_simplex(n)),
     )
     .max_iter(MAX_ITERS)
     .into_stepper()
@@ -90,8 +113,8 @@ impl<const COUNT: bool> Function for GomezCounted<COUNT> {
     }
 }
 
-/// Gomez's default simplex uses unit coordinate steps, versus Basin's 5% steps.
-/// Its rounding, inner-contraction tie rule, and collapse stop also differ.
+/// Gomez starts from the same vertices as Basin, using standard coefficients.
+/// Its subsequent rounding, inner-contraction tie rule, and collapse stop differ.
 /// Disable counting for timing; verify with counting in a separate run.
 pub fn solve_gomez<const COUNT: bool>(n: usize) -> Summary {
     let problem = GomezCounted::<COUNT> {
@@ -100,7 +123,7 @@ pub fn solve_gomez<const COUNT: bool>(n: usize) -> Summary {
     };
     let mut optimizer = OptimizerDriver::builder(&problem)
         .with_initial(start(n))
-        .with_algo(gomez::algo::NelderMead::new)
+        .with_algo(gomez_solver)
         .build();
     let mut iterations = 0;
     let mut last_cost = f64::NAN;

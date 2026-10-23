@@ -14,7 +14,7 @@
 //! the completed iterations and final costs.
 //!
 //! The `nm_target_*` groups compare Basin and Gomez at the published objective
-//! target, retaining their different initial simplexes and internal stops.
+//! target, using identical initial simplexes and retaining their internal stops.
 //! `verify_nm` reports actual callbacks, quality, and budget-limited cases.
 //! The `nm_step_*` groups isolate implementation changes on identical inputs.
 //!
@@ -170,7 +170,7 @@ fn bench_cobyla(c: &mut Criterion) {
 fn bench_nm_target(c: &mut Criterion) {
     use competitor_bench::nm;
 
-    // These are effectiveness comparisons: the default simplexes differ.
+    // The initial simplex is identical, but trajectories and stopping rules differ.
     // Both timers include setup, initialization, extraction, and teardown.
     for n in [2, 12, 24] {
         for result in [nm::solve_basin(n), nm::solve_gomez::<true>(n)] {
@@ -201,7 +201,12 @@ fn bench_nm_step(c: &mut Criterion) {
                         Problem::new(Rosenbrock::<Vec<f64>>::default());
                     let mut solver = NelderMead::new();
                     let state = solver
-                        .init(&mut problem, SimplexProgress::new(nm::start(n)))
+                        .init(
+                            &mut problem,
+                            SimplexProgress::from_simplex(nm::initial_simplex(
+                                n,
+                            )),
+                        )
                         .unwrap();
                     (problem, solver, state)
                 },
