@@ -4,7 +4,12 @@
 // for active-state matching across a whole section (e.g. any `/docs/*` page
 // lights up the "Docs" link).
 
-import type { Path } from "$app/types";
+import { resolve } from "$app/paths";
+import type { Path, ResolvedPathname } from "$app/types";
+
+// A single-path signature avoids TypeScript's limit on Kit's generated union
+// of argument tuples while preserving validation against the site's paths.
+export const resolvePath = resolve as (path: Path) => ResolvedPathname;
 
 export type NavLink = {
     label: string;
@@ -106,13 +111,34 @@ export const SOLVER_LINKS: DocsNavItem[] = [
     {
         label: "Derivative-free",
         children: [
-            solver("Nelder–Mead", "nelder-mead"),
-            solver("MADS", "mads"),
-            solver("NEWUOA", "newuoa"),
-            solver("BOBYQA", "bobyqa"),
-            solver("LINCOA", "lincoa"),
-            solver("COBYLA", "cobyla"),
-            solver("Solis–Wets", "solis-wets"),
+            {
+                label: "Nelder–Mead",
+                href: "docs/solvers/derivative-free/nelder-mead/",
+            },
+            {
+                label: "MADS",
+                href: "docs/solvers/derivative-free/mads/",
+            },
+            {
+                label: "NEWUOA",
+                href: "docs/solvers/derivative-free/newuoa/",
+            },
+            {
+                label: "BOBYQA",
+                href: "docs/solvers/derivative-free/bobyqa/",
+            },
+            {
+                label: "LINCOA",
+                href: "docs/solvers/derivative-free/lincoa/",
+            },
+            {
+                label: "COBYLA",
+                href: "docs/solvers/derivative-free/cobyla/",
+            },
+            {
+                label: "Solis–Wets",
+                href: "docs/solvers/derivative-free/solis-wets/",
+            },
         ],
     },
     {

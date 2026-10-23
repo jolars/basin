@@ -28,15 +28,22 @@
                     ({#if reference.edition}{formatEdition(reference.edition)},
                     {/if}pp. {reference.page?.replaceAll("-", "–")}).
                     {reference.publisher}.
+                {:else if reference.type === "report"}
+                    <cite>{reference.title}</cite>. Report {reference.number}.
+                    {reference.publisher}.
                 {:else}
                     {reference.title}.
                     <cite>{reference["container-title"]}</cite>,
                     {reference.volume}{#if reference.issue}({reference.issue}){/if},
                     {reference.page?.replaceAll("-", "–")}.
                 {/if}
-                <a href={`https://doi.org/${reference.DOI}`}
-                    >doi:{reference.DOI}</a
-                >.
+                {#if reference.DOI}
+                    <a href={`https://doi.org/${reference.DOI}`}
+                        >doi:{reference.DOI}</a
+                    >.
+                {:else if reference.URL}
+                    <a href={reference.URL}>Full text</a>.
+                {/if}
             </li>
         {/each}
     </ol>

@@ -64,6 +64,41 @@
             description:
                 "When to use L-BFGS, how limited-memory quasi-Newton optimization works, and how to configure and run it in Basin, with original references.",
         },
+        "/docs/solvers/derivative-free/nelder-mead": {
+            title: "Nelder–Mead – Basin",
+            description:
+                "When to use Nelder–Mead, how simplex search and box projection work, and how to configure and run it in Basin, with references.",
+        },
+        "/docs/solvers/derivative-free/mads": {
+            title: "MADS – Basin",
+            description:
+                "When to use mesh adaptive direct search, how OrthoMADS polling and constraint barriers work, and how to run it in Basin, with references.",
+        },
+        "/docs/solvers/derivative-free/newuoa": {
+            title: "NEWUOA – Basin",
+            description:
+                "When to use NEWUOA, how quadratic interpolation and trust regions work, and how to configure and run it in Basin, with references.",
+        },
+        "/docs/solvers/derivative-free/bobyqa": {
+            title: "BOBYQA – Basin",
+            description:
+                "When to use BOBYQA, how quadratic models handle box bounds, and how to configure and run it in Basin, with references.",
+        },
+        "/docs/solvers/derivative-free/lincoa": {
+            title: "LINCOA – Basin",
+            description:
+                "When to use LINCOA, how quadratic models handle linear constraints, and how to configure and run it in Basin, with references.",
+        },
+        "/docs/solvers/derivative-free/cobyla": {
+            title: "COBYLA – Basin",
+            description:
+                "When to use COBYLA, how linear interpolation models handle constraints, and how to configure and run it in Basin, with references.",
+        },
+        "/docs/solvers/derivative-free/solis-wets": {
+            title: "Solis–Wets – Basin",
+            description:
+                "When to use Solis–Wets, how adaptive random local search works, and how to configure and run it in Basin, with references.",
+        },
         "/docs/migrating-to-v3": {
             title: "Migrating to Basin 3.0 – Basin",
             description:

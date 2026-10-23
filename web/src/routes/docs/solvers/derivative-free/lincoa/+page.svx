@@ -1,0 +1,176 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# LINCOA
+
+LINCOA is a local derivative-free optimizer for smooth functions with linear
+constraints. It builds a quadratic model from objective values, then searches
+that model inside a trust region while accounting for the active constraints.
+You supply the objective, any box bounds, and the matrices defining linear
+equalities and inequalities.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/lincoa/struct.Lincoa.html)
+
+  | Property    | Requirement                                             |
+  | ----------- | ------------------------------------------------------- |
+  | Objective   | A scalar function, preferably smooth                     |
+  | Evaluations | `CostFunction`; no derivatives                           |
+  | Search      | Local, from one starting point                           |
+  | Constraints | Bounds, linear equalities, and linear inequalities       |
+  | Parameters  | All four dense backends, with `f32` or `f64`              |
+
+## When to use it
+
+Consider LINCOA when gradients are unavailable or expensive and the feasible
+region is described by linear constraints. Its quadratic model can capture
+curvature that a linear approximation misses. Powell's [2015
+paper](#ref-powell-2015-lincoa) describes the constrained trust-region step.
+
+For a problem with only box bounds, compare [BOBYQA](../bobyqa/). For an
+unconstrained problem, compare [NEWUOA](../newuoa/). If any constraint is
+nonlinear, use a method that supports that block, such as
+[COBYLA](../cobyla/). When the objective is nonsmooth, compare
+[MADS](../mads/) when its supported constraint modes fit the problem; it does
+not accept LINCOA's general linear blocks.
+
+LINCOA follows a local model, so the starting point matters. The objective
+should also be defined outside the feasible region: interpolation and geometry
+steps can sample infeasible points even though the published incumbent comes
+from the feasible model points.
+
+## How it works
+
+LINCOA maintains an interpolation set and a quadratic objective model shared in
+structure with NEWUOA and BOBYQA. Updating the model minimizes the change in its
+Hessian in the Frobenius norm while satisfying the interpolation conditions.
+This allows a quadratic model to use fewer points than a fully determined
+quadratic would require.
+
+A projected truncated conjugate-gradient method searches for a step that
+reduces the model inside the trust region and the linear feasible region. An
+active-set QR factorization tracks constraint normals that restrict the step.
+Other iterations improve the interpolation geometry so the model remains
+useful.
+
+Basin converts every present constraint block to inequalities `A x <= b`.
+Bounds contribute coordinate rows, equalities contribute two rows with
+opposite signs, and each nonzero row is normalized. The resolution `rho`
+decreases toward the configured final radius as the run progresses.
+
+## Example
+
+The unconstrained minimum of this quadratic is `[2.0, 2.0]`. Requiring
+`x[0] + x[1] <= 2.0` moves the minimum to `[1.0, 1.0]`. The starting point is
+feasible, and the constraint matrix uses Basin's pure-Rust `DenseMatrix` type.
+
+<!-- compile: solver-lincoa -->
+```rust
+use basin::{
+    Constrained, ConstraintSet, CostFunction, DenseMatrix, Executor, Lincoa,
+    LinearBlock, Termination,
+};
+use std::convert::Infallible;
+
+struct Quadratic;
+
+impl CostFunction for Quadratic {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok((x[0] - 2.0).powi(2) + (x[1] - 2.0).powi(2))
+    }
+}
+
+fn main() {
+    let constraints = ConstraintSet::new().with_linear_inequalities(
+        LinearBlock::new(
+            DenseMatrix::from_row_slice(1, 2, &[1.0, 1.0]),
+            vec![2.0],
+        ),
+    );
+    let problem = Constrained::new(Quadratic, constraints);
+    let solver = Lincoa::new()
+        .with_initial_radius(0.5)
+        .with_final_radius(1e-7);
+
+    let result = Executor::from_start(problem, solver, vec![0.0, 0.0])
+        .max_cost_evals(500)
+        .run()
+        .unwrap();
+
+    assert!(matches!(
+        result.report.termination,
+        Termination::Converged(_)
+    ));
+    let x = result.best_param();
+    assert!(x[0] + x[1] <= 2.0 + 1e-8);
+    assert!((x[0] - 1.0).abs() < 1e-3);
+    assert!((x[1] - 1.0).abs() < 1e-3);
+}
+```
+
+`Constrained` attaches the declaration to the objective without requiring a
+separate `Constraints` implementation. Add bounds or linear equalities to the
+same `ConstraintSet` when the problem needs them. Nonlinear blocks are
+unsupported and are rejected by the solver's type requirements.
+
+## Practical considerations
+
+### Start inside the intended feasible region
+
+LINCOA does not project an infeasible starting point. It relaxes each offending
+right-hand side to admit that point, following Powell's algorithm. This changes
+the region being optimized, including any affected bounds or equalities.
+Provide a feasible start and check the returned point against your original
+constraints. Zero-normal rows are dropped, so validate degenerate rows before
+passing them to the solver.
+
+The objective must accept infeasible interpolation and geometry probes. Linear
+constraints limit the accepted search point; they do not make every objective
+evaluation safe for a function defined only on the feasible region.
+
+### Scale the variables and model resolution
+
+The initial radius defaults to `1.0` and the final radius to `1e-6`, with
+`initial_radius > final_radius > 0`. Choose the first for a useful initial
+change in your parameters and the second for the resolution your objective
+evaluations can support. A small radius is a geometric stopping condition,
+not a bound on the error in the parameters or objective.
+
+The default interpolation set contains `2n + 1` points for `n` parameters.
+`with_npt` changes that size. More points increase initialization evaluations
+and model storage, so keep the default unless you have a reason to change it.
+
+### Separate convergence from the evaluation budget
+
+The algorithm stops naturally when its final-radius stage finishes.
+`with_absolute_radius_tolerance` adds an optional earlier check on `rho`; it
+does not change the radius schedule. Keep evaluation and iteration limits on
+the executor and inspect the termination report. Radius convergence alone
+does not establish feasibility for the original constraints or global
+optimality.
+
+## Implementation
+
+LINCOA publishes the feasible model incumbent and objective through
+`PointState`. The solver owns the interpolation model, active-set factors, and
+radius schedule. Use `Executor::run_with_solver` to retain the solver and read
+`rho()` or `geometry_diagnostics()`. The diagnostic gradient belongs to the
+quadratic model, not the objective.
+
+Fresh initialization rebuilds the model and reevaluates its interpolation
+points. Preserve an `ExactCheckpoint` when continuing the same numerical run;
+a parameter snapshot starts a new model.
+
+Supported parameter types are `Vec<F>`, `nalgebra::DVector<F>`,
+`ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`. Present
+linear blocks require matrix operations supplied by the corresponding dense
+backends. Model calculations use internal pure-Rust buffers without a
+BLAS/LAPACK provider and work on WASM. Basin cross-validates the implementation
+against [PRIMA](https://github.com/libprima/prima).
+
+<References entries={["powell-2015-lincoa"]} />

@@ -1,0 +1,171 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# Nelder–Mead
+
+Nelder–Mead minimizes a scalar objective using a simplex of `n + 1` points in
+`n` dimensions. It compares objective values and moves the simplex through
+reflection, expansion, contraction, and shrink steps. You supply no gradient
+or Hessian.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/nelder_mead/struct.NelderMead.html)
+
+| Property | Requirement |
+| --- | --- |
+| Objective | A scalar function |
+| Evaluations | `CostFunction` |
+| Search | Local, from an initial simplex or one starting point |
+| Constraints | Unconstrained by default; an explicit projected variant supports box bounds |
+| Parameters | All four dense backends, with `f32` or `f64` |
+
+## When to use it
+
+Consider Nelder–Mead for a small problem when objective values are available
+but reliable derivatives are difficult to obtain. Its geometric steps avoid
+building a derivative or interpolation model. The original method is due to
+[Nelder and Mead (1965)](#ref-nelder-mead-1965).
+
+The simplex stores `n + 1` parameter vectors, so storage grows as `O(n²)`.
+Initialization evaluates all of those vertices, and a shrink evaluates `n`
+new points. For a smooth objective with expensive evaluations, compare the
+quadratic models in [NEWUOA](../newuoa/) or, with box bounds,
+[BOBYQA](../bobyqa/). [Solis–Wets](../solis-wets/) uses linear storage and
+random trial directions instead.
+
+A collapsed simplex does not certify a stationary point. Nelder–Mead can
+converge to a nonminimizer even on some strictly convex two-dimensional
+functions; [Lagarias et al. (1998)](#ref-lagarias-et-al-1998) discuss this
+limitation and the method's convergence results in low dimensions. Compare
+several starting points when the solution matters.
+
+## How it works
+
+Basin sorts the vertices by cost and computes the centroid of every vertex
+except the worst. It first reflects the worst vertex through that centroid.
+A particularly good reflection prompts an expansion. A poor reflection
+prompts a contraction, and a failed contraction shrinks the other vertices
+toward the best. Each trial is evaluated before the solver decides which
+vertices to retain.
+
+`NelderMead::new()` uses reflection `1`, expansion `2`, contraction `0.5`, and
+shrink `0.5`. `NelderMead::adaptive()` selects the dimension-dependent
+coefficients of [Gao and Han (2012)](#ref-gao-han-2012); in two dimensions they
+coincide with the standard coefficients. `with_params` supplies an explicit
+set of coefficients.
+
+The default stopping rule requires both a small simplex in parameter space
+and a small spread of its costs. Basin measures the maximum infinity-norm
+distance from the best vertex and the maximum absolute cost difference from
+that vertex. An unchanged best vertex alone does not stop the search.
+
+## Example
+
+This quadratic has its minimum at `[1.0, -2.0]`. The example uses absolute
+simplex tolerances and disables the relative terms so the requested scales
+are explicit. The executor supplies an iteration budget.
+
+<!-- compile: solver-nelder-mead -->
+```rust
+use basin::{CostFunction, Executor, NelderMead, Termination};
+use std::convert::Infallible;
+
+struct Quadratic;
+
+impl CostFunction for Quadratic {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok((x[0] - 1.0).powi(2) + 4.0 * (x[1] + 2.0).powi(2))
+    }
+}
+
+fn main() {
+    let solver = NelderMead::new()
+        .with_absolute_simplex_size_tolerance(1e-9)
+        .with_relative_simplex_size_tolerance(None)
+        .with_absolute_simplex_cost_tolerance(1e-14)
+        .with_relative_simplex_cost_tolerance(None);
+
+    let result = Executor::from_start(Quadratic, solver, vec![-3.0, 5.0])
+        .max_iter(2_000)
+        .run()
+        .unwrap();
+
+    assert!(matches!(
+        result.report.termination,
+        Termination::Converged(_)
+    ));
+    assert!((result.param()[0] - 1.0).abs() < 1e-7);
+    assert!((result.param()[1] + 2.0).abs() < 1e-7);
+}
+```
+
+## Practical considerations
+
+### Choose a useful initial simplex
+
+`Executor::from_start` builds a simplex by changing one coordinate at a time.
+Each nonzero coordinate receives a 5% relative perturbation; a zero
+coordinate receives an absolute perturbation of `0.00025`. Those defaults
+can be much too small or large for a problem's units. Use
+`SimplexProgress::with_step` to change the relative perturbation, or pass
+`SimplexProgress::from_simplex(vertices)` to `Executor::new` for full control.
+Supply `n + 1` vertices of dimension `n` and choose a simplex with nonzero
+volume. Rescale coordinates with very different units.
+
+### Interpret the simplex tests
+
+Both absolute tolerances default to `1e-8`. Both relative tolerances default
+to `sqrt(f64::EPSILON)` for `f64` or `32 * f32::EPSILON` for `f32`. The size
+threshold is the larger of its absolute term and its relative term times
+the best point's infinity norm. The cost threshold uses the larger of the
+best cost's magnitude and the initial cost spread as its relative scale.
+
+`None` disables an individual tolerance, and zero requests an exact-zero
+threshold. The enabled size and cost conditions must both pass. The optional
+`with_absolute_simplex_cost_std_dev_tolerance` adds a separate stopping test
+based only on the sample standard deviation of the costs. A flat objective
+can satisfy cost-only checks far from a useful solution; even the paired
+tests describe simplex collapse rather than stationarity. Keep an iteration
+or evaluation budget and inspect the termination report.
+
+### Opt into box projection
+
+`NelderMead::new().projected()` requires a problem that implements
+`Constraints` with the box-only set `ConstraintSet<BoxBounds<Vec<f64>>>`
+for a `Vec<f64>` objective. It clamps the initial vertices and every trial
+into the declared box before evaluating them. The unbounded constructor
+ignores constraint declarations.
+
+Projection can collapse multiple vertices onto the same boundary face and
+stall the search. Consider BOBYQA for a box-constrained smooth objective, or
+[MADS](../mads/) when a polling method fits the problem. The projected
+variant supports box bounds only; it does not handle linear or nonlinear
+constraint blocks.
+
+## Implementation
+
+`SimplexProgress` owns the vertices, costs, evaluation counts, and historical
+incumbent. The solver owns its scratch vectors and resolved coefficients.
+Fresh initialization evaluates every supplied vertex and resets the simplex
+convergence reference; an exact solver-and-state checkpoint preserves the
+adaptive coefficients, scratch, and reference and skips initialization.
+
+Use `vertices()`, `costs()`, or `evaluated_vertices()` to inspect the simplex.
+Opt-in `with_trial_diagnostics(true)` records native trial attempts; retain
+the solver through `Executor::run_with_solver` to inspect
+`trial_observations()`.
+
+Supported parameter types are `Vec<F>`, `nalgebra::DVector<F>`,
+`ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`. The method
+uses vector operations and coordinate access without a matrix factorization
+or BLAS/LAPACK provider. The projected mode additionally requires clamping.
+See the API's [Backends
+section](https://docs.rs/basin/latest/basin/solver/nelder_mead/struct.NelderMead.html#backends)
+for custom-vector requirements.
+
+<References entries={["nelder-mead-1965", "lagarias-et-al-1998", "gao-han-2012"]} />

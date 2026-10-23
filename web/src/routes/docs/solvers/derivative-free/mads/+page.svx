@@ -1,0 +1,243 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# MADS
+
+Mesh adaptive direct search (MADS) is a local derivative-free optimizer that
+tests directions around an incumbent on an adaptive mesh. Basin implements
+OrthoMADS, which generates orthogonal poll directions deterministically. The
+method needs no interpolating objective model and can handle nonsmooth
+functions.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/mads/struct.Mads.html)
+
+  | Property    | Requirement                                             |
+  | ----------- | ------------------------------------------------------- |
+  | Objective   | A scalar function, including nonsmooth functions          |
+  | Evaluations | `CostFunction`; nonlinear values in constrained mode      |
+  | Search      | Local and deterministic, from one starting point          |
+  | Constraints | Unconstrained, box-only, or nonlinear-inequality-only mode |
+  | Parameters  | All four dense backends, with `f32` or `f64`              |
+
+## When to use it
+
+Consider MADS when derivatives are unavailable and nonsmoothness makes a local
+linear or quadratic model unreliable. For a smooth objective, compare
+[NEWUOA](../newuoa/) or [BOBYQA](../bobyqa/), which use quadratic models to
+capture curvature. MADS polls directions explicitly, so its evaluation cost
+can grow quickly with the number of parameters.
+
+[Audet and Dennis (2006)](#ref-audet-dennis-2006) establish the MADS framework;
+read it with the [2008 erratum](#ref-audet-custodio-dennis-2008).
+[Abramson et al. (2009)](#ref-abramson-audet-dennis-le-digabel-2009) introduce
+the deterministic OrthoMADS directions used here.
+
+The nonsmooth convergence results concern refining subsequences and their
+limit points under regularity and direction-density assumptions. Clarke
+stationarity requires appropriate local Lipschitz assumptions; constrained
+results also depend on constraint qualifications. Those results do not imply
+global optimality or certify a finite run. Although the implementation can
+evaluate discontinuous objectives, the same stationarity conclusion does not
+automatically extend to an arbitrary discontinuous function.
+
+## How it works
+
+Each iteration constructs an orthogonal integer basis using a Halton sequence
+and a scaled Householder reflection. The positive and negative columns form
+`2n` candidate poll directions for `n` parameters. Basin polls opportunistically:
+an improvement can end the poll before all candidates have been evaluated.
+
+Trial points lie on a mesh around the incumbent. An improving poll coarsens
+the mesh, and an unsuccessful poll refines it. The fine mesh size shrinks
+faster than the poll size, making increasingly varied directions available as
+the search refines. The Halton schedule chooses the directions without a
+random seed.
+
+The default mode accepts objective improvements. Box-bounded mode rejects
+infeasible probes without evaluating their objective. The progressive-barrier
+mode instead tracks objective and aggregate constraint violation, retaining
+feasible and infeasible search histories.
+
+## Example
+
+This nonsmooth absolute-value valley has its unique minimum at `[1.0, 2.0]`.
+The example sets the minimum poll size on the solver and the evaluation budget
+on the executor.
+
+<!-- compile: solver-mads -->
+```rust
+use basin::{CostFunction, Executor, Mads, Termination};
+use std::convert::Infallible;
+
+struct AbsValley;
+
+impl CostFunction for AbsValley {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok((x[0] - 1.0).abs() + 2.0 * (x[1] - 2.0).abs())
+    }
+}
+
+fn main() {
+    let solver = Mads::new()
+        .with_initial_poll_size(1.0)
+        .with_minimum_poll_size(1e-8);
+
+    let result = Executor::from_start(AbsValley, solver, vec![0.0, 0.0])
+        .max_cost_evals(5_000)
+        .run()
+        .unwrap();
+
+    assert!(matches!(
+        result.report.termination,
+        Termination::Converged(_)
+    ));
+    assert!(result.best_cost() < 1e-6);
+    assert!((result.best_param()[0] - 1.0).abs() < 1e-6);
+    assert!((result.best_param()[1] - 2.0).abs() < 1e-6);
+}
+```
+
+## Practical considerations
+
+### Choose the mode that matches your constraints
+
+`Mads::new()` is unconstrained and ignores any constraint declaration on the
+problem. Select a constrained mode explicitly to enforce constraints.
+
+  | Mode                             | Complete constraint declaration                   | Behavior                                                      |
+  | -------------------------------- | ------------------------------------------------- | ------------------------------------------------------------- |
+  | `Mads::new()`                     | None required                                     | Accepts objective improvements                                |
+  | `Mads::new().bounded()`           | Box bounds only                                   | Clamps the start, then rejects out-of-box probes               |
+  | `Mads::new().constrained()`       | Nonlinear inequalities only                       | Allows an infeasible start and uses a progressive barrier      |
+
+The bounded mode uses an extreme barrier: a point outside the box is treated
+as having infinite cost without calling the objective. Declare bounds with
+`ConstraintSet::new().with_bounds(BoxBounds::new(lower, upper))` and attach
+them to the problem with `Constrained::new`.
+
+The constrained mode implements the progressive-barrier approach of
+[Audet and Dennis (2009)](#ref-audet-dennis-2009). It aggregates residuals as
+`h(x) = sum(max(c[j](x), 0)^2)` and progressively lowers an admissible violation
+threshold. It can explore around both feasible and infeasible incumbents.
+The current mode requires a nonlinear-inequality-only declaration and the
+`NonlinearInequalityValues` callback. It does not accept additional bounds,
+linear blocks, or nonlinear equalities. Compare [COBYLA](../cobyla/) for a
+problem that combines those blocks.
+
+### Check the progressive barrier's selected result
+
+This example starts outside the unit disk and uses the constrained mode. The
+unconstrained minimum is `[2.0, 0.0]`; the constrained minimum is `[1.0, 0.0]`.
+
+<!-- compile: solver-mads-constrained -->
+```rust
+use basin::{
+    Constrained, ConstraintSet, ConstraintSolveError, CostFunction, Executor,
+    Mads, NonlinearInequalityValues, ViolationMeasure,
+};
+use std::convert::Infallible;
+
+struct DiskQuadratic;
+
+impl CostFunction for DiskQuadratic {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok((x[0] - 2.0).powi(2) + x[1].powi(2))
+    }
+}
+
+impl NonlinearInequalityValues for DiskQuadratic {
+    type Param = Vec<f64>;
+    type Values = Vec<f64>;
+    type Error = Infallible;
+
+    fn nonlinear_inequalities(
+        &self,
+        x: &Self::Param,
+    ) -> Result<Self::Values, ConstraintSolveError<Self::Error>> {
+        Ok(vec![x[0].powi(2) + x[1].powi(2) - 1.0])
+    }
+}
+
+fn main() {
+    let constraints = ConstraintSet::new().with_nonlinear_inequalities(1);
+    let problem = Constrained::new(DiskQuadratic, constraints);
+    let solver = Mads::new()
+        .with_initial_poll_size(1.0)
+        .with_minimum_poll_size(1e-7)
+        .constrained();
+
+    let result = Executor::from_start(problem, solver, vec![2.0, 0.0])
+        .max_cost_evals(5_000)
+        .run()
+        .unwrap();
+
+    let (x, cost, violation) = result.state.best().unwrap();
+    assert_eq!(violation.measure(), &ViolationMeasure::SquaredL2);
+    assert!(violation.value < 1e-10);
+    assert!(x[0].powi(2) + x[1].powi(2) <= 1.0 + 1e-5);
+    assert!((cost - 1.0).abs() < 1e-3);
+}
+```
+
+The violation report contains the squared-sum measure, not the largest
+constraint residual. Inspect the selected point and individual constraints
+before accepting it: reaching the poll-size floor does not certify
+feasibility. Selection can increase the objective as feasibility improves,
+so objective-only executor targets and stall checks are unavailable in this
+mode.
+
+Return finite constraint values. The current positive-part aggregation skips
+NaN residuals, so a NaN must not be used to represent an infeasible evaluation.
+Report callback failures through `ConstraintSolveError::Evaluation` instead.
+
+### Scale the poll sizes and allow enough evaluations
+
+The initial poll size defaults to `1.0`, and the minimum defaults to `1e-6`.
+Choose positive values with the minimum below the initial size. Rescale
+parameters so a common poll scale makes sense across coordinates. A small
+minimum poll size controls geometric resolution; it does not bound parameter
+error or establish stationarity in a finite run.
+
+`with_absolute_poll_size_tolerance` adds an optional earlier stopping check
+without changing the mesh schedule. A failed poll can require `2n` objective
+evaluations in the unconstrained mode. Constrained iterations may poll around
+more than one center. Keep an evaluation budget on the executor, and budget
+nonlinear callbacks separately with
+`max_evaluations(EvaluationKind::Residual, limit)` when needed.
+
+## Implementation
+
+Unconstrained and box-bounded MADS publish their incumbent through
+`PointState`. Progressive-barrier MADS uses `SelectedState` with an unscaled
+`SquaredL2` violation report and identity transformation. Constraint calls
+count as residual evaluations; box-rejected probes make no objective call.
+
+The solver owns the mesh, Halton counters, and barrier history. Use
+`Executor::run_with_solver` to retain it and inspect `poll_size()` and
+`mesh_index()`. Fresh initialization resets those histories and reevaluates
+the starting point. An `ExactCheckpoint` retains them for exact continuation.
+
+Supported parameter types are `Vec<F>`, `nalgebra::DVector<F>`,
+`ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`, in every
+mode. Poll geometry uses internal integer and floating-point buffers without
+matrix capabilities, a BLAS/LAPACK provider, or an RNG. The implementation is
+deterministic and works on WASM.
+
+<References
+    entries={[
+        "audet-dennis-2006",
+        "audet-custodio-dennis-2008",
+        "abramson-audet-dennis-le-digabel-2009",
+        "audet-dennis-2009",
+    ]}
+/>

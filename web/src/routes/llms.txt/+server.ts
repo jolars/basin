@@ -36,6 +36,13 @@ export function GET() {
 - [BFGS](${docs}/solvers/quasi-newton/bfgs/): dense inverse-Hessian models, initialization, stopping tests, and a Rust example
 - [L-BFGS](${docs}/solvers/quasi-newton/l-bfgs/): when to use limited-memory BFGS, a Rust example, convergence settings, backend requirements, and original references
 - [L-BFGS-B](${docs}/solvers/quasi-newton/l-bfgs-b/): problem-side box bounds, limited-memory curvature, stopping tests, and a Rust example
+- [Nelder–Mead](${docs}/solvers/derivative-free/nelder-mead/): simplex search, adaptive coefficients, box projection, stopping tests, and a Rust example
+- [MADS](${docs}/solvers/derivative-free/mads/): OrthoMADS polling, box and nonlinear constraints, poll-size stopping, and a Rust example
+- [NEWUOA](${docs}/solvers/derivative-free/newuoa/): unconstrained quadratic interpolation, trust-region radii, and a Rust example
+- [BOBYQA](${docs}/solvers/derivative-free/bobyqa/): quadratic interpolation with box bounds, trust-region radii, and a Rust example
+- [LINCOA](${docs}/solvers/derivative-free/lincoa/): quadratic models with linear constraints, feasible starts, and a Rust example
+- [COBYLA](${docs}/solvers/derivative-free/cobyla/): linear interpolation models, general constraints, feasibility caveats, and a Rust example
+- [Solis–Wets](${docs}/solvers/derivative-free/solis-wets/): seeded random local search, adaptive step sizes, stopping tests, and a Rust example
 
 ## Reference
 

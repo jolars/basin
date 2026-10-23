@@ -14,9 +14,9 @@ algorithm family.
 | A Hessian or Hessian-vector products | [Trust-region Newton](#trust-region) | Use second-order information; the matrix-free mode needs only products. |
 | Residuals and a Jacobian | [Levenberg–Marquardt](#levenberg-marquardt) or its [QR variant](#levenberg-marquardt-qr) | Use the least-squares structure; QR avoids forming the Gram matrix. |
 | Least squares with box bounds | [Trust-region reflective](#trust-region-reflective) or [bounded Levenberg–Marquardt](#bounded-levenberg-marquardt) | Both combine the residual model with bound-aware steps. |
-| Objective values only, with a locally smooth function | [NEWUOA](#newuoa), or [BOBYQA](#bobyqa) with box bounds | Build a quadratic model without gradients. |
-| Objective values only, with linear constraints | [LINCOA](#lincoa) | Build a quadratic objective model while handling linear inequalities. |
-| Objective values only, with nonlinear constraints | [COBYLA](#cobyla) or [constrained MADS](#mads) | COBYLA uses linear interpolation models; MADS uses polling and a progressive barrier. Check each method's supported constraint blocks. |
+| Objective values only, with a locally smooth function | [NEWUOA](derivative-free/newuoa/), or [BOBYQA](derivative-free/bobyqa/) with box bounds | Build a quadratic model without gradients. |
+| Objective values only, with linear constraints | [LINCOA](derivative-free/lincoa/) | Build a quadratic objective model while handling linear inequalities. |
+| Objective values only, with nonlinear constraints | [COBYLA](derivative-free/cobyla/) or [constrained MADS](derivative-free/mads/) | COBYLA uses linear interpolation models; MADS uses polling and a progressive barrier. Check each method's supported constraint blocks. |
 | Gradients and general nonlinear constraints | [SLSQP](#slsqp) | Solve local constrained subproblems using objective and constraint derivatives. |
 | Several local minima to explore | [CMA-ES](#cma-es), [differential evolution](#de), or [DIRECT](#direct) | Search across a region; check whether the method needs sampling bounds or enforces constraints. |
 | One scalar variable to minimize | [Brent](#brent) or [golden-section search](#golden-section) | Start with an interval bracketing a minimum. |
@@ -43,9 +43,9 @@ both into account when choosing a method and its stopping tolerances.
 ## Reading the catalog
 
 Each entry below links to the authoritative API reference on
-[docs.rs](https://docs.rs/basin). The first-order and quasi-Newton guides also
-explain when to use each method, how it works, and how to configure it, with
-citations and full references.
+[docs.rs](https://docs.rs/basin). The first-order, quasi-Newton, and
+derivative-free guides also explain when to use each method, how it works, and
+how to configure it, with citations and full references.
 
 Backend support applies to every enabled version of the listed backend.
 Multiple versions can be used in the same build; see the
@@ -131,13 +131,15 @@ finding uses a direct callback API and a separate result type.
   and cost-spread tests are enabled by default in Basin 2.0; see the
   [Basin 2.0 migration guide](../migrating-to-v2/#nelder-mead-convergence-defaults) and API reference
   for tolerance settings and scaling limits.
+  [Read the Nelder–Mead guide](derivative-free/nelder-mead/).
 - **<span id="mads"></span>[`Mads`](https://docs.rs/basin/latest/basin/solver/mads/struct.Mads.html)**:
   mesh adaptive direct search (the deterministic OrthoMADS instance): polls a
   positive spanning set of `2n` directions on a shrinking mesh, generated from
-  the Halton sequence and a scaled Householder reflection. Unlike Nelder-Mead it
-  has a convergence guarantee on nonsmooth or non-continuous objectives, a
-  box-constrained variant (`Mads::bounded()`) via the extreme barrier, and a
-  nonlinearly-constrained variant (`Mads::constrained()`) handling `c(x) ≤ 0`
+  the Halton sequence and a scaled Householder reflection. Its stationarity
+  results for nonsmooth objectives require regularity and direction-density
+  assumptions. It offers a box-constrained variant (`Mads::bounded()`) via the
+  extreme barrier and a nonlinearly-constrained variant (`Mads::constrained()`)
+  handling `c(x) ≤ 0`
   via the progressive barrier (which tolerates an infeasible start). Needs only
   a `CostFunction` (plus `NonlinearInequalityValues` for the constrained
   mode). All modes support `f32` and `f64` on every dense backend release.
@@ -149,6 +151,7 @@ finding uses a direct callback API and a separate result type.
   without additional evaluations or changes to solver convergence.
   Implements Audet & Dennis (2006), OrthoMADS (Abramson, Audet, Dennis &
   Le Digabel 2009), and the progressive barrier (Audet & Dennis 2009).
+  [Read the MADS guide](derivative-free/mads/).
 - **<span id="newuoa"></span>[`Newuoa`](https://docs.rs/basin/latest/basin/solver/newuoa/struct.Newuoa.html)**:
   Powell's model-based trust-region method: maintains a quadratic surrogate
   interpolating the objective on `2n+1` points and updates it by the
@@ -157,6 +160,7 @@ finding uses a direct callback API and a separate result type.
   supported dense backend release; model and radius diagnostics live on the
   solver. Implements Powell (2006), cross-validated against PRIMA
   v0.7.2.
+  [Read the NEWUOA guide](derivative-free/newuoa/).
 - **<span id="bobyqa"></span>[`Bobyqa`](https://docs.rs/basin/latest/basin/solver/bobyqa/struct.Bobyqa.html)**:
   the bound-constrained sibling of `Newuoa`: the same least-Frobenius-norm
   quadratic model, with a box-aware trust-region step (TRSBOX) and geometry step
@@ -165,6 +169,7 @@ finding uses a direct callback API and a separate result type.
   dense backend release; the solver owns the model and radius schedule.
   Implements Powell (2009), cross-validated against PRIMA
   v0.7.2.
+  [Read the BOBYQA guide](derivative-free/bobyqa/).
 - **<span id="lincoa"></span>[`Lincoa`](https://docs.rs/basin/latest/basin/solver/lincoa/struct.Lincoa.html)**:
   the linearly-constrained sibling of `Newuoa`: the same least-Frobenius-norm
   quadratic model, with a projected truncated-CG trust-region step (TRSTEP) and
@@ -175,6 +180,7 @@ finding uses a direct callback API and a separate result type.
   matrices require `MatrixShape`, `MatrixFinite`, and `MatTransposeVecInto`. Infeasible starts relax the constraints.
   Implements Powell
   (2015), ported from PRIMA v0.7.2.
+  [Read the LINCOA guide](derivative-free/lincoa/).
 - **<span id="cobyla"></span>[`Cobyla`](https://docs.rs/basin/latest/basin/solver/cobyla/struct.Cobyla.html)**:
   Powell's nonlinearly-constrained solver: it builds **linear** models by
   interpolation at the `n+1` vertices of a simplex and steers by an L-infinity
@@ -192,6 +198,7 @@ finding uses a direct callback API and a separate result type.
   Only present linear blocks require `MatrixShape`, `MatrixFinite`, and
   `MatVecInto`; nonlinear-only input needs no matrix type. Nonempty nonlinear
   callbacks count as residual evaluations. Implements Powell (1994), ported from PRIMA.
+  [Read the COBYLA guide](derivative-free/cobyla/).
 - **<span id="solis-wets"></span>[`SolisWets`](https://docs.rs/basin/latest/basin/solver/solis_wets/struct.SolisWets.html)**:
   adaptive random local search: a randomized hill-climber testing `x + b + d`
   and `x − b − d` with `d ~ N(0, ρ²I)`, a success-direction bias `b`, and a step
@@ -201,6 +208,7 @@ finding uses a direct callback API and a separate result type.
   `CostFunction`. Supports all four dense backends with `f32` or `f64` and
   publishes `PointState`; the solver owns its bias and adaptive step size.
   Implements Solis & Wets (1981).
+  [Read the Solis–Wets guide](derivative-free/solis-wets/).
 
 ## Trust region
 

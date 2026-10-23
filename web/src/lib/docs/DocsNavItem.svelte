@@ -1,7 +1,6 @@
 <script lang="ts">
-    import { resolve } from "$app/paths";
     import { page } from "$app/state";
-    import type { DocsNavItem } from "#lib/nav.ts";
+    import { type DocsNavItem, resolvePath } from "#lib/nav.ts";
     import DocsNavEntry from "./DocsNavItem.svelte";
     import IconChevronRight from "~icons/lucide/chevron-right";
 
@@ -44,7 +43,7 @@
         </details>
     {:else}
         <a
-            href={`${resolve(item.href)}${item.fragment ? `#${item.fragment}` : ""}`}
+            href={`${resolvePath(item.href)}${item.fragment ? `#${item.fragment}` : ""}`}
             aria-current={active
                 ? item.fragment
                     ? "location"

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { resolve } from "$app/paths";
+    import { resolvePath } from "#lib/nav.ts";
     import IconSearch from "~icons/lucide/search";
     import IconClose from "~icons/lucide/x";
     import type { documents as searchDocuments } from "./search";
@@ -105,7 +105,7 @@
             {#each results as result (result.href)}
                 <li>
                     <a
-                        href={resolve(result.href)}
+                        href={resolvePath(result.href)}
                         onclick={() => dialog.close()}
                         class="block rounded-md p-3 hover:bg-stone-100 focus-visible:bg-stone-100 dark:hover:bg-stone-800 dark:focus-visible:bg-stone-800"
                         ><span class="font-medium">{result.title}</span>

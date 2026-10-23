@@ -1,0 +1,183 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# COBYLA
+
+COBYLA is a local derivative-free optimizer for constrained scalar functions.
+It estimates the objective and constraints by linear interpolation, then
+balances objective reduction against the largest constraint violation. You
+supply function values, and the starting point may be infeasible.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/cobyla/struct.Cobyla.html)
+
+  | Property    | Requirement                                                 |
+  | ----------- | ----------------------------------------------------------- |
+  | Objective   | A scalar function; smoothness helps the linear models         |
+  | Evaluations | `CostFunction` and values for declared nonlinear blocks       |
+  | Search      | Local, from one starting point                               |
+  | Constraints | Bounds, linear blocks, nonlinear equalities, and nonlinear inequalities |
+  | Parameters  | All four dense backends, with `f32` or `f64`                  |
+
+## When to use it
+
+Consider COBYLA when the objective or constraints lack reliable derivatives and
+you need a method that can recover from an infeasible start. Powell's [1994
+chapter](#ref-powell-1994-cobyla) introduces the linear interpolation method.
+Smoothness helps those models predict local behavior, although Basin does not
+require differentiability.
+
+If all constraints are linear and the objective is smooth, compare
+[LINCOA](../lincoa/), which builds a quadratic objective model. For box bounds
+alone, compare [BOBYQA](../bobyqa/). For a nonsmooth problem with nonlinear
+inequalities, compare the progressive-barrier mode of [MADS](../mads/).
+
+COBYLA permits infeasible trial points, including points outside box bounds.
+Use it when your callbacks can evaluate those points. Its local search also
+means that different starts can find different constrained solutions.
+
+## How it works
+
+At each stage, COBYLA maintains a simplex of `n + 1` points for `n` parameters.
+The objective and each constraint have a linear interpolating model on those
+vertices. A trust-region subproblem proposes a step using the models; geometry
+steps repair the simplex when it becomes poorly shaped.
+
+The method uses a merit function of the form `objective + penalty * violation`,
+where the violation is the largest positive constraint residual. The penalty
+changes as the method balances reducing the objective and improving
+feasibility. The resolution `rho` shrinks toward the configured final radius.
+
+Basin folds bounds and linear and nonlinear blocks into residuals with the
+convention `c(x) <= 0`. An equality contributes residuals of opposite signs.
+The rows are neither normalized nor relaxed. The current implementation
+interpolates every constraint model, including linear constraints.
+
+## Example
+
+Minimizing `x[0] * x[1]` inside the unit disk has minimum value `-0.5`. The
+example declares one nonlinear inequality, starts outside the disk, and checks
+both the selected objective and its reported violation.
+
+<!-- compile: solver-cobyla -->
+```rust
+use basin::{
+    Cobyla, Constrained, ConstraintSet, ConstraintSolveError, CostFunction,
+    Executor, NonlinearInequalityValues, Termination, ViolationMeasure,
+};
+use std::convert::Infallible;
+
+struct Disk;
+
+impl CostFunction for Disk {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok(x[0] * x[1])
+    }
+}
+
+impl NonlinearInequalityValues for Disk {
+    type Param = Vec<f64>;
+    type Values = Vec<f64>;
+    type Error = Infallible;
+
+    fn nonlinear_inequalities(
+        &self,
+        x: &Self::Param,
+    ) -> Result<Self::Values, ConstraintSolveError<Self::Error>> {
+        Ok(vec![x[0].powi(2) + x[1].powi(2) - 1.0])
+    }
+}
+
+fn main() {
+    let constraints = ConstraintSet::new().with_nonlinear_inequalities(1);
+    let problem = Constrained::new(Disk, constraints);
+    let solver = Cobyla::new()
+        .with_initial_radius(0.5)
+        .with_final_radius(1e-7);
+
+    let result = Executor::from_start(problem, solver, vec![1.0, 1.0])
+        .max_cost_evals(500)
+        .run()
+        .unwrap();
+
+    assert!(matches!(
+        result.report.termination,
+        Termination::Converged(_)
+    ));
+    let (x, cost, violation) = result.state.best().unwrap();
+    assert_eq!(violation.measure(), &ViolationMeasure::LInf);
+    assert!(violation.value < 1e-5);
+    assert!(x[0].powi(2) + x[1].powi(2) <= 1.0 + 1e-5);
+    assert!((cost + 0.5).abs() < 1e-3);
+}
+```
+
+The constraint callback returns the residual `x[0]^2 + x[1]^2 - 1`, so
+nonpositive values mean feasibility. Keep the declared count equal to the
+callback's output length. Nonlinear equalities use a separate
+`with_nonlinear_equalities` declaration and `NonlinearEqualityValues` callback.
+
+## Practical considerations
+
+### Scale constraint residuals deliberately
+
+The largest positive residual enters the merit function without row
+normalization. Multiplying a constraint by a positive constant preserves its
+feasible set but changes its influence on the search. Choose residual units
+that make the relative importance of violations sensible.
+
+Equalities become paired inequalities. A small final radius does not guarantee
+that either residual is small enough for your application. Check each
+constraint at the returned point using your own feasibility tolerance.
+
+### Choose radii for the accuracy of your evaluations
+
+The initial radius defaults to `1.0` and the final radius to `1e-6`; require
+`initial_radius > final_radius > 0`. Rescale parameters so a single radius
+describes useful changes in each coordinate. Tiny radii cannot recover detail
+hidden by objective noise, constraint noise, or rounding.
+
+Natural convergence means the final-radius stage finished, not that the
+constraints are satisfied. `with_absolute_radius_tolerance` adds an optional
+earlier check without changing the algorithm's schedule. Inspect the
+termination report together with the violation report.
+
+### Budget objective and constraint calls
+
+`max_cost_evals` limits objective calls. Nonlinear inequality and equality
+callbacks count separately as residual evaluations, so use
+`max_evaluations(EvaluationKind::Residual, limit)` when those callbacks have
+their own budget. Bound and linear arithmetic require no residual callbacks.
+
+The selected point follows COBYLA's feasibility and merit rules. Its objective
+can increase as feasibility improves, so objective-only executor targets and
+stall checks are unavailable for this state.
+
+## Implementation
+
+COBYLA publishes the selected point, objective, and `ViolationReport` through
+`SelectedState`. The report uses the unscaled `LInf` measure with
+`PrimaModeration`: extreme and non-finite callback values undergo PRIMA's
+moderation before model construction and reporting. Reported violation is the
+maximum positive folded residual, rather than a derivative-based optimality
+test.
+
+The solver owns the simplex, penalty, filter, and radius schedule. Retain it
+with `Executor::run_with_solver` to inspect `rho()` or
+`geometry_diagnostics()`. Fresh initialization rebuilds those structures;
+an `ExactCheckpoint` preserves them for exact continuation.
+
+Supported parameter types are `Vec<F>`, `nalgebra::DVector<F>`,
+`ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`. Nonlinear
+values may use a different vector representation from the parameters. Present
+linear blocks additionally require the dense matrix capabilities documented
+in the API. The simplex calculations use pure-Rust internal buffers, need no
+BLAS/LAPACK provider, and work on WASM. Basin ports and cross-validates the
+algorithm against [PRIMA](https://github.com/libprima/prima).
+
+<References entries={["powell-1994-cobyla"]} />

@@ -1,0 +1,148 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# NEWUOA
+
+NEWUOA is a local optimizer for smooth functions whose derivatives are
+unavailable. It builds a quadratic model from objective values at a set of
+nearby points, then searches within a trust region. You supply the function and
+a starting point; the solver maintains the interpolation points and the model.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/newuoa/struct.Newuoa.html)
+
+  | Property    | Requirement                                  |
+  | ----------- | -------------------------------------------- |
+  | Objective   | A smooth scalar function                     |
+  | Evaluations | `CostFunction`                               |
+  | Search      | Local, from one starting point               |
+  | Constraints | Unconstrained                                |
+  | Parameters  | All four dense backends, with `f32` or `f64` |
+
+## When to use it
+
+Consider NEWUOA when function evaluations are expensive enough to justify
+maintaining a quadratic model, and an analytic gradient is unavailable.
+[Powell (2006)](#ref-powell-newuoa-2006) describes the method and recommends
+using `2n + 1` interpolation points for `n` parameters, reducing the initial
+sampling compared with a fully determined quadratic.
+
+Use [BOBYQA](../bobyqa/) when the variables have box bounds, or
+[LINCOA](../lincoa/) for linear inequalities. NEWUOA ignores constraint
+declarations. If a reliable gradient is available, compare
+[BFGS](../../quasi-newton/bfgs/) or
+[L-BFGS](../../quasi-newton/l-bfgs/). For nonsmooth functions, compare
+[MADS](../mads/).
+
+## How it works
+
+The quadratic model interpolates the stored objective values. With fewer
+points than a full quadratic needs, the remaining freedom is resolved by
+minimizing the Frobenius norm of the change to its Hessian. A trust-region
+subproblem proposes a step, and the agreement between predicted and actual
+improvement controls the next trust-region radius. These are the central
+ideas in [Powell (2006)](#ref-powell-newuoa-2006).
+
+Basin also takes geometry steps to improve the arrangement of interpolation
+points. Such evaluations can improve the model without improving the current
+objective. One solver iteration can include both a trial step and a geometry
+step, so iterations and function evaluations are different budgets.
+
+The solver maintains a resolution `rho` separately from the trust-region
+radius. It reduces this resolution in stages and finishes after completing
+the stage at the configured final radius.
+
+## Example
+
+This quadratic has its minimum at `[1.0, -2.0]`. The example supplies only
+objective values, chooses the initial and final resolutions, and places an
+evaluation budget on the executor.
+
+<!-- compile: solver-newuoa -->
+```rust
+use basin::{CostFunction, Executor, Newuoa, Termination};
+use std::convert::Infallible;
+
+struct Quadratic;
+
+impl CostFunction for Quadratic {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok((x[0] - 1.0).powi(2) + 4.0 * (x[1] + 2.0).powi(2))
+    }
+}
+
+fn main() {
+    let solver = Newuoa::new()
+        .with_initial_radius(0.5)
+        .with_final_radius(1e-8);
+
+    let result = Executor::from_start(Quadratic, solver, vec![-3.0, 5.0])
+        .max_cost_evals(500)
+        .run()
+        .unwrap();
+
+    assert!(matches!(
+        result.report.termination,
+        Termination::Converged(_)
+    ));
+    assert!(result.best_cost() < 1e-12);
+    assert!((result.best_param()[0] - 1.0).abs() < 1e-6);
+    assert!((result.best_param()[1] + 2.0).abs() < 1e-6);
+}
+```
+
+## Practical considerations
+
+### Choose radii in parameter units
+
+`with_initial_radius` sets the initial resolution and trust-region radius;
+its default is `1.0`. Choose a useful initial displacement for your variables,
+and rescale variables with very different units. `with_final_radius` defaults
+to `1e-6` and must satisfy `initial_radius > final_radius > 0`. Finishing the
+final stage records a convergence condition; it does not certify a global
+minimum or a particular parameter error.
+
+`with_absolute_radius_tolerance` provides an optional early stopping test on
+the current `rho`. It is disabled by default, and it does not change the
+radius schedule. Keep evaluation budgets on the executor and inspect the
+termination report to distinguish completion from an exhausted budget.
+
+### Account for interpolation work
+
+`with_npt` chooses the interpolation-set size. Basin currently implements
+`2n + 1 <= npt <= (n + 1)(n + 2) / 2`, with `2n + 1` as the default. The
+smaller partial-model sizes allowed by the original algorithm are not yet
+implemented. Initialization evaluates all `npt` points. Larger sets therefore
+require more initial evaluations and more model storage and work.
+
+### Match the resolution to the objective
+
+Interpolation models assume that nearby function values contain useful local
+information. Noise, discontinuities, and a final radius below meaningful
+numerical resolution can undermine that information. Choose radii for the
+objective's accuracy and the scalar precision; the example's `1e-8` is an
+`f64` choice for an exact quadratic.
+
+## Implementation
+
+NEWUOA publishes the current evaluated point and its historical incumbent
+through `PointState`. The solver owns the quadratic model, interpolation
+geometry, and radius schedule. Fresh initialization rebuilds the model; exact
+solver-and-state checkpoints preserve it. Use `Executor::run_with_solver` to
+retain the final solver and inspect `rho()` or `geometry_diagnostics()`. The
+diagnostic gradient comes from the interpolation model, rather than an
+evaluation of the objective's gradient.
+
+Supported parameter types are `Vec<F>`, `nalgebra::DVector<F>`,
+`ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`. The model
+uses internal vectors and pure-Rust algebra, so no matrix capability or
+BLAS/LAPACK provider is required from the parameter backend. Basin's model
+updates and driver have been cross-validated against
+[PRIMA](https://github.com/libprima/prima) v0.7.2.
+
+<References entries={["powell-newuoa-2006"]} />

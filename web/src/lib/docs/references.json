@@ -174,5 +174,179 @@
         "issue": "1",
         "page": "7:1-7:4",
         "DOI": "10.1145/2049662.2049669"
+    },
+    {
+        "id": "nelder-mead-1965",
+        "type": "article-journal",
+        "title": "A Simplex Method for Function Minimization",
+        "author": [
+            { "family": "Nelder", "given": "John A." },
+            { "family": "Mead", "given": "Roger" }
+        ],
+        "issued": { "date-parts": [[1965]] },
+        "container-title": "The Computer Journal",
+        "volume": "7",
+        "issue": "4",
+        "page": "308-313",
+        "DOI": "10.1093/comjnl/7.4.308"
+    },
+    {
+        "id": "lagarias-et-al-1998",
+        "type": "article-journal",
+        "title": "Convergence Properties of the Nelder–Mead Simplex Method in Low Dimensions",
+        "author": [
+            { "family": "Lagarias", "given": "Jeffrey C." },
+            { "family": "Reeds", "given": "James A." },
+            { "family": "Wright", "given": "Margaret H." },
+            { "family": "Wright", "given": "Paul E." }
+        ],
+        "issued": { "date-parts": [[1998]] },
+        "container-title": "SIAM Journal on Optimization",
+        "volume": "9",
+        "issue": "1",
+        "page": "112-147",
+        "DOI": "10.1137/S1052623496303470"
+    },
+    {
+        "id": "gao-han-2012",
+        "type": "article-journal",
+        "title": "Implementing the Nelder-Mead simplex algorithm with adaptive parameters",
+        "author": [
+            { "family": "Gao", "given": "Fuchang" },
+            { "family": "Han", "given": "Lixing" }
+        ],
+        "issued": { "date-parts": [[2012]] },
+        "container-title": "Computational Optimization and Applications",
+        "volume": "51",
+        "issue": "1",
+        "page": "259-277",
+        "DOI": "10.1007/s10589-010-9329-3"
+    },
+    {
+        "id": "solis-wets-1981",
+        "type": "article-journal",
+        "title": "Minimization by Random Search Techniques",
+        "author": [
+            { "family": "Solis", "given": "Francisco J." },
+            { "family": "Wets", "given": "Roger J.-B." }
+        ],
+        "issued": { "date-parts": [[1981]] },
+        "container-title": "Mathematics of Operations Research",
+        "volume": "6",
+        "issue": "1",
+        "page": "19-30",
+        "DOI": "10.1287/moor.6.1.19"
+    },
+    {
+        "id": "powell-newuoa-2006",
+        "type": "chapter",
+        "title": "The NEWUOA software for unconstrained optimization without derivatives",
+        "author": [{ "family": "Powell", "given": "M. J. D." }],
+        "issued": { "date-parts": [[2006]] },
+        "container-title": "Large-Scale Nonlinear Optimization",
+        "page": "255-297",
+        "publisher": "Springer",
+        "DOI": "10.1007/0-387-30065-1_16"
+    },
+    {
+        "id": "powell-bobyqa-2009",
+        "type": "report",
+        "title": "The BOBYQA algorithm for bound constrained optimization without derivatives",
+        "author": [{ "family": "Powell", "given": "M. J. D." }],
+        "issued": { "date-parts": [[2009, 8]] },
+        "publisher": "Department of Applied Mathematics and Theoretical Physics, University of Cambridge",
+        "number": "DAMTP 2009/NA06",
+        "URL": "https://www.damtp.cam.ac.uk/user/na/NA_papers/NA2009_06.pdf"
+    },
+    {
+        "id": "powell-2015-lincoa",
+        "type": "article-journal",
+        "title": "On fast trust region methods for quadratic models with linear constraints",
+        "author": [{ "family": "Powell", "given": "M. J. D." }],
+        "issued": { "date-parts": [[2015]] },
+        "container-title": "Mathematical Programming Computation",
+        "volume": "7",
+        "issue": "3",
+        "page": "237-267",
+        "DOI": "10.1007/s12532-015-0084-4"
+    },
+    {
+        "id": "powell-1994-cobyla",
+        "type": "chapter",
+        "title": "A direct search optimization method that models the objective and constraint functions by linear interpolation",
+        "author": [{ "family": "Powell", "given": "M. J. D." }],
+        "editor": [
+            { "family": "Gomez", "given": "Susana" },
+            { "family": "Hennart", "given": "Jean-Pierre" }
+        ],
+        "issued": { "date-parts": [[1994]] },
+        "container-title": "Advances in Optimization and Numerical Analysis",
+        "publisher": "Springer",
+        "publisher-place": "Dordrecht",
+        "page": "51-67",
+        "DOI": "10.1007/978-94-015-8330-5_4"
+    },
+    {
+        "id": "audet-dennis-2006",
+        "type": "article-journal",
+        "title": "Mesh adaptive direct search algorithms for constrained optimization",
+        "author": [
+            { "family": "Audet", "given": "Charles" },
+            { "family": "Dennis", "given": "John E." }
+        ],
+        "issued": { "date-parts": [[2006]] },
+        "container-title": "SIAM Journal on Optimization",
+        "volume": "17",
+        "issue": "1",
+        "page": "188-217",
+        "DOI": "10.1137/040603371"
+    },
+    {
+        "id": "audet-custodio-dennis-2008",
+        "type": "article-journal",
+        "title": "Erratum: Mesh adaptive direct search algorithms for constrained optimization",
+        "author": [
+            { "family": "Audet", "given": "Charles" },
+            { "family": "Custódio", "given": "Ana Luísa" },
+            { "family": "Dennis", "given": "John E." }
+        ],
+        "issued": { "date-parts": [[2008]] },
+        "container-title": "SIAM Journal on Optimization",
+        "volume": "18",
+        "issue": "4",
+        "page": "1501-1503",
+        "DOI": "10.1137/060671267"
+    },
+    {
+        "id": "abramson-audet-dennis-le-digabel-2009",
+        "type": "article-journal",
+        "title": "OrthoMADS: A deterministic MADS instance with orthogonal directions",
+        "author": [
+            { "family": "Abramson", "given": "Mark A." },
+            { "family": "Audet", "given": "Charles" },
+            { "family": "Dennis", "given": "John E." },
+            { "family": "Le Digabel", "given": "Sébastien" }
+        ],
+        "issued": { "date-parts": [[2009]] },
+        "container-title": "SIAM Journal on Optimization",
+        "volume": "20",
+        "issue": "2",
+        "page": "948-966",
+        "DOI": "10.1137/080716980"
+    },
+    {
+        "id": "audet-dennis-2009",
+        "type": "article-journal",
+        "title": "A progressive barrier for derivative-free nonlinear programming",
+        "author": [
+            { "family": "Audet", "given": "Charles" },
+            { "family": "Dennis", "given": "John E." }
+        ],
+        "issued": { "date-parts": [[2009]] },
+        "container-title": "SIAM Journal on Optimization",
+        "volume": "20",
+        "issue": "1",
+        "page": "445-472",
+        "DOI": "10.1137/070692662"
     }
 ]

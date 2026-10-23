@@ -1,0 +1,163 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# Solis–Wets
+
+Solis–Wets is a random local search that adapts its step size and remembers
+successful directions. It tests a Gaussian perturbation and, if that fails,
+its reversal. It accepts a new point only when the objective improves, using
+objective values without derivatives or a matrix model.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/solis_wets/struct.SolisWets.html)
+
+| Property | Requirement |
+| --- | --- |
+| Objective | A scalar function |
+| Evaluations | `CostFunction` |
+| Search | Random local search from one starting point |
+| Constraints | Unconstrained; declarations are ignored |
+| Parameters | All four dense backends, with `f32` or `f64` |
+
+## When to use it
+
+Consider Solis–Wets when derivatives are unavailable and a simple local
+search with `O(n)` storage suits the evaluation budget. The method adapts a
+single mutation scale and a direction bias, keeping its vector work linear
+in the number of parameters. It belongs to the random-search framework of
+[Solis and Wets (1981)](#ref-solis-wets-1981).
+
+For a smooth problem with a small number of expensive evaluations, compare
+the quadratic interpolation model in [NEWUOA](../newuoa/).
+[Nelder–Mead](../nelder-mead/) offers deterministic simplex moves, while
+[MADS](../mads/) uses polling on a mesh. Solis–Wets is useful when its low
+storage cost and randomized directions matter more than building a local
+curvature model.
+
+Treat it as a local method. Random directions do not ensure that a finite
+run finds a global minimum, and strict improvement prevents the method from
+crossing an objective barrier through worse points. Use multiple starts
+when you need to compare local solutions.
+
+## How it works
+
+The solver starts with zero bias and a mutation standard deviation `rho` of
+`1`. Each iteration samples independent normal components with that standard
+deviation and adds the bias to form a step. It evaluates the forward point
+first. If that point does not strictly improve the current cost, it evaluates
+the reversed step. A forward success retains `0.2` of the old bias and adds
+`0.4` times the successful step. A reversal success subtracts `0.4` times
+the forward step from the bias. When both trials fail, the bias is halved.
+
+Five consecutive successful iterations double `rho`; three consecutive
+failed iterations halve it. Each adaptation resets its corresponding
+streak counter. An iteration therefore costs one objective evaluation on
+forward success and two otherwise. The current objective never increases.
+
+Basin interprets `rho` as the per-coordinate standard deviation and resets
+streaks after adaptation, following the conventions used in memetic local
+search implementations. These details differ from a literal reading of
+the covariance notation and counter placement in the original paper.
+
+## Example
+
+This quadratic has its minimum at `[1.0, -2.0]`. A fixed seed makes the run
+reproducible. The solver stops when its mutation standard deviation reaches
+`1e-8`, and the executor also imposes an iteration budget.
+
+<!-- compile: solver-solis-wets -->
+```rust
+use basin::{CostFunction, Executor, SolisWets, Termination};
+use std::convert::Infallible;
+
+struct Quadratic;
+
+impl CostFunction for Quadratic {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok((x[0] - 1.0).powi(2) + 4.0 * (x[1] + 2.0).powi(2))
+    }
+}
+
+fn main() {
+    let solver = SolisWets::new(42)
+        .with_initial_step_size(1.0)
+        .with_absolute_step_size_tolerance(1e-8);
+
+    let result = Executor::from_start(Quadratic, solver, vec![-3.0, 5.0])
+        .max_iter(10_000)
+        .run()
+        .unwrap();
+
+    assert!(matches!(
+        result.report.termination,
+        Termination::Converged(_)
+    ));
+    assert!(result.cost() < 1e-12);
+    assert!((result.param()[0] - 1.0).abs() < 1e-6);
+    assert!((result.param()[1] + 2.0).abs() < 1e-6);
+}
+```
+
+## Practical considerations
+
+### Set the initial scale in parameter units
+
+`with_initial_step_size` controls the initial standard deviation in every
+coordinate. Choose it for the distance you expect to travel and rescale
+parameters with different units. A single scalar scale cannot independently
+adapt to different sensitivities along each coordinate. The bias gain,
+memory, decay, adaptation thresholds, and expansion and contraction factors
+all have `with_*` setters, but parameter scaling is a useful first adjustment.
+
+### Choose a stopping rule and budget
+
+Solis–Wets has no default convergence test. Configure
+`with_absolute_step_size_tolerance` to stop on a small mutation standard
+deviation. `None` disables this check, and zero requests exact collapse.
+A small `rho` reports a small search scale; it does not certify stationarity
+or a particular parameter error. Optional step- and cost-change checks
+observe accepted moves, so rejected trials do not turn an unchanged point
+into convergence.
+
+Keep execution limits on the executor and inspect the termination report.
+An iteration uses up to two evaluations, so a cost budget checked at
+iteration boundaries can be exceeded by one. Noisy evaluations can also
+make strict improvement misleading; a lucky low observation can prevent
+subsequent proposals from being accepted.
+
+### Handle constraints explicitly
+
+Solis–Wets does not project or clip candidates, and constraint declarations
+do not restrict its search. Use an explicit adapter or choose a constrained
+solver such as [BOBYQA](../bobyqa/) for box bounds. An objective can return
+`Ok(f64::INFINITY)` for an infeasible candidate: from a finite incumbent,
+that candidate fails the improvement test. This rejection policy is useful
+only when the objective and feasible region make it suitable; it does not
+turn Solis–Wets into a general constrained solver.
+
+## Implementation
+
+`PointState` publishes the current point and its cost. The solver retains
+the bias, adapted step size, success and failure counters, and a seeded
+`ChaCha8Rng`. Retain it through `Executor::run_with_solver` to inspect
+`step_size()`, `bias()`, `success_count()`, and `failure_count()`.
+
+The same seed reproduces the same trajectory for the same deterministic
+objective. Fresh initialization restores that seed, the configured initial
+scale, zero bias, and empty streaks, then evaluates the starting point.
+An exact solver-and-state checkpoint preserves the RNG and adaptation and
+skips initialization; a state-only snapshot starts a fresh search.
+
+Supported parameter types are `Vec<F>`, `nalgebra::DVector<F>`,
+`ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`. The method
+requires normal sampling and basic vector operations, without a matrix
+factorization or BLAS/LAPACK provider. See the API's [Backends
+section](https://docs.rs/basin/latest/basin/solver/solis_wets/struct.SolisWets.html#backends)
+for custom-vector requirements.
+
+<References entries={["solis-wets-1981"]} />

@@ -12,7 +12,7 @@
     import DocsSearch from "#lib/docs/DocsSearch.svelte";
     import ThemeToggle from "#lib/ThemeToggle.svelte";
     import { theme } from "#lib/theme.svelte.ts";
-    import { NAV_LINKS, activeSection } from "#lib/nav.ts";
+    import { NAV_LINKS, activeSection, resolvePath } from "#lib/nav.ts";
 
     let { children } = $props();
 
@@ -70,7 +70,7 @@
                 </a>
             {:else}
                 <a
-                    href={resolve(link.href)}
+                    href={resolvePath(link.href)}
                     aria-current={current === link.section ? "page" : undefined}
                     class="{extra} px-3 py-1.5 rounded-md transition-colors {current ===
                     link.section
