@@ -357,17 +357,20 @@ impl<F: Scalar> NewuoaWork<F> {
         // gradient at x_opt (`‖∇Q‖² < 10·‖∇Q_int‖²` fails it); after three
         // consecutive flags, replace Q by Q_int. (Powell's paper uses 0.01 /
         // 100×; PRIMA re-tuned to 0.1 / 10× and compares at x_opt.)
-        if knew {
+        if knew && ratio <= c01 {
             let galt = self.model.alt_gradient_at_opt();
             let gisq: F = galt.iter().map(|x| *x * *x).sum();
             let gopt = self.model.gradient_at_opt();
             let gqsq: F = gopt.iter().map(|x| *x * *x).sum();
-            let flag = ratio <= c01 && gqsq >= ten * gisq;
+            let flag = gqsq >= ten * gisq;
             self.itest = if flag { self.itest + 1 } else { 0 };
             if self.itest >= 3 {
                 self.model.adopt_alt_model();
                 self.itest = 0;
             }
+        } else if knew {
+            // A successful ratio rules out adoption without constructing Q_int.
+            self.itest = 0;
         }
 
         // Box 6: a good ratio earns another trust-region iteration.
@@ -579,12 +582,12 @@ fn do_geometry<F: Scalar, E>(
     // recorded step length is `min(Δ̄, ‖d‖)`, as in PRIMA.
     let q_new = model.eval_change(&xnew_disp);
     let q_opt = model.eval_change(&xopt_disp);
-    let model_err = (f_new - f_opt - (q_new - q_opt)).abs();
-    history.push((dnorm.min(delta_bar), model_err));
+    let residual = f_new - f_opt - (q_new - q_opt);
+    history.push((dnorm.min(delta_bar), residual.abs()));
 
     // Box 5 update with the fixed index `t`.
     if sc.sigma != F::zero() {
-        model.commit_update(t, &ctx, &sc, f_new);
+        model.commit_update_with_residual(t, &ctx, &sc, f_new, residual);
     }
     Ok((xabs, f_new))
 }

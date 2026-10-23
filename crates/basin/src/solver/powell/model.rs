@@ -130,20 +130,21 @@ impl<F: Scalar> QuadraticModel<F> {
         assert_eq!(v.len(), self.n, "hessian_matvec: v must have length n");
         // y = Γ v (Γ is symmetric n×n).
         let mut y = vec![F::zero(); self.n];
-        for i in 0..self.n {
-            let mut acc = F::zero();
-            for j in 0..self.n {
-                acc = acc + self.gamma_explicit.get(i, j) * v[j];
-            }
-            y[i] = acc;
+        for (i, yi) in y.iter_mut().enumerate() {
+            *yi = self
+                .gamma_explicit
+                .row(i)
+                .iter()
+                .zip(v)
+                .fold(F::zero(), |acc, (a, b)| acc + *a * *b);
         }
         // y += Σ_k γ_k (x_k − x0) · ((x_k − x0)·v).
         for k in 0..self.m {
             let row = self.xpt.row(k);
             let dot = dot(row, v);
             let coef = self.gamma[k] * dot;
-            for i in 0..self.n {
-                y[i] = y[i] + coef * row[i];
+            for (yi, xi) in y.iter_mut().zip(row) {
+                *yi = *yi + coef * *xi;
             }
         }
         y
@@ -172,8 +173,8 @@ impl<F: Scalar> QuadraticModel<F> {
         for k in 0..self.m {
             let row = self.xpt.row(k);
             let coef = lambda[k] * dot(row, u);
-            for i in 0..self.n {
-                y[i] = y[i] + coef * row[i];
+            for (yi, xi) in y.iter_mut().zip(row) {
+                *yi = *yi + coef * *xi;
             }
         }
         y

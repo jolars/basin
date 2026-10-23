@@ -84,37 +84,51 @@ impl<F: Scalar> QuadraticModel<F> {
         let n = self.n;
         let m = self.m;
         let rank = m - n - 1;
+        assert_eq!(v_lambda.len(), m, "apply_h: |v_lambda| must be m");
+        assert_eq!(v_g.len(), n, "apply_h: |v_g| must be n");
 
-        // λ-part: Ω v_λ (via factorization) + Ξᵀ v_g.
-        let mut out_lambda = vec![F::zero(); m];
-        for k in 0..rank {
-            let mut zdot = F::zero();
-            for i in 0..m {
-                zdot = zdot + self.zmat.get(i, k) * v_lambda[i];
-            }
-            let coef = self.zsign[k] * zdot;
-            for i in 0..m {
-                out_lambda[i] = out_lambda[i] + coef * self.zmat.get(i, k);
+        // Traverse row-major Z contiguously while preserving each dot product's
+        // summation order. Independent columns can then use vector instructions.
+        let mut coefficients = vec![F::zero(); rank];
+        for (i, vi) in v_lambda.iter().enumerate() {
+            for (sum, z) in coefficients.iter_mut().zip(self.zmat.row(i)) {
+                *sum = *sum + *z * *vi;
             }
         }
-        for r in 0..n {
-            let vr = v_g[r];
-            for i in 0..m {
-                out_lambda[i] = out_lambda[i] + self.bmat_xi.get(r, i) * vr;
+        for (coef, sign) in coefficients.iter_mut().zip(&self.zsign) {
+            *coef = *sign * *coef;
+        }
+
+        // λ-part: Ω v_λ (via factorization) + Ξᵀ v_g.
+        let mut out_lambda: Vec<F> = (0..m)
+            .map(|i| {
+                coefficients
+                    .iter()
+                    .zip(self.zmat.row(i))
+                    .fold(F::zero(), |acc, (coef, z)| acc + *coef * *z)
+            })
+            .collect();
+        for (r, vr) in v_g.iter().enumerate() {
+            for (out, b) in out_lambda.iter_mut().zip(self.bmat_xi.row(r)) {
+                *out = *out + *b * *vr;
             }
         }
 
         // g-part: Ξ v_λ + Υ v_g.
         let mut out_g = vec![F::zero(); n];
-        for r in 0..n {
-            let mut acc = F::zero();
-            for i in 0..m {
-                acc = acc + self.bmat_xi.get(r, i) * v_lambda[i];
-            }
-            for s in 0..n {
-                acc = acc + self.bmat_ups.get(r, s) * v_g[s];
-            }
-            out_g[r] = acc;
+        for (r, out) in out_g.iter_mut().enumerate() {
+            let acc = self
+                .bmat_xi
+                .row(r)
+                .iter()
+                .zip(v_lambda)
+                .fold(F::zero(), |acc, (b, v)| acc + *b * *v);
+            *out = self
+                .bmat_ups
+                .row(r)
+                .iter()
+                .zip(v_g)
+                .fold(acc, |acc, (b, v)| acc + *b * *v);
         }
 
         (out_lambda, out_g)
@@ -134,10 +148,20 @@ impl<F: Scalar> QuadraticModel<F> {
             t < self.m,
             "lagrange_coeffs: t must index an interpolation point"
         );
-        let mut e_t = vec![F::zero(); self.m];
-        e_t[t] = F::one();
-        let v_g = vec![F::zero(); self.n];
-        let (lambda, g) = self.apply_h(&e_t, &v_g);
+        // Read H's column directly instead of multiplying the full operator by
+        // a unit vector and evaluating its identically zero terms.
+        let lambda = (0..self.m)
+            .map(|i| {
+                self.zsign
+                    .iter()
+                    .zip(self.zmat.row(i))
+                    .zip(self.zmat.row(t))
+                    .fold(F::zero(), |acc, ((sign, zi), zt)| {
+                        acc + *sign * *zi * *zt
+                    })
+            })
+            .collect();
+        let g = (0..self.n).map(|r| self.bmat_xi.get(r, t)).collect();
         (g, lambda)
     }
 
@@ -291,16 +315,15 @@ impl<F: Scalar> QuadraticModel<F> {
         t: usize,
         ctx: &UpdateContext<F>,
     ) -> UpdateScalars<F> {
-        let m = self.m;
-        let n = self.n;
-        let rank = m - n - 1;
-        assert!(t < m, "update_params: t must index an interpolation point");
+        assert!(
+            t < self.m,
+            "update_params: t must index an interpolation point"
+        );
 
         // α = Ω_{tt} = Σ_k sₖ z_{k,t}².
         let mut alpha = F::zero();
-        for k in 0..rank {
-            let zt = self.zmat.get(t, k);
-            alpha = alpha + self.zsign[k] * zt * zt;
+        for (sign, zt) in self.zsign.iter().zip(self.zmat.row(t)) {
+            alpha = alpha + *sign * *zt * *zt;
         }
         let tau = ctx.hw[t];
         let sigma = alpha * ctx.beta + tau * tau;
@@ -337,9 +360,25 @@ impl<F: Scalar> QuadraticModel<F> {
         scalars: &UpdateScalars<F>,
         f_new: F,
     ) {
+        // Q interpolates F at x_opt, so its unstored constant cancels.
+        let q_new = self.eval_change(&ctx.xnew);
+        let q_opt = self.eval_change(self.xpt.row(self.kopt));
+        let df = (f_new - self.fval[self.kopt]) - (q_new - q_opt);
+        self.commit_update_with_residual(t, ctx, scalars, f_new, df);
+    }
+
+    /// Reuse a signed model residual already computed on the current model.
+    /// Geometry steps need it for their history before committing the update.
+    pub(crate) fn commit_update_with_residual(
+        &mut self,
+        t: usize,
+        ctx: &UpdateContext<F>,
+        scalars: &UpdateScalars<F>,
+        f_new: F,
+        df: F,
+    ) {
         let n = self.n;
         let m = self.m;
-        let rank = m - n - 1;
         assert!(t < m, "commit_update: t must index an interpolation point");
         assert!(
             scalars.sigma != F::zero(),
@@ -349,14 +388,6 @@ impl<F: Scalar> QuadraticModel<F> {
         let beta = scalars.beta;
         let tau = scalars.tau;
         let sigma = scalars.sigma;
-
-        // Model residual under the old model (eq. 4.23).
-        // df = (F(x⁺) − F(x_opt)) − (Q_old(x⁺) − Q_old(x_opt)), with
-        // Q_old(x_opt) = F(x_opt) ⇒ df = F(x⁺) − Q_old(x⁺), no constant needed.
-        let xopt_disp = self.xpt.row(self.kopt).to_vec();
-        let q_new = self.eval_change(&ctx.xnew);
-        let q_opt = self.eval_change(&xopt_disp);
-        let df = (f_new - self.fval[self.kopt]) - (q_new - q_opt);
 
         // Preserve quantities needed for the H update.
         // ehw = e_t − H w (suppressed [λ; g]).
@@ -373,9 +404,13 @@ impl<F: Scalar> QuadraticModel<F> {
         let mut het_lambda = vec![F::zero(); m];
         for i in 0..m {
             let mut acc = F::zero();
-            for k in 0..rank {
-                acc = acc
-                    + self.zsign[k] * self.zmat.get(i, k) * self.zmat.get(t, k);
+            for ((sign, zi), zt) in self
+                .zsign
+                .iter()
+                .zip(self.zmat.row(i))
+                .zip(self.zmat.row(t))
+            {
+                acc = acc + *sign * *zi * *zt;
             }
             het_lambda[i] = acc;
         }
@@ -392,22 +427,25 @@ impl<F: Scalar> QuadraticModel<F> {
         // Update Ξ and Υ from the sub-blocks in eq. 4.11.
         // bottom-left (g × λ) block ⇒ Ξ; bottom-right (g × g) ⇒ Υ.
         for r in 0..n {
-            for j in 0..m {
-                let term = alpha * ehw_g[r] * ehw_lambda[j]
-                    - beta * het_g[r] * het_lambda[j]
-                    + tau
-                        * (het_g[r] * ehw_lambda[j] + ehw_g[r] * het_lambda[j]);
-                let updated = self.bmat_xi.get(r, j) + inv_sigma * term;
-                self.bmat_xi.set(r, j, updated);
+            for ((entry, ehw), het) in self
+                .bmat_xi
+                .row_mut(r)
+                .iter_mut()
+                .zip(&ehw_lambda)
+                .zip(&het_lambda)
+            {
+                let term = alpha * ehw_g[r] * *ehw - beta * het_g[r] * *het
+                    + tau * (het_g[r] * *ehw + ehw_g[r] * *het);
+                *entry = *entry + inv_sigma * term;
             }
         }
         for r in 0..n {
-            for s in 0..n {
-                let term = alpha * ehw_g[r] * ehw_g[s]
-                    - beta * het_g[r] * het_g[s]
-                    + tau * (het_g[r] * ehw_g[s] + ehw_g[r] * het_g[s]);
-                let updated = self.bmat_ups.get(r, s) + inv_sigma * term;
-                self.bmat_ups.set(r, s, updated);
+            for ((entry, ehw), het) in
+                self.bmat_ups.row_mut(r).iter_mut().zip(&ehw_g).zip(&het_g)
+            {
+                let term = alpha * ehw_g[r] * *ehw - beta * het_g[r] * *het
+                    + tau * (het_g[r] * *ehw + ehw_g[r] * *het);
+                *entry = *entry + inv_sigma * term;
             }
         }
 
@@ -415,18 +453,20 @@ impl<F: Scalar> QuadraticModel<F> {
         self.update_omega_factorization(t, &ehw_lambda, tau, sigma, beta);
 
         // Install the new interpolation point.
-        for k in 0..n {
-            self.xpt.set(t, k, ctx.xnew[k]);
-        }
+        self.xpt.row_mut(t).copy_from_slice(&ctx.xnew);
         self.fval[t] = f_new;
 
         // H⁺e_t consists of column t of Ω⁺ and Ξ⁺.
         let mut hcol_lambda = vec![F::zero(); m];
         for i in 0..m {
             let mut acc = F::zero();
-            for k in 0..rank {
-                acc = acc
-                    + self.zsign[k] * self.zmat.get(i, k) * self.zmat.get(t, k);
+            for ((sign, zi), zt) in self
+                .zsign
+                .iter()
+                .zip(self.zmat.row(i))
+                .zip(self.zmat.row(t))
+            {
+                acc = acc + *sign * *zi * *zt;
             }
             hcol_lambda[i] = acc;
         }
@@ -438,13 +478,11 @@ impl<F: Scalar> QuadraticModel<F> {
         // Update the model (eqs. 4.29, 4.30).
         // Γ⁺ = Γ + γ_t (x_t^old − x0)(x_t^old − x0)ᵀ.
         for i in 0..n {
-            for j in 0..n {
-                let add = old_gamma_t * old_xt[i] * old_xt[j];
-                self.gamma_explicit.set(
-                    i,
-                    j,
-                    self.gamma_explicit.get(i, j) + add,
-                );
+            for (entry, xj) in
+                self.gamma_explicit.row_mut(i).iter_mut().zip(&old_xt)
+            {
+                let add = old_gamma_t * old_xt[i] * *xj;
+                *entry = *entry + add;
             }
         }
         // λ⁺ = df · (H⁺ e_t)_λ ; γ⁺_t = λ⁺_t, γ⁺_j = γ_j + λ⁺_j (j ≠ t).
@@ -614,10 +652,11 @@ impl<F: Scalar> QuadraticModel<F> {
         sin: F,
     ) {
         for i in 0..self.m {
-            let z1 = self.zmat.get(i, c1);
-            let z2 = self.zmat.get(i, c2);
-            self.zmat.set(i, c1, cos * z1 + sin * z2);
-            self.zmat.set(i, c2, -sin * z1 + cos * z2);
+            let row = self.zmat.row_mut(i);
+            let z1 = row[c1];
+            let z2 = row[c2];
+            row[c1] = cos * z1 + sin * z2;
+            row[c2] = -sin * z1 + cos * z2;
         }
     }
 }
@@ -634,6 +673,72 @@ mod tests {
     use crate::solver::powell::kkt::{
         assert_h_matches_inverse, build_w_dense, invert_dense,
     };
+
+    fn check_signed_operator<F: Scalar>() {
+        let from = |x| F::from_f64(x).unwrap();
+        let n = 3;
+        let m = 2 * n + 1;
+        let mut model =
+            QuadraticModel::initialize(vec![F::zero(); n], from(0.5), m, |x| {
+                x.iter().map(|v| *v * *v).sum()
+            });
+        model.zmat = DenseMatrix::from_fn(m, n, |i, j| {
+            from(((i * 7 + j * 3 + 1) as f64).sin())
+        });
+        model.zsign = vec![-F::one(), F::one(), -F::one()];
+        model.bmat_xi = DenseMatrix::from_fn(n, m, |i, j| {
+            from((i as f64 - j as f64) / 10.0)
+        });
+        model.bmat_ups = DenseMatrix::from_fn(n, n, |i, j| {
+            from(if i == j { 2.0 } else { 0.25 })
+        });
+        let vl: Vec<_> = (0..m).map(|i| from(i as f64 / 10.0 - 0.3)).collect();
+        let vg = vec![from(-0.7), from(0.4), from(0.9)];
+        let omega = DenseMatrix::from_fn(m, m, |i, j| {
+            (0..n)
+                .map(|k| {
+                    model.zsign[k] * model.zmat.get(i, k) * model.zmat.get(j, k)
+                })
+                .sum::<F>()
+        });
+        let close = |actual: F, expected: F| {
+            assert!(
+                (actual - expected).abs()
+                    <= from(64.0) * F::epsilon() * (F::one() + expected.abs()),
+                "actual={actual:?}, expected={expected:?}"
+            );
+        };
+        let (lambda, g) = model.apply_h(&vl, &vg);
+        for i in 0..m {
+            let expected = (0..m).map(|j| omega.get(i, j) * vl[j]).sum::<F>()
+                + (0..n).map(|r| model.bmat_xi.get(r, i) * vg[r]).sum::<F>();
+            close(lambda[i], expected);
+            let (column_g, column_lambda) = model.lagrange_coeffs(i);
+            for j in 0..m {
+                close(column_lambda[j], omega.get(j, i));
+            }
+            for r in 0..n {
+                close(column_g[r], model.bmat_xi.get(r, i));
+            }
+        }
+        for r in 0..n {
+            let expected = (0..m)
+                .map(|i| model.bmat_xi.get(r, i) * vl[i])
+                .sum::<F>()
+                + (0..n).map(|s| model.bmat_ups.get(r, s) * vg[s]).sum::<F>();
+            close(g[r], expected);
+        }
+    }
+
+    #[test]
+    fn signed_operator_and_columns_match_dense_f64() {
+        check_signed_operator::<f64>();
+    }
+
+    #[test]
+    fn signed_operator_and_columns_match_dense_f32() {
+        check_signed_operator::<f32>();
+    }
 
     /// Build the full `(m+n+1)` vector `w` (Powell 2006, eq. 4.10) for a new
     /// displacement `xnew`, in the *unsuppressed* index order

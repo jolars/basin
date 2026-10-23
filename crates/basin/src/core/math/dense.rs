@@ -170,6 +170,21 @@ impl<F: Scalar> DenseMatrix<F> {
         );
         &self.data[i * self.cols..(i + 1) * self.cols]
     }
+
+    /// Mutable row view for dense updates that check the row bounds once.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `i >= nrows()`.
+    pub(crate) fn row_mut(&mut self, i: usize) -> &mut [F] {
+        assert!(
+            i < self.rows,
+            "DenseMatrix::row_mut: row {i} out of bounds for a {}×{} matrix",
+            self.rows,
+            self.cols
+        );
+        &mut self.data[i * self.cols..(i + 1) * self.cols]
+    }
 }
 
 impl<F: Scalar> MatVec<Vec<F>> for DenseMatrix<F> {
@@ -518,6 +533,25 @@ mod tests {
     fn row_rejects_out_of_bounds() {
         let a = fixture(); // 2 rows
         let _ = a.row(2);
+    }
+
+    #[test]
+    fn row_mut_updates_only_its_row() {
+        let mut a = fixture();
+        a.row_mut(1).copy_from_slice(&[40.0, 50.0, 60.0]);
+        assert_eq!(a.row(0), &[1.0, 2.0, 3.0]);
+        assert_eq!(a.row(1), &[40.0, 50.0, 60.0]);
+        assert!(
+            DenseMatrix::<f64>::from_row_slice(1, 0, &[])
+                .row_mut(0)
+                .is_empty()
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "DenseMatrix::row_mut")]
+    fn row_mut_rejects_out_of_bounds() {
+        let _ = fixture().row_mut(2);
     }
 
     #[test]
