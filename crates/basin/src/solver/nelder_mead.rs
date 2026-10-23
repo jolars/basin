@@ -570,7 +570,7 @@ where
         }
     }
 
-    state.sort();
+    state.sort_last();
     Ok(crate::SolverStep::from((state, None)))
 }
 
@@ -603,6 +603,9 @@ where
         *c = trace.evaluate(problem, v, TrialKind::Shrink(i + 1))?;
         trace.accept(trace.trials.len().saturating_sub(1), true);
     }
+    // Shrinking can reorder every vertex. Other transformations replace only
+    // the worst vertex, so the caller can use a single stable insertion.
+    state.sort();
     Ok(())
 }
 

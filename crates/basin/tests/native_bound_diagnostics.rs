@@ -79,6 +79,16 @@ fn simplex<F: Scalar>() {
             ],
             vec![false, false, true, true],
         ),
+        (
+            vec![3., 3., -2., -1.],
+            vec![
+                TrialKind::Reflection,
+                TrialKind::InsideContraction,
+                TrialKind::Shrink(1),
+                TrialKind::Shrink(2),
+            ],
+            vec![false, false, true, true],
+        ),
     ];
     let mut cases = cases;
     for nonfinite in [f64::NAN, f64::INFINITY] {
@@ -115,6 +125,9 @@ fn simplex<F: Scalar>() {
             let state = solver.init(&mut p, seed()).unwrap();
             let result = solver.next_iter(&mut p, state);
             assert_eq!(result.is_err(), fail.is_some());
+            if let Ok(step) = &result {
+                assert!(step.state.costs().windows(2).all(|w| w[0] <= w[1]));
+            }
             let trials = solver.trial_observations();
             let length = fail.map_or(costs.len(), |i| i - 2);
             assert_eq!(trials.len(), length);

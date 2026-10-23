@@ -49,7 +49,23 @@ pub(super) struct Trace<V, F: Scalar> {
 }
 
 impl<V: Clone, F: Scalar> Trace<V, F> {
+    #[inline]
     pub fn evaluate<P: crate::CostFunction<Param = V, Output = F>>(
+        &mut self,
+        problem: &mut crate::Problem<P>,
+        point: &V,
+        kind: TrialKind,
+    ) -> Result<F, P::Error> {
+        if !self.enabled {
+            return problem.cost(point);
+        }
+        self.evaluate_traced(problem, point, kind)
+    }
+
+    // Keep optional record construction out of the ordinary evaluation path,
+    // so the solver can inline cost callbacks without copying trace metadata.
+    #[cold]
+    fn evaluate_traced<P: crate::CostFunction<Param = V, Output = F>>(
         &mut self,
         problem: &mut crate::Problem<P>,
         point: &V,
@@ -57,18 +73,16 @@ impl<V: Clone, F: Scalar> Trace<V, F> {
     ) -> Result<F, P::Error> {
         let before = *problem.counts();
         let result = problem.cost(point);
-        if self.enabled {
-            self.sequence += 1;
-            self.trials.push(Trial {
-                sequence: self.sequence,
-                kind,
-                point: point.clone(),
-                cost: result.as_ref().ok().copied(),
-                accepted: None,
-                counts_before: before,
-                counts_after: *problem.counts(),
-            });
-        }
+        self.sequence += 1;
+        self.trials.push(Trial {
+            sequence: self.sequence,
+            kind,
+            point: point.clone(),
+            cost: result.as_ref().ok().copied(),
+            accepted: None,
+            counts_before: before,
+            counts_after: *problem.counts(),
+        });
         result
     }
 

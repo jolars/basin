@@ -1,9 +1,9 @@
 //! One-shot GD and Nelder-Mead comparison (not a benchmark): basin vs
 //! argmin on `Vec<f64>`, identical problem, start, configuration, and a
-//! fixed iteration budget (no early stop), so the only thing that can
-//! differ is the implementation. Prints iterations and the cost reached,
-//! confirming the two reach comparable quality before the timings in
-//! `benches/gd_nm.rs` are trusted.
+//! shared iteration cap. Each solver retains its internal stopping rules.
+//! Prints completed iterations and costs; equal caps do not establish equal
+//! work. See `verify_nm` for the published Basin/Gomez workload and callback
+//! accounting.
 //!
 //! Also verifies the COBYLA migration cases against `cobyla` with matched
 //! objective budgets and final radii. Their trajectories differ; reported
@@ -27,9 +27,7 @@ const MAX_ITERS: u64 = 200;
 
 fn main() {
     let start = vec![-1.2, 1.0];
-    println!(
-        "Rosenbrock 2D from {start:?}, fixed {MAX_ITERS} iters (no early stop)\n"
-    );
+    println!("Rosenbrock 2D from {start:?}, cap of {MAX_ITERS} iterations\n");
 
     // ---- Steepest descent + More-Thuente line search ----
     println!("== gradient descent (steepest + More-Thuente) ==");
@@ -73,8 +71,8 @@ fn main() {
     println!("  basin   {:>4} iters  cost={:.6e}", r.iter(), r.cost());
 
     // Hand argmin the *exact* simplex basin builds (relative step 0.05),
-    // and an sd-tolerance of 0 to disable its early stop so it runs the
-    // full budget like basin.
+    // and an sd-tolerance of 0 to disable its standard-deviation stop.
+    // Basin retains its default simplex convergence checks.
     let simplex = IntoInitialSimplex::into_initial_simplex(start.clone(), 0.05);
     let nm = ArgminNelderMead::new(simplex)
         .with_sd_tolerance(0.0)

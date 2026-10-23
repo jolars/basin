@@ -268,6 +268,23 @@ impl<V, F: Scalar> SimplexProgress<V, F> {
             }
         }
     }
+
+    /// Restore stable cost order when only the last vertex has changed.
+    /// The prefix must already be sorted, with NaNs last.
+    pub(crate) fn sort_last(&mut self) {
+        let Some((&cost, prefix)) = self.costs.split_last() else {
+            return;
+        };
+        if cost.is_nan() {
+            return;
+        }
+        let index =
+            prefix.partition_point(|&other| !other.is_nan() && other <= cost);
+        // Moving the intervening block once avoids repeatedly swapping vector
+        // headers as an accepted trial travels from worst to best.
+        self.vertices[index..].rotate_right(1);
+        self.costs[index..].rotate_right(1);
+    }
 }
 impl<V: Clone, F: Scalar> State for SimplexProgress<V, F> {
     type Param = V;
@@ -355,3 +372,55 @@ impl<V: Clone, F: Scalar> IncumbentState for SimplexProgress<V, F> {
     }
 }
 impl<V: Clone, F: Scalar> ObjectiveIncumbentState for SimplexProgress<V, F> {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn inserting_last_vertex_preserves_ties_and_nan_order() {
+        macro_rules! check {
+            ($f:ty) => {{
+                let costs = [
+                    <$f>::NEG_INFINITY,
+                    -1.0,
+                    -0.0,
+                    0.0,
+                    1.0,
+                    1.0,
+                    <$f>::INFINITY,
+                    <$f>::NAN,
+                    <$f>::NAN,
+                ];
+                for last in costs {
+                    let mut state =
+                        SimplexProgress::<Vec<$f>, $f>::from_simplex(
+                            (0..=costs.len())
+                                .map(|i| vec![i as $f; costs.len()])
+                                .collect(),
+                        );
+                    state.costs = costs.into_iter().chain([last]).collect();
+                    let mut expected: Vec<_> =
+                        state.costs.iter().copied().enumerate().collect();
+                    expected.sort_by(|(_, a), (_, b)| {
+                        a.is_nan().cmp(&b.is_nan()).then_with(|| {
+                            a.partial_cmp(b)
+                                .unwrap_or(std::cmp::Ordering::Equal)
+                        })
+                    });
+
+                    state.sort_last();
+
+                    for ((vertex, cost), (index, expected_cost)) in
+                        state.vertices.iter().zip(&state.costs).zip(expected)
+                    {
+                        assert_eq!(vertex[0], index as $f);
+                        assert_eq!(cost.to_bits(), expected_cost.to_bits());
+                    }
+                }
+            }};
+        }
+        check!(f32);
+        check!(f64);
+    }
+}

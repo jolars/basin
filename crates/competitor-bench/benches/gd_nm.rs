@@ -9,10 +9,14 @@
 //!     and a bit-identical initial simplex (basin's `IntoInitialSimplex`,
 //!     relative step 0.05).
 //!
-//! GD/NM use a *fixed* iteration budget with no early stop on either side
-//! (`src/bin/verify_gd_nm.rs` confirms both run the full budget and reach
-//! comparable cost), so the timing is a clean per-iteration
-//! implementation-cost comparison.
+//! The original GD/NM groups use iteration caps and retain solver-specific
+//! stopping rules. Equal caps do not imply equal work; `verify_gd_nm` prints
+//! the completed iterations and final costs.
+//!
+//! The `nm_target_*` groups compare Basin and Gomez at the published objective
+//! target, retaining their different initial simplexes and internal stops.
+//! `verify_nm` reports actual callbacks, quality, and budget-limited cases.
+//! The `nm_step_*` groups isolate implementation changes on identical inputs.
 //!
 //! COBYLA compares Basin's PRIMA port with the `cobyla` crate on the original
 //! migration workloads. It uses matched objective budgets and final radii,
@@ -163,5 +167,59 @@ fn bench_cobyla(c: &mut Criterion) {
     }
 }
 
-criterion_group!(benches, bench_gd, bench_nm, bench_cobyla);
+fn bench_nm_target(c: &mut Criterion) {
+    use competitor_bench::nm;
+
+    // These are effectiveness comparisons: the default simplexes differ.
+    // Both timers include setup, initialization, extraction, and teardown.
+    for n in [2, 12, 24] {
+        for result in [nm::solve_basin(n), nm::solve_gomez::<true>(n)] {
+            let _ = result.verify();
+        }
+        let mut group = c.benchmark_group(format!("nm_target_rosenbrock_n{n}"));
+        group.bench_function("basin", |b| {
+            b.iter(|| black_box(nm::solve_basin(black_box(n))))
+        });
+        group.bench_function("gomez", |b| {
+            b.iter(|| black_box(nm::solve_gomez::<false>(black_box(n))))
+        });
+        group.finish();
+    }
+}
+
+fn bench_nm_step(c: &mut Criterion) {
+    use basin::{Problem, Solver};
+    use competitor_bench::nm;
+
+    // A fresh initialized simplex makes before/after implementation work identical.
+    // Initialization is excluded; the solver's teardown is charged to each step.
+    for n in [2, 12, 24] {
+        c.bench_function(&format!("nm_step_rosenbrock_n{n}/basin"), |b| {
+            b.iter_batched(
+                || {
+                    let mut problem =
+                        Problem::new(Rosenbrock::<Vec<f64>>::default());
+                    let mut solver = NelderMead::new();
+                    let state = solver
+                        .init(&mut problem, SimplexProgress::new(nm::start(n)))
+                        .unwrap();
+                    (problem, solver, state)
+                },
+                |(mut problem, mut solver, state)| {
+                    black_box(solver.next_iter(&mut problem, state).unwrap())
+                },
+                BatchSize::SmallInput,
+            )
+        });
+    }
+}
+
+criterion_group!(
+    benches,
+    bench_gd,
+    bench_nm,
+    bench_nm_target,
+    bench_nm_step,
+    bench_cobyla
+);
 criterion_main!(benches);

@@ -736,13 +736,14 @@ where
         if state.vertices().len() != state.costs().len() {
             return None;
         }
-        [
+        match (
             self.check_collapse(state),
             self.check_cost_std_dev(state.costs()),
-        ]
-        .into_iter()
-        .flatten()
-        .reduce(Termination::merge)
+        ) {
+            (Some(collapse), Some(std_dev)) => Some(collapse.merge(std_dev)),
+            (collapse, None) => collapse,
+            (None, std_dev) => std_dev,
+        }
     }
 }
 
