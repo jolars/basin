@@ -12,7 +12,6 @@ history of curvature pairs.
 
 [API
 reference](https://docs.rs/basin/latest/basin/solver/nonlinear_cg/struct.NonlinearCg.html)
-· [Compare solvers](../../)
 
   | Property    | Requirement                                             |
   | ----------- | ------------------------------------------------------- |
@@ -126,30 +125,29 @@ To try Polak–Ribière+, import `CgUpdate` and add
 
 ## Practical Considerations
 
-**Scale the parameters.** Large differences in parameter units can make a
-gradient-based direction less useful and an absolute gradient tolerance harder
-to interpret. Choose a threshold for your parameterization, precision, and
-derivative accuracy; `1e-8` is a choice for the example above.
+### Scale the parameters
 
-**Choose a stopping test.** An exactly zero gradient at a finite point with
-finite cost always terminates successfully. Other gradient, step, and
-cost-change tolerances are disabled by default. Configure an absolute or
-relative tolerance on the solver and put iteration or evaluation budgets on the
-executor. Inspect the termination report to distinguish convergence from
-reaching a budget.
+Large differences in parameter units can make a gradient-based direction less
+useful and an absolute gradient tolerance harder to interpret. Choose a
+threshold for your parameterization, precision, and derivative accuracy; `1e-8`
+is a choice for the example above.
 
-**Use restarts deliberately.** Safety restarts are always active. Optional
-periodic restarts discard the previous direction after a chosen number of
-accepted steps; configure them with `with_restart_interval(Some(k))`. They are
-disabled by default, and `Some(1)` makes every direction steepest descent. The
-Hager–Zhang coefficient parameter `eta` controls its update safeguard, rather
-than a stopping tolerance, and has no effect on Polak–Ribière+.
+### Choose a stopping test
 
-**Check gradient accuracy.** The direction update uses differences between
-gradients, and the line search depends on directional derivatives. If you use
-[`FiniteDiff`](https://docs.rs/basin/latest/basin/core/numdiff/struct.FiniteDiff.html),
-account for derivative error and its additional objective evaluations when
-choosing tolerances and budgets.
+An exactly zero gradient at a finite point with finite cost always terminates
+successfully. Other gradient, step, and cost-change tolerances are disabled by
+default. Configure an absolute or relative tolerance on the solver and put
+iteration or evaluation budgets on the executor. Inspect the termination report
+to distinguish convergence from reaching a budget.
+
+### Use restarts deliberately
+
+Safety restarts are always active. Optional periodic restarts discard the
+previous direction after a chosen number of accepted steps; configure them with
+`with_restart_interval(Some(k))`. They are disabled by default, and `Some(1)`
+makes every direction steepest descent. The Hager–Zhang coefficient parameter
+`eta` controls its update safeguard, rather than a stopping tolerance, and has
+no effect on Polak–Ribière+.
 
 ## Basin Implementation
 

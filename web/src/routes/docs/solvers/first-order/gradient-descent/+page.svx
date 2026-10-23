@@ -11,7 +11,6 @@ baseline before trying a method that learns more from previous steps.
 
 [API
 reference](https://docs.rs/basin/latest/basin/solver/gradient_descent/struct.GradientDescent.html)
-· [Compare solvers](../../)
 
   | Property    | Requirement                                                                                    |
   | ----------- | ---------------------------------------------------------------------------------------------- |
@@ -21,7 +20,7 @@ reference](https://docs.rs/basin/latest/basin/solver/gradient_descent/struct.Gra
   | Constraints | Unconstrained; use [projected gradient descent](../projected-gradient-descent/) for box bounds |
   | Parameters  | All four dense backends, with `f32` or `f64`                                                   |
 
-## When to Use It
+## When to use it
 
 Consider gradient descent when you want a straightforward method with little
 storage beyond the parameters and gradient. A fixed step is useful when you
@@ -113,31 +112,22 @@ To choose the step through backtracking instead, construct the solver with
 
 ## Practical Considerations
 
-**Choose the step for your scale.** A fixed step does not check whether the
-objective decreases. A step that is too large can overshoot or diverge, while a
-small step can make progress slow. Rescale parameters with very different units,
-or try a line search when you cannot choose a useful fixed step.
+### Choose the step for your scale
 
-**Add momentum carefully.** `with_momentum(beta)` carries a fraction of the
-previous velocity into each update. Coefficients between zero and one can help
-on elongated valleys, but can also cause overshoot. Reduce the fixed step when
-adding momentum. With a line search, the acceptance condition applies to the
-trial along the negative gradient; the additional velocity changes the point
-Basin actually takes.
+A fixed step does not check whether the objective decreases. A step that is too
+large can overshoot or diverge, while a small step can make progress slow.
+Rescale parameters with very different units, or try a line search when you
+cannot choose a useful fixed step.
 
-**Choose a stopping test.** Gradient descent has no default optimality check.
-Use `with_absolute_gradient_tolerance` to test the Euclidean gradient norm, or
-configure a relative gradient tolerance. Choose a threshold for your parameter
-units, scalar precision, and derivative accuracy. Keep iteration and evaluation
-budgets on the executor, and inspect the termination report to see whether a
-convergence test passed.
+### Add momentum carefully
 
-**Check numerical derivatives.** You can wrap the objective in
-[`FiniteDiff`](https://docs.rs/basin/latest/basin/core/numdiff/struct.FiniteDiff.html)
-when an analytic gradient is unavailable. This adds objective evaluations and
-introduces derivative error, so account for both when choosing a tolerance.
+`with_momentum(beta)` carries a fraction of the previous velocity into each
+update. Coefficients between zero and one can help on elongated valleys, but can
+also cause overshoot. Reduce the fixed step when adding momentum. With a line
+search, the acceptance condition applies to the trial along the negative
+gradient; the additional velocity changes the point Basin actually takes.
 
-## Basin Implementation
+## Implementation
 
 Basin publishes the current point, objective, and gradient through
 `FirstOrderState`. Fresh initialization evaluates the starting point and resets
