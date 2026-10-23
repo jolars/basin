@@ -89,12 +89,18 @@ export const SOLVER_LINKS: DocsNavItem[] = [
     {
         label: "Quasi-Newton",
         children: [
-            solver("BFGS", "bfgs"),
+            {
+                label: "BFGS",
+                href: "docs/solvers/quasi-newton/bfgs/",
+            },
             {
                 label: "L-BFGS",
                 href: "docs/solvers/quasi-newton/l-bfgs/",
             },
-            solver("L-BFGS-B", "lbfgsb"),
+            {
+                label: "L-BFGS-B",
+                href: "docs/solvers/quasi-newton/l-bfgs-b/",
+            },
         ],
     },
     {

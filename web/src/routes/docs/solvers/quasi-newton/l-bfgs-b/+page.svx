@@ -1,0 +1,193 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# L-BFGS-B
+
+L-BFGS-B is a local optimizer for smooth functions with box bounds when you can
+compute a gradient. It builds a curvature model from a short history of steps
+and gradient changes, keeping storage manageable for large problems. Its search
+accounts for the bounds so objective and gradient evaluations stay inside the
+box.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/lbfgs/struct.Lbfgs.html)
+
+  | Property    | Requirement                                                        |
+  | ----------- | ------------------------------------------------------------------ |
+  | Objective   | A smooth scalar function                                           |
+  | Evaluations | `CostFunction` and `Gradient`                                      |
+  | Search      | Local, from one starting point                                     |
+  | Constraints | A box-only `ConstraintSet<BoxBounds<V>>` on the problem            |
+  | Parameters  | Contiguous vectors on all four dense backends, with `f32` or `f64` |
+
+## When to use it
+
+Consider L-BFGS-B when each parameter has an independent lower or upper bound
+and you want to use curvature information without storing a dense matrix. The
+algorithm combines gradient projection with a limited-memory BFGS model
+([Byrd et al., 1995](#ref-byrd-lu-nocedal-zhu-1995)).
+
+For an unconstrained problem, use [L-BFGS](../l-bfgs/) or [BFGS](../bfgs/).
+[Projected gradient descent](../../first-order/projected-gradient-descent/)
+offers a simpler method with little working storage for box bounds. For
+least-squares objectives with bounds, compare [trust-region
+reflective](../../#trust-region-reflective). Linear and nonlinear constraint
+blocks need a method that supports them, such as [SLSQP](../../#slsqp).
+
+L-BFGS-B finds a local constrained solution. Different starting points can lead
+to different minima, and noisy or nonsmooth gradients can make its curvature
+estimates unreliable.
+
+## How it works
+
+Basin projects the starting point into the box before evaluating the objective
+and gradient. Each iteration first explores the projected negative-gradient path
+to find a generalized Cauchy point. It then refines the quadratic model over
+variables that are free to move, followed by a line search that keeps the step
+feasible. This is the bound-constrained algorithm described in
+[Zhu et al. (1997)](#ref-zhu-byrd-lu-nocedal-1997), with the version 3.0
+subspace changes of [Morales and Nocedal (2011)](#ref-morales-nocedal-2011).
+
+After an accepted step, the solver retains the change in parameters and the
+change in gradient when they pass its curvature safeguard. At most `m` pairs
+contribute to the model. The default
+[Moré–Thuente line search](https://docs.rs/basin/latest/basin/line_search/more_thuente/struct.MoreThuente.html)
+seeks sufficient decrease and a strong Wolfe curvature condition within the
+feasible step interval ([Moré and Thuente, 1994](#ref-more-thuente-1994)). A
+single iteration can require several objective and gradient evaluations.
+
+## Example
+
+This quadratic has its unconstrained minimum at `[1.0, -2.0]`. The box moves the
+constrained minimum to `[0.5, -1.0]`, where the raw gradient is nonzero. The
+example declares bounds on the problem and uses a projected-gradient stopping
+test.
+
+<!-- compile: solver-lbfgsb -->
+```rust
+use basin::{
+    BoxBounds, ConstraintDescription, ConstraintSet, Constraints, CostFunction,
+    Executor, Gradient, Lbfgsb, Termination,
+};
+use std::convert::Infallible;
+
+struct BoundedQuadratic {
+    lower: Vec<f64>,
+    upper: Vec<f64>,
+}
+
+impl Constraints for BoundedQuadratic {
+    type Set = ConstraintSet<BoxBounds<Vec<f64>>>;
+
+    fn constraints(
+        &self,
+    ) -> <Self::Set as ConstraintDescription>::Borrowed<'_> {
+        ConstraintSet::new()
+            .with_bounds(BoxBounds::new(Some(&self.lower), Some(&self.upper)))
+    }
+}
+
+impl CostFunction for BoundedQuadratic {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok((x[0] - 1.0).powi(2) + 4.0 * (x[1] + 2.0).powi(2))
+    }
+}
+
+impl Gradient for BoundedQuadratic {
+    type Gradient = Vec<f64>;
+
+    fn gradient(&self, x: &Self::Param) -> Result<Self::Gradient, Self::Error> {
+        Ok(vec![2.0 * (x[0] - 1.0), 8.0 * (x[1] + 2.0)])
+    }
+}
+
+fn main() {
+    let problem = BoundedQuadratic {
+        lower: vec![-1.0, -1.0],
+        upper: vec![0.5, 1.0],
+    };
+    let solver = Lbfgsb::new()
+        .with_m_capacity(10)
+        .with_absolute_projected_gradient_tolerance(1e-8)
+        .with_relative_cost_reduction_tolerance(None);
+
+    let result = Executor::from_start(problem, solver, vec![-3.0, 5.0])
+        .max_iter(200)
+        .run()
+        .unwrap();
+
+    assert!(matches!(
+        result.report.termination,
+        Termination::Converged(_)
+    ));
+    assert!((result.param()[0] - 0.5).abs() < 1e-7);
+    assert!((result.param()[1] + 1.0).abs() < 1e-7);
+}
+```
+
+`Lbfgsb` is the alias for the default bounded mode of `Lbfgs`. Calling
+`Lbfgs::new()` selects the same algorithm; `.unbounded()` selects unconstrained
+L-BFGS. Initialization projects this example's seed to `[-1.0, 1.0]` before
+the first objective or gradient evaluation.
+
+## Practical considerations
+
+### Use a projected stationarity test
+
+At a constrained minimum, the negative gradient can point out of the feasible
+box.
+L-BFGS-B tests the infinity norm of its bound-clipped gradient, which vanishes
+at a box-constrained stationary point. Configure it through
+`with_absolute_projected_gradient_tolerance`. The default is `1e-9` for `f64`
+and `1e-10` for `f32`; choose a threshold for your objective's scale, parameter
+units, precision, and derivative accuracy. With numerical gradients, account
+for approximation error rather than assuming the default is attainable.
+
+### Distinguish the stopping reasons
+
+For `f64`, the solver also stops when the signed cost reduction is at most
+`10 * f64::EPSILON * max(|f_previous|, |f_current|, 1)`. Configure the factor
+with `with_relative_cost_reduction_tolerance`; this check is disabled by
+default for `f32`. The example disables it explicitly so convergence depends
+on the projected-gradient test. `None` disables either configurable check,
+and zero requests an exact-zero threshold.
+
+A small cost reduction alone does not establish stationarity. Inspect the
+termination report, and keep iteration and evaluation budgets on the executor.
+
+### Start with the default history length
+
+Basin retains up to ten curvature pairs by default. `with_m_capacity(m)` changes
+this capacity for a fresh solve. Increasing it stores more information and uses
+more memory, but does not guarantee faster convergence.
+
+## Implementation
+
+Basin ports the L-BFGS-B 3.0 Fortran implementation, including its compact
+curvature model and subspace minimization. Singular or non-positive-definite
+model factorizations cause it to clear the history and retry. It publishes the
+current point, objective, and gradient through `FirstOrderState`; the solver
+owns the curvature history and work buffers. Fresh solves clear that history
+and reset the line search; exact solver-and-state checkpoints retain them.
+
+Bounds belong to the problem through `Constraints`, using a box-only
+`ConstraintSet<BoxBounds<V>>`. The solver validates this declaration and rejects
+unsupported constraint blocks. You can supply another strategy through
+`Lbfgs::with_line_search(search)`, but it must implement bounded steps. The
+default line search preserves iteration-wise parity with the Fortran reference.
+
+Supported parameter types are `Vec<F>`, `nalgebra::DVector<F>`,
+`ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`. Parameter
+storage must be contiguous; strided ndarray views are unsupported. The compact
+model uses pure-Rust factorizations without a BLAS/LAPACK provider. See the API's
+[Backends
+section](https://docs.rs/basin/latest/basin/solver/lbfgs/struct.Lbfgs.html#backends)
+for the exact capability requirements.
+
+<References
+entries={["byrd-lu-nocedal-zhu-1995", "zhu-byrd-lu-nocedal-1997", "morales-nocedal-2011", "more-thuente-1994"]} />

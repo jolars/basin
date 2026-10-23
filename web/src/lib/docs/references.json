@@ -125,5 +125,54 @@
         "page": "421-436",
         "publisher": "Springer",
         "DOI": "10.1007/978-3-642-35289-8_25"
+    },
+    {
+        "id": "byrd-lu-nocedal-zhu-1995",
+        "type": "article-journal",
+        "title": "A limited memory algorithm for bound constrained optimization",
+        "author": [
+            { "family": "Byrd", "given": "Richard H." },
+            { "family": "Lu", "given": "Peihuang" },
+            { "family": "Nocedal", "given": "Jorge" },
+            { "family": "Zhu", "given": "Ciyou" }
+        ],
+        "issued": { "date-parts": [[1995]] },
+        "container-title": "SIAM Journal on Scientific Computing",
+        "volume": "16",
+        "issue": "5",
+        "page": "1190-1208",
+        "DOI": "10.1137/0916069"
+    },
+    {
+        "id": "zhu-byrd-lu-nocedal-1997",
+        "type": "article-journal",
+        "title": "Algorithm 778: L-BFGS-B: Fortran subroutines for large-scale bound-constrained optimization",
+        "author": [
+            { "family": "Zhu", "given": "Ciyou" },
+            { "family": "Byrd", "given": "Richard H." },
+            { "family": "Lu", "given": "Peihuang" },
+            { "family": "Nocedal", "given": "Jorge" }
+        ],
+        "issued": { "date-parts": [[1997]] },
+        "container-title": "ACM Transactions on Mathematical Software",
+        "volume": "23",
+        "issue": "4",
+        "page": "550-560",
+        "DOI": "10.1145/279232.279236"
+    },
+    {
+        "id": "morales-nocedal-2011",
+        "type": "article-journal",
+        "title": "Remark on “Algorithm 778: L-BFGS-B: Fortran subroutines for large-scale bound constrained optimization”",
+        "author": [
+            { "family": "Morales", "given": "José Luis" },
+            { "family": "Nocedal", "given": "Jorge" }
+        ],
+        "issued": { "date-parts": [[2011]] },
+        "container-title": "ACM Transactions on Mathematical Software",
+        "volume": "38",
+        "issue": "1",
+        "page": "7:1-7:4",
+        "DOI": "10.1145/2049662.2049669"
     }
 ]

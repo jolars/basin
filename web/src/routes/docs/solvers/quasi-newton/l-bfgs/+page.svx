@@ -18,7 +18,7 @@ reference](https://docs.rs/basin/latest/basin/solver/lbfgs/struct.Lbfgs.html)
   | Objective   | A smooth scalar function                                           |
   | Evaluations | `CostFunction` and `Gradient`                                      |
   | Search      | Local, from one starting point                                     |
-  | Constraints | Unconstrained; use [L-BFGS-B](../../#lbfgsb) for box bounds        |
+  | Constraints | Unconstrained; use [L-BFGS-B](../l-bfgs-b/) for box bounds        |
   | Parameters  | Contiguous vectors on all four dense backends, with `f32` or `f64` |
 
 ## When to use it
@@ -29,7 +29,7 @@ memory for additional curvature information. The original numerical study is
 [Liu and Nocedal (1989)](#ref-liu-nocedal-1989).
 
 For a smaller problem where a dense approximation is affordable,
-[BFGS](../../#bfgs) is another option. If you can supply useful Hessian-vector
+[BFGS](../bfgs/) is another option. If you can supply useful Hessian-vector
 products, consider [trust-region Newton](../../#trust-region). For curve fitting
 expressed through residuals and a Jacobian, compare the [nonlinear least-squares
 methods](../../#nonlinear-least-squares).

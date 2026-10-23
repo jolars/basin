@@ -29,7 +29,7 @@ projection methods are discussed in [Nocedal and Wright
 (2006)](#ref-nocedal-wright-2006).
 
 For a smooth problem where curvature information could reduce the number of
-iterations, compare [L-BFGS-B](../../#lbfgsb). For an unconstrained problem, use
+iterations, compare [L-BFGS-B](../../quasi-newton/l-bfgs-b/). For an unconstrained problem, use
 [gradient descent](../gradient-descent/) or
 [L-BFGS](../../quasi-newton/l-bfgs/). Linear and nonlinear constraints need a
 method that supports those blocks, such as [SLSQP](../../#slsqp).

@@ -9,8 +9,8 @@ algorithm family.
 
 | Your problem | Solvers to consider | What guides the choice |
 | --- | --- | --- |
-| Smooth, unconstrained, with a gradient | [L-BFGS](quasi-newton/l-bfgs/) or [BFGS](#bfgs) | L-BFGS keeps a short history; BFGS stores a dense inverse-Hessian approximation. |
-| Box bounds, with a gradient | [L-BFGS-B](#lbfgsb) or [projected gradient descent](first-order/projected-gradient-descent/) | Both enforce the box; L-BFGS-B also builds a curvature model. |
+| Smooth, unconstrained, with a gradient | [L-BFGS](quasi-newton/l-bfgs/) or [BFGS](quasi-newton/bfgs/) | L-BFGS keeps a short history; BFGS stores a dense inverse-Hessian approximation. |
+| Box bounds, with a gradient | [L-BFGS-B](quasi-newton/l-bfgs-b/) or [projected gradient descent](first-order/projected-gradient-descent/) | Both enforce the box; L-BFGS-B also builds a curvature model. |
 | A Hessian or Hessian-vector products | [Trust-region Newton](#trust-region) | Use second-order information; the matrix-free mode needs only products. |
 | Residuals and a Jacobian | [Levenberg–Marquardt](#levenberg-marquardt) or its [QR variant](#levenberg-marquardt-qr) | Use the least-squares structure; QR avoids forming the Gram matrix. |
 | Least squares with box bounds | [Trust-region reflective](#trust-region-reflective) or [bounded Levenberg–Marquardt](#bounded-levenberg-marquardt) | Both combine the residual model with bound-aware steps. |
@@ -43,9 +43,9 @@ both into account when choosing a method and its stopping tolerances.
 ## Reading the catalog
 
 Each entry below links to the authoritative API reference on
-[docs.rs](https://docs.rs/basin). The first-order guides and the
-[L-BFGS guide](quasi-newton/l-bfgs/) also explain when to use each method,
-how it works, and how to configure it, with citations and full references.
+[docs.rs](https://docs.rs/basin). The first-order and quasi-Newton guides also
+explain when to use each method, how it works, and how to configure it, with
+citations and full references.
 
 Backend support applies to every enabled version of the listed backend.
 Multiple versions can be used in the same build; see the
@@ -103,7 +103,7 @@ finding uses a direct callback API and a separate result type.
   Wright, 2006). Supports all four dense backends with `f32` or `f64`.
   Optional fixed initial matrices require cloning and entry access; closure
   initializers require entry access. Named initializers enforce their own
-  seed contracts.
+  seed contracts. [Read the BFGS guide](quasi-newton/bfgs/).
 - **<span id="lbfgs"></span>[`Lbfgs`](https://docs.rs/basin/latest/basin/solver/lbfgs/struct.Lbfgs.html)**:
   limited-memory BFGS for larger problems (two-loop recursion, Nocedal & Wright
   Alg. 7.4). [Read the L-BFGS guide](quasi-newton/l-bfgs/).
@@ -115,6 +115,7 @@ finding uses a direct callback API and a separate result type.
   TOMS Alg. 778; Nocedal & Morales, 2011). Supports all four dense backends
   with `f32` or `f64` and contiguous parameter storage. A custom line search
   must implement bounded steps.
+  [Read the L-BFGS-B guide](quasi-newton/l-bfgs-b/).
 
 ## Derivative-free
 

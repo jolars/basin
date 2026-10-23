@@ -1,0 +1,165 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# BFGS
+
+BFGS is a local optimizer for smooth functions when you can compute a gradient.
+It builds a dense approximation to the inverse Hessian from changes in the
+gradient, using that model to scale and combine search directions. You do not
+need to supply a Hessian, but storing the model requires memory proportional to
+the square of the number of parameters.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/bfgs/struct.Bfgs.html)
+
+  | Property    | Requirement                                              |
+  | ----------- | -------------------------------------------------------- |
+  | Objective   | A smooth scalar function                                 |
+  | Evaluations | `CostFunction` and `Gradient`                            |
+  | Search      | Local, from one starting point                           |
+  | Constraints | Unconstrained; use [L-BFGS-B](../l-bfgs-b/) for box bounds |
+  | Parameters  | All four dense backends, with `f32` or `f64`             |
+
+## When to use it
+
+Consider BFGS when gradients are available and a dense inverse-Hessian
+approximation fits comfortably in memory. It can use curvature information to
+make more progress per iteration than steepest descent. The method and its
+line-search requirements are described in [Nocedal and Wright
+(2006)](#ref-nocedal-wright-2006), Chapter 6.
+
+For a larger problem, [L-BFGS](../l-bfgs/) retains a short history of curvature
+pairs instead of a dense matrix. If you can supply useful Hessian-vector
+products, compare [trust-region Newton](../../#trust-region). For objectives
+expressed through residuals and a Jacobian, consider the [nonlinear least-squares
+methods](../../#nonlinear-least-squares).
+
+BFGS follows local descent directions, so its starting point matters. Noisy or
+nonsmooth gradients can also make its curvature model unreliable. Compare
+[derivative-free methods](../../#derivative-free) when a reliable gradient is
+unavailable.
+
+## How it works
+
+Each iteration multiplies the negative gradient by the current inverse-Hessian
+approximation to obtain a search direction. A line search then chooses how far
+to move along it. Basin uses a
+[strong Wolfe line search](https://docs.rs/basin/latest/basin/line_search/wolfe/struct.Wolfe.html)
+by default, seeking sufficient decrease and a curvature condition. One solver
+iteration can therefore require several objective and gradient evaluations.
+
+After an accepted step, BFGS compares the change in parameters with the change
+in gradient. A rank-two update adjusts the model to match this new curvature
+information while preserving symmetry. With positive curvature and a positive
+definite initial model, the update preserves positive definiteness, making the
+next direction a descent direction in exact arithmetic.
+
+Basin starts with the identity matrix and rescales it immediately before the
+first accepted curvature update. Updates that fail the curvature safeguard are
+skipped, leaving the current model in place.
+
+## Example
+
+This quadratic has its minimum at `[1.0, -2.0]`. The example supplies an
+analytic gradient, sets a gradient tolerance on the solver, and limits
+iterations through the executor.
+
+<!-- compile: solver-bfgs -->
+```rust
+use basin::{Bfgs, CostFunction, Executor, Gradient, Termination};
+use std::convert::Infallible;
+
+struct Quadratic;
+
+impl CostFunction for Quadratic {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok((x[0] - 1.0).powi(2) + 4.0 * (x[1] + 2.0).powi(2))
+    }
+}
+
+impl Gradient for Quadratic {
+    type Gradient = Vec<f64>;
+
+    fn gradient(&self, x: &Self::Param) -> Result<Self::Gradient, Self::Error> {
+        Ok(vec![2.0 * (x[0] - 1.0), 8.0 * (x[1] + 2.0)])
+    }
+}
+
+fn main() {
+    let solver = Bfgs::new().with_absolute_gradient_tolerance(1e-8);
+
+    let result = Executor::from_start(Quadratic, solver, vec![-3.0, 5.0])
+        .max_iter(200)
+        .run()
+        .unwrap();
+
+    assert!(matches!(
+        result.report.termination,
+        Termination::Converged(_)
+    ));
+    assert!((result.param()[0] - 1.0).abs() < 1e-7);
+    assert!((result.param()[1] + 2.0).abs() < 1e-7);
+}
+```
+
+## Practical considerations
+
+### Allow for dense storage
+
+The inverse-Hessian model needs `O(n²)` storage and work per update for `n`
+parameters. Check this cost before choosing BFGS for a large problem. L-BFGS
+lets you limit the stored curvature history instead.
+
+### Scale the parameters and the initial model
+
+Rescaling parameters can improve the model's starting scale and make gradient
+tolerances easier to interpret. If you already have a useful approximation,
+`with_initial_inverse_hessian(matrix)` supplies a fixed seed, while
+`with_initial_inverse_hessian_initializer(initializer)` constructs one from
+the initial point and gradient. Custom seeds skip the default first-update
+rescaling so their scaling survives.
+
+### Configure a stopping test
+
+BFGS has no default optimality check. Use
+`with_absolute_gradient_tolerance` or `with_relative_gradient_tolerance` to
+test the Euclidean gradient norm. Choose the threshold for your parameter units,
+precision, and derivative accuracy; `1e-8` is a choice for the example above.
+Optional step and cost-change checks can also stop a run, but a small observed
+change alone does not establish stationarity.
+
+`with_relative_curvature_tolerance` controls whether the model accepts an
+update. It is an algorithm safeguard, not a convergence tolerance. Keep
+iteration and evaluation budgets on the executor, then inspect the termination
+report to distinguish convergence from a budget limit or a line-search failure.
+
+## Implementation
+
+BFGS publishes the current point, objective, and gradient through
+`FirstOrderState`; the solver owns the inverse-Hessian model. Its matrix type
+is inferred from the parameter backend through `DenseBackend`. Fresh solves
+rebuild the model and reset the line search; exact solver-and-state checkpoints
+retain both. Use `Executor::run_with_solver` to retain the final solver and
+inspect `inverse_hessian()`.
+
+You can supply another strategy through `Bfgs::with_line_search(search)`.
+Choose a strategy that provides the curvature conditions the update needs.
+
+Supported parameter types are `Vec<F>`, `nalgebra::DVector<F>`,
+`ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`. The default
+model uses matrix-vector products and rank-one updates without a factorization
+or a BLAS/LAPACK provider. Fixed initial matrices additionally require cloning
+and entry access; closure initializers require entry access. Basin checks these
+seeds for matching dimensions, finiteness, exact symmetry, and positive
+definiteness, using a pure-Rust Cholesky check. Invalid seeds panic at
+initialization. Named initializers enforce their own seed contracts. See the
+API's [Backends
+section](https://docs.rs/basin/latest/basin/solver/bfgs/struct.Bfgs.html#backends)
+for the exact capability requirements.
+
+<References entries={["nocedal-wright-2006"]} />

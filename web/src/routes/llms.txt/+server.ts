@@ -33,7 +33,9 @@ export function GET() {
 - [Nonlinear conjugate gradient](${docs}/solvers/first-order/nonlinear-cg/): Hager–Zhang and Polak–Ribière+ updates, restarts, and a Rust example
 - [Stochastic gradient descent](${docs}/solvers/first-order/sgd/): mini-batch gradients, seeded sampling, momentum, cost refreshes, and a Rust example
 - [Projected gradient descent](${docs}/solvers/first-order/projected-gradient-descent/): problem-side box bounds, projection, stationarity tests, and a Rust example
+- [BFGS](${docs}/solvers/quasi-newton/bfgs/): dense inverse-Hessian models, initialization, stopping tests, and a Rust example
 - [L-BFGS](${docs}/solvers/quasi-newton/l-bfgs/): when to use limited-memory BFGS, a Rust example, convergence settings, backend requirements, and original references
+- [L-BFGS-B](${docs}/solvers/quasi-newton/l-bfgs-b/): problem-side box bounds, limited-memory curvature, stopping tests, and a Rust example
 
 ## Reference
 
