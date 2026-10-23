@@ -2,7 +2,7 @@
     import References from "#lib/docs/References.svelte";
 </script>
 
-# Projected Gradient Descent
+# Projected gradient descent
 
 Projected gradient descent is a local optimizer for smooth functions with box
 bounds. It takes a step along the negative gradient, then clamps each parameter
@@ -21,7 +21,7 @@ reference](https://docs.rs/basin/latest/basin/solver/projected_gradient_descent/
   | Constraints | A box-only `ConstraintSet<BoxBounds<V>>` on the problem |
   | Parameters  | All four dense backends, with `f32` or `f64`            |
 
-## When to Use It
+## When to use it
 
 Consider projected gradient descent when each parameter has an independent lower
 or upper bound and you want a method with little working storage. It is also a
@@ -39,7 +39,7 @@ The method follows local descent directions. Different starting points can lead
 to different constrained minima, and a poorly scaled objective can make progress
 slow even though every published iterate satisfies the box bounds.
 
-## How It Works
+## How it works
 
 Basin first projects the starting point into the box, then evaluates the
 objective and gradient there. At each iteration it chooses a step length, moves
@@ -132,7 +132,7 @@ fn main() {
 The starting point lies outside the box. Initialization projects it to
 `[-1.0, 1.0]` before the first objective or gradient evaluation.
 
-## Practical Considerations
+## Practical considerations
 
 **Choose a step for your objective's scale.** A small fixed step can make
 progress slow, while an overly large one can cause oscillation or repeated jumps
@@ -156,7 +156,7 @@ projected iterates. A custom line search may call your objective and gradient
 outside the box. If those evaluations are invalid, use a fixed step or a solver
 with a bound-aware search, such as L-BFGS-B.
 
-## Basin Implementation
+## Basin implementation
 
 Bounds belong to the problem through `Constraints`, using a box-only
 `ConstraintSet<BoxBounds<V>>`. The solver requires this declaration and rejects

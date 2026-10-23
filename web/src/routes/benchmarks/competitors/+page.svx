@@ -8,11 +8,11 @@
 </script>
 
 <Seo
-    title="Library Benchmarks – Basin"
+    title="Library benchmarks – Basin"
     description="Compare Basin with other optimization libraries, solver by solver, with convergence figures, explanations of the results, and methodology beside each comparison."
 />
 
-# Comparing Libraries
+# Comparing libraries
 
 How much progress does each implementation make, and how long does it take?
 These comparisons follow individual solvers on shared problems. The curves show
@@ -115,7 +115,7 @@ gradient check before the harness emits results. The stopping tests and budget
 units still differ, so the shared numerical tolerance does not make the
 termination rules identical.
 
-## Gradient Descent
+## Gradient descent
 
 This case compares steepest descent in Basin and
 [argmin](https://argmin-rs.org/) {data.versions.argmin}. Both use a
@@ -190,7 +190,7 @@ NLopt reaching its endpoint sooner in this snapshot. This multimodal problem
 tests the model-building path from one starting point. It does not measure the
 probability of finding the global minimum from arbitrary starts.
 
-## Methodology and Reproduction
+## Methodology and reproduction
 
 Measured {data.generatedAt} on {data.env.cpu} ({data.env.os}/{data.env.arch}),
 using {data.env.compiler}. Serial runs use {data.env.threads} thread. LM uses

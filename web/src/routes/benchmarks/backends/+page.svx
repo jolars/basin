@@ -5,11 +5,11 @@
 </script>
 
 <Seo
-    title="Backend Benchmarks – Basin"
+    title="Backend benchmarks – Basin"
     description="Choose a Basin linear-algebra backend using measured solve times for vector methods, dense matrix methods, and sparse least squares, with explanations of scaling and benchmark coverage."
 />
 
-# Choosing a Backend
+# Choosing a backend
 
 Backend choice changes how Basin stores parameters and performs linear algebra.
 These comparisons keep each solver and problem fixed, vary the backend, and
@@ -25,13 +25,13 @@ coverage of this saved run, rather than the current capabilities of a backend.
 The API documentation records each solver's supported parameter and matrix
 types.
 
-## Vector Methods
+## Vector methods
 
 These methods operate on vectors without a dense Hessian or covariance matrix.
 All four dense backends appear in each comparison: `Vec<f64>`, nalgebra,
 ndarray, and faer.
 
-### Gradient Descent
+### Gradient descent
 
 Gradient descent on Rosenbrock provides a baseline for the cost of repeated
 vector operations and evaluations. In this snapshot, `Vec<f64>` has the lowest
@@ -59,7 +59,7 @@ problem size.
 
 <BackendFigure solver="lbfgs" problem="styblinski" />
 
-## Dense Matrix Methods
+## Dense matrix methods
 
 Dense matrix updates and decompositions change the balance of work. The
 smallest problem can favor a different backend from the largest one, so inspect
@@ -106,7 +106,7 @@ has a smaller effect on solve time.
 This is an unconstrained test of SLSQP's optimization path. It does not measure
 the cost of evaluating or enforcing constraints.
 
-## Sparse Least Squares
+## Sparse least squares
 
 These cases use sparse Jacobians and sparse Cholesky factorizations. Only
 nalgebra and faer supply the sparse matrix representations used by this
@@ -134,7 +134,7 @@ This favorable least-squares design does not exercise rank deficiency or the
 cases where damping helps. Use it to compare the measured sparse paths, and
 choose the solver based on your problem's numerical properties.
 
-## Methodology and Reproduction
+## Methodology and reproduction
 
 Measured {data.generatedAt} on {data.env.cpu} ({data.env.os}/{data.env.arch}).
 Each point is Criterion's mean time for a complete solve, with a

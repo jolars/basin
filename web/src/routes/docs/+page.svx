@@ -20,7 +20,7 @@ Bracketed scalar equations use the separate `BrentRoot::solve` API. It accepts
 a fallible closure and returns the signed function value and final bracket
 directly, without representing root finding as objective minimization.
 
-## A Solver Run at a Glance
+## A solver run at a glance
 
 The smallest complete program: minimize the sphere function with the
 derivative-free Nelder–Mead simplex. Implement
@@ -56,10 +56,10 @@ fn main() {
 
 Nelder–Mead needs no derivatives, so `CostFunction` is the only trait to
 implement. If you want to reach for a gradient-based solver and you add a
-`Gradient` impl; the [Getting Started](getting-started/) guide walks through
+`Gradient` impl; the [Getting started](getting-started/) guide walks through
 that full path on the Rosenbrock function.
 
-## How the Pieces Fit
+## How the pieces fit
 
 - **Problem**: what you implement. A `CostFunction` (and a `Gradient`, if your
   solver needs one) describing the objective. Constraints such as box bounds
@@ -76,7 +76,7 @@ that full path on the Rosenbrock function.
   (`observe_init`/`observe_iter`/`observe_final`) for logging, progress
   reporting, or recording a trajectory. Observers run alongside the execution controls.
 
-## Choosing a Solver
+## Choosing a solver
 
 A rough map from the shape of your problem to where to start. The
 [Solvers](solvers/) catalog has the full list, problem requirements, and
@@ -112,9 +112,9 @@ The repository's
 [`CITATION.cff`](https://github.com/jolars/basin/blob/main/CITATION.cff) carries
 the same reference in machine-readable form.
 
-## Where to Go Next
+## Where to go next
 
-- [Getting Started](getting-started/): install Basin and run your first solve.
+- [Getting started](getting-started/): install Basin and run your first solve.
 - [Migrating to Basin 2.0](migrating-to-v2/): upgrade constraints, progress states,
   termination reports, solver settings, and checkpoints from Basin 1.x.
 - [Migrating from Argmin](migrating-from-argmin/): translate problem traits,

@@ -76,7 +76,7 @@
     of performance across all problems.
 </p>
 
-<h3 id={`${group.problem}-starting-points`}>Starting Points</h3>
+<h3 id={`${group.problem}-starting-points`}>Starting points</h3>
 <p>
     Lower curves have smaller objective gaps; curves further left reach that
     accuracy sooner. Each panel has its own logarithmic axes. A curve ending

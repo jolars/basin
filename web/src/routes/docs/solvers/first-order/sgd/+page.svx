@@ -2,7 +2,7 @@
     import References from "#lib/docs/References.svelte";
 </script>
 
-# Stochastic Gradient Descent
+# Stochastic gradient descent
 
 Stochastic gradient descent (SGD) is a local optimizer for objectives that
 average a loss over many samples. Each step uses the gradient from a small
@@ -20,7 +20,7 @@ Basin uses a constant learning rate and offers optional heavy-ball momentum.
   | Constraints | Unconstrained                                               |
   | Parameters  | All four dense vector backends, with `f32` or `f64`         |
 
-## When to Use It
+## When to use it
 
 Consider SGD when a full gradient is expensive because the objective includes
 many samples. Small batches trade a less accurate direction for cheaper steps.
@@ -40,7 +40,7 @@ scheme, learning rates, and objective assumptions. Basin's fixed learning rate
 does not provide a general guarantee of convergence to an exact minimizer; batch
 gradients can remain noisy near a solution.
 
-## How It Works
+## How it works
 
 The problem supplies the number of samples and a method that averages their
 gradients over a requested batch of indices. For a batch gradient `g`, SGD takes
@@ -126,7 +126,7 @@ Returning their sum would change the effective learning rate when the batch size
 changes. The assertions allow for batch noise; reaching the iteration budget
 does not establish convergence.
 
-## Practical Considerations
+## Practical considerations
 
 **Tune the learning rate.** A large rate can produce unstable steps, while a
 small rate can make progress slow. Scale the input features and parameters, and
@@ -150,7 +150,7 @@ setting because its state does not publish a full gradient. Optional cost- and
 step-change checks observe objective refreshes, so choose their thresholds and
 any executor stall patience with the refresh period in mind.
 
-## Basin Implementation
+## Basin implementation
 
 Basin evaluates the full objective at the starting point, then refreshes it
 every `n_samples / batch_size` mini-batch steps by default, using the clamped

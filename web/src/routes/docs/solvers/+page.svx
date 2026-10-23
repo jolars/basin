@@ -1,11 +1,11 @@
-# Choosing a Solver
+# Choosing a solver
 
 Start with the information your problem provides: objective values, gradients,
 or residuals and a Jacobian. Then check which methods support your constraints.
 The table below gives starting points; the sidebar groups every solver by
 algorithm family.
 
-## Where to Start
+## Where to start
 
 | Your problem | Solvers to consider | What guides the choice |
 | --- | --- | --- |
@@ -27,7 +27,7 @@ its starting point, and a global search does not guarantee that a finite run
 will find the global minimum. Compare evaluation counts and the quality of
 the returned point on your own problem.
 
-## Constraints and Derivatives
+## Constraints and derivatives
 
 Choose a solver that handles every constraint block your problem declares.
 Box bounds, linear constraints, and nonlinear constraints are different
@@ -40,7 +40,7 @@ synthesize derivatives with
 Finite differences add evaluations and introduce approximation error; take
 both into account when choosing a method and its stopping tolerances.
 
-## Reading the Catalog
+## Reading the catalog
 
 Each entry below links to the authoritative API reference on
 [docs.rs](https://docs.rs/basin). The first-order guides and the
@@ -53,7 +53,7 @@ Multiple versions can be used in the same build; see the
 Most optimization solvers run through the common `Executor` loop. Scalar root
 finding uses a direct callback API and a separate result type.
 
-## First-Order
+## First-order
 
 - **<span id="nonlinear-cg"></span>[`NonlinearCg`](https://docs.rs/basin/latest/basin/solver/nonlinear_cg/struct.NonlinearCg.html)**:
   nonlinear conjugate gradient with selectable Hager–Zhang (default) and
@@ -116,7 +116,7 @@ finding uses a direct callback API and a separate result type.
   with `f32` or `f64` and contiguous parameter storage. A custom line search
   must implement bounded steps.
 
-## Derivative-Free
+## Derivative-free
 
 - **<span id="nelder-mead"></span>[`NelderMead`](https://docs.rs/basin/latest/basin/solver/nelder_mead/struct.NelderMead.html)**:
   the classic reflection, expansion, and contraction simplex; needs only a
@@ -201,7 +201,7 @@ finding uses a direct callback API and a separate result type.
   publishes `PointState`; the solver owns its bias and adaptive step size.
   Implements Solis & Wets (1981).
 
-## Trust Region
+## Trust region
 
 For problems exposing a `Hessian` or, matrix-free, a `HessianProduct` (either
 analytic, or synthesized by `FiniteDiff`):
@@ -221,7 +221,7 @@ analytic, or synthesized by `FiniteDiff`):
   work on every backend. Both modes publish `FirstOrderState` and support
   `f32` and `f64`.
 
-## Nonlinear Least Squares
+## Nonlinear least squares
 
 For problems expressed as residuals (`Residual` + `Jacobian`):
 
@@ -279,7 +279,7 @@ _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
   ([doi:10.1007/BFb0067700](https://doi.org/10.1007/BFb0067700)). Reference
   comparisons use [SciPy 1.16.2's dense TRF](https://github.com/scipy/scipy/blob/v1.16.2/scipy/optimize/_lsq/trf.py).
 
-## Global & Stochastic
+## Global & stochastic
 
 - **<span id="direct"></span>[`Direct`](https://docs.rs/basin/latest/basin/solver/direct/struct.Direct.html)**:
   original DIRECT for deterministic global optimization over finite box bounds.
@@ -367,7 +367,7 @@ _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
   the chosen inner solver does. Custom step takers or inner solvers can narrow
   backend support.
 
-## Memetic (Composed)
+## Memetic (composed)
 
 These run a local solver inside a global one using Basin's solver composition
 primitives. Custom inner solvers or local-search operators can narrow backend
@@ -463,7 +463,7 @@ The pluggable line searches are documented alongside the first-order solvers:
 (ordinary and approximate Wolfe; Hager & Zhang, 2005, DOI
 10.1137/030601880).
 
-## Scalar Minimization
+## Scalar minimization
 
 For a scalar objective on a bracketed interval:
 
@@ -480,7 +480,7 @@ For a scalar objective on a bracketed interval:
   linearly-converging companion to `Brent` (Kiefer, 1953; *Numerical Recipes*
   §10.1).
 
-## Root Finding
+## Root finding
 
 - **<span id="brent-root"></span>[`BrentRoot`](https://docs.rs/basin/latest/basin/root/brent/struct.BrentRoot.html)**:
   bracketed scalar root finding by bisection, secant steps, and inverse
@@ -521,7 +521,7 @@ problem's `BoxBounds` declaration and use its middle point to seed a scalar mini
 Both searches follow the scalar recurrences in SciPy 1.16.3's elementwise
 bracketing routines.
 
-## Backends and Constraints
+## Backends and constraints
 
 All vector-based solvers support the four dense backends: `Vec`, nalgebra,
 ndarray, and faer. Scalar algorithms need no linear-algebra backend. Each
@@ -532,5 +532,5 @@ Box bounds and other constraints belong to the problem. Choose a solver that
 supports those constraints, or use an explicit projection, barrier, or penalty
 adapter.
 
-See [Getting Started](../getting-started/) for a worked example, or open the
+See [Getting started](../getting-started/) for a worked example, or open the
 [Visualizer](../../visualizer/) to watch several of these solvers converge.

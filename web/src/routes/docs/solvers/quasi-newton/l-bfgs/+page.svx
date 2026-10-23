@@ -22,7 +22,7 @@ reference](https://docs.rs/basin/latest/basin/solver/lbfgs/struct.Lbfgs.html) ·
   | Constraints | Unconstrained; use [L-BFGS-B](../../#lbfgsb) for box bounds        |
   | Parameters  | Contiguous vectors on all four dense backends, with `f32` or `f64` |
 
-## When to Use It
+## When to use it
 
 Consider L-BFGS when the gradient is available and storing a dense approximation
 to the inverse Hessian would be expensive. The history length lets you trade
@@ -41,7 +41,7 @@ gradient. If your objective is noisy or nonsmooth, compare [derivative-free
 methods](../../#derivative-free) instead of assuming those estimates will be
 reliable.
 
-## How It Works
+## How it works
 
 After an accepted step, L-BFGS forms two vectors: the change in the parameters
 and the change in the gradient. Together, they describe how the local slope
@@ -113,7 +113,7 @@ fn main() {
 Call `.unbounded()` to select L-BFGS. `Lbfgs::new()` alone selects the
 box-constrained L-BFGS-B mode, also available through the `Lbfgsb` alias.
 
-## Practical Considerations
+## Practical considerations
 
 **Scale the parameters.** When parameter units differ greatly, rescaling can
 make the curvature information and gradient tolerance easier to interpret. An
@@ -136,7 +136,7 @@ termination report to see whether a convergence test passed.
 when an analytic gradient is unavailable. This adds objective evaluations and
 introduces derivative error, so account for both when choosing a tolerance.
 
-## Basin Implementation
+## Basin implementation
 
 The unconstrained mode uses the two-loop recursion with a scaled identity
 initial approximation. Basin skips curvature updates that fail its curvature

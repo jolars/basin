@@ -50,7 +50,7 @@ BFGS owns its inverse Hessian and infers the matrix through the vector's
 `DenseBackend` association. Each enabled backend version has its own
 association; `Executor::from_start` infers the state from the starting vector.
 
-## The Basic Executor Migration
+## The basic executor migration
 
 Here is a complete Argmin Nelder–Mead run. Argmin receives the simplex when the
 solver is constructed and configures the initial parameter and iteration budget
@@ -139,7 +139,7 @@ initialization samples a box or requires an explicit population, such as PSO,
 GA, DE, and random search. `CmaEs` and `BoundedCmaEs` support `from_start`: the
 starting point supplies the mean, and the solver configures the initial scale.
 
-## Common API Mappings
+## Common API mappings
 
 | Argmin 0.11 | Basin 2.0 |
 | --- | --- |
@@ -162,7 +162,7 @@ Preserve numerical behavior by comparing the final objective, parameters,
 termination reason, and evaluation counts—not merely by copying a numeric
 tolerance.
 
-## Brent Root Finding
+## Brent root finding
 
 Basin keeps root finding outside its optimization state model: the signed
 function value and sign-changing bracket are part of `RootResult`, rather than
@@ -247,7 +247,7 @@ intentionally omits it. A compatibility adapter can safely discard that
 setting. For bounds, use `Lbfgsb` as shown below. Basin does not currently
 replace Argmin's OWL-QN mode for L1 regularization.
 
-## Nonlinear Least Squares
+## Nonlinear least squares
 
 Basin models nonlinear least squares directly through `Residual` and `Jacobian`.
 Its state cost is `½‖r(x)‖²`. Choose `GaussNewton` when a full Gauss–Newton step
@@ -295,7 +295,7 @@ change for the same problem and initial point. Its `with_gradient_orthogonality_
 `with_relative_model_reduction_tolerance`, and `with_relative_step_tolerance` methods expose the corresponding
 MINPACK-style stopping tests.
 
-## Typed Errors
+## Typed errors
 
 Argmin problem methods all return its general `argmin::core::Error`. In Basin,
 `CostFunction` owns an `Error` associated type, and `Gradient` and `Hessian`
@@ -344,7 +344,7 @@ validate constraints return `ConstraintSolveError<P::Error>`: its `Evaluation`
 variant preserves the original problem error, while `InvalidConstraints`
 reports malformed constraint declarations or callback outputs.
 
-## Finite Differences
+## Finite differences
 
 When the old integration manually approximates derivatives, first migrate only
 the value function and wrap it in `FiniteDiff`. The default is a central
@@ -387,7 +387,7 @@ fn main() {
 erase bounds. Under the optional `parallel` feature, its coordinate-wise
 evaluations can run in parallel.
 
-## Bounds and Constraints
+## Bounds and constraints
 
 Bounds describe the problem in Basin. Declare a box-only set through `Constraints`, then choose a
 solver whose type advertises that it consumes bounds. The compiler rejects a
@@ -453,7 +453,7 @@ bounded global solvers. Linear and nonlinear constraints use their corresponding
 problem traits; barrier and augmented-Lagrangian adapters are explicit opt-ins
 when an inner solver is otherwise unconstrained.
 
-## Particle Swarm Optimization
+## Particle swarm optimization
 
 Argmin 0.11's `ParticleSwarm` and Basin's `GlobalBestPso` share the synchronous,
 coordinate-wise inertia update and the default coefficients
@@ -528,7 +528,7 @@ and use `Executor::resume_from_checkpoint`, or serialize them together through
 `ExactCheckpointWriter`. A progress-only snapshot starts a fresh run that
 reevaluates its members and resets particle histories.
 
-## Simulated Annealing Is Deliberately Basin-Native
+## Simulated annealing is deliberately Basin-native
 
 Basin now supports arbitrary continuous or discrete parameter types through
 `SimulatedAnnealing` and a user-supplied `Neighbor` trait or closure. Migration
@@ -572,7 +572,7 @@ through `Executor::new`. Reattach
 execution controls, observers, cancellation, and the checkpoint writer when
 resuming.
 
-## Observers and Cancellation
+## Observers and cancellation
 
 Basin's `Observe<S>` observers receive read-only state and return `()`.
 For solver diagnostics, use
@@ -638,7 +638,7 @@ Cancellation is cooperative and checked between top-level iterations. If an
 individual cost or derivative evaluation must abort immediately, return the
 problem's typed error instead.
 
-## Complete Backend Examples
+## Complete backend examples
 
 These small programs exercise the same derivative-free solve on every advertised
 backend release. Pair each program with the exact dependency row at the top of
@@ -788,7 +788,7 @@ fn main() {
 }
 ```
 
-## Check Compatibility Before Removing Argmin
+## Check compatibility before removing Argmin
 
 Basin's `Brent` minimizes a scalar objective, while `BrentRoot` solves a
 bracketed scalar equation through the direct API above. Basin does not offer a
@@ -812,7 +812,7 @@ after the like-for-like path passes.
 
 ## Next
 
-- [Getting Started](../getting-started/): state construction and shared
+- [Getting started](../getting-started/): state construction and shared
   solver convergence settings.
 - [Solvers](../solvers/): supported algorithms and problem requirements.
 - [Full Basin API](https://docs.rs/basin): authoritative type and method

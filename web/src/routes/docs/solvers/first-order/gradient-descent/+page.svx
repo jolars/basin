@@ -2,7 +2,7 @@
     import References from "#lib/docs/References.svelte";
 </script>
 
-# Gradient Descent
+# Gradient descent
 
 Gradient descent is a local optimizer for smooth functions when you can compute
 a gradient. Each step moves opposite the gradient, using a fixed step size or a
@@ -37,7 +37,7 @@ Gradient descent follows a local path, so different starting points can lead to
 different minima. For gradients computed from samples or minibatches, compare
 [SGD](../sgd/), which provides mini-batch updates with seeded sampling.
 
-## How It Works
+## How it works
 
 At the current point, the negative gradient is the direction of steepest local
 decrease in the Euclidean norm. Gradient descent chooses a step length `alpha`
@@ -110,7 +110,7 @@ fn main() {
 To choose the step through backtracking instead, construct the solver with
 `GradientDescent::with_line_search(basin::Backtracking::new())`.
 
-## Practical Considerations
+## Practical considerations
 
 ### Choose the step for your scale
 

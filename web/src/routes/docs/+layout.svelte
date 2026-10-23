@@ -20,7 +20,7 @@
                 "Learn how to define an optimization problem, choose a solver, and run it with Basin.",
         },
         "/docs/getting-started": {
-            title: "Getting Started – Basin",
+            title: "Getting started – Basin",
             description:
                 "Install Basin and run your first solve: implement CostFunction, add a Gradient when needed, then drive a solver with the Executor.",
         },
@@ -35,27 +35,27 @@
                 "Upgrade from Basin 1.x to 2.0: migrate problem constraints, progress states, termination reports, solver settings, and checkpoints.",
         },
         "/docs/solvers": {
-            title: "Choosing a Solver – Basin",
+            title: "Choosing a solver – Basin",
             description:
                 "Choose a Basin solver based on your derivatives, constraints, and problem structure, then browse the full solver catalog.",
         },
         "/docs/solvers/first-order/gradient-descent": {
-            title: "Gradient Descent – Basin",
+            title: "Gradient descent – Basin",
             description:
                 "When to use gradient descent, how fixed steps, line searches, and heavy-ball momentum work, and how to run it in Basin, with references.",
         },
         "/docs/solvers/first-order/nonlinear-cg": {
-            title: "Nonlinear Conjugate Gradient – Basin",
+            title: "Nonlinear conjugate gradient – Basin",
             description:
                 "When to use nonlinear conjugate gradient, how Hager–Zhang and Polak–Ribière+ updates work, and how to run it in Basin, with references.",
         },
         "/docs/solvers/first-order/sgd": {
-            title: "Stochastic Gradient Descent – Basin",
+            title: "Stochastic gradient descent – Basin",
             description:
                 "When to use SGD, how mini-batch sampling, momentum, and cost refreshes work, and how to run it in Basin, with references.",
         },
         "/docs/solvers/first-order/projected-gradient-descent": {
-            title: "Projected Gradient Descent – Basin",
+            title: "Projected gradient descent – Basin",
             description:
                 "When to use projected gradient descent, how box bounds and projected stationarity work, and how to run it in Basin, with references.",
         },

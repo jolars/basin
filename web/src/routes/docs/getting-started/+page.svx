@@ -1,4 +1,4 @@
-# Getting Started
+# Getting started
 
 ## Install
 
@@ -30,7 +30,7 @@ In Basin 2.0, no features are enabled by default. Enable `problems` with
 in `basin::problems`. Basin 1.x enables this feature by default; on that release
 line, `default-features = false` excludes it.
 
-## A Simple Example
+## A simple example
 
 Implement `CostFunction` for your objective. Add a `Gradient` impl when the
 solver needs derivatives (gradient descent does; Nelder–Mead does not). Then
@@ -78,7 +78,7 @@ fn main() {
 }
 ```
 
-## Seeding from a Point
+## Seeding from a point
 
 `Executor::new` takes a fully-built state, so you control the initial iterate.
 For the common case (start at a point with the solver's natural defaults),
@@ -103,7 +103,7 @@ and random search, require an explicit state. The scalar minimizers `Brent`,
 `BrentDerivative`, and `GoldenSection` also require a state because they start
 from a bracket. Use `Executor::new` for those solvers.
 
-## Convergence and Run Limits
+## Convergence and run limits
 
 Configure numerical convergence on the solver. Configure iteration, evaluation,
 and time limits on the executor, along with targets, stagnation stops, and

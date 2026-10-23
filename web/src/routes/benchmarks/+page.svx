@@ -14,7 +14,7 @@ problem: the algorithm, its implementation, and the linear-algebra backend. Each
 comparison answers a different question. These guides explain the setup, walk
 through the results, and describe the limits of each measurement.
 
-## Comparing Solvers
+## Comparing solvers
 
 **Which algorithm makes useful progress on my kind of problem?** The [solver
 comparisons](./solvers/) run Basin's optimizers from shared starting points and
@@ -25,7 +25,7 @@ Start here when choosing between algorithms. Read the results alongside the
 [solver selection guide](../docs/solvers/), which covers derivative
 requirements, constraints, and problem structure.
 
-## Comparing Libraries
+## Comparing libraries
 
 **How does Basin compare with other implementations?** The [library
 comparisons](./competitors/) examine individual solvers, including L-BFGS,
@@ -36,7 +36,7 @@ These curves measure the complete optimization path recorded by each harness.
 Differences in line searches, stopping rules, and numerical safeguards can
 affect both the work performed and the result.
 
-## Choosing a Backend
+## Choosing a backend
 
 **How does backend choice affect the cost of a solve as the problem grows?** The
 [backend comparisons](./backends/) hold the solver and problem fixed while

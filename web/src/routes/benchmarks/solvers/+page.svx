@@ -8,11 +8,11 @@
 </script>
 
 <Seo
-    title="Solver Benchmarks – Basin"
+    title="Solver benchmarks – Basin"
     description="Compare Basin's optimization algorithms from shared starting points: target attainment, time to target, and complete convergence traces, with interpretation and methodology."
 />
 
-# Comparing Solvers
+# Comparing solvers
 
 Solver choice affects both how quickly the objective improves and which solution
 a run approaches. These comparisons run Basin's optimizers from shared, randomly
@@ -48,7 +48,7 @@ attainment across all starts.
 </section>
 {/each}
 
-## Methodology and Reproduction
+## Methodology and reproduction
 
 Measured {data.generatedAt} on {data.env.cpu} ({data.env.os}/{data.env.arch}).
 Every solver uses `Vec<f64>` and the same {formatDuration(data.budgetNs)} budget

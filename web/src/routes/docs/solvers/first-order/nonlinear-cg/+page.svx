@@ -2,7 +2,7 @@
     import References from "#lib/docs/References.svelte";
 </script>
 
-# Nonlinear Conjugate Gradient
+# Nonlinear conjugate gradient
 
 Nonlinear conjugate gradient is a local optimizer for smooth functions when you
 can compute a gradient. It combines the negative gradient with the previous
@@ -21,7 +21,7 @@ reference](https://docs.rs/basin/latest/basin/solver/nonlinear_cg/struct.Nonline
   | Constraints | Unconstrained                                           |
   | Parameters  | All four dense backends, with `f32` or `f64`            |
 
-## When to Use It
+## When to use it
 
 Consider nonlinear conjugate gradient for a large, smooth problem when you want
 to use gradient information while keeping memory proportional to the number of
@@ -41,7 +41,7 @@ consider [projected gradient descent](../projected-gradient-descent/). Nonlinear
 conjugate gradient does not enforce bounds or other constraints, and different
 starting points can lead to different local minima.
 
-## How It Works
+## How it works
 
 The first search direction is the negative gradient. After a line search accepts
 a step, the solver forms the next direction by adding a multiple of the old
@@ -123,7 +123,7 @@ fn main() {
 To try Polak–Ribière+, import `CgUpdate` and add
 `.with_update(CgUpdate::PolakRibierePlus)` to the solver configuration.
 
-## Practical Considerations
+## Practical considerations
 
 ### Scale the parameters
 
@@ -149,7 +149,7 @@ makes every direction steepest descent. The Hager–Zhang coefficient parameter
 `eta` controls its update safeguard, rather than a stopping tolerance, and has
 no effect on Polak–Ribière+.
 
-## Basin Implementation
+## Basin implementation
 
 Basin stores the search direction and restart bookkeeping on `NonlinearCg` and
 publishes the current point, objective, and gradient through `FirstOrderState`.
