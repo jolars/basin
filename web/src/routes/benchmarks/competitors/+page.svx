@@ -17,7 +17,8 @@
 How much progress does each implementation make, and how long does it take?
 These comparisons follow individual solvers on shared problems. The curves show
 the objective gap $f(\mathbf{x}) - f^\star$ against elapsed time. Compare the
-time needed to reach a given accuracy as well as the accuracy ultimately reached.
+time needed to reach a given accuracy as well as the accuracy ultimately
+reached.
 
 The workloads use enough parameters or observations to make complete solves
 usually take milliseconds to roughly a tenth of a second on the measurement
@@ -25,71 +26,68 @@ machine. Sizes differ by solver: a useful workload for L-BFGS can be excessive
 for a simplex method. We choose larger problems instead of repeating tiny solves
 or continuing iterations after reaching the target.
 
-| Solver | Workload |
-| --- | --- |
-| Levenberg–Marquardt | 32 parameters, 4,096 residuals |
-| COBYLA | 30 variables, box bounds, and an active sum constraint |
-| SLSQP | 100 variables and an active nonlinear ball constraint |
-| Gradient descent | 100-variable Rosenbrock |
-| Nelder–Mead | 12-variable Rosenbrock |
-| L-BFGS | 100-variable Rosenbrock |
-| NEWUOA | 30-variable Styblinski–Tang |
+  | Solver              | Workload                                               |
+  | ------------------- | ------------------------------------------------------ |
+  | Levenberg–Marquardt | 32 parameters, 4,096 residuals                         |
+  | COBYLA              | 30 variables, box bounds, and an active sum constraint |
+  | SLSQP               | 100 variables and an active nonlinear ball constraint  |
+  | Gradient descent    | 100-variable Rosenbrock                                |
+  | Nelder–Mead         | 12-variable Rosenbrock                                 |
+  | L-BFGS              | 100-variable Rosenbrock                                |
+  | NEWUOA              | 30-variable Styblinski–Tang                            |
 
-Configurations match where the APIs allow it. Line searches, stopping rules,
-and numerical safeguards can still produce different paths. These are
-comparisons of solver effectiveness, including implementation costs, rather
-than measurements of identical numerical work. For comparisons between
-algorithms within Basin, see [comparing solvers](../solvers/).
+Configurations match where the APIs allow it. Line searches, stopping rules, and
+numerical safeguards can still produce different paths. These are comparisons of
+solver effectiveness, including implementation costs, rather than measurements
+of identical numerical work. For comparisons between algorithms within Basin,
+see [comparing solvers](../solvers/).
 
 ## Levenberg–Marquardt
 
 Basin {data.versions.basin} and
 [levenberg-marquardt](https://docs.rs/levenberg-marquardt/0.15.0/levenberg_marquardt/)
-{lmVersion} jointly fit 16 exponential response curves.
-Each curve has an amplitude and a decay rate, giving 32 parameters. Each has
-256 exact observations at evenly spaced times in $[0,4]$, giving 4,096 residuals.
-For curve $k=0,\ldots,15$, the true parameters are
-$a_k=100\,000+1\,000k$ and $b_k=-1-0.02k$. Every pair starts at
-$(50\,000,-0.3)$.
+{lmVersion} jointly fit 16 exponential response curves. Each curve has an
+amplitude and a decay rate, giving 32 parameters. Each has 256 exact
+observations at evenly spaced times in $[0,4]$, giving 4,096 residuals. For
+curve $k = 0,\ldots,15$, the true parameters are $a_k = 100\,000 + 1\,000k$ and
+$b_k = -1 - 0.02k$. Every pair starts at $(50\,000,-0.3)$.
 
 Both use nalgebra {data.versions.nalgebra}, the same analytic Jacobian, column
 scaling, pivoted QR, and an initial scaled step-bound factor of 100. Although
 curves have separate parameters, the harness supplies a single dense Jacobian
-and both libraries solve the complete dense least-squares system. This tests
-the dense QR path, rather than a specialized solver that exploits the blocks.
+and both libraries solve the complete dense least-squares system. This tests the
+dense QR path, rather than a specialized solver that exploits the blocks.
 
 Function-reduction, orthogonality, and scaled-radius tolerances are 30 times
 `f64` machine epsilon, about $6.66 \times 10^{-15}$. Basin uses trust-region
-damping and disables its absolute-gradient and unscaled-step checks. Both have
-a 330-residual-call budget; Basin also has a 200-iteration safety cap.
+damping and disables its absolute-gradient and unscaled-step checks. Both have a
+330-residual-call budget; Basin also has a 200-iteration safety cap.
 
 <CompetitorFigure solver="lm" problem="exp_fit" />
 
 Both implementations recover all 32 parameters and use seven residual and six
-Jacobian evaluations in this snapshot. The curve records the best objective
-seen at residual evaluations, including rejected trials. Internal damping
-searches and acceptance rules still differ from the reference's MINPACK path.
+Jacobian evaluations in this snapshot. The curve records the best objective seen
+at residual evaluations, including rejected trials. Internal damping searches
+and acceptance rules still differ from the reference's MINPACK path.
 
 ## COBYLA
 
 The constrained fixture minimizes a coupled quadratic,
 
 $$
-f(\mathbf{x})=\sum_{i=1}^{n}(x_i-1)^2
- +\sum_{i=1}^{n-1}(x_{i+1}-x_i)^2,
+  f(\mathbf{x}) = \sum_{i=1}^{n}(x_i - 1)^2 + \sum_{i=1}^{n-1}(x_{i+1} - x_i)^2,
 $$
 
-with $n=30$, $0\le x_i\le2$, and $\sum_i x_i\le0.75n$.
-The unique optimum has every coordinate equal to $0.75$ and
-$f^\star=n/16=1.875$. The deterministic start is
-$x_i=0.3+0.4(i-1)/n$.
+with $n = 30$, $0 \le x_i \le 2$, and $\sum_i x_i \le 0.75n$. The unique optimum
+has every coordinate equal to $0.75$ and $f^\star = n/16 = 1.875$. The
+deterministic start is $x_i = 0.3 + 0.4(i - 1)/n$.
 
-Basin's PRIMA implementation is compared with
-[cobyla](https://docs.rs/cobyla/) {data.versions.cobyla}, derived from NLopt.
-Both use an initial radius of $0.5$, a final radius of about
-$7.45\times10^{-9}$, a 10,000-objective-call budget, and disabled optional
-objective-change stops. Objective trials enter the main curve only when their
-maximum constraint violation is at most $1.49\times10^{-8}$.
+Basin's PRIMA implementation is compared with [cobyla](https://docs.rs/cobyla/)
+{data.versions.cobyla}, derived from NLopt. Both use an initial radius of $0.5$,
+a final radius of about $7.45 \times 10^{-9}$, a 10,000-objective-call budget,
+and disabled optional objective-change stops. Objective trials enter the main
+curve only when their maximum constraint violation is at most
+$1.49 \times 10^{-8}$.
 
 <CompetitorFigure solver="cobyla" problem="quadratic_30d" />
 
@@ -105,25 +103,25 @@ excludes native bounds.
 
 ## SLSQP
 
-SLSQP minimizes the same coupled quadratic with $n=100$, subject to the
+SLSQP minimizes the same coupled quadratic with $n = 100$, subject to the
 nonlinear constraint
 
 $$
-\frac{1}{n}\sum_{i=1}^{n}x_i^2\le0.75^2.
+  \frac{1}{n}\sum_{i=1}^{n}x_i^2 \le 0.75^2.
 $$
 
 The unique optimum again has every coordinate equal to $0.75$, with
-$f^\star=6.25$. This case uses the same starting-point formula as COBYLA,
+$f^\star = 6.25$. This case uses the same starting-point formula as COBYLA,
 analytic objective gradients, and an analytic constraint Jacobian. Normalizing
 the constraint by $n$ keeps its scale independent of dimension.
 
 Basin is compared with [slsqp](https://docs.rs/slsqp/1.0.2/slsqp/)
-{data.versions.slsqp}, a Rust translation of NLopt 2.7.1, and native NLopt 2.9.1.
-Basin uses Kraft's composite accuracy test at $10^{-10}$. The references use an
-absolute function-change tolerance of $10^{-10}$, with their other optional
-objective and step tolerances disabled. Basin has a 200-iteration safety cap;
-the references have a 200-objective-evaluation cap. The objective curve uses a
-constraint-violation tolerance of $10^{-8}$.
+{data.versions.slsqp}, a Rust translation of NLopt 2.7.1, and native NLopt
+2.9.1. Basin uses Kraft's composite accuracy test at $10^{-10}$. The references
+use an absolute function-change tolerance of $10^{-10}$, with their other
+optional objective and step tolerances disabled. Basin has a 200-iteration
+safety cap; the references have a 200-objective-evaluation cap. The objective
+curve uses a constraint-violation tolerance of $10^{-8}$.
 
 <CompetitorFigure solver="slsqp" problem="constrained_quadratic" />
 
@@ -137,9 +135,9 @@ point.
 ## Gradient descent
 
 Basin and [argmin](https://argmin-rs.org/) {data.versions.argmin} use steepest
-descent with a Moré–Thuente line search on chained Rosenbrock with 100 variables.
-Both start from the alternating vector $(-1.2,1,-1.2,1,\ldots)$.
-They seek $f\le10^{-10}$ with a {data.iterations}-iteration safety cap.
+descent with a Moré–Thuente line search on chained Rosenbrock with 100
+variables. Both start from the alternating vector $(-1.2,1,-1.2,1,\ldots)$. They
+seek $f \le 10^{-10}$ with a {data.iterations}-iteration safety cap.
 
 <CompetitorFigure solver="gd" problem="rosenbrock" />
 
@@ -156,11 +154,11 @@ coordinates and standard coefficients. [gomez](https://docs.rs/gomez/)
 {data.versions.gomez} and NLopt construct their own simplexes with their default
 coefficients.
 
-All seek $f\le10^{-10}$. Basin, argmin, and gomez have a
+All seek $f \le 10^{-10}$. Basin, argmin, and gomez have a
 {data.iterations}-iteration cap; NLopt has a
 {data.iterations}-objective-evaluation cap. A trial at 20 variables made little
-progress within this budget, so the published case uses a smaller dimension
-that exposes useful convergence behavior.
+progress within this budget, so the published case uses a smaller dimension that
+exposes useful convergence behavior.
 
 <CompetitorFigure solver="nm" problem="rosenbrock" />
 
@@ -171,14 +169,14 @@ this outcome. A stalled curve remains in the comparison.
 ## L-BFGS
 
 L-BFGS uses the same 100-variable Rosenbrock fixture and start as gradient
-descent. All three retain ten curvature pairs. Basin and argmin use a Moré–Thuente
-line search. NLopt supplies its bundled L-BFGS implementation, whose line search
-is not configurable through the harness's API.
+descent. All three retain ten curvature pairs. Basin and argmin use a
+Moré–Thuente line search. NLopt supplies its bundled L-BFGS implementation,
+whose line search is not configurable through the harness's API.
 
-All seek $f\le10^{-10}$. Basin and argmin have a
-{data.iterations}-iteration safety cap, with argmin's gradient and cost-change
-tolerances zeroed. NLopt has a {data.iterations}-objective-evaluation cap.
-These limits bound the runs; they do not prescribe equal work.
+All seek $f \le 10^{-10}$. Basin and argmin have a {data.iterations}-iteration
+safety cap, with argmin's gradient and cost-change tolerances zeroed. NLopt has
+a {data.iterations}-objective-evaluation cap. These limits bound the runs; they
+do not prescribe equal work.
 
 <CompetitorFigure solver="lbfgs" problem="rosenbrock" />
 
@@ -193,9 +191,10 @@ Basin and NLopt run Powell's model-based derivative-free method on
 30-dimensional Styblinski–Tang, starting at the origin. Basin follows the
 modernized PRIMA implementation, while NLopt uses Powell's reference.
 
-The initial radius is $0.5$, the final radius is $10^{-6}$, and the interpolation
-set has $2n+1$ points. Basin has a 10,000-iteration safety cap and NLopt a
-10,000-evaluation cap. Both stop on their radius criteria before those limits.
+The initial radius is $0.5$, the final radius is $10^{-6}$, and the
+interpolation set has $2n + 1$ points. Basin has a 10,000-iteration safety cap
+and NLopt a 10,000-evaluation cap. Both stop on their radius criteria before
+those limits.
 
 <CompetitorFigure solver="newuoa" problem="styblinski" />
 
@@ -212,10 +211,10 @@ gomez's bundled `nalgebra::DVector<f64>`. Native NLopt is accessed through the
 Rust `nlopt` bindings, version {data.versions.nlopt}.
 
 Each case warms up once. Each timestamp is the median at the corresponding
-sample over {data.repetitions} repetitions of the same deterministic run.
-The harness checks that numerical traces agree across repetitions before
-combining timestamps. Repetitions reduce timing noise; they are not independent
-starting points or a measure of reliability across problems.
+sample over {data.repetitions} repetitions of the same deterministic run. The
+harness checks that numerical traces agree across repetitions before combining
+timestamps. Repetitions reduce timing noise; they are not independent starting
+points or a measure of reliability across problems.
 
 Timings include initialization and trace instrumentation. Some driving loops
 construct their executor before starting the clock. LM and COBYLA also include
@@ -225,9 +224,10 @@ the timer. Argmin uses an observer, Basin and gomez use driving loops, and NLopt
 uses objective callbacks, so sampling and instrumentation costs differ.
 
 The objective curves retain at most about 512 samples plus the endpoint from
-each full recorded trace. Feasibility plots retain all recorded trials. Objective gaps are floored at $10^{-16}$ for display,
-including small negative gaps allowed by constrained feasibility tolerances.
-Absolute times depend on the machine. Results use source revision
+each full recorded trace. Feasibility plots retain all recorded trials.
+Objective gaps are floored at $10^{-16}$ for display, including small negative
+gaps allowed by constrained feasibility tolerances. Absolute times depend on the
+machine. Results use source revision
 <code>{data.env.revision.slice(0, 7)}</code>{revisionNote}.
 
 From the repository root:
@@ -238,8 +238,9 @@ cargo run -p competitor-bench --release --bin trace > target/competitor-traces.j
 pnpm --dir web collect:competitors
 ```
 
-The [trace harness](https://github.com/jolars/basin/blob/main/crates/competitor-bench/src/bin/trace.rs)
-and its shared fixtures define the problems and settings. The
-[collection script](https://github.com/jolars/basin/blob/main/web/scripts/collect-competitors.ts)
-validates the results and adds machine and version metadata before updating
-the committed figures.
+The [trace
+harness](https://github.com/jolars/basin/blob/main/crates/competitor-bench/src/bin/trace.rs)
+and its shared fixtures define the problems and settings. The [collection
+script](https://github.com/jolars/basin/blob/main/web/scripts/collect-competitors.ts)
+validates the results and adds machine and version metadata before updating the
+committed figures.
