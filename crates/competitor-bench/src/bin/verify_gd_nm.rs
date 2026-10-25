@@ -5,9 +5,9 @@
 //! work. See `verify_nm` for the published Basin/Gomez workload and callback
 //! accounting.
 //!
-//! Also verifies the COBYLA migration cases against `cobyla` with matched
-//! objective budgets and final radii. Their trajectories differ; reported
-//! constraint counts distinguish vector callbacks from scalar callbacks.
+//! Also verifies the COBYLA migration cases against `cobyla` and NLopt with
+//! matched objective budgets and final radii. Their trajectories differ;
+//! reported constraint counts distinguish vector callbacks from scalar callbacks.
 //!
 //! Run: `cargo run -p competitor-bench --bin verify_gd_nm --release`.
 
@@ -95,6 +95,7 @@ fn main() {
         for (library, unit, result) in [
             ("basin", "vector", case.solve_basin()),
             ("cobyla", "scalar nonlinear", case.solve_reference()),
+            ("nlopt", "scalar nonlinear", case.solve_nlopt()),
         ] {
             case.verify(&result);
             println!(

@@ -777,7 +777,11 @@ fn main() {
             convergence::median_run(|| lm::run(library), REPS),
         ));
     }
-    for library in [cobyla::Library::Basin, cobyla::Library::Reference] {
+    for library in [
+        cobyla::Library::Basin,
+        cobyla::Library::Reference,
+        cobyla::Library::Nlopt,
+    ] {
         traces.push(published_trace(
             "cobyla",
             "quadratic_30d",

@@ -40,7 +40,7 @@ function fixture(): CompetitorResult[] {
 }
 
 test("collects exactly one measured row per curated case and library", () => {
-    assert.equal(validateCompetitorResults(fixture()).length, 18);
+    assert.equal(validateCompetitorResults(fixture()).length, 19);
     assert.throws(
         () => validateCompetitorResults(fixture().slice(1)),
         /Missing result/,

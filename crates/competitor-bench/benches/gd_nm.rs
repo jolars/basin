@@ -18,10 +18,10 @@
 //! `verify_nm` reports actual callbacks, quality, and budget-limited cases.
 //! The `nm_step_*` groups isolate implementation changes on identical inputs.
 //!
-//! COBYLA compares Basin's PRIMA port with the `cobyla` crate on the original
-//! migration workloads. It uses matched objective budgets and final radii,
-//! with independent result checks before timing. The variants take different
-//! trajectories, so these are whole-solve comparisons at a common quality
+//! COBYLA compares Basin's PRIMA port with the `cobyla` crate and native NLopt
+//! on the original migration workloads. It uses matched objective budgets and
+//! final radii, with independent result checks before timing. The variants take
+//! different trajectories, so these are whole-solve comparisons at a common quality
 //! target. Timing includes setup, initialization, extraction, and teardown.
 //!
 //! Run: `cargo bench -p competitor-bench --bench gd_nm`.
@@ -156,12 +156,16 @@ fn bench_cobyla(c: &mut Criterion) {
     for (case, name) in competitor_bench::cobyla::CASES {
         case.verify(&case.solve_basin());
         case.verify(&case.solve_reference());
+        case.verify(&case.solve_nlopt());
         let mut group = c.benchmark_group(format!("cobyla_{name}"));
         group.bench_function("basin", |b| {
             b.iter(|| black_box(black_box(case).solve_basin()))
         });
         group.bench_function("cobyla", |b| {
             b.iter(|| black_box(black_box(case).solve_reference()))
+        });
+        group.bench_function("nlopt", |b| {
+            b.iter(|| black_box(black_box(case).solve_nlopt()))
         });
         group.finish();
     }

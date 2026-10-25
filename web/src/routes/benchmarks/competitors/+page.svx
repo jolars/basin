@@ -80,11 +80,18 @@ has every coordinate equal to $0.75$ and $f^\star = n/16 = 1.875$. The
 deterministic start is $x_i = 0.3 + 0.4(i - 1)/n$.
 
 Basin's PRIMA implementation is compared with [cobyla](https://docs.rs/cobyla/)
-{data.versions.cobyla}, derived from NLopt. Both use an initial radius of $0.5$,
-a final radius of about $7.45 \times 10^{-9}$, a 10,000-objective-call budget,
-and disabled optional objective-change stops. Objective trials enter the main
-curve only when their maximum constraint violation is at most
-$1.49 \times 10^{-8}$.
+{data.versions.cobyla}, derived from NLopt, and native NLopt 2.9.1 through the
+[nlopt](https://docs.rs/nlopt/) {data.versions.nlopt} Rust bindings. All three
+use an initial radius of $0.5$, a final radius of about $7.45 \times 10^{-9}$,
+a 10,000-objective-call budget, and disabled optional objective-change stops.
+The references use native bounds and a zero tolerance for the sum constraint.
+Objective trials enter the main curve only when their maximum constraint
+violation is at most $1.49 \times 10^{-8}$.
+
+The [NLopt variant](https://nlopt.readthedocs.io/en/latest/NLopt_Algorithms/#cobyla-constrained-optimization-by-linear-approximations)
+modifies Powell's original implementation with explicit bound handling,
+trust-region increases, and deterministic simplex perturbations. Basin follows
+modern PRIMA, so matched budgets and radii do not imply identical trajectories.
 
 <CompetitorFigure solver="cobyla" problem="quadratic_30d" />
 
@@ -93,8 +100,8 @@ lower objective is not a better constrained solution. Small negative objective
 gaps permitted by the feasibility tolerance appear at the display floor.
 
 Constraint counts use different callback units. Basin records vector callbacks
-including bounds, while the reference records scalar nonlinear callbacks and
-excludes native bounds.
+including bounds, while both references record scalar nonlinear callbacks and
+exclude native bounds.
 
 ## SLSQP
 

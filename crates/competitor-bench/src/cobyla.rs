@@ -1,7 +1,8 @@
 //! Public COBYLA comparisons on migration workloads and a larger coupled quadratic.
 //!
-//! Basin follows PRIMA; the `cobyla` crate is derived from NLopt. Equal objective
-//! budgets and final radii do not imply equal trajectories or numerical work.
+//! Basin follows PRIMA; the `cobyla` crate is derived from NLopt, while `nlopt`
+//! wraps native NLopt 2.9.1. Equal objective budgets and final radii do not imply
+//! equal trajectories or numerical work.
 
 use basin::{Cobyla, CostFunction, Executor, SelectedState, TerminationCode};
 use std::{
@@ -18,6 +19,7 @@ pub const FEASIBILITY_TOLERANCE: f64 = 1.490_116_119_384_765_6e-8;
 pub enum Library {
     Basin,
     Reference,
+    Nlopt,
 }
 
 impl Library {
@@ -25,6 +27,7 @@ impl Library {
         match self {
             Self::Basin => "basin",
             Self::Reference => "cobyla",
+            Self::Nlopt => "nlopt",
         }
     }
 }
@@ -55,8 +58,8 @@ pub struct Outcome {
     pub point: Vec<f64>,
     pub cost: f64,
     pub objective_calls: usize,
-    /// Vector callbacks in Basin; scalar nonlinear callbacks in `cobyla`.
-    /// Native bound rows are evaluated internally by the latter.
+    /// Vector callbacks in Basin; scalar nonlinear callbacks in the references.
+    /// Native bound rows are evaluated internally by both references.
     pub constraint_calls: usize,
     pub iterations: Option<u64>,
     pub stop: Stop,
@@ -242,11 +245,79 @@ impl Case {
         }
     }
 
+    pub fn solve_nlopt(self) -> Outcome {
+        self.solve_nlopt_logged(None)
+    }
+
+    fn solve_nlopt_logged(self, log: Option<&RefCell<Log>>) -> Outcome {
+        let mut problem = Problem::new(self);
+        problem.log = log;
+        let mut point = self.start();
+        if let Some(log) = log {
+            log.borrow_mut().restart();
+        }
+        let mut opt = nlopt::Nlopt::new(
+            nlopt::Algorithm::Cobyla,
+            point.len(),
+            |x: &[f64], _: Option<&mut [f64]>, _: &mut ()| problem.objective(x),
+            nlopt::Target::Minimize,
+            (),
+        );
+        opt.set_lower_bounds(
+            &problem.bounds.iter().map(|b| b.0).collect::<Vec<_>>(),
+        )
+        .unwrap();
+        opt.set_upper_bounds(
+            &problem.bounds.iter().map(|b| b.1).collect::<Vec<_>>(),
+        )
+        .unwrap();
+        if matches!(self, Self::Quadratic | Self::QuadraticNd(_)) {
+            opt.add_inequality_constraint(
+                |x: &[f64], _: Option<&mut [f64]>, _: &mut ()| {
+                    problem
+                        .constraint_calls
+                        .set(problem.constraint_calls.get() + 1);
+                    // NLopt uses c(x) <= 0, opposite to the `cobyla` crate.
+                    x.iter().sum::<f64>() - 0.75 * x.len() as f64
+                },
+                (),
+                // Match the `cobyla` crate's zero constraint tolerance.
+                0.0,
+            )
+            .unwrap();
+        }
+        opt.set_initial_step1(0.5).unwrap();
+        opt.set_xtol_abs1(FINAL_RADIUS).unwrap();
+        opt.set_maxeval(self.budget() as u32).unwrap();
+        let (cost, stop) = match opt.optimize(&mut point) {
+            Ok((status, cost)) => (
+                cost,
+                match status {
+                    nlopt::SuccessState::MaxEvalReached => Stop::Budget,
+                    nlopt::SuccessState::XtolReached => Stop::Radius,
+                    other => Stop::Other(format!("{other:?}")),
+                },
+            ),
+            Err((status, cost)) => (cost, Stop::Other(format!("{status:?}"))),
+        };
+        // Include native optimizer teardown in the trace, as on Basin's side.
+        drop(opt);
+        Outcome {
+            point,
+            cost,
+            objective_calls: problem.objective_calls.get(),
+            constraint_calls: problem.constraint_calls.get(),
+            iterations: None,
+            stop,
+        }
+    }
+
     pub fn trace(self, library: Library) -> Run {
         let log = RefCell::new(Log::new());
         let result = match library {
             Library::Basin => self.solve_basin_logged(Some(&log)),
             Library::Reference => self.solve_reference_logged(Some(&log)),
+            Library::Nlopt => self.solve_nlopt_logged(Some(&log)),
         };
         let elapsed = log.borrow().elapsed();
         let violation = self.violation(&result.point);
@@ -265,8 +336,12 @@ impl Case {
         let status = match (library, &result.stop) {
             (Library::Basin, Stop::Budget) => "MaxCostEvals".into(),
             (Library::Basin, Stop::Radius) => "SolverConverged".into(),
-            (Library::Reference, Stop::Budget) => "MaxEvalReached".into(),
-            (Library::Reference, Stop::Radius) => "XtolReached".into(),
+            (Library::Reference | Library::Nlopt, Stop::Budget) => {
+                "MaxEvalReached".into()
+            }
+            (Library::Reference | Library::Nlopt, Stop::Radius) => {
+                "XtolReached".into()
+            }
             (_, Stop::Other(status)) => status.clone(),
         };
         log.into_inner().finish(
@@ -387,7 +462,11 @@ mod tests {
     #[test]
     fn larger_coupled_quadratic_recovers_the_constrained_optimum() {
         let case = super::Case::QuadraticNd(30);
-        for library in [super::Library::Basin, super::Library::Reference] {
+        for library in [
+            super::Library::Basin,
+            super::Library::Reference,
+            super::Library::Nlopt,
+        ] {
             let result = case.trace(library);
             assert!(result.summary.verified);
             assert_eq!(result.summary.point.len(), 30);
@@ -404,10 +483,11 @@ mod tests {
     #[test]
     fn quadratic_tracing_preserves_solutions_and_raw_callback_counts() {
         use super::{Case, Library};
-        for library in [Library::Basin, Library::Reference] {
+        for library in [Library::Basin, Library::Reference, Library::Nlopt] {
             let plain = match library {
                 Library::Basin => Case::Quadratic.solve_basin(),
                 Library::Reference => Case::Quadratic.solve_reference(),
+                Library::Nlopt => Case::Quadratic.solve_nlopt(),
             };
             let traced = Case::Quadratic.trace(library);
             assert!(traced.summary.verified);
@@ -427,9 +507,7 @@ mod tests {
             CASES.into_iter().zip([(50, 50), (200, 201), (61, 61)])
         {
             let basin = case.solve_basin();
-            let reference = case.solve_reference();
             case.verify(&basin);
-            case.verify(&reference);
             assert_eq!(basin.objective_calls, basin_calls);
             assert_eq!(basin.constraint_calls, constraints);
             let stop = if basin_calls == case.budget() {
@@ -438,8 +516,20 @@ mod tests {
                 Stop::Radius
             };
             assert_eq!(basin.stop, stop);
-            if reference.stop == Stop::Budget {
-                assert_eq!(reference.objective_calls, case.budget());
+            for reference in [case.solve_reference(), case.solve_nlopt()] {
+                case.verify(&reference);
+                assert!(matches!(reference.stop, Stop::Budget | Stop::Radius));
+                if reference.stop == Stop::Budget {
+                    assert_eq!(reference.objective_calls, case.budget());
+                }
+                assert_eq!(
+                    reference.constraint_calls,
+                    if matches!(case, super::Case::Quadratic) {
+                        reference.objective_calls
+                    } else {
+                        0
+                    }
+                );
             }
         }
     }

@@ -145,7 +145,7 @@ export const COMPETITOR_CASES: CompetitorCase[] = [
         solver: "cobyla",
         problem: "quadratic_30d",
         n: 30,
-        libraries: ["basin", "cobyla"],
+        libraries: ["basin", "cobyla", "nlopt"],
         blurb: "A coupled quadratic in 30 variables with box bounds and an active sum constraint. The optimum has every coordinate equal to 0.75. Objective progress includes only feasible trials.",
     },
     {

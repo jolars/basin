@@ -292,7 +292,10 @@ compatibility and numerical behavior still need verification.
     handling before claiming a matched comparison.
   - [ ] **Compare Gauss-Newton against argmin.**
   - [ ] **Compare scalar methods against argmin.**
-  - [ ] **Compare COBYLA against NLopt.**
+  - [x] **Compare COBYLA against NLopt.** Added native NLopt to the migration
+    workload timings and verification, plus the published 30-variable
+    constrained quadratic traces. Match starts, objective budgets, and radii;
+    report feasibility, callback counts, and termination separately.
   - [ ] **Compare DIRECT against NLopt.** Distinguish the DIRECT variants.
   - [ ] **Compare augmented Lagrangian methods against NLopt.** Match inner
     solvers and account for all nested evaluation work.
