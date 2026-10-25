@@ -266,25 +266,39 @@ compatibility and numerical behavior still need verification.
 - [x] **Publish the existing LM and COBYLA comparisons.** The competitor page
   shows exponential-fit LM against `levenberg-marquardt` and a constrained
   quadratic against `cobyla`, using 11 repeated convergence traces. Exposed
-  settings match where possible, with algorithm differences documented. COBYLA
-  reports best feasible objective and trial violation separately. Broader
-  aggregate reporting remains part of the publication prerequisites above.
-- [ ] **Expand comparisons using existing argmin and NLopt dependencies.**
-  [Argmin](https://docs.rs/argmin/0.11.0/argmin/solver/index.html) supplies
-  BFGS, nonlinear CG with PR+, trust-region Steihaug and dogleg, particle
-  swarm, Gauss-Newton, and scalar methods. Match Basin's CG update
-  explicitly: its default is Hager-Zhang, while argmin 0.11 has no built-in
-  Hager-Zhang update. Reuse the argmin PSO reference fixture, checking
-  initialization, topology, and boundary handling before claiming a matched
-  comparison. The existing [`nlopt` Rust
-  bindings](https://docs.rs/nlopt/0.8.1/nlopt/) provide access to C
-  implementations of BOBYQA, COBYLA, SLSQP, DIRECT, and augmented Lagrangian
-  methods. Add bounded BOBYQA and genuinely constrained SLSQP first, reusing
-  HS71 and an analytic constrained quadratic. Check feasibility,
-  stationarity, and complementarity where available. Distinguish DIRECT
-  variants and match augmented-Lagrangian inner solvers and all nested
-  evaluation work. Retain the `slsqp` crate as another Rust reference, but
-  record its shared NLopt lineage.
+  settings match where possible, with algorithm differences documented.
+  COBYLA reports best feasible objective and trial violation separately.
+  Broader aggregate reporting remains part of the publication prerequisites
+  above.
+
+- [ ] **Expand comparisons using existing argmin and NLopt dependencies.** Use
+  [argmin](https://docs.rs/argmin/0.11.0/argmin/solver/index.html) and the C
+  implementations exposed through the existing [`nlopt` Rust
+  bindings](https://docs.rs/nlopt/0.8.1/nlopt/). Start with bounded BOBYQA
+  and constrained SLSQP. For constrained comparisons, check feasibility,
+  stationarity, and complementarity where available.
+
+  - [ ] **Compare bounded BOBYQA against NLopt.**
+  - [ ] **Compare constrained SLSQP against NLopt.** Reuse HS71 and an analytic
+    constrained quadratic.
+  - [ ] **Compare BFGS against argmin.**
+  - [ ] **Compare nonlinear CG against argmin with PR+.** Match Basin's update
+    explicitly: its default is Hager-Zhang, while argmin 0.11 has no
+    built-in Hager-Zhang update.
+  - [ ] **Compare trust-region Steihaug against argmin.**
+  - [ ] **Compare trust-region dogleg against argmin.**
+  - [ ] **Compare particle swarm against argmin.** Reuse the existing PSO
+    reference fixture, checking initialization, topology, and boundary
+    handling before claiming a matched comparison.
+  - [ ] **Compare Gauss-Newton against argmin.**
+  - [ ] **Compare scalar methods against argmin.**
+  - [ ] **Compare COBYLA against NLopt.**
+  - [ ] **Compare DIRECT against NLopt.** Distinguish the DIRECT variants.
+  - [ ] **Compare augmented Lagrangian methods against NLopt.** Match inner
+    solvers and account for all nested evaluation work.
+  - [ ] **Add the `slsqp` crate as another Rust reference.** Record its shared
+    NLopt lineage.
+
 - [ ] **Benchmark actual L-BFGS-B with active bounds.** The [`lbfgsb`
   crate](https://github.com/ybyygu/rust-lbfgsb) wraps Stephen Becker's C
   translation of L-BFGS-B and is the preferred C-backed candidate. Its build
@@ -296,6 +310,7 @@ compatibility and numerical behavior still need verification.
   Match memory size, line-search settings, and projected-gradient checks.
   The existing unconstrained L-BFGS chart and NLopt's L-BFGS are not
   coverage of Basin's L-BFGS-B algorithm.
+
 - [ ] **Add active CMA-ES against the Rust `cmaes` crate.** [`cmaes`
   0.2.2](https://docs.rs/cmaes/0.2.2/cmaes/) supplies active covariance
   adaptation and automatic restart strategies. Explicitly select negative
@@ -305,6 +320,7 @@ compatibility and numerical behavior still need verification.
   as multimodal problems over multiple seeds. Compare standalone CMA-ES
   first; report IPOP/BIPOP restarts and local injections separately. Do not
   infer bounded-CMA equivalence from unconstrained CMA-ES results.
+
 - [ ] **Add bounded least squares against `rmpfit`.** [`rmpfit`
   2.0.0](https://docs.rs/rmpfit/2.0.0/rmpfit/) is a pure-Rust CMPFIT port
   with analytic or numerical derivatives, parameter bounds, and fixed
