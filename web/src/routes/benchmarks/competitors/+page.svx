@@ -20,11 +20,9 @@ the objective gap $f(\mathbf{x}) - f^\star$ against elapsed time. Compare the
 time needed to reach a given accuracy as well as the accuracy ultimately
 reached.
 
-The workloads use enough parameters or observations to make complete solves
-usually take milliseconds to roughly a tenth of a second on the measurement
-machine. Sizes differ by solver: a useful workload for L-BFGS can be excessive
-for a simplex method. We choose larger problems instead of repeating tiny solves
-or continuing iterations after reaching the target.
+Sizes differ by solver: a useful workload for L-BFGS can be excessive for a
+simplex method. We choose larger problems instead of repeating tiny solves or
+continuing iterations after reaching the target.
 
   | Solver              | Workload                                               |
   | ------------------- | ------------------------------------------------------ |
@@ -45,7 +43,7 @@ see [comparing solvers](../solvers/).
 ## Levenberg–Marquardt
 
 Basin {data.versions.basin} and
-[levenberg-marquardt](https://docs.rs/levenberg-marquardt/0.15.0/levenberg_marquardt/)
+[levenberg-marquardt](https://docs.rs/levenberg-marquardt/latest/levenberg_marquardt/)
 {lmVersion} jointly fit 16 exponential response curves. Each curve has an
 amplitude and a decay rate, giving 32 parameters. Each has 256 exact
 observations at evenly spaced times in $[0,4]$, giving 4,096 residuals. For
@@ -65,10 +63,9 @@ damping and disables its absolute-gradient and unscaled-step checks. Both have a
 
 <CompetitorFigure solver="lm" problem="exp_fit" />
 
-Both implementations recover all 32 parameters and use seven residual and six
-Jacobian evaluations in this snapshot. The curve records the best objective seen
-at residual evaluations, including rejected trials. Internal damping searches
-and acceptance rules still differ from the reference's MINPACK path.
+The curve records the best objective seen at residual evaluations, including
+rejected trials. Internal damping searches and acceptance rules still differ
+from the reference's MINPACK path.
 
 ## COBYLA
 
@@ -91,11 +88,9 @@ $1.49 \times 10^{-8}$.
 
 <CompetitorFigure solver="cobyla" problem="quadratic_30d" />
 
-Both returned points pass independent accuracy and feasibility checks in this
-snapshot. Read the violation plot alongside objective progress: an infeasible
-trial with a lower objective is not a better constrained solution. Small
-negative objective gaps permitted by the feasibility tolerance appear at the
-display floor.
+Read the violation plot alongside objective progress: an infeasible trial with a
+lower objective is not a better constrained solution. Small negative objective
+gaps permitted by the feasibility tolerance appear at the display floor.
 
 Constraint counts use different callback units. Basin records vector callbacks
 including bounds, while the reference records scalar nonlinear callbacks and
@@ -115,22 +110,20 @@ $f^\star = 6.25$. This case uses the same starting-point formula as COBYLA,
 analytic objective gradients, and an analytic constraint Jacobian. Normalizing
 the constraint by $n$ keeps its scale independent of dimension.
 
-Basin is compared with [slsqp](https://docs.rs/slsqp/1.0.2/slsqp/)
-{data.versions.slsqp}, a Rust translation of NLopt 2.7.1, and native NLopt
-2.9.1. Basin uses Kraft's composite accuracy test at $10^{-10}$. The references
-use an absolute function-change tolerance of $10^{-10}$, with their other
-optional objective and step tolerances disabled. Basin has a 200-iteration
-safety cap; the references have a 200-objective-evaluation cap. The objective
-curve uses a constraint-violation tolerance of $10^{-8}$.
+Basin is compared with [slsqp](https://docs.rs/slsqp/latest/slsqp/)
+{data.versions.slsqp}, a Rust translation of NLopt, and native NLopt. Basin uses
+Kraft's composite accuracy test at $10^{-10}$. The references use an absolute
+function-change tolerance of $10^{-10}$, with their other optional objective and
+step tolerances disabled. Basin has a 200-iteration safety cap; the references
+have a 200-objective-evaluation cap. The objective curve uses a
+constraint-violation tolerance of $10^{-8}$.
 
 <CompetitorFigure solver="slsqp" problem="constrained_quadratic" />
 
-All three returned points pass the independent accuracy and feasibility checks
-in this snapshot, but their termination statuses report failure or roundoff
-limits. Those statuses are retained in the run details. Passing an independent
-solution check does not mean that the solver reported convergence. The main
-curve also records best feasible trials, which can differ from the returned
-point.
+Termination statuses and independent accuracy and feasibility checks are
+reported in the run details. Passing an independent solution check does not mean
+that the solver reported convergence. The main curve records best feasible
+trials, which can differ from the returned point.
 
 ## Gradient descent
 
@@ -141,10 +134,8 @@ seek $f \le 10^{-10}$ with a {data.iterations}-iteration safety cap.
 
 <CompetitorFigure solver="gd" problem="rosenbrock" />
 
-Neither run reaches the target within the budget in this snapshot. Basin
-finishes its budget sooner, while argmin reaches a smaller objective gap. Read
-the time at a common objective gap as well as the endpoints: faster iterations
-alone do not establish a faster solve.
+Read the time at a common objective gap as well as the endpoints: faster
+iterations alone do not establish a faster solve.
 
 ## Nelder–Mead
 
@@ -156,15 +147,9 @@ coefficients.
 
 All seek $f \le 10^{-10}$. Basin, argmin, and gomez have a
 {data.iterations}-iteration cap; NLopt has a
-{data.iterations}-objective-evaluation cap. A trial at 20 variables made little
-progress within this budget, so the published case uses a smaller dimension that
-exposes useful convergence behavior.
+{data.iterations}-objective-evaluation cap.
 
 <CompetitorFigure solver="nm" problem="rosenbrock" />
-
-Basin, argmin, and gomez reach the target in this snapshot. NLopt approaches a
-positive objective gap instead. Its different simplex initialization is part of
-this outcome. A stalled curve remains in the comparison.
 
 ## L-BFGS
 
@@ -180,11 +165,6 @@ do not prescribe equal work.
 
 <CompetitorFigure solver="lbfgs" problem="rosenbrock" />
 
-All three reach the target in this snapshot. Increasing the dimension makes the
-cost of curvature history and the optimization path more visible than in the
-previous two-variable fixture. These cheap analytic evaluations still expose
-solver overhead more strongly than an expensive application objective would.
-
 ## NEWUOA
 
 Basin and NLopt run Powell's model-based derivative-free method on
@@ -193,14 +173,12 @@ modernized PRIMA implementation, while NLopt uses Powell's reference.
 
 The initial radius is $0.5$, the final radius is $10^{-6}$, and the
 interpolation set has $2n + 1$ points. Basin has a 10,000-iteration safety cap
-and NLopt a 10,000-evaluation cap. Both stop on their radius criteria before
-those limits.
+and NLopt a 10,000-evaluation cap.
 
 <CompetitorFigure solver="newuoa" problem="styblinski" />
 
-Both implementations approach the known global minimum from this start. This
-case exercises larger interpolation models, but a single start does not measure
-the probability of finding the global minimum on a multimodal problem.
+A single start does not measure the probability of finding the global minimum on
+a multimodal problem.
 
 ## Methodology and reproduction
 
