@@ -13,6 +13,12 @@ timeout = 20
 # mdsvex marks external links as nofollow, which lychee otherwise skips.
 preprocess = { command = "web/scripts/lychee-preprocess.sh" }
 
+# GNU's documentation server rate-limits automated link checks.
+[hosts."www.gnu.org"]
+headers = { User-Agent = "Mozilla/5.0 (compatible; Basin documentation link checker; +https://basin.rs/)" }
+concurrency = 1
+request_interval = "2s"
+
 # Publishers often block automated HTML requests. DOI content negotiation
 # validates the identifier through its registration agency instead.
 [hosts."doi.org"]
