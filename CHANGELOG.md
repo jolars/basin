@@ -1,5 +1,28 @@
 # Changelog
 
+## [3.1.0](https://github.com/jolars/basin/compare/v3.0.0...v3.1.0) (2026-10-26)
+
+### Features
+
+- **solvers:** add bisection root solver ([`9263b7c`](https://github.com/jolars/basin/commit/9263b7c4f1ba05643bdbc77990fb91ed9ae0aded))
+- **web:** publish LM and COBYLA benchmark traces ([`c7d4209`](https://github.com/jolars/basin/commit/c7d42098835f3c9eeaa798280de1a7fde1e74f95))
+
+### Bug Fixes
+
+- **deps:** patch undici denial of service ([`275cc1a`](https://github.com/jolars/basin/commit/275cc1a7e3c2aaae538755b924f2f7d07a6dff5f))
+- **ci:** avoid GNU link checker rate limits ([`11a357a`](https://github.com/jolars/basin/commit/11a357a348dfe1d6979fd7ac8d5e2f1d95008c6a))
+- **web:** parse documentation search content safely ([`de14c9e`](https://github.com/jolars/basin/commit/de14c9ebcf2f5f64f5ddf4759a9521384cafa552))
+- **ci:** restrict default workflow token permissions ([`020db58`](https://github.com/jolars/basin/commit/020db58dd235b8be2faab2674b73b4532ae0c975))
+- **ci:** quote the L-BFGS-B test command ([`a4bc3ea`](https://github.com/jolars/basin/commit/a4bc3ea8eb5b086f07ae52793655276ad8a289e5))
+
+### Performance Improvements
+
+- speed up NEWUOA Hessian and origin updates ([`58b7c7e`](https://github.com/jolars/basin/commit/58b7c7efffe540de571cbdb2b2d620d9b1ad79c3))
+- reduce NEWUOA model maintenance overhead ([`1f498e1`](https://github.com/jolars/basin/commit/1f498e1ffe509355ebc21219728577340da87700))
+- reduce Nelder-Mead iteration overhead ([`f6bddec`](https://github.com/jolars/basin/commit/f6bddec8189338835956cb042d9b221aa401fc4f))
+- reduce QR factorization and solve overhead ([`fddd5b1`](https://github.com/jolars/basin/commit/fddd5b1f42f01cb1c0ffa87c87767ea88c13e712))
+- **slsqp:** reduce QR and allocation overhead ([`b421caa`](https://github.com/jolars/basin/commit/b421caaca9359edb5368fc986a8feb5816af3538))
+
 ## [3.0.0](https://github.com/jolars/basin/compare/v2.0.0...v3.0.0) (2026-10-20)
 
 Unfortunately, I have realized that the changes to constraints API in Basin 2.0 are much less ergonomic and have decided to switch back to the simpler approach of 1.x. I apologize to anyone who has already migrated, but hope that you find the new (old) API more pleasant to use. In short:

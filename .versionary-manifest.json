@@ -1,18 +1,18 @@
 {
   "manifest-version": 1,
-  "baseline-sha": "4e3326ec0dc2599204ff44b37280b8ecc92d05aa",
+  "baseline-sha": "275cc1a7e3c2aaae538755b924f2f7d07a6dff5f",
   "release-targets": [
     {
       "path": ".",
-      "version": "3.0.0",
-      "tag": "v3.0.0"
+      "version": "3.1.0",
+      "tag": "v3.1.0"
     }
   ],
   "pending-release-targets": [
     {
       "path": ".",
-      "version": "3.0.0",
-      "tag": "v3.0.0"
+      "version": "3.1.0",
+      "tag": "v3.1.0"
     }
   ]
 }
