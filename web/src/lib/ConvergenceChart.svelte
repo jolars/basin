@@ -9,8 +9,9 @@
         series,
         ariaLabel = "convergence chart",
         yLabel = "suboptimality f(x) − f*",
+        xScale = "log",
         /** Drop the per-chart axis titles ("suboptimality f(x) − f*",
-         * "wall-clock time"). For multi-panel grids where the caller provides
+         * "time"). For multi-panel grids where the caller provides
          * shared labels around the grid edges. Tightens the left + bottom
          * padding too so the plot area gets the freed-up space. */
         compact = false,
@@ -23,6 +24,7 @@
         series: Series[];
         ariaLabel?: string;
         yLabel?: string;
+        xScale?: "log" | "linear";
         compact?: boolean;
         directLabels?: boolean;
     } = $props();
@@ -46,9 +48,7 @@
     // Minimum vertical gap between fanned-out end-of-line labels.
     const labelGap = 15;
 
-    // Log–log layout: x = log10(time), y = log10(suboptimality). The iter-0
-    // sample sits at t = 0, which has no log; it's clamped to the left edge so
-    // the initial objective value still shows.
+    // Logarithmic time clamps the initial sample at t = 0 to the left edge.
     const g = $derived.by(() => {
         const allT = series
             .flatMap((s) => s.points.map((p) => p.tNs))
@@ -60,6 +60,9 @@
         );
         const xSpan = xHi - xLo;
         const tFloor = 10 ** xLo;
+        const maxTime = Math.max(1, ...allT);
+        const timeUnit = 10 ** Math.floor(Math.log10(maxTime));
+        const timeLimit = Math.ceil(maxTime / timeUnit) * timeUnit;
 
         const allY = series
             .flatMap((s) => s.points.map((p) => p.subopt))
@@ -74,25 +77,39 @@
         const ySpan = yHi - yLo;
 
         const xPx = (t: number) =>
-            padL + ((Math.log10(Math.max(t, tFloor)) - xLo) / xSpan) * innerW;
+            padL +
+            (xScale === "linear"
+                ? t / timeLimit
+                : (Math.log10(Math.max(t, tFloor)) - xLo) / xSpan) *
+                innerW;
         const yPx = (s: number) =>
             axisY - ((Math.log10(s) - yLo) / ySpan) * innerH;
 
-        // x ticks at each decade of time, labeled as a duration. First and last
-        // tick labels use start and end anchors so they tuck inside the plot
-        // edges instead of centering past them and getting clipped.
+        // Edge anchors keep tick labels inside the plot.
         const xTicks: {
             x: number;
             label: string;
             anchor: "start" | "middle" | "end";
         }[] = [];
-        for (let k = xLo; k <= xHi; k++) {
-            const anchor = k === xLo ? "start" : k === xHi ? "end" : "middle";
-            xTicks.push({
-                x: xPx(10 ** k),
-                label: formatDuration(10 ** k).replace(/\.0+ /, " "),
-                anchor,
-            });
+        if (xScale === "linear") {
+            for (let i = 0; i <= 4; i++) {
+                const time = (i / 4) * timeLimit;
+                xTicks.push({
+                    x: xPx(time),
+                    label: String(Number((time / 1e6).toPrecision(6))),
+                    anchor: i === 0 ? "start" : i === 4 ? "end" : "middle",
+                });
+            }
+        } else {
+            for (let k = xLo; k <= xHi; k++) {
+                const anchor =
+                    k === xLo ? "start" : k === xHi ? "end" : "middle";
+                xTicks.push({
+                    x: xPx(10 ** k),
+                    label: formatDuration(10 ** k).replace(/\.0+ /, " "),
+                    anchor,
+                });
+            }
         }
 
         // y ticks at decades of suboptimality, thinned to ≤ ~7 labels so a wide
@@ -227,7 +244,7 @@
         >
     {/each}
 
-    <!-- x gridlines + labels (one per time decade) -->
+    <!-- x gridlines + labels -->
     {#each g.xTicks as t}
         <line
             class="stroke-stone-100 dark:stroke-stone-800"
@@ -278,7 +295,7 @@
             class="fill-stone-500 dark:fill-stone-400"
             x={padL + innerW / 2}
             y={H - 4}
-            text-anchor="middle">wall-clock time</text
+            text-anchor="middle">time{xScale === "linear" ? " (ms)" : ""}</text
         >
     {/if}
 

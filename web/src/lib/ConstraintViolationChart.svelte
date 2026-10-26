@@ -10,7 +10,7 @@
     let {
         series,
         tolerance,
-        ariaLabel = "Trial constraint violation against wall-clock time",
+        ariaLabel = "Trial constraint violation against time",
     }: {
         series: Series[];
         tolerance: number;
@@ -66,13 +66,9 @@
             toleranceY: y(tolerance),
             xTicks: Array.from({ length: 5 }, (_, i) => ({
                 x: x((i / 4) * timeLimit),
-                label:
-                    i === 0
-                        ? "0"
-                        : formatDuration((i / 4) * timeLimit).replace(
-                              /\.0+ /,
-                              " ",
-                          ),
+                label: String(
+                    Number((((i / 4) * timeLimit) / 1e6).toPrecision(6)),
+                ),
             })),
             yTicks: ticks.map((value) => ({
                 y: y(value),
@@ -203,7 +199,7 @@
         x={left + width / 2}
         y={H - 4}
         text-anchor="middle"
-        class="fill-stone-500 dark:fill-stone-400">wall-clock time</text
+        class="fill-stone-500 dark:fill-stone-400">time (ms)</text
     >
 </svg>
 <p class="mt-1 text-xs text-stone-500 dark:text-stone-400">
