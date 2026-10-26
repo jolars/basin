@@ -1,0 +1,126 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# Secant root finding
+
+Basin's secant method solves a scalar equation `f(x) = 0` using linear
+interpolation between recent samples. It preserves a sign-changing bracket
+and falls back to bisection when a proposal is unsafe or progress is slow.
+
+[API
+reference](https://docs.rs/basin/latest/basin/root/secant/struct.SecantRoot.html)
+
+  | Property    | Requirement                                               |
+  | ----------- | --------------------------------------------------------- |
+  | Equation    | A continuous, deterministic scalar function                |
+  | Evaluations | A fallible function-value callback                        |
+  | Search      | One root inside a supplied bracket                        |
+  | Interval    | Finite, strictly ordered endpoints with a sign change      |
+  | Parameters  | Scalar `f32` or `f64`, without optional features            |
+
+## When to use it
+
+Consider safeguarded secant iteration when you want a simple interpolation
+method without derivatives. It can accelerate a nearly linear root search
+while retaining the bracket. Compare [Brent](../brent/) or
+[TOMS 748](../toms748/) for higher-order interpolation, or
+[bisection](../bisection/) for predictable interval halving.
+
+This API always needs a bracket. Ordinary secant iteration starts from two
+guesses and can leave their interval; Basin's method checks the endpoint
+signs and safeguards each proposal. Roots of even multiplicity need an exact
+endpoint zero because their function values do not change sign.
+
+## How it works
+
+Given the two most recently evaluated points, the secant line proposes its
+zero as the next trial. For points `x₀` and `x₁`, this is
+`x₁ - f(x₁) * (x₁ - x₀) / (f(x₁) - f(x₀))`.
+
+The secant update follows [SciPy 1.16.3's `newton` routine without
+derivatives](#ref-scipy-2025-newton). Basin adds bracket preservation:
+non-finite, exterior, or non-advancing proposals become midpoint trials. If
+two trials fail to halve the bracket, the next trial is a bisection. Recent
+samples drive interpolation; the live bracket separately tracks enclosure.
+
+Each iteration evaluates one trial, updates the bracket by sign, and retains
+the evaluated endpoint with the smaller absolute residual as the result's
+estimate. An exact zero collapses the bracket immediately.
+
+## Example
+
+The positive zero of `x² - 2` is bracketed by `[0, 2]`. `Infallible` supplies
+the error type for this callback, which cannot fail.
+
+<!-- compile: root-secant -->
+```rust
+use basin::SecantRoot;
+use std::convert::Infallible;
+
+fn main() {
+    let result = SecantRoot::new(0.0, 2.0)
+        .with_absolute_position_tolerance(1e-10)
+        .with_max_iter(100)
+        .solve(|x| Ok::<_, Infallible>(x * x - 2.0))
+        .unwrap();
+
+    assert!(result.converged());
+    assert!((result.root() - 2.0_f64.sqrt()).abs() < 1e-10);
+    assert_eq!(result.value(), result.root() * result.root() - 2.0);
+    assert_eq!(result.callback_evals(), result.function_evals());
+}
+```
+
+## Practical considerations
+
+### Validate the interval and the function
+
+The endpoints must be finite and strictly ordered, with finite width. Their
+function values must have opposite signs unless one is exactly zero. All
+evaluated function values must be finite, and the function must be
+deterministic and continuous throughout the interval.
+
+[`RootBracketer`](https://docs.rs/basin/latest/basin/bracket/root/struct.RootBracketer.html)
+can discover an interval first; the [Brent example](../brent/#example) shows
+the two stages. A discontinuity can satisfy an endpoint sign test without
+enclosing a zero. Multiple enclosed roots do not select a particular solution.
+
+### Use bracket width to judge convergence
+
+Convergence requires an exact zero or a bracket width at most
+`absolute + relative * abs(root)`. A small secant step alone does not stop
+the search. The defaults are absolute position tolerance `1e-12` and relative
+position tolerance `4ε` for the selected scalar type.
+
+Set them with `with_absolute_position_tolerance` and
+`with_relative_position_tolerance`. The absolute value must be finite and
+positive, and the relative value must be finite and at least `4ε`; invalid
+settings panic. These are position tolerances. Inspect the signed `value()`
+separately if your application also requires a small residual.
+
+### Inspect the termination reason
+
+The default limit is 100 trial steps. `with_max_iter(0)` evaluates only the
+endpoints, stopping after the first if it is an exact root. An exhausted limit
+returns `Ok` with `RootTerminationReason::MaxIter`, so check `converged()` or
+`reason()` before accepting the estimate.
+
+Invalid intervals, missing sign changes, and non-finite function values
+return typed `RootError` variants. Callback errors are preserved in
+`RootError::Evaluation`.
+
+## Implementation
+
+Every `solve` starts afresh and reevaluates the endpoints. The direct callback
+API uses no optimization state or executor. `RootResult` keeps the estimate,
+its signed value, the final ordered bracket, termination, and work counts.
+`function_evals()` includes the endpoints and equals `callback_evals()`;
+derivative counts are zero.
+
+Scalar `f32` and `f64` work without a linear-algebra backend or optional
+feature, including on WASM. The safeguards and bracket-based stopping rule
+differ from SciPy's ordinary secant interface, so matching trajectories are
+not part of the API contract.
+
+<References entries={["scipy-2025-newton"]} />

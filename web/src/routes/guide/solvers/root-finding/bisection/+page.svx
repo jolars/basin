@@ -1,0 +1,125 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# Bisection root finding
+
+Bisection solves a scalar equation `f(x) = 0` by repeatedly halving an interval
+whose endpoint values have opposite signs. It needs only function values and
+gives a predictable reduction in bracket width at each step.
+
+[API
+reference](https://docs.rs/basin/latest/basin/root/bisection/struct.BisectionRoot.html)
+
+  | Property    | Requirement                                               |
+  | ----------- | --------------------------------------------------------- |
+  | Equation    | A continuous, deterministic scalar function                |
+  | Evaluations | A fallible function-value callback                        |
+  | Search      | One root inside a supplied bracket                        |
+  | Interval    | Finite, strictly ordered endpoints with a sign change      |
+  | Parameters  | Scalar `f32` or `f64`, without optional features            |
+
+## When to use it
+
+Consider bisection when you want a simple baseline with predictable progress,
+or when interpolation offers little benefit. For a continuous function and a
+valid bracket, each midpoint evaluation retains a half containing a root.
+[Brent](../brent/) and [TOMS 748](../toms748/) also preserve a bracket and
+can reduce the number of evaluations by interpolating.
+
+The endpoints must have opposite nonzero signs unless one is exactly a root.
+An interior root of even multiplicity, such as the zero of `(x - 1)^2`, cannot
+be isolated by a sign change. If several roots lie in the bracket, the method
+does not let you select which one it finds.
+
+## How it works
+
+At each step, bisection evaluates the midpoint of `[a, b]`. An exact zero ends
+the search immediately. Otherwise, the midpoint replaces the endpoint with
+the same sign, halving the interval up to floating-point rounding.
+
+Basin implements the interval-halving rule described in the [GNU Scientific
+Library manual](#ref-gsl-2024-roots). Its returned estimate is the evaluated
+endpoint with the smaller absolute function value. The GSL algorithm instead
+reports the midpoint of the remaining interval, which need not have been
+evaluated. Basin keeps the signed value at its estimate in `RootResult`.
+
+## Example
+
+The positive zero of `x² - 2` lies in `[0, 2]`. The solver accepts the interval
+directly and uses a fallible callback; no problem traits or executor are needed.
+
+<!-- compile: root-bisection -->
+```rust
+use basin::{BisectionRoot, RootTerminationReason};
+use std::convert::Infallible;
+
+fn main() {
+    let result = BisectionRoot::new(0.0, 2.0)
+        .with_absolute_position_tolerance(1e-10)
+        .with_max_iter(100)
+        .solve(|x| Ok::<_, Infallible>(x * x - 2.0))
+        .unwrap();
+
+    assert_eq!(result.reason(), RootTerminationReason::Converged);
+    assert!((result.root() - 2.0_f64.sqrt()).abs() < 1e-10);
+    assert_eq!(result.value(), result.root() * result.root() - 2.0);
+    let (lower, upper) = result.bracket();
+    assert!(lower <= result.root() && result.root() <= upper);
+}
+```
+
+## Practical considerations
+
+### Supply a bracket within the function's domain
+
+The endpoints and their difference must be finite, and `lower < upper`. The
+callback must return finite values wherever it is evaluated. A sign change
+across a discontinuity or pole does not establish the existence of a root.
+
+If the interval is unknown,
+[`RootBracketer`](https://docs.rs/basin/latest/basin/bracket/root/struct.RootBracketer.html)
+can search geometrically, with optional domain limits. Check `bracketed()`
+before passing its endpoints to the solver; see the [Brent
+example](../brent/#example). Bracketing and solving count their work separately.
+
+### Choose a position tolerance
+
+Convergence requires an exact zero or a bracket width at most
+`absolute + relative * abs(root)`. The defaults are `1e-12` for the absolute
+position tolerance and `4ε` for the relative tolerance, using the selected
+scalar type's machine epsilon. Use `with_absolute_position_tolerance` and
+`with_relative_position_tolerance` to change them.
+
+The absolute tolerance must be finite and positive, and the relative tolerance
+must be finite and at least `4ε`; invalid settings panic. These are position
+tolerances, so convergence does not promise a small `value()`. Inspect the
+residual when your application also needs an equation-value tolerance. With
+`f32`, the relative term usually limits useful accuracy away from zero.
+
+### Budget midpoint evaluations
+
+The default limit is 100 iterations, each evaluating one midpoint. Ignoring
+rounding, the width after `n` steps is the initial width divided by `2^n`.
+Allow enough steps for the initial width and requested accuracy.
+
+`with_max_iter(0)` evaluates only the endpoints, stopping after the lower
+endpoint if it is exactly a root. Exhausting the limit returns `Ok` with
+`RootTerminationReason::MaxIter`; inspect `converged()` or `reason()` before
+using the estimate. Invalid intervals, missing sign changes, non-finite
+function values, and application errors return typed `RootError` variants.
+
+## Implementation
+
+Each `solve` starts afresh and reevaluates the interval endpoints. `RootResult`
+retains the estimate, its signed value, the final ordered bracket, the
+termination reason, and work counts. `function_evals()` includes endpoint
+evaluations, and `callback_evals()` equals it for this value-only method.
+An exact zero collapses the bracket to that point.
+
+Scalar `f32` and `f64` work without a linear-algebra backend or optional
+feature, including on WASM. Reference checks use [SciPy 1.16.3
+`bisect`](#ref-scipy-2025-bisect). Stopping rules and returned estimates differ,
+so the checks compare initial trajectories and final accuracy.
+
+<References entries={["gsl-2024-roots", "scipy-2025-bisect"]} />

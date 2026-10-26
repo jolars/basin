@@ -21,9 +21,13 @@ const authorList = new Intl.ListFormat("en-US", {
     type: "conjunction",
 });
 
-export function formatAuthors(authors: Reference["author"]): string {
+type ReferenceAuthor = { family: string; given: string } | { literal: string };
+
+export function formatAuthors(authors: ReferenceAuthor[]): string {
     return authorList.format(
-        authors.map(({ family, given }) => {
+        authors.map((author) => {
+            if ("literal" in author) return author.literal;
+            const { family, given } = author;
             const initials = given
                 .split(/\s+/u)
                 .map((name) =>

@@ -1,0 +1,160 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# Newton root finding
+
+Newton's method solves a scalar equation `f(x) = 0` using its first derivative.
+Basin safeguards the derivative step with secant interpolation and bisection,
+preserving a sign-changing bracket throughout the search.
+
+[API
+reference](https://docs.rs/basin/latest/basin/root/newton/struct.NewtonRoot.html)
+
+  | Property    | Requirement                                               |
+  | ----------- | --------------------------------------------------------- |
+  | Equation    | A continuous, deterministic scalar function                |
+  | Evaluations | Function values and first derivatives                     |
+  | Search      | One root inside a supplied bracket, with an optional guess |
+  | Interval    | Finite, strictly ordered endpoints with a sign change      |
+  | Parameters  | Scalar `f32` or `f64`, without optional features            |
+
+## When to use it
+
+Consider Newton when an accurate first derivative is inexpensive, especially
+when it shares intermediate calculations with the function value. Near a
+simple root and with sufficient smoothness, Newton steps converge
+quadratically. Bracket safeguards can add work when the initial guess is far
+away or the derivative is poorly behaved.
+
+For value-only callbacks, compare [Brent](../brent/) or
+[TOMS 748](../toms748/). If second derivatives are also cheap, compare
+[Halley](../halley/). This scalar root API is separate from
+[trust-region Newton](../../trust-region/trust-region-newton/), which
+minimizes an objective using gradients and Hessians.
+
+## How it works
+
+The first trial is the bracket midpoint unless `with_initial_guess` supplies
+another interior point. Subsequent trials propose `x - f(x) / f'(x)`. A zero
+or non-finite first derivative disables that proposal. A proposal outside the
+bracket falls back to secant interpolation, then bisection if needed.
+
+If two trials fail to halve the bracket, the next trial is a bisection. Each
+iteration evaluates one trial, updates the bracket by sign, and tests the
+remaining interval. The returned estimate is the evaluated endpoint with the
+smaller absolute residual.
+
+The derivative method follows [Boost.Math 1.89.0's root-finding
+documentation](#ref-boost-2025-roots-deriv). Basin adds secant fallback and
+the two-trial contraction safeguard, and uses bracket width for convergence.
+
+## Example
+
+This callback computes `f(x)` and `f'(x)` together for `x² - 2`. The initial
+guess is strictly inside `[0, 2]`.
+
+<!-- compile: root-newton-combined -->
+```rust
+use basin::NewtonRoot;
+use std::convert::Infallible;
+
+fn main() {
+    let result = NewtonRoot::new(0.0, 2.0)
+        .with_initial_guess(1.0)
+        .with_absolute_position_tolerance(1e-10)
+        .with_max_iter(100)
+        .solve_combined(|x| Ok::<_, Infallible>((x * x - 2.0, 2.0 * x)))
+        .unwrap();
+
+    assert!(result.converged());
+    assert!((result.root() - 2.0_f64.sqrt()).abs() < 1e-10);
+    assert_eq!(result.function_evals(), result.callback_evals());
+    assert_eq!(result.derivative_evals(), result.callback_evals());
+    assert_eq!(result.second_derivative_evals(), 0);
+}
+```
+
+Use `solve` when the value and derivative are separate calculations. Both
+callbacks return the same application error type.
+
+<!-- compile: root-newton-separate -->
+```rust
+use basin::NewtonRoot;
+use std::convert::Infallible;
+
+fn main() {
+    let result = NewtonRoot::new(0.0, 2.0)
+        .solve(
+            |x| Ok::<_, Infallible>(x * x - 2.0),
+            |x| Ok(2.0 * x),
+        )
+        .unwrap();
+
+    assert!(result.converged());
+    assert!((result.root() - 2.0_f64.sqrt()).abs() < 1e-10);
+}
+```
+
+## Practical considerations
+
+### Keep the bracket and derivatives consistent
+
+The endpoints must be finite and strictly ordered, with finite width, and
+their values must have opposite signs unless one is exactly a root. The
+function must be deterministic and continuous, and finite at every evaluated
+point. Finite derivatives must describe that same function.
+
+An explicit initial guess must be finite and strictly inside the bracket.
+Invalid guesses return `RootError::InvalidInitialGuess` before any callback,
+even with a zero iteration limit. If you need to discover a bracket first,
+see the [automatic bracketing example](../brent/#example).
+
+### Distinguish bad derivatives from callback failures
+
+Zero or non-finite derivative values activate the safeguards. Non-finite
+function values are errors, and application errors from either callback are
+preserved in `RootError::Evaluation`. A callback that returns `Err` stops the
+solve; it does not request a fallback step.
+
+A bracket excludes most even-multiplicity roots because their function values
+do not change sign. With several roots inside the interval, the method does
+not promise to find the one nearest the initial guess.
+
+### Judge convergence by the bracket
+
+Convergence requires an exact zero or a bracket width at most
+`absolute + relative * abs(root)`. A small Newton step alone does not prove
+convergence, and a narrow bracket does not promise a small residual.
+Inspect the signed `value()` when residual accuracy also matters.
+
+The defaults are absolute position tolerance `1e-12`, relative position
+tolerance `4ε` for the scalar type, and 100 trial steps. The corresponding
+builders are `with_absolute_position_tolerance`,
+`with_relative_position_tolerance`, and `with_max_iter`. Absolute tolerance
+must be finite and positive, and relative tolerance must be finite and at
+least `4ε`; invalid tolerance settings panic.
+
+An iteration limit returns `Ok` with `RootTerminationReason::MaxIter`.
+Check `converged()` or `reason()`. A zero limit evaluates only the endpoints,
+stopping after the lower one if it is exactly a root.
+
+## Implementation
+
+Separate callbacks evaluate derivatives only when interpolation needs them,
+and cache them at the current point. `solve_combined` obtains and caches both
+quantities at each function evaluation, including the endpoints. Combining
+callbacks can share expensive work, but also computes derivatives at points
+where a separate callback would not need them.
+
+`RootResult` counts returned function values in `function_evals()` and first
+derivatives in `derivative_evals()`. `callback_evals()` counts actual callback
+invocations, so a combined value-and-derivative call counts once there. Compare
+callback cost alongside iteration counts when choosing an interface.
+
+Every solve starts with fresh history and endpoint evaluations. The result
+retains the estimate, its signed value, the final ordered bracket, and
+termination. Scalar `f32` and `f64` require no linear-algebra backend or
+optional feature and work on WASM.
+
+<References entries={["boost-2025-roots-deriv"]} />

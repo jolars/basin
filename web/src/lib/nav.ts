@@ -277,11 +277,30 @@ export const SOLVER_LINKS: DocsNavItem[] = [
     {
         label: "Root finding",
         children: [
-            solver("Brent", "brent-root"),
-            solver("Secant", "secant-root"),
-            solver("Newton", "newton-root"),
-            solver("Halley", "halley-root"),
-            solver("TOMS 748", "toms748-root"),
+            {
+                label: "Bisection",
+                href: "guide/solvers/root-finding/bisection/",
+            },
+            {
+                label: "Brent",
+                href: "guide/solvers/root-finding/brent/",
+            },
+            {
+                label: "Secant",
+                href: "guide/solvers/root-finding/secant/",
+            },
+            {
+                label: "Newton",
+                href: "guide/solvers/root-finding/newton/",
+            },
+            {
+                label: "Halley",
+                href: "guide/solvers/root-finding/halley/",
+            },
+            {
+                label: "TOMS 748",
+                href: "guide/solvers/root-finding/toms748/",
+            },
         ],
     },
 ];

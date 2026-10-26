@@ -194,6 +194,36 @@
             description:
                 "When to use the augmented Lagrangian method, how penalty and multiplier updates work, and how to check feasibility and stationarity in Basin, with references.",
         },
+        "/guide/solvers/root-finding/bisection": {
+            title: "Bisection root finding – Basin",
+            description:
+                "When to use bisection, how interval halving works, and how to configure root tolerances and interpret results in Basin, with references.",
+        },
+        "/guide/solvers/root-finding/brent": {
+            title: "Brent root finding – Basin",
+            description:
+                "When to use Brent root finding, how interpolation and bisection work, and how to discover a bracket and solve a scalar equation in Basin, with references.",
+        },
+        "/guide/solvers/root-finding/secant": {
+            title: "Secant root finding – Basin",
+            description:
+                "When to use safeguarded secant iteration, how bracket preservation works, and how to configure and run it in Basin, with references.",
+        },
+        "/guide/solvers/root-finding/newton": {
+            title: "Newton root finding – Basin",
+            description:
+                "When to use safeguarded Newton iteration, how derivative callbacks and fallback steps work, and how to configure and run it in Basin, with references.",
+        },
+        "/guide/solvers/root-finding/halley": {
+            title: "Halley root finding – Basin",
+            description:
+                "When to use safeguarded Halley iteration, how first and second derivatives guide the search, and how to configure and run it in Basin, with references.",
+        },
+        "/guide/solvers/root-finding/toms748": {
+            title: "TOMS 748 root finding – Basin",
+            description:
+                "When to use TOMS 748, how interpolation cycles contract a root bracket, and how to interpret tolerances and evaluation counts in Basin, with references.",
+        },
         "/guide/migrating-to-v3": {
             title: "Migrating to Basin 3.0 – Basin",
             description:

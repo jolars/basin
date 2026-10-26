@@ -1,0 +1,131 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# TOMS 748 root finding
+
+TOMS Algorithm 748 solves a scalar equation `f(x) = 0` using higher-order
+interpolation while contracting a sign-changing interval. It needs only
+function values; the polynomial calculations do not require user derivatives.
+
+[API
+reference](https://docs.rs/basin/latest/basin/root/toms748/struct.Toms748Root.html)
+
+  | Property    | Requirement                                               |
+  | ----------- | --------------------------------------------------------- |
+  | Equation    | A continuous, deterministic scalar function                |
+  | Evaluations | A fallible function-value callback                        |
+  | Search      | One root inside a supplied bracket                        |
+  | Interval    | Finite, strictly ordered endpoints with a sign change      |
+  | Parameters  | Scalar `f32` or `f64`, without optional features            |
+
+## When to use it
+
+Consider TOMS 748 for smooth scalar functions with expensive evaluations and
+a known bracket. Its interpolation cycles aim to reduce both root error and
+bracket width quickly. Compare [Brent](../brent/) using function-evaluation
+counts on your problem; an iteration has a different cost in the two methods.
+
+For a simple baseline, compare [bisection](../bisection/). If first or second
+derivatives are inexpensive, compare [Newton](../newton/) or
+[Halley](../halley/). All require a sign-changing interval or an exact
+endpoint root. An interior root of even multiplicity generally has no sign
+change, and several enclosed roots do not select a particular solution.
+
+## How it works
+
+Basin implements Algorithm 4.2 from [Alefeld, Potra, and Shi
+(1995)](#ref-alefeld-potra-shi-1995), with `k = 2` and `μ = 0.5`.
+A startup secant step is followed by cycles containing two inverse cubic or
+Newton-quadratic interpolations and a double-length secant step. If a cycle
+fails to halve the interval, bisection enforces the contraction.
+
+Newton-quadratic interpolation solves a polynomial model built from sampled
+values; it does not evaluate the function's derivative. Basin scales function
+values before interpolation. Repeated values, non-finite intermediate
+arithmetic, or exterior proposals lead to lower-order interpolation or
+bisection.
+
+Each accepted sample updates the bracket by sign. An exact zero collapses it
+immediately; otherwise, the returned estimate is the evaluated endpoint with
+the smaller absolute residual.
+
+## Example
+
+This value-only callback solves `x² - 2 = 0` on `[0, 2]`. The iteration limit
+counts startup and interpolation cycles, rather than individual callbacks.
+
+<!-- compile: root-toms748 -->
+```rust
+use basin::Toms748Root;
+use std::convert::Infallible;
+
+fn main() {
+    let result = Toms748Root::new(0.0, 2.0)
+        .with_absolute_position_tolerance(1e-10)
+        .with_max_iter(100)
+        .solve(|x| Ok::<_, Infallible>(x * x - 2.0))
+        .unwrap();
+
+    assert!(result.converged());
+    assert!((result.root() - 2.0_f64.sqrt()).abs() < 1e-10);
+    assert_eq!(result.value(), result.root() * result.root() - 2.0);
+    assert_eq!(result.function_evals(), result.callback_evals());
+}
+```
+
+## Practical considerations
+
+### Check the function contract
+
+The endpoints must be finite and strictly ordered, with finite width and
+opposite function signs unless one endpoint is exactly a root. The callback
+must be deterministic and continuous on the interval, and finite wherever
+evaluated. A sign change across a discontinuity does not establish a zero.
+
+If the bracket is unknown,
+[`RootBracketer`](https://docs.rs/basin/latest/basin/bracket/root/struct.RootBracketer.html)
+can search geometrically within optional limits. Check `bracketed()` before
+using its endpoints; the [Brent example](../brent/#example) shows the full
+sequence. Search and solve evaluation counts are separate.
+
+### Set position accuracy
+
+Convergence requires an exact zero or a bracket width at most
+`absolute + relative * abs(root)`. The defaults are absolute position
+tolerance `1e-12` and relative position tolerance `4ε` for the scalar type.
+Set them with `with_absolute_position_tolerance` and
+`with_relative_position_tolerance`.
+
+Absolute tolerance must be finite and positive, and relative tolerance must
+be finite and at least `4ε`; invalid tolerance settings panic. The bracket
+test controls position accuracy under the function contract. Inspect the
+signed `value()` separately if your application needs a residual tolerance.
+For `f32`, choose accuracy consistent with its larger machine epsilon.
+
+### Compare evaluations rather than iterations
+
+`iterations()` counts the startup step and subsequent cycles that evaluate
+at least one point. A full cycle can use four function evaluations and can
+stop early on convergence. The default limit of 100 iterations is therefore
+not a 100-evaluation budget. Use `function_evals()` to measure callback work.
+
+`with_max_iter(0)` evaluates only endpoints, stopping after the first if it
+is an exact root. Exhausting the limit returns `Ok` with
+`RootTerminationReason::MaxIter`; inspect `converged()` or `reason()` before
+using the estimate. Invalid intervals, missing sign changes, non-finite
+function values, and application errors return typed `RootError` variants.
+
+## Implementation
+
+Each `solve` starts afresh and reevaluates its endpoints. `RootResult`
+retains the estimate, signed value, final ordered bracket, termination reason,
+and work counts. `function_evals()` includes endpoints and equals
+`callback_evals()`; derivative counts are zero.
+
+Scalar `f32` and `f64` work without a linear-algebra backend or optional
+feature, including on WASM. Final-output reference checks use SciPy 1.16.3
+with `k = 2`. Floating-point safeguards and stopping rules differ, so general
+trajectory parity is not claimed.
+
+<References entries={["alefeld-potra-shi-1995"]} />

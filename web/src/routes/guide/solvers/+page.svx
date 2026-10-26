@@ -20,7 +20,7 @@ algorithm family.
 | Gradients and general nonlinear constraints | [SLSQP](general-constrained/slsqp/) | Solve local constrained subproblems using objective and constraint derivatives. |
 | Several local minima to explore | [CMA-ES](global-and-stochastic/cma-es/), [differential evolution](global-and-stochastic/de/), or [DIRECT](global-and-stochastic/direct/) | Search across a region; check whether the method needs sampling bounds or enforces constraints. |
 | One scalar variable to minimize | [Brent](#brent) or [golden-section search](#golden-section) | Start with an interval bracketing a minimum. |
-| A scalar equation to solve | [Brent root finding](#brent-root) or [TOMS 748](#toms748-root) | Start with a sign-changing bracket; these solve for a zero rather than minimize a cost. |
+| A scalar equation to solve | [Brent root finding](root-finding/brent/) or [TOMS 748](root-finding/toms748/) | Start with a sign-changing bracket; these solve for a zero rather than minimize a cost. |
 
 These choices are starting points for comparison. A local method depends on
 its starting point, and a global search does not guarantee that a finite run
@@ -523,30 +523,36 @@ For a scalar objective on a bracketed interval:
   `scipy.optimize.bisect`). Each iteration evaluates one midpoint. It returns
   the evaluated endpoint with the smaller absolute residual and uses Basin's
   bracket-width convergence rule.
+  [Read the bisection guide](root-finding/bisection/).
 - **<span id="brent-root"></span>[`BrentRoot`](https://docs.rs/basin/latest/basin/root/brent/struct.BrentRoot.html)**:
   bracketed scalar root finding by bisection, secant steps, and inverse
   quadratic interpolation (Brent, 1971). It uses a direct fallible-closure API
   rather than `Executor`, preserving the signed function value and final
   bracket in a root-specific result.
+  [Read the Brent root-finding guide](root-finding/brent/).
 - **<span id="secant-root"></span>[`SecantRoot`](https://docs.rs/basin/latest/basin/root/secant/struct.SecantRoot.html)**:
   secant iteration with bracket preservation and bisection safeguards (SciPy
   1.16.3, `scipy.optimize.newton`, secant update; Basin adds bracketing and
   bracket-based termination).
+  [Read the secant guide](root-finding/secant/).
 - **<span id="newton-root"></span>[`NewtonRoot`](https://docs.rs/basin/latest/basin/root/newton/struct.NewtonRoot.html)**:
   safeguarded Newton iteration using first derivatives (Boost.Math 1.89.0,
   "Root Finding With Derivatives: Newton-Raphson, Halley & Schroeder"; Basin
   adds secant fallback, a two-trial contraction safeguard, and bracket-based
   termination).
+  [Read the Newton root-finding guide](root-finding/newton/).
 - **<span id="halley-root"></span>[`HalleyRoot`](https://docs.rs/basin/latest/basin/root/halley/struct.HalleyRoot.html)**:
   safeguarded Halley iteration using first and second derivatives (Boost.Math
   1.89.0, "Root Finding With Derivatives: Newton-Raphson, Halley & Schroeder";
   Basin adds secant fallback, a two-trial contraction safeguard, and
   bracket-based termination).
+  [Read the Halley guide](root-finding/halley/).
 - **<span id="toms748-root"></span>[`Toms748Root`](https://docs.rs/basin/latest/basin/root/toms748/struct.Toms748Root.html)**:
   derivative-free bracketed root finding using Algorithm 4.2 (`k = 2`,
   `μ = 0.5`) from Alefeld, Potra, and Shi (1995), "Algorithm 748: Enclosing
   Zeros of Continuous Functions," _ACM Transactions on Mathematical Software_,
   21(3), 327–344, [doi:10.1145/210089.210111](https://doi.org/10.1145/210089.210111).
+  [Read the TOMS 748 guide](root-finding/toms748/).
 
 All six support scalar `f64` and `f32` without optional features, use direct
 fallible callbacks, and preserve signed function values and the final bracket.

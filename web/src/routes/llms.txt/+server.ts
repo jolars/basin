@@ -68,6 +68,12 @@ export function GET() {
 - [SLSQP](${guide}/solvers/general-constrained/slsqp/): constraint declarations, dense subproblems, convergence diagnostics, and a Rust example
 - [Barrier method](${guide}/solvers/general-constrained/barrier-method/): Phase I feasibility, log-barrier continuation, inner solver requirements, and a Rust example
 - [Augmented Lagrangian](${guide}/solvers/general-constrained/augmented-lagrangian-method/): linear equalities, multiplier and penalty updates, feasibility and stationarity, and a Rust example
+- [Bisection root finding](${guide}/solvers/root-finding/bisection/): interval halving, bracket requirements, position tolerances, and a Rust example
+- [Brent root finding](${guide}/solvers/root-finding/brent/): interpolation, bisection safeguards, automatic bracketing, and a Rust example
+- [Secant root finding](${guide}/solvers/root-finding/secant/): safeguarded secant steps, bracket contraction, position tolerances, and a Rust example
+- [Newton root finding](${guide}/solvers/root-finding/newton/): first derivatives, separate and combined callbacks, fallback steps, and Rust examples
+- [Halley root finding](${guide}/solvers/root-finding/halley/): first and second derivatives, separate and combined callbacks, safeguards, and Rust examples
+- [TOMS 748 root finding](${guide}/solvers/root-finding/toms748/): derivative-free interpolation cycles, bracket contraction, evaluation counts, and a Rust example
 
 ## Reference
 

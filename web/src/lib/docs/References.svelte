@@ -16,7 +16,9 @@
             <li id={`ref-${id}`}>
                 {formatAuthors(reference.author)}
                 ({reference.issued["date-parts"][0][0]}).
-                {#if reference.type === "book"}
+                {#if reference.type === "webpage"}
+                    <cite>{reference.title}</cite>. {reference.publisher}.
+                {:else if reference.type === "book"}
                     <cite>{reference.title}</cite>
                     {#if reference.edition}
                         ({formatEdition(reference.edition)})

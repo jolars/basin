@@ -1,0 +1,136 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# Brent root finding
+
+Brent's method solves a scalar equation `f(x) = 0` by combining interpolation
+with bisection. It uses only function values and retains a bracket throughout
+the search.
+
+[API
+reference](https://docs.rs/basin/latest/basin/root/brent/struct.BrentRoot.html)
+
+  | Property    | Requirement                                               |
+  | ----------- | --------------------------------------------------------- |
+  | Equation    | A continuous, deterministic scalar function                |
+  | Evaluations | A fallible function-value callback                        |
+  | Search      | One root inside a supplied bracket                        |
+  | Interval    | Finite, strictly ordered endpoints with a sign change      |
+  | Parameters  | Scalar `f32` or `f64`, without optional features            |
+
+## When to use it
+
+Consider Brent as a general starting point when you can bracket a scalar root
+and do not have derivatives. Interpolation can make it substantially faster
+than [bisection](../bisection/), while fallback steps preserve progress when
+the interpolation model is poor. Compare [TOMS 748](../toms748/) when function
+evaluations are expensive and the function is smooth.
+
+If reliable derivatives are cheap, compare [Newton](../newton/) or
+[Halley](../halley/). All of these Basin methods require a sign-changing
+interval, or an exact endpoint root. An even-multiplicity root generally has
+no sign change, and an interval with several roots does not select a
+particular one.
+
+## How it works
+
+[Brent (1971)](#ref-brent-1971) combines secant and inverse quadratic
+interpolation with interval halving. Basin keeps a sign-changing pair and
+recent evaluated points. Two distinct function values support a secant
+proposal; additional history permits inverse quadratic interpolation.
+
+The solver accepts interpolation only when its size and recent progress pass
+the safeguards. Otherwise, it bisects the current bracket. Each trial
+evaluates the function once and updates the interval. This combines fast
+local interpolation with the reliability of bracket reduction, provided the
+function satisfies the continuity contract.
+
+## Example
+
+This example first discovers a bracket for the positive zero of `x² - 2`.
+The initial interval `[0, 1]` does not bracket the root, so `RootBracketer`
+expands it while respecting the lower domain limit. Always check the bracket
+search result before starting the solve.
+
+<!-- compile: root-brent -->
+```rust
+use basin::{BrentRoot, RootBracketer};
+use std::convert::Infallible;
+
+fn main() {
+    let function = |x| Ok::<_, Infallible>(x * x - 2.0);
+    let search = RootBracketer::new(0.0, 1.0)
+        .with_lower_bound(0.0)
+        .bracket(function)
+        .unwrap();
+    assert!(search.bracketed());
+
+    let (lower, upper) = search.bracket();
+    let result = BrentRoot::new(lower, upper)
+        .with_absolute_position_tolerance(1e-10)
+        .with_max_iter(100)
+        .solve(function)
+        .unwrap();
+
+    assert!(result.converged());
+    assert!((result.root() - 2.0_f64.sqrt()).abs() < 1e-10);
+    assert_eq!(result.value(), result.root() * result.root() - 2.0);
+    let total_evaluations = search.function_evals() + result.function_evals();
+    assert!(total_evaluations > result.function_evals());
+}
+```
+
+If you already know a bracket, pass its endpoints directly to `BrentRoot::new`.
+The interval belongs to the root finder; it needs no `BoxBounds` declaration,
+optimization state, or `Executor`.
+
+## Practical considerations
+
+### Check continuity and domain limits
+
+The endpoints must be finite and strictly ordered, their difference must be
+finite, and their values must have opposite signs unless an endpoint is
+exactly a root. All evaluated function values must be finite. A sign change
+across a pole or jump can shrink the bracket without locating a zero.
+
+An automatic bracket search can skip roots of a nonmonotonic function.
+Use domain knowledge to choose seeds and optional search limits. Failure to
+find a bracket does not prove there is no root.
+
+### Set position accuracy and an iteration limit
+
+`with_absolute_position_tolerance` defaults to `1e-12`, and
+`with_relative_position_tolerance` defaults to `4ε` for the scalar type.
+Convergence requires an exact zero or a bracket width at most
+`absolute + relative * abs(root)`. These settings bound position error under
+the function contract; inspect `value()` separately if residual size matters.
+
+The absolute tolerance must be finite and positive, and the relative tolerance
+must be finite and at least `4ε`. Invalid tolerance settings panic. For `f32`,
+choose accuracy consistent with its larger machine epsilon.
+
+The default limit is 100 evaluated trial steps. `with_max_iter(0)` still
+checks the endpoint values, stopping early on an exact lower-endpoint root.
+Reaching the limit returns a clean `RootResult` with reason `MaxIter`.
+Check `converged()` or `reason()` before treating the estimate as a solution.
+
+### Handle typed errors
+
+Brent returns `BrentRootError<E, F>`, where `E` is the callback's error type.
+Its variants distinguish an invalid interval, a missing sign change, a
+non-finite function value, and an application error preserved in `Evaluation`.
+The other root solvers use `RootError<E, F>`.
+
+## Implementation
+
+`RootResult` retains the root estimate, its signed function value, the final
+ordered bracket, the termination reason, and work counts. Each `solve` starts
+fresh. Bracket discovery and solving reevaluate their own endpoints, so add
+both stages' `function_evals()` when measuring the complete search.
+
+For Brent, `callback_evals()` equals `function_evals()`, including endpoint
+evaluations; derivative counts are zero. Scalar `f32` and `f64` require no
+linear-algebra backend or optional feature and work on WASM.
+
+<References entries={["brent-1971"]} />

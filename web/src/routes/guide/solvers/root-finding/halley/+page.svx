@@ -1,0 +1,165 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# Halley root finding
+
+Halley's method solves a scalar equation `f(x) = 0` using first and second
+derivatives. Basin guards its correction and falls back through Newton,
+secant interpolation, and bisection while preserving a sign-changing bracket.
+
+[API
+reference](https://docs.rs/basin/latest/basin/root/halley/struct.HalleyRoot.html)
+
+  | Property    | Requirement                                               |
+  | ----------- | --------------------------------------------------------- |
+  | Equation    | A continuous, deterministic scalar function                |
+  | Evaluations | Function values, first derivatives, and second derivatives |
+  | Search      | One root inside a supplied bracket, with an optional guess |
+  | Interval    | Finite, strictly ordered endpoints with a sign change      |
+  | Parameters  | Scalar `f32` or `f64`, without optional features            |
+
+## When to use it
+
+Consider Halley when accurate first and second derivatives are cheap, or
+when all three quantities share substantial computation. Near a simple root
+and with sufficient smoothness, Halley steps converge cubically. The
+additional derivative cost can outweigh the reduction in trial evaluations.
+
+Compare [Newton](../newton/) when only a first derivative is economical.
+For value-only callbacks, compare [Brent](../brent/) or
+[TOMS 748](../toms748/). All of these Basin methods need a bracket; Halley
+does not expose an unbracketed polishing mode.
+
+## How it works
+
+The first trial is the bracket midpoint or the point supplied by
+`with_initial_guess`. With `delta = f(x) / f'(x)`, Halley proposes
+`x - delta / (1 - delta * f''(x) / (2 * f'(x)))`.
+
+Basin uses the second-derivative correction only when its magnitude is less
+than one, preventing it from reversing the Newton direction. An unusable
+correction leaves the Newton proposal available. Zero or non-finite first
+derivatives disable derivative interpolation; unsafe proposals fall back
+through secant interpolation to bisection.
+
+If two trials fail to halve the bracket, the next trial is a bisection. One
+iteration evaluates one trial and updates the bracket by sign. These rules
+extend the method described in [Boost.Math 1.89.0's derivative root-finding
+documentation](#ref-boost-2025-roots-deriv) with secant fallback, the
+contraction safeguard, and bracket-based stopping.
+
+## Example
+
+For `x³ - 2`, the callback returns the function value, first derivative, and
+second derivative in that order. A combined callback can share intermediate
+calculations such as `x²`.
+
+<!-- compile: root-halley-combined -->
+```rust
+use basin::HalleyRoot;
+use std::convert::Infallible;
+
+fn main() {
+    let result = HalleyRoot::new(0.0, 2.0)
+        .with_initial_guess(1.0)
+        .with_absolute_position_tolerance(1e-10)
+        .with_max_iter(100)
+        .solve_combined(|x| {
+            let square = x * x;
+            Ok::<_, Infallible>((square * x - 2.0, 3.0 * square, 6.0 * x))
+        })
+        .unwrap();
+
+    assert!(result.converged());
+    assert!((result.root() - 2.0_f64.cbrt()).abs() < 1e-10);
+    assert_eq!(result.function_evals(), result.callback_evals());
+    assert_eq!(result.derivative_evals(), result.callback_evals());
+    assert_eq!(result.second_derivative_evals(), result.callback_evals());
+}
+```
+
+Alternatively, `solve` accepts three separate fallible callbacks with the
+same application error type.
+
+<!-- compile: root-halley-separate -->
+```rust
+use basin::HalleyRoot;
+use std::convert::Infallible;
+
+fn main() {
+    let result = HalleyRoot::new(0.0, 2.0)
+        .solve(
+            |x| Ok::<_, Infallible>(x * x * x - 2.0),
+            |x| Ok(3.0 * x * x),
+            |x| Ok(6.0 * x),
+        )
+        .unwrap();
+
+    assert!(result.converged());
+    assert!((result.root() - 2.0_f64.cbrt()).abs() < 1e-10);
+}
+```
+
+## Practical considerations
+
+### Supply a valid bracket and derivatives
+
+The function must be deterministic and continuous on the interval, with
+finite values at every evaluated point. Endpoints must be finite and strictly
+ordered, with finite width and opposite signs unless one is exactly a root.
+Finite derivatives must describe that function. See the [Brent
+example](../brent/#example) to discover a bracket with `RootBracketer`.
+
+An explicit initial guess must be finite and strictly inside the interval.
+Invalid guesses return `RootError::InvalidInitialGuess` before any callback,
+even with a zero iteration limit. Several enclosed roots do not select a
+particular solution, and an even-multiplicity root generally cannot be
+bracketed by a sign change.
+
+### Distinguish safeguards from errors
+
+Non-finite derivative values disable the affected proposal. A zero first
+derivative also prevents a derivative step; a zero second derivative simply
+leaves the Newton step. A non-finite function value returns
+`RootError::NonFiniteValue`.
+
+Errors from any callback stop the solve and are preserved in
+`RootError::Evaluation`. Return a non-finite derivative only when the value
+is unavailable numerically and a fallback is appropriate; an application
+failure should remain an error.
+
+### Set position tolerances and check termination
+
+Convergence requires an exact zero or a bracket width at most
+`absolute + relative * abs(root)`. A small Halley step alone does not stop
+the search. Inspect the signed `value()` if residual size also matters.
+
+Defaults are absolute position tolerance `1e-12`, relative position tolerance
+`4ε` for the scalar type, and 100 trial steps. Set them with
+`with_absolute_position_tolerance`, `with_relative_position_tolerance`, and
+`with_max_iter`. Absolute tolerance must be finite and positive, and relative
+tolerance must be finite and at least `4ε`; invalid tolerance settings panic.
+
+An exhausted limit returns `Ok` with `RootTerminationReason::MaxIter`.
+Check `converged()` or `reason()`. A zero limit evaluates only endpoints,
+stopping after the lower one if it is exactly a root.
+
+## Implementation
+
+With separate callbacks, derivatives are evaluated only when interpolation
+needs them and are cached at the current point. A combined callback computes
+and caches all three quantities at each function evaluation, including the
+endpoints. Choose the interface by the cost of shared work and unnecessary
+derivative evaluations.
+
+`function_evals()`, `derivative_evals()`, and `second_derivative_evals()` count
+the quantities returned by callbacks. `callback_evals()` counts invocations,
+so a combined evaluation increments each quantity count but invokes the
+callback only once. Each `solve` starts with fresh history and endpoint work.
+
+`RootResult` retains the estimate, its signed value, the final ordered bracket,
+termination, and counts. Scalar `f32` and `f64` work without a linear-algebra
+backend or optional feature, including on WASM.
+
+<References entries={["boost-2025-roots-deriv"]} />

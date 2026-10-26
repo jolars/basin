@@ -890,5 +890,69 @@
         "issued": { "date-parts": [[2004]] },
         "publisher": "Cambridge University Press",
         "URL": "https://web.stanford.edu/~boyd/cvxbook/"
+    },
+    {
+        "id": "gsl-2024-roots",
+        "type": "webpage",
+        "title": "GNU Scientific Library Reference Manual: One Dimensional Root-Finding",
+        "author": [{ "literal": "GNU Scientific Library contributors" }],
+        "issued": { "date-parts": [[2024]] },
+        "publisher": "GNU Project",
+        "URL": "https://www.gnu.org/software/gsl/doc/html/roots.html#root-bracketing-algorithms"
+    },
+    {
+        "id": "scipy-2025-bisect",
+        "type": "webpage",
+        "title": "scipy.optimize.bisect (SciPy 1.16.3)",
+        "author": [{ "literal": "SciPy contributors" }],
+        "issued": { "date-parts": [[2025]] },
+        "publisher": "SciPy",
+        "URL": "https://github.com/scipy/scipy/blob/v1.16.3/scipy/optimize/_zeros_py.py#L496"
+    },
+    {
+        "id": "brent-1971",
+        "type": "article-journal",
+        "title": "An algorithm with guaranteed convergence for finding a zero of a function",
+        "author": [{ "family": "Brent", "given": "Richard P." }],
+        "issued": { "date-parts": [[1971]] },
+        "container-title": "The Computer Journal",
+        "volume": "14",
+        "issue": "4",
+        "page": "422-425",
+        "DOI": "10.1093/comjnl/14.4.422"
+    },
+    {
+        "id": "scipy-2025-newton",
+        "type": "webpage",
+        "title": "scipy.optimize.newton (SciPy 1.16.3)",
+        "author": [{ "literal": "SciPy contributors" }],
+        "issued": { "date-parts": [[2025]] },
+        "publisher": "SciPy",
+        "URL": "https://github.com/scipy/scipy/blob/v1.16.3/scipy/optimize/_zeros_py.py#L109"
+    },
+    {
+        "id": "boost-2025-roots-deriv",
+        "type": "webpage",
+        "title": "Root Finding With Derivatives: Newton-Raphson, Halley & Schroeder (Boost.Math 1.89.0)",
+        "author": [{ "literal": "Boost.Math contributors" }],
+        "issued": { "date-parts": [[2025]] },
+        "publisher": "Boost",
+        "URL": "https://www.boost.org/doc/libs/1_89_0/libs/math/doc/html/math_toolkit/roots_deriv.html"
+    },
+    {
+        "id": "alefeld-potra-shi-1995",
+        "type": "article-journal",
+        "title": "Algorithm 748: Enclosing Zeros of Continuous Functions",
+        "author": [
+            { "family": "Alefeld", "given": "G. E." },
+            { "family": "Potra", "given": "Florian A." },
+            { "family": "Shi", "given": "Yixun" }
+        ],
+        "issued": { "date-parts": [[1995]] },
+        "container-title": "ACM Transactions on Mathematical Software",
+        "volume": "21",
+        "issue": "3",
+        "page": "327-344",
+        "DOI": "10.1145/210089.210111"
     }
 ]
