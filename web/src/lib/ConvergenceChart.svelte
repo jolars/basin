@@ -1,6 +1,6 @@
 <script lang="ts">
     import { formatDuration } from "./data/benchmarks";
-    import { placeLabels } from "./labelPlacement";
+    import { placeLineLabels } from "./lineLabels";
 
     type Point = { tNs: number; subopt: number };
     type Series = { label: string; color: string; points: Point[] };
@@ -15,10 +15,8 @@
          * shared labels around the grid edges. Tightens the left + bottom
          * padding too so the plot area gets the freed-up space. */
         compact = false,
-        /** Label each line directly at its end (directlabels' "angled.boxes" style)
-         * instead of relying on a separate legend. Suited to roomy charts with a
-         * handful of lines; leave off for dense tiny-multiples. Widens the right
-         * padding to give the labels room. */
+        /** Place angled boxes along the curves, where other lines and labels
+         * leave room. Suited to a handful of lines in a roomy chart. */
         directLabels = false,
     }: {
         series: Series[];
@@ -32,11 +30,8 @@
     // Static viewBox; the SVG scales to its container via `w-full h-auto`.
     const W = 380;
     const H = 264;
-    // Right and top need a bit of breathing room so the rightmost or topmost tick
-    // labels don't bump against the viewBox edge (the last x label, e.g. "20 ms",
-    // also uses an `end` text-anchor below so it tucks inside the plot edge).
-    // `directLabels` widens the right margin to hold the fanned-out labels.
-    const padR = $derived(directLabels ? 80 : 20);
+    // Edge anchors keep the outermost tick labels inside the viewBox.
+    const padR = 20;
     const padT = 16;
     // Left and bottom padding depend on `compact` so they react if the prop flips.
     // Bumped slightly to give the widest y label ("1e-10") clearance on the left.
@@ -45,8 +40,6 @@
     const innerW = $derived(W - padL - padR);
     const innerH = $derived(H - padT - padB);
     const axisY = $derived(padT + innerH);
-    // Minimum vertical gap between fanned-out end-of-line labels.
-    const labelGap = 15;
 
     // Logarithmic time clamps the initial sample at t = 0 to the left edge.
     const g = $derived.by(() => {
@@ -123,96 +116,24 @@
         const lines = series.map((s) => {
             const pts = [...s.points]
                 .sort((a, b) => a.tNs - b.tNs)
-                .map((p) => ({ cx: xPx(p.tNs), cy: yPx(p.subopt) }));
+                .map((p) => ({ x: xPx(p.tNs), y: yPx(p.subopt) }));
             const d = pts
                 .map(
                     (p, i) =>
-                        `${i ? "L" : "M"}${p.cx.toFixed(1)},${p.cy.toFixed(1)}`,
+                        `${i ? "L" : "M"}${p.x.toFixed(1)},${p.y.toFixed(1)}`,
                 )
                 .join(" ");
-            const end = pts[pts.length - 1];
-            const prev = pts[pts.length - 2] ?? end;
-            return { label: s.label, color: s.color, d, end, prev };
+            return { label: s.label, color: s.color, d, points: pts };
         });
 
-        // End-of-line labels (opt-in), directlabels' "angled.boxes" style with
-        // graceful collision handling. Each label wants to ride its line: sit just
-        // past the endpoint, tilted to the final slope, on a backing box. But
-        // convergence traces bottom out at the suboptimality floor at different
-        // times, so endpoints cluster; we de-overlap the anchor y's with the shared
-        // minimal-displacement placer. A label the placer left alone rides its line;
-        // one it had to move fans into the right-margin column with a leader back to
-        // its endpoint.
-        type Label = {
-            text: string;
-            color: string;
-            x: number;
-            y: number;
-            w: number;
-            transform: string | null;
-            leader: string | null;
-        };
-        let labels: Label[] = [];
-        if (directLabels) {
-            const tiltCap = (22 * Math.PI) / 180;
-            const off = 8;
-            const ends = lines
-                .filter((l) => l.end)
-                .map((l) => {
-                    const ang = Math.max(
-                        -tiltCap,
-                        Math.min(
-                            tiltCap,
-                            Math.atan2(
-                                l.end.cy - l.prev.cy,
-                                l.end.cx - l.prev.cx,
-                            ),
-                        ),
-                    );
-                    return {
-                        text: l.label,
-                        color: l.color,
-                        ex: l.end.cx,
-                        ey: l.end.cy,
-                        ang,
-                    };
-                });
-            const ys = placeLabels(
-                ends.map((e) => e.ey),
-                labelGap,
-                padT,
-                axisY,
-            );
-            const colX = padL + innerW + 6;
-            labels = ends.map((e, i) => {
-                const w = e.text.length * 6.7 + 6;
-                if (Math.abs(ys[i] - e.ey) <= 1.5) {
-                    const x = e.ex + Math.cos(e.ang) * off;
-                    const y = e.ey + Math.sin(e.ang) * off;
-                    const deg = (e.ang * 180) / Math.PI;
-                    return {
-                        text: e.text,
-                        color: e.color,
-                        x,
-                        y,
-                        w,
-                        transform: `rotate(${deg.toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)})`,
-                        leader: null,
-                    };
-                }
-                const x = colX;
-                const y = ys[i];
-                return {
-                    text: e.text,
-                    color: e.color,
-                    x,
-                    y,
-                    w,
-                    transform: null,
-                    leader: `M${e.ex.toFixed(1)},${e.ey.toFixed(1)} L${(x - 3).toFixed(1)},${y.toFixed(1)}`,
-                };
-            });
-        }
+        const labels = directLabels
+            ? placeLineLabels(lines, {
+                  left: padL,
+                  right: padL + innerW,
+                  top: padT,
+                  bottom: axisY,
+              })
+            : [];
 
         return { xTicks, yTicks, lines, labels };
     });
@@ -309,36 +230,35 @@
         />
     {/each}
 
-    <!-- end-of-line labels (opt-in, directlabels' "angled.boxes" style): each
-         rides its line's slope where there's room, else fans into the right
-         margin with a leader back to its endpoint -->
+    <!-- Boxes follow the local slope and use open space along each curve. -->
     {#each g.labels as label}
         {#if label.leader}
-            <path
-                d={label.leader}
-                fill="none"
+            <line
+                x1={label.anchor.x}
+                y1={label.anchor.y}
+                x2={label.leader.x}
+                y2={label.leader.y}
                 stroke-width="1"
-                stroke-opacity="0.45"
-                style="stroke: {label.color}"
+                style:stroke={label.color}
             />
         {/if}
-        <g transform={label.transform}>
+        <g
+            font-size="11"
+            transform={`translate(${label.x} ${label.y}) rotate(${(label.angle * 180) / Math.PI})`}
+        >
             <rect
-                class="fill-white dark:fill-stone-950"
-                x={label.x - 3}
-                y={label.y - 8}
-                width={label.w}
-                height="16"
-                rx="3"
-                opacity="0.85"
+                class="fill-white stroke-stone-400 dark:fill-stone-950 dark:stroke-stone-500"
+                x={-label.width / 2}
+                y={-label.height / 2}
+                width={label.width}
+                height={label.height}
+                stroke-width="0.6"
+                rx="1"
             />
             <text
-                x={label.x}
-                y={label.y}
-                text-anchor="start"
-                dominant-baseline="middle"
-                font-weight="600"
-                style="fill: {label.color}">{label.text}</text
+                text-anchor="middle"
+                dominant-baseline="central"
+                style:fill={label.color}>{label.label}</text
             >
         </g>
     {/each}
