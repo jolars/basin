@@ -1,0 +1,162 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# Trust-region reflective
+
+Trust-region reflective (TRF) minimizes nonlinear least-squares objectives with
+box bounds. It combines distance-to-bound scaling, an explicit trust radius,
+reflected trial steps, and a rank-aware dense SVD solve.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/trust_region_reflective/struct.TrustRegionReflective.html)
+
+  | Property    | Requirement                                                  |
+  | ----------- | ------------------------------------------------------------ |
+  | Objective   | A smooth sum of squared residuals, or an adapted robust loss |
+  | Evaluations | `Residual` and `Jacobian`                                    |
+  | Search      | Local, from one starting point                               |
+  | Constraints | Box bounds only                                              |
+  | Parameters  | All four dense backends, with `f32` or `f64`                 |
+
+## When to use it
+
+Consider TRF for small and medium dense bounded fits, especially when the
+Jacobian may be rank deficient or some parameters must be fixed. For sparse
+Jacobians, compare [bounded LM](../bounded-levenberg-marquardt/).
+
+The scaling follows [Branch, Coleman, and Li
+(1999)](#ref-branch-coleman-li-1999), with trust-region parameter selection
+related to [Moré (1978)](#ref-more-1978). Candidate selection and radius updates
+follow SciPy's dense TRF variant. This is a local method; bound-aware steps do
+not ensure a global minimum.
+
+## How it works
+
+The solver scales free coordinates by their distance to the relevant bound and
+adds a nonnegative curvature correction to the linear residual model. A
+pure-Rust one-sided Jacobi SVD factors the augmented model directly, without
+forming normal equations. Singular directions below the rank cutoff are omitted.
+The minimum-norm Gauss–Newton step is used when it fits inside the radius;
+otherwise a safeguarded secular solve limits its length.
+
+When a proposed step meets a bound, the solver compares a truncated step, a
+first-boundary reflection, and a scaled-gradient step. It accepts finite
+objective decreases and updates the radius using actual versus predicted
+reduction. Rejected trials reuse the factorization. Finite equal bounds fix
+coordinates, which are eliminated internally.
+
+## Example
+
+The unconstrained residual minimum is `[3.0, 2.0]`, outside the declared box.
+The bounded solution is `[2.0, 2.0]` and has cost `0.5`.
+
+<!-- compile: solver-trust-region-reflective -->
+```rust
+use basin::{
+    BoxBounds, Constrained, ConstraintSet, DenseMatrix, Executor, Jacobian,
+    Residual, TrustRegionReflective,
+};
+use std::convert::Infallible;
+
+struct Fit;
+
+impl Residual for Fit {
+    type Param = Vec<f64>;
+    type Output = Vec<f64>;
+    type Error = Infallible;
+
+    fn residual(&self, x: &Self::Param) -> Result<Self::Output, Self::Error> {
+        Ok(vec![x[0] - 3.0, 2.0 * (x[1] - 2.0)])
+    }
+}
+
+impl Jacobian for Fit {
+    type Jacobian = DenseMatrix;
+
+    fn jacobian(&self, _: &Self::Param) -> Result<Self::Jacobian, Self::Error> {
+        Ok(DenseMatrix::from_row_slice(2, 2, &[1.0, 0.0, 0.0, 2.0]))
+    }
+}
+
+fn main() {
+    let solver = TrustRegionReflective::new()
+        .with_absolute_scaled_gradient_tolerance(1e-8);
+    let constraints = ConstraintSet::new().with_bounds(BoxBounds::new(
+        Some(vec![0.0, 0.0]),
+        Some(vec![2.0, 4.0]),
+    ));
+    let problem = Constrained::new(Fit, constraints);
+    let result = Executor::from_start(problem, solver, vec![0.5, 0.5])
+        .max_iter(100)
+        .run()
+        .unwrap();
+
+    assert!((result.param()[0] - 2.0).abs() < 1e-6);
+    assert!((result.param()[1] - 2.0).abs() < 1e-6);
+    assert!((result.cost() - 0.5).abs() < 1e-6);
+}
+```
+
+## Practical considerations
+
+### Declare the complete box
+
+Attach a box-only constraint declaration to the residual problem. Finite starts
+are projected strictly inside free intervals. Equal finite bounds fix a
+parameter; an all-fixed problem evaluates residuals once and finishes without a
+Jacobian. Signed infinite bounds are supported. Bounds and residual dimensions
+must remain fixed during a solve.
+
+Use `BoundedFiniteDiff` when numerical Jacobians must respect bounds. Invalid
+shapes, reversed or NaN bounds, non-finite starts, and invalid settings panic. A
+free interval without a representable interior fails before any callback.
+
+### Interpret rank and stopping settings
+
+`with_rank_tolerance` controls which singular directions the dense solve
+retains. Storage is `O(mn + n²)` for `m` residuals and `n` parameters; there is
+no sparse or large-scale subspace path.
+
+`with_absolute_scaled_gradient_tolerance` tests `max |v ⊙ Jᵀr|` over free
+coordinates, with default `1e-8`. This metric accounts for bounds but remains
+sensitive to units. Optional observed cost and step checks combine with OR and
+inspect accepted iterates. Small changes alone do not certify stationarity.
+
+Non-finite trial residuals cause rejection and radius contraction. Numerical
+breakdowns or exhausted retries produce `SolverFailed`; an unchanged trial after
+finite equal-cost rejection can produce `NumericalNoProgress`. Inspect the
+report, feasibility, and fit quality, and keep budgets on the executor.
+
+## Implementation
+
+Trust-region reflective publishes matching parameters and cost through
+`PointState`. It computes the gradient internally; the state does not expose it
+through `GradientState`. Residuals, Jacobians, and model caches belong to the
+solver. Fresh runs reset them, while exact solver-and-state checkpoints retain
+them.
+
+For ordinary residuals, the reported cost is `0.5 * sum(r[i]^2)`. The solver
+requires `Residual` and `Jacobian`, without a `CostFunction` implementation.
+Wrapping the problem in
+[`RobustLeastSquares`](https://docs.rs/basin/latest/basin/core/least_squares/struct.RobustLeastSquares.html)
+selects a robust loss and residual scale. The adapter supplies a safeguarded
+model, while costs and convergence use the robust objective and its gradient.
+Custom Jacobians additionally need `ScaleRowsInPlace` for robust losses.
+
+Supported dense pairs are `Vec<F>`/`DenseMatrix<F>`,
+`nalgebra::DVector<F>`/`DMatrix<F>`, `ndarray::Array1<F>`/`Array2<F>`, and
+`faer::Col<F>`/`Mat<F>`, with `F = f32` or `f64`. The default `Vec` path needs
+no BLAS/LAPACK provider.
+
+All backends share the internal dense SVD kernel through entry access. Sparse
+Jacobians are unsupported. Use `Executor::run_with_solver` to retain the solver
+and inspect native convergence diagnostics, including whether an all-fixed
+problem caused termination.
+
+Reference comparisons use [SciPy 1.16.2's dense
+TRF](https://github.com/scipy/scipy/blob/v1.16.2/scipy/optimize/_lsq/trf.py).
+Fixed-coordinate elimination and minimum-norm interior steps under rank
+deficiency are Basin extensions; trajectories need not agree.
+
+<References entries={["branch-coleman-li-1999", "more-1978"]} />

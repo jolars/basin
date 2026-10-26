@@ -143,19 +143,36 @@ export const SOLVER_LINKS: DocsNavItem[] = [
     },
     {
         label: "Trust-region",
-        children: [solver("Trust-region Newton", "trust-region-newton")],
+        children: [
+            {
+                label: "Trust-region Newton",
+                href: "guide/solvers/trust-region/trust-region-newton/",
+            },
+        ],
     },
     {
         label: "Nonlinear least squares",
         children: [
-            solver("Gauss–Newton", "gauss-newton"),
-            solver("Levenberg–Marquardt", "levenberg-marquardt"),
-            solver("Levenberg–Marquardt QR", "levenberg-marquardt-qr"),
-            solver(
-                "Bounded Levenberg–Marquardt",
-                "bounded-levenberg-marquardt",
-            ),
-            solver("Trust-region reflective", "trust-region-reflective"),
+            {
+                label: "Gauss–Newton",
+                href: "guide/solvers/nonlinear-least-squares/gauss-newton/",
+            },
+            {
+                label: "Levenberg–Marquardt",
+                href: "guide/solvers/nonlinear-least-squares/levenberg-marquardt/",
+            },
+            {
+                label: "Levenberg–Marquardt QR",
+                href: "guide/solvers/nonlinear-least-squares/levenberg-marquardt-qr/",
+            },
+            {
+                label: "Bounded Levenberg–Marquardt",
+                href: "guide/solvers/nonlinear-least-squares/bounded-levenberg-marquardt/",
+            },
+            {
+                label: "Trust-region reflective",
+                href: "guide/solvers/nonlinear-least-squares/trust-region-reflective/",
+            },
         ],
     },
     {

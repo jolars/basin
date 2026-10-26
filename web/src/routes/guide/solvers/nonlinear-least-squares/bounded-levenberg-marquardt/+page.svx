@@ -1,0 +1,152 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# Bounded Levenberg–Marquardt
+
+Bounded Levenberg–Marquardt combines damped normal equations with Coleman–Li box
+scaling. It takes strictly feasible steps and adapts damping with Nielsen's
+gain-ratio update.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/bounded_levenberg_marquardt/struct.BoundedLevenbergMarquardt.html)
+
+  | Property    | Requirement                                                         |
+  | ----------- | ------------------------------------------------------------------- |
+  | Objective   | A smooth sum of squared residuals, or an adapted robust loss        |
+  | Evaluations | `Residual` and `Jacobian`                                           |
+  | Search      | Local, from one starting point                                      |
+  | Constraints | Box bounds only                                                     |
+  | Parameters  | All four dense backends, with `f32` or `f64`; also sparse Jacobians |
+
+## When to use it
+
+Consider bounded LM for a nonlinear least-squares fit with box bounds,
+particularly when you need sparse Jacobians. For dense problems needing
+reflected steps, an explicit trust radius, or fixed-parameter elimination,
+compare [trust-region reflective](../trust-region-reflective/).
+
+The bound scaling follows [Branch, Coleman, and Li
+(1999)](#ref-branch-coleman-li-1999). Basin combines it with LM damping rather
+than implementing the paper's complete STIR algorithm. As with unconstrained LM,
+the starting point determines which local solution the solver approaches.
+
+## How it works
+
+At each iterate, Coleman–Li scaling measures distance to the bound in the
+descent direction and supplies a diagonal curvature correction. The solver adds
+this correction and damping to `JᵀJ`, then solves the scaled normal equations by
+Cholesky.
+
+A step that would leave the box is shortened to stay strictly inside it. Damping
+changes according to the gain ratio using the smooth Nielsen update. There is no
+reflected step or explicit trust-region radius. This differs from [unconstrained
+LM](../levenberg-marquardt/), whose default damping strategy uses a scaled
+radius.
+
+## Example
+
+The unconstrained residual minimum is `[3.0, 2.0]`, outside the declared box.
+The bounded solution is `[2.0, 2.0]` and has cost `0.5`.
+
+<!-- compile: solver-bounded-levenberg-marquardt -->
+```rust
+use basin::{
+    BoundedLevenbergMarquardt, BoxBounds, Constrained, ConstraintSet,
+    DenseMatrix, Executor, Jacobian, Residual,
+};
+use std::convert::Infallible;
+
+struct Fit;
+
+impl Residual for Fit {
+    type Param = Vec<f64>;
+    type Output = Vec<f64>;
+    type Error = Infallible;
+
+    fn residual(&self, x: &Self::Param) -> Result<Self::Output, Self::Error> {
+        Ok(vec![x[0] - 3.0, 2.0 * (x[1] - 2.0)])
+    }
+}
+
+impl Jacobian for Fit {
+    type Jacobian = DenseMatrix;
+
+    fn jacobian(&self, _: &Self::Param) -> Result<Self::Jacobian, Self::Error> {
+        Ok(DenseMatrix::from_row_slice(2, 2, &[1.0, 0.0, 0.0, 2.0]))
+    }
+}
+
+fn main() {
+    let solver = BoundedLevenbergMarquardt::new()
+        .with_absolute_scaled_gradient_tolerance(1e-8);
+    let constraints = ConstraintSet::new().with_bounds(BoxBounds::new(
+        Some(vec![0.0, 0.0]),
+        Some(vec![2.0, 4.0]),
+    ));
+    let problem = Constrained::new(Fit, constraints);
+    let result = Executor::from_start(problem, solver, vec![0.5, 0.5])
+        .max_iter(100)
+        .run()
+        .unwrap();
+
+    assert!((result.param()[0] - 2.0).abs() < 1e-6);
+    assert!((result.param()[1] - 2.0).abs() < 1e-6);
+    assert!((result.cost() - 0.5).abs() < 1e-6);
+}
+```
+
+## Practical considerations
+
+### Supply a box-only declaration
+
+Attach `ConstraintSet::new().with_bounds(...)` to the residual problem using
+`Constrained::new`. This solver requires a complete box-only declaration; it
+does not handle additional linear or nonlinear constraint blocks. Initialization
+moves the starting point strictly inside the box because the affine scaling is
+undefined on a finite face. Use TRF when coordinates need to be fixed with equal
+bounds.
+
+### Check scaled stationarity and damping failures
+
+`with_absolute_scaled_gradient_tolerance` tests `max_i |g_i| |v_i|`, where
+`g = Jᵀr` and `v` is the distance-to-bound scaling. The default is `1e-8`. This
+differs from an unscaled projected-gradient norm and remains sensitive to
+residual and parameter units. `None` disables it; zero requests exact
+stationarity. Optional observed step and cost checks combine with OR.
+
+`with_tau` controls initial damping, and `with_max_inner_attempts` limits
+retries (default `50`). Cholesky breakdowns trigger increased damping;
+exhausting retries or overflowing damping produces `SolverFailed`. A small step
+alone does not establish stationarity. Keep execution budgets on the executor
+and inspect the returned fit and termination report.
+
+## Implementation
+
+Bounded Levenberg–Marquardt publishes matching parameters and cost through
+`PointState`. It computes the gradient internally; the state does not expose it
+through `GradientState`. Residuals, Jacobians, and model caches belong to the
+solver. Fresh runs reset them, while exact solver-and-state checkpoints retain
+them.
+
+For ordinary residuals, the reported cost is `0.5 * sum(r[i]^2)`. The solver
+requires `Residual` and `Jacobian`, without a `CostFunction` implementation.
+Wrapping the problem in
+[`RobustLeastSquares`](https://docs.rs/basin/latest/basin/core/least_squares/struct.RobustLeastSquares.html)
+selects a robust loss and residual scale. The adapter supplies a safeguarded
+model, while costs and convergence use the robust objective and its gradient.
+Custom Jacobians additionally need `ScaleRowsInPlace` for robust losses.
+
+Supported dense pairs are `Vec<F>`/`DenseMatrix<F>`,
+`nalgebra::DVector<F>`/`DMatrix<F>`, `ndarray::Array1<F>`/`Array2<F>`, and
+`faer::Col<F>`/`Mat<F>`, with `F = f32` or `f64`. The default `Vec` path needs
+no BLAS/LAPACK provider.
+
+Nalgebra-sparse and faer-sparse Jacobians are also supported. Their Gram
+matrices must contain the diagonal in the CSC pattern for damping. Use
+`BoundedLevenbergMarquardt::default()` for `f32`.
+
+This solver was named `Trf` in Basin 1.x. The current `TrustRegionReflective` is
+a separate algorithm with reflected steps and an explicit radius.
+
+<References entries={["branch-coleman-li-1999"]} />

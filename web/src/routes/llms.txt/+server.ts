@@ -43,6 +43,12 @@ export function GET() {
 - [LINCOA](${guide}/solvers/derivative-free/lincoa/): quadratic models with linear constraints, feasible starts, and a Rust example
 - [COBYLA](${guide}/solvers/derivative-free/cobyla/): linear interpolation models, general constraints, feasibility caveats, and a Rust example
 - [Solis–Wets](${guide}/solvers/derivative-free/solis-wets/): seeded random local search, adaptive step sizes, stopping tests, and a Rust example
+- [Trust-region Newton](${guide}/solvers/trust-region/trust-region-newton/): Newton models, subproblem strategies, matrix-free products, and a Rust example
+- [Gauss–Newton](${guide}/solvers/nonlinear-least-squares/gauss-newton/): undamped normal equations, rank requirements, stopping tests, and a Rust example
+- [Levenberg–Marquardt](${guide}/solvers/nonlinear-least-squares/levenberg-marquardt/): scaled damping, trust-region and Nielsen updates, stopping tests, and a Rust example
+- [Levenberg–Marquardt QR](${guide}/solvers/nonlinear-least-squares/levenberg-marquardt-qr/): pivoted QR, numerical rank checks, damping choices, and a Rust example
+- [Bounded Levenberg–Marquardt](${guide}/solvers/nonlinear-least-squares/bounded-levenberg-marquardt/): box scaling, strictly feasible steps, sparse Jacobians, and a Rust example
+- [Trust-region reflective](${guide}/solvers/nonlinear-least-squares/trust-region-reflective/): box bounds, reflected steps, rank-aware dense SVD, and a Rust example
 
 ## Reference
 

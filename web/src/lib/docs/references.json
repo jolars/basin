@@ -348,5 +348,132 @@
         "issue": "1",
         "page": "445-472",
         "DOI": "10.1137/070692662"
+    },
+    {
+        "id": "more-sorensen-1983",
+        "type": "article-journal",
+        "title": "Computing a trust region step",
+        "author": [
+            {
+                "family": "Moré",
+                "given": "Jorge J."
+            },
+            {
+                "family": "Sorensen",
+                "given": "Danny C."
+            }
+        ],
+        "issued": {
+            "date-parts": [[1983]]
+        },
+        "container-title": "SIAM Journal on Scientific and Statistical Computing",
+        "volume": "4",
+        "issue": "3",
+        "page": "553-572",
+        "DOI": "10.1137/0904038"
+    },
+    {
+        "id": "madsen-nielsen-tingleff-2004",
+        "type": "book",
+        "title": "Methods for Non-Linear Least Squares Problems",
+        "author": [
+            {
+                "family": "Madsen",
+                "given": "Kaj"
+            },
+            {
+                "family": "Nielsen",
+                "given": "Hans Bruun"
+            },
+            {
+                "family": "Tingleff",
+                "given": "Ole"
+            }
+        ],
+        "issued": {
+            "date-parts": [[2004]]
+        },
+        "edition": "2",
+        "publisher": "Informatics and Mathematical Modelling, Technical University of Denmark"
+    },
+    {
+        "id": "marquardt-1963",
+        "type": "article-journal",
+        "title": "An algorithm for least-squares estimation of nonlinear parameters",
+        "author": [
+            {
+                "family": "Marquardt",
+                "given": "Donald W."
+            }
+        ],
+        "issued": {
+            "date-parts": [[1963]]
+        },
+        "container-title": "Journal of the Society for Industrial and Applied Mathematics",
+        "volume": "11",
+        "issue": "2",
+        "page": "431-441",
+        "DOI": "10.1137/0111030"
+    },
+    {
+        "id": "more-1978",
+        "type": "chapter",
+        "title": "The Levenberg-Marquardt algorithm: Implementation and theory",
+        "author": [
+            {
+                "family": "Moré",
+                "given": "Jorge J."
+            }
+        ],
+        "issued": {
+            "date-parts": [[1978]]
+        },
+        "container-title": "Numerical Analysis",
+        "page": "105-116",
+        "publisher": "Springer",
+        "DOI": "10.1007/BFb0067700"
+    },
+    {
+        "id": "nielsen-1999",
+        "type": "report",
+        "title": "Damping parameter in Marquardt’s method",
+        "author": [
+            {
+                "family": "Nielsen",
+                "given": "Hans Bruun"
+            }
+        ],
+        "issued": {
+            "date-parts": [[1999]]
+        },
+        "number": "IMM-REP-1999-05",
+        "publisher": "Technical University of Denmark"
+    },
+    {
+        "id": "branch-coleman-li-1999",
+        "type": "article-journal",
+        "title": "A subspace, interior, and conjugate gradient method for large-scale bound-constrained minimization problems",
+        "author": [
+            {
+                "family": "Branch",
+                "given": "Mary Ann"
+            },
+            {
+                "family": "Coleman",
+                "given": "Thomas F."
+            },
+            {
+                "family": "Li",
+                "given": "Yuying"
+            }
+        ],
+        "issued": {
+            "date-parts": [[1999]]
+        },
+        "container-title": "SIAM Journal on Scientific Computing",
+        "volume": "21",
+        "issue": "1",
+        "page": "1-23",
+        "DOI": "10.1137/S1064827595289108"
     }
 ]

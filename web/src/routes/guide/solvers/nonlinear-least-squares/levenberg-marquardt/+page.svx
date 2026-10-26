@@ -1,0 +1,147 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# Levenberg–Marquardt
+
+Levenberg–Marquardt (LM) minimizes nonlinear least-squares objectives with
+scaled damping. It regularizes the Gauss–Newton model and rejects unsuccessful
+trials, making it a useful starting choice for smooth curve-fitting problems.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/levenberg_marquardt/struct.LevenbergMarquardt.html)
+
+  | Property    | Requirement                                                   |
+  | ----------- | ------------------------------------------------------------- |
+  | Objective   | A smooth sum of squared residuals, or an adapted robust loss  |
+  | Evaluations | `Residual` and `Jacobian`                                     |
+  | Search      | Local, from one starting point                                |
+  | Constraints | Unconstrained; use bounded LM or TRF for box bounds           |
+  | Parameters  | All four dense backends, plus nalgebra-sparse and faer-sparse |
+
+## When to use it
+
+Consider LM when residuals and a Jacobian are available but an undamped
+[Gauss–Newton](../gauss-newton/) step is unreliable. Its diagonal scaling
+accounts for differences in Jacobian column magnitudes. For ill-conditioned
+dense Jacobians, compare [LM with pivoted QR](../levenberg-marquardt-qr/), which
+avoids forming `JᵀJ`.
+
+[Marquardt (1963)](#ref-marquardt-1963) describes scaled damping, and [Moré
+(1978)](#ref-more-1978) develops the implementation and scaling approach. LM
+remains a local optimizer; damping does not remove dependence on the start.
+
+## How it works
+
+The Cholesky variant solves `(JᵀJ + μD) h = -Jᵀr`, where `D` tracks the running
+maximum of the Gram diagonal. Initially zero columns receive a unit floor. A
+positive ratio of actual to predicted reduction accepts a trial. Rejected trials
+reuse the current linear model.
+
+The default `LmDamping::TrustRegion` chooses damping to fit a scaled radius
+measured by `sqrt(hᵀDh)`. An undamped step is used when it fits. Radius
+initialization and updates follow MINPACK's `lmder`, while a bracketed search
+replaces `lmpar`'s parameter selection. Basin retains its own acceptance and
+stopping rules, so this is not a complete MINPACK port.
+
+`LmDamping::Nielsen` instead updates damping directly from the gain ratio,
+following [Nielsen (1999)](#ref-nielsen-1999) and [Madsen, Nielsen, and Tingleff
+(2004)](#ref-madsen-nielsen-tingleff-2004), §3.2.
+
+## Example
+
+This affine fitting problem isolates the residual and Jacobian interface. The
+solver sets an optimality tolerance, and the executor limits iterations.
+
+<!-- compile: solver-levenberg-marquardt -->
+```rust
+use basin::{DenseMatrix, Executor, Jacobian, LevenbergMarquardt, Residual};
+use std::convert::Infallible;
+
+struct Fit;
+
+impl Residual for Fit {
+    type Param = Vec<f64>;
+    type Output = Vec<f64>;
+    type Error = Infallible;
+
+    fn residual(&self, x: &Self::Param) -> Result<Self::Output, Self::Error> {
+        Ok(vec![x[0] - 1.0, 2.0 * (x[1] - 2.0)])
+    }
+}
+
+impl Jacobian for Fit {
+    type Jacobian = DenseMatrix;
+
+    fn jacobian(&self, _: &Self::Param) -> Result<Self::Jacobian, Self::Error> {
+        Ok(DenseMatrix::from_row_slice(2, 2, &[1.0, 0.0, 0.0, 2.0]))
+    }
+}
+
+fn main() {
+    let solver =
+        LevenbergMarquardt::new().with_absolute_gradient_tolerance(1e-8);
+    let result = Executor::from_start(Fit, solver, vec![0.0, 0.0])
+        .max_iter(100)
+        .run()
+        .unwrap();
+
+    assert!((result.param()[0] - 1.0).abs() < 1e-6);
+    assert!((result.param()[1] - 2.0).abs() < 1e-6);
+    assert!(result.cost() < 1e-12);
+}
+```
+
+## Practical considerations
+
+### Configure damping separately from convergence
+
+Trust-region damping is the default for both scalar types.
+`with_initial_step_bound` sets its initial radius factor (default `100`). To use
+Nielsen damping, select `with_damping(LmDamping::Nielsen)` and tune `with_tau`
+(default `1e-3`); `tau` does not affect trust-region damping.
+`with_max_inner_attempts` limits model retries, with default `50`.
+
+### Interpret the stopping test
+
+Only `with_absolute_gradient_tolerance` is enabled by default, testing
+`‖Jᵀr‖∞ ≤ 1e-8`. Choose its threshold for residual and parameter units. Optional
+orthogonality, model-reduction, trial-step, and scaled-radius tests combine with
+OR. The radius test applies only to trust-region damping. Small steps or model
+reductions can occur under heavy damping while the gradient remains large,
+including with robust losses.
+
+Use gradient tests alone when stationarity is required, or guard native relative
+progress tests with `with_absolute_progress_gradient_tolerance`. This guard does
+not apply to executor stops or observed progress checks. Keep execution budgets
+on the executor and inspect the report: an unchanged rejected finite trial can
+produce `NumericalNoProgress`, and exhausted retries or numerical breakdowns
+produce `SolverFailed`. Neither certifies accuracy.
+
+## Implementation
+
+Levenberg–Marquardt publishes matching parameters and cost through `PointState`.
+It computes the gradient internally; the state does not expose it through
+`GradientState`. Residuals, Jacobians, and model caches belong to the solver.
+Fresh runs reset them, while exact solver-and-state checkpoints retain them.
+
+For ordinary residuals, the reported cost is `0.5 * sum(r[i]^2)`. The solver
+requires `Residual` and `Jacobian`, without a `CostFunction` implementation.
+Wrapping the problem in
+[`RobustLeastSquares`](https://docs.rs/basin/latest/basin/core/least_squares/struct.RobustLeastSquares.html)
+selects a robust loss and residual scale. The adapter supplies a safeguarded
+model, while costs and convergence use the robust objective and its gradient.
+Custom Jacobians additionally need `ScaleRowsInPlace` for robust losses.
+
+Supported dense pairs are `Vec<F>`/`DenseMatrix<F>`,
+`nalgebra::DVector<F>`/`DMatrix<F>`, `ndarray::Array1<F>`/`Array2<F>`, and
+`faer::Col<F>`/`Mat<F>`, with `F = f32` or `f64`. The default `Vec` path needs
+no BLAS/LAPACK provider.
+
+Nalgebra-sparse and faer-sparse Jacobians are also supported; their Gram
+matrices must include the diagonal in the CSC pattern for damping. Use
+`LevenbergMarquardt::default()` for `f32`.
+
+<References
+entries={["marquardt-1963", "more-1978", "nielsen-1999", "madsen-nielsen-tingleff-2004"]}
+/>

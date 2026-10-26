@@ -11,9 +11,9 @@ algorithm family.
 | --- | --- | --- |
 | Smooth, unconstrained, with a gradient | [L-BFGS](quasi-newton/l-bfgs/) or [BFGS](quasi-newton/bfgs/) | L-BFGS keeps a short history; BFGS stores a dense inverse-Hessian approximation. |
 | Box bounds, with a gradient | [L-BFGS-B](quasi-newton/l-bfgs-b/) or [projected gradient descent](first-order/projected-gradient-descent/) | Both enforce the box; L-BFGS-B also builds a curvature model. |
-| A Hessian or Hessian-vector products | [Trust-region Newton](#trust-region) | Use second-order information; the matrix-free mode needs only products. |
-| Residuals and a Jacobian | [Levenberg–Marquardt](#levenberg-marquardt) or its [QR variant](#levenberg-marquardt-qr) | Use the least-squares structure; QR avoids forming the Gram matrix. |
-| Least squares with box bounds | [Trust-region reflective](#trust-region-reflective) or [bounded Levenberg–Marquardt](#bounded-levenberg-marquardt) | Both combine the residual model with bound-aware steps. |
+| A Hessian or Hessian-vector products | [Trust-region Newton](trust-region/trust-region-newton/) | Use second-order information; the matrix-free mode needs only products. |
+| Residuals and a Jacobian | [Levenberg–Marquardt](nonlinear-least-squares/levenberg-marquardt/) or its [QR variant](nonlinear-least-squares/levenberg-marquardt-qr/) | Use the least-squares structure; QR avoids forming the Gram matrix. |
+| Least squares with box bounds | [Trust-region reflective](nonlinear-least-squares/trust-region-reflective/) or [bounded Levenberg–Marquardt](nonlinear-least-squares/bounded-levenberg-marquardt/) | Both combine the residual model with bound-aware steps. |
 | Objective values only, with a locally smooth function | [NEWUOA](derivative-free/newuoa/), or [BOBYQA](derivative-free/bobyqa/) with box bounds | Build a quadratic model without gradients. |
 | Objective values only, with linear constraints | [LINCOA](derivative-free/lincoa/) | Build a quadratic objective model while handling linear inequalities. |
 | Objective values only, with nonlinear constraints | [COBYLA](derivative-free/cobyla/) or [constrained MADS](derivative-free/mads/) | COBYLA uses linear interpolation models; MADS uses polling and a progressive barrier. Check each method's supported constraint blocks. |
@@ -43,9 +43,9 @@ both into account when choosing a method and its stopping tolerances.
 ## Reading the catalog
 
 Each entry below links to the authoritative API reference on
-[docs.rs](https://docs.rs/basin). The first-order, quasi-Newton, and
-derivative-free guides also explain when to use each method, how it works, and
-how to configure it, with citations and full references.
+[docs.rs](https://docs.rs/basin). The individual solver guides also explain
+when to use each method, how it works, and how to configure it, with citations
+and full references.
 
 Backend support applies to every enabled version of the listed backend.
 Multiple versions can be used in the same build; see the
@@ -229,6 +229,7 @@ analytic, or synthesized by `FiniteDiff`):
   `FiniteDiff` cannot construct one. Its matrix-free Hessian-vector products
   work on every backend. Both modes publish `FirstOrderState` and support
   `f32` and `f64`.
+  [Read the trust-region Newton guide](trust-region/trust-region-newton/).
 
 ## Nonlinear least squares
 
@@ -246,6 +247,7 @@ _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
 
 - **<span id="gauss-newton"></span>[`GaussNewton`](https://docs.rs/basin/latest/basin/solver/gauss_newton/struct.GaussNewton.html)**:
   undamped normal-equations solver (Madsen, Nielsen & Tingleff, 2004, §3.1).
+  [Read the Gauss–Newton guide](nonlinear-least-squares/gauss-newton/).
 - **<span id="levenberg-marquardt"></span>[`LevenbergMarquardt`](https://docs.rs/basin/latest/basin/solver/levenberg_marquardt/struct.LevenbergMarquardt.html)**:
   damped least squares; the workhorse for curve fitting. Marquardt (1963) with
   Moré (1978)/MINPACK column scaling and scaled trust-region damping by default
@@ -255,6 +257,7 @@ _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
   MINPACK's
   [`lmder`](https://netlib.org/minpack/lmder.f) radius updates with a bracketed
   parameter search. Both damping strategies retain Basin's stopping tests.
+  [Read the Levenberg–Marquardt guide](nonlinear-least-squares/levenberg-marquardt/).
 - **<span id="levenberg-marquardt-qr"></span>[`LevenbergMarquardtQr`](https://docs.rs/basin/latest/basin/solver/levenberg_marquardt/struct.LevenbergMarquardtQr.html)**:
   opt-in pivoted QR with the same configurable damping and stopping rules as
   `LevenbergMarquardt`. Avoids forming the Gram matrix; supports all four dense
@@ -266,6 +269,7 @@ _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
   The default trust-region damping follows MINPACK's
   [`lmder`](https://netlib.org/minpack/lmder.f) radius updates, using bracketed
   parameter selection instead of [`lmpar`](https://netlib.org/minpack/lmpar.f).
+  [Read the Levenberg–Marquardt QR guide](nonlinear-least-squares/levenberg-marquardt-qr/).
 - **<span id="bounded-levenberg-marquardt"></span>[`BoundedLevenbergMarquardt`](https://docs.rs/basin/latest/basin/solver/bounded_levenberg_marquardt/struct.BoundedLevenbergMarquardt.html)**:
   bounded Levenberg–Marquardt with Coleman–Li affine scaling, Nielsen damping,
   and strictly feasible steps. Supports all four dense backends, nalgebra-sparse,
@@ -275,6 +279,7 @@ _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
   Bound-Constrained Minimization Problems,” _SIAM Journal on Scientific
   Computing_ 21(1), 1–23
   ([doi:10.1137/S1064827595289108](https://doi.org/10.1137/S1064827595289108)).
+  [Read the bounded Levenberg–Marquardt guide](nonlinear-least-squares/bounded-levenberg-marquardt/).
 - **<span id="trust-region-reflective"></span>[`TrustRegionReflective`](https://docs.rs/basin/latest/basin/solver/trust_region_reflective/struct.TrustRegionReflective.html)**:
   dense trust-region-reflective least squares with an explicit radius, reflected
   steps, a rank-aware SVD solve, and fixed-parameter elimination. Supports all
@@ -287,6 +292,7 @@ _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
   _Numerical Analysis_, Lecture Notes in Mathematics 630, 105–116
   ([doi:10.1007/BFb0067700](https://doi.org/10.1007/BFb0067700)). Reference
   comparisons use [SciPy 1.16.2's dense TRF](https://github.com/scipy/scipy/blob/v1.16.2/scipy/optimize/_lsq/trf.py).
+  [Read the trust-region reflective guide](nonlinear-least-squares/trust-region-reflective/).
 
 ## Global & stochastic
 

@@ -1,0 +1,128 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# Gauss–Newton
+
+Gauss–Newton minimizes a nonlinear least-squares objective by linearizing its
+residuals and taking the full least-squares step. It uses no damping or line
+search, so a good starting point and a well-conditioned Jacobian matter.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/gauss_newton/struct.GaussNewton.html)
+
+  | Property    | Requirement                                                   |
+  | ----------- | ------------------------------------------------------------- |
+  | Objective   | A smooth sum of squared residuals, or an adapted robust loss  |
+  | Evaluations | `Residual` and `Jacobian`                                     |
+  | Search      | Local, from one starting point                                |
+  | Constraints | Unconstrained                                                 |
+  | Parameters  | All four dense backends, plus nalgebra-sparse and faer-sparse |
+
+## When to use it
+
+Consider Gauss–Newton when the residual model is nearly linear near your
+starting point and the Jacobian has full column rank. It is a useful baseline
+for understanding the effect of damping. [Madsen, Nielsen, and Tingleff
+(2004)](#ref-madsen-nielsen-tingleff-2004), §3.1, describe the method.
+
+For a less reliable start, compare
+[Levenberg–Marquardt](../levenberg-marquardt/). For ill-conditioned dense
+Jacobians, compare its [QR variant](../levenberg-marquardt-qr/). These are local
+methods; a stationary point need not be the global minimum.
+
+## How it works
+
+At each iterate, Gauss–Newton forms the gradient `g = Jᵀr` and Gram matrix
+`JᵀJ`. It solves `(JᵀJ) h = -g` by Cholesky and moves to `x + h` without
+checking whether the objective decreased. This approximates the least-squares
+Hessian by omitting terms involving second derivatives of the residuals.
+
+Forming `JᵀJ` squares the Jacobian's condition number in exact arithmetic. A
+rank-deficient Jacobian can make Cholesky fail, and a highly nonlinear model can
+send the full step away from a solution.
+
+## Example
+
+This affine residual model has its unique zero at `[1.0, 2.0]`. Its Jacobian has
+full column rank, so the full Gauss–Newton step solves it directly.
+
+<!-- compile: solver-gauss-newton -->
+```rust
+use basin::{DenseMatrix, Executor, GaussNewton, Jacobian, Residual};
+use std::convert::Infallible;
+
+struct Fit;
+
+impl Residual for Fit {
+    type Param = Vec<f64>;
+    type Output = Vec<f64>;
+    type Error = Infallible;
+
+    fn residual(&self, x: &Self::Param) -> Result<Self::Output, Self::Error> {
+        Ok(vec![x[0] - 1.0, 2.0 * (x[1] - 2.0)])
+    }
+}
+
+impl Jacobian for Fit {
+    type Jacobian = DenseMatrix;
+
+    fn jacobian(&self, _: &Self::Param) -> Result<Self::Jacobian, Self::Error> {
+        Ok(DenseMatrix::from_row_slice(2, 2, &[1.0, 0.0, 0.0, 2.0]))
+    }
+}
+
+fn main() {
+    let solver = GaussNewton::new().with_absolute_gradient_tolerance(1e-8);
+    let result = Executor::from_start(Fit, solver, vec![0.0, 0.0])
+        .max_iter(100)
+        .run()
+        .unwrap();
+
+    assert!((result.param()[0] - 1.0).abs() < 1e-6);
+    assert!((result.param()[1] - 2.0).abs() < 1e-6);
+    assert!(result.cost() < 1e-12);
+}
+```
+
+## Practical considerations
+
+### Check rank and the starting point
+
+A non-positive-definite Gram matrix produces `SolverFailed`. Use damping or a
+rank-aware method rather than expecting pure Gauss–Newton to regularize it. A
+full step can also increase the cost. Keep iteration and residual-evaluation
+budgets on the executor, and inspect the termination report and returned fit.
+
+### Choose a gradient tolerance for the residual scale
+
+`with_absolute_gradient_tolerance` tests `‖Jᵀr‖∞`, with default `1e-8`. `None`
+disables the test; zero requests exact stationarity. Multiplying every residual
+by a constant scales this gradient by its square. Optional observed step and
+cost-change tests combine with the gradient test using OR; a small change alone
+does not establish stationarity or a good fit.
+
+## Implementation
+
+Gauss–Newton publishes matching parameters and cost through `PointState`. It
+computes the gradient internally; the state does not expose it through
+`GradientState`. Residuals, Jacobians, and model caches belong to the solver.
+Fresh runs reset them, while exact solver-and-state checkpoints retain them.
+
+For ordinary residuals, the reported cost is `0.5 * sum(r[i]^2)`. The solver
+requires `Residual` and `Jacobian`, without a `CostFunction` implementation.
+Wrapping the problem in
+[`RobustLeastSquares`](https://docs.rs/basin/latest/basin/core/least_squares/struct.RobustLeastSquares.html)
+selects a robust loss and residual scale. The adapter supplies a safeguarded
+model, while costs and convergence use the robust objective and its gradient.
+Custom Jacobians additionally need `ScaleRowsInPlace` for robust losses.
+
+Supported dense pairs are `Vec<F>`/`DenseMatrix<F>`,
+`nalgebra::DVector<F>`/`DMatrix<F>`, `ndarray::Array1<F>`/`Array2<F>`, and
+`faer::Col<F>`/`Mat<F>`, with `F = f32` or `f64`. The default `Vec` path needs
+no BLAS/LAPACK provider.
+
+Nalgebra-sparse and faer-sparse Jacobians are also supported. Use
+`GaussNewton::default()` when selecting `f32`.
+
+<References entries={["madsen-nielsen-tingleff-2004"]} />

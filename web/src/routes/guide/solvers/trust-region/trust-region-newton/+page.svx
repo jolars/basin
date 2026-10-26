@@ -1,0 +1,161 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# Trust-region Newton
+
+Trust-region Newton minimizes smooth scalar objectives using a gradient and
+second-order information. It limits each quadratic-model step to a ball and
+adjusts that ball according to how well the model predicts objective reduction.
+You can supply a full Hessian or use Hessian-vector products without forming a
+matrix.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/trust_region/struct.TrustRegion.html)
+
+  | Property    | Requirement                                                    |
+  | ----------- | -------------------------------------------------------------- |
+  | Objective   | A smooth scalar function                                       |
+  | Evaluations | `CostFunction`, `Gradient`, and `Hessian` or `HessianProduct`  |
+  | Search      | Local, from one starting point                                 |
+  | Constraints | Unconstrained; the trust-region ball is an internal step limit |
+  | Parameters  | All four dense backends, with `f32` or `f64`                   |
+
+## When to use it
+
+Consider this solver when you can supply useful second-order information. The
+matrix-free mode is useful when forming and storing a Hessian is too expensive.
+If you only have a gradient, compare [L-BFGS](../../quasi-newton/l-bfgs/). If
+the objective is a residual sum of squares, compare the [nonlinear least-squares
+solvers](../../#nonlinear-least-squares).
+
+[Nocedal and Wright (2006)](#ref-nocedal-wright-2006), Chapter 4 and Algorithm
+4.1, describe the trust-region framework. Its convergence results require
+assumptions on the objective and model quality. A finite run does not certify a
+global minimum, and a small gradient alone need not exclude a saddle.
+
+## How it works
+
+Each iteration approximately minimizes `gᵀp + 0.5 pᵀHp` subject to `‖p‖ ≤ Δ`.
+The ratio of actual to predicted reduction determines whether to accept the
+trial and shrink or grow `Δ`. Rejected trials solve the model again at a smaller
+radius.
+
+The default Steihaug strategy uses truncated conjugate gradient. It stops at the
+boundary or follows a detected negative-curvature direction to it. Other
+strategies trade subproblem cost against model accuracy:
+
+  | Strategy       | Model operations                | Behavior                                                                   |
+  | -------------- | ------------------------------- | -------------------------------------------------------------------------- |
+  | `Steihaug`     | Hessian-vector products         | Truncated CG; supports matrix-free mode                                    |
+  | `CauchyPoint`  | Hessian-vector products         | Minimizes along the negative gradient; supports matrix-free mode           |
+  | `Dogleg`       | Matrix products and Cholesky    | Combines Cauchy and Newton steps; falls back to Cauchy for a non-SPD model |
+  | `MoreSorensen` | Eigendecomposition and Cholesky | Near-exact secular solve with explicit hard-case handling                  |
+
+[Moré and Sorensen (1983)](#ref-more-sorensen-1983) describe the near-exact
+subproblem method. Even a globally solved quadratic subproblem does not make the
+outer nonlinear search global.
+
+## Example
+
+This quadratic supplies Hessian-vector products directly. The example uses
+matrix-free Steihaug with a gradient tolerance and an iteration budget.
+
+<!-- compile: solver-trust-region-newton -->
+```rust
+use basin::{CostFunction, Executor, Gradient, HessianProduct, TrustRegion};
+use std::convert::Infallible;
+
+struct Quadratic;
+
+impl CostFunction for Quadratic {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok(0.5 * (x[0].powi(2) + 100.0 * x[1].powi(2)))
+    }
+}
+
+impl Gradient for Quadratic {
+    type Gradient = Vec<f64>;
+
+    fn gradient(&self, x: &Self::Param) -> Result<Self::Gradient, Self::Error> {
+        Ok(vec![x[0], 100.0 * x[1]])
+    }
+}
+
+impl HessianProduct for Quadratic {
+    fn hessian_product(
+        &self,
+        _: &Self::Param,
+        v: &Self::Param,
+    ) -> Result<Self::Param, Self::Error> {
+        Ok(vec![v[0], 100.0 * v[1]])
+    }
+}
+
+fn main() {
+    let solver =
+        TrustRegion::matrix_free().with_absolute_gradient_tolerance(1e-10);
+    let result = Executor::from_start(Quadratic, solver, vec![5.0, 1.0])
+        .max_iter(100)
+        .run()
+        .unwrap();
+
+    assert!(result.cost() < 1e-16);
+}
+```
+
+## Practical considerations
+
+### Match the strategy to the derivative interface
+
+`TrustRegion::new()` uses a full `Hessian` and Steihaug.
+`TrustRegion::with_subproblem(Dogleg)` selects another matrix strategy.
+`TrustRegion::matrix_free()` requires `HessianProduct` instead;
+`matrix_free_with(CauchyPoint)` is also available. Dogleg and Moré–Sorensen
+require a matrix and cannot run in matrix-free mode.
+
+`FiniteDiff` can synthesize Hessian-vector products on every backend. With
+ndarray, exact-Hessian mode needs a supplied `Array2` Hessian because the
+adapter cannot construct one. Numerical derivatives add evaluations and
+approximation error; set budgets and tolerances accordingly.
+
+### Configure resolution and stopping separately
+
+`with_radius` and `with_max_radius` control the model's step scale; `with_eta`
+controls acceptance. Scale parameters so one Euclidean radius is meaningful.
+These settings are algorithm controls, not accuracy tolerances.
+
+Gradient and observed progress checks are disabled by default. Enable
+`with_absolute_gradient_tolerance` or `with_relative_gradient_tolerance` for an
+optimality check. A finite non-positive model prediction reports convergence
+only for an exactly zero computed gradient; otherwise it produces
+`NumericalNoProgress`. A collapsed radius alone does not establish stationarity.
+Keep iteration and evaluation budgets on the executor.
+
+### Budget Hessian-vector products
+
+Exact mode reuses the Hessian across radius retries at one point. Matrix-free
+mode must repeat CG products when it retries with a smaller radius. Count and
+limit `EvaluationKind::HessianProduct` separately when those calls dominate the
+cost.
+
+## Implementation
+
+The solver publishes matching parameters, cost, and gradient through
+`FirstOrderState`. It owns the trust radius and rejection history. Fresh
+initialization restores the configured radius and reevaluates the start; exact
+solver-and-state checkpoints retain the current history. Use
+`Executor::run_with_solver` and `radius()` to inspect the retained radius.
+
+Supported parameter types are `Vec<F>`, `nalgebra::DVector<F>`,
+`ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`. All four
+dense backends provide the operations for every shipped matrix strategy.
+Matrix-free mode binds no matrix type. Pure-Rust configurations work on WASM
+without a BLAS/LAPACK provider; optional LAPACK acceleration has separate
+platform requirements.
+
+<References entries={["nocedal-wright-2006", "more-sorensen-1983"]} />
