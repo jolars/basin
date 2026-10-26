@@ -147,52 +147,6 @@ numerical work against analytic cases and reference implementations.
   constraints if benchmarks justify it alongside COBYLA, BOBYQA, and LINCOA.
   Those existing methods cover different model or constraint classes.
 
-### Rustima integration
-
-Follow-ups from [rustima #6](https://github.com/zongseung/rustima/issues/6). The
-probe found no integration requirement that needs a breaking Basin change before
-2.0. The Basin additions below can ship compatibly in 2.x.
-
-- [x] **Probe the Basin 2.0 integration.** Compared rustima `314455b` with a
-  trial using Basin `1ae01c8` for BFGS, L-BFGS, L-BFGS-B, Nelder-Mead, and
-  CSS initialization. Both implementations passed 155 Rust and 424 Python
-  tests. Across 384 paired runs, full-fit log-likelihood differences stayed
-  below `1.4e-7`. Stepwise and grid searches selected the same models on
-  four datasets, with reproducible repeated runs. The trial checked on Rust
-  1.87, including the `parallel` and `nalgebra_v0_34` features.
-- [x] **Add configurable initial inverse Hessians to BFGS.** Support rustima's
-  diagonal seed based on the initial gradient without requiring coordinate
-  scaling. Preserve existing callers and default behavior. Define how custom
-  seeds interact with the first curvature rescaling, fresh solves, and exact
-  continuation, without adding required backend capabilities to existing
-  configurations.
-- [x] **Add an opt-in Nelder-Mead cost standard-deviation check.** Added
-  `with_absolute_simplex_cost_std_dev_tolerance` for sample standard
-  deviation. Documented the formula, non-finite inputs, OR composition, and
-  checkpoint behavior. The check is disabled by default and preserves the
-  paired simplex-size and cost-spread defaults.
-- [ ] **Define rustima's budget and failure handling.** Distinguish completed
-  iterations from evaluation requests in `n_iter` and restart budgets.
-  Document that Basin's evaluation limits are soft and may overrun within a
-  line search. Handle `Termination::Failed` in successful run results
-  separately from callback `Err` values, and choose explicit policies for
-  partial results and fallback solvers. Retain the accepted Basin 2.0 budget
-  semantics; a future strict callback cap would need a separate opt-in API.
-- [ ] **Reconcile rustima's toolchain declaration.** Rustima declares Rust 1.83,
-  but its existing nalgebra 0.34.1 dependency requires 1.87.0, matching
-  Basin's MSRV. Confirm the maintainer's support policy and correct
-  rustima's declaration or investigate genuine 1.83 support. The probe
-  verified the integration on Rust 1.87.0 and tested it on 1.89.0.
-- [ ] **Prepare the upstream comparison PR, starting with L-BFGS-B.** Retain the
-  existing implementations for comparison before migrating the remaining
-  solvers. Preserve CSS's `[-10, 10]` box, fixed central-difference step of
-  `1e-7`, and existing optimizer settings, plus the objective's fused
-  evaluation and gradient fallback behavior. Compare fitted parameters,
-  likelihoods, convergence, reproducibility, and performance against the
-  reference fixtures, including stepwise and grid model selection. Broaden
-  the timing pilot before drawing publication-quality performance
-  conclusions.
-
 ### Longer-term candidates
 
 - [ ] **Evaluate a trust-constr-style solver.** After SLSQP establishes
@@ -294,8 +248,8 @@ compatibility and numerical behavior still need verification.
   - [ ] **Compare scalar methods against argmin.**
   - [x] **Compare COBYLA against NLopt.** Added native NLopt to the migration
     workload timings and verification, plus the published 30-variable
-    constrained quadratic traces. Match starts, objective budgets, and radii;
-    report feasibility, callback counts, and termination separately.
+    constrained quadratic traces. Match starts, objective budgets, and
+    radii; report feasibility, callback counts, and termination separately.
   - [ ] **Compare DIRECT against NLopt.** Distinguish the DIRECT variants.
   - [ ] **Compare augmented Lagrangian methods against NLopt.** Match inner
     solvers and account for all nested evaluation work.
@@ -316,9 +270,9 @@ compatibility and numerical behavior still need verification.
 
   - [x] Publish one larger bounded example against the C-backed `lbfgsb`
     reference on the competitor benchmark page. The 20,000-variable extended
-    Rosenbrock driver takes at least 20 ms per solve for both implementations
-    on the measurement machine. Broader fixture coverage and assessment of
-    `lbfgsb-rs-pure` remain open.
+    Rosenbrock driver takes at least 20 ms per solve for both
+    implementations on the measurement machine. Broader fixture coverage and
+    assessment of `lbfgsb-rs-pure` remain open.
 
 - [ ] **Add active CMA-ES against the Rust `cmaes` crate.** [`cmaes`
   0.2.2](https://docs.rs/cmaes/0.2.2/cmaes/) supplies active covariance
