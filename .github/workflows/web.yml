@@ -89,6 +89,10 @@ jobs:
         # stays on for local installs, where it's the actual protection layer.
         run: pnpm install --frozen-lockfile --config.minimumReleaseAge=0
 
+      - name: Test documentation search
+        working-directory: web
+        run: pnpm run test:search
+
       - name: Build site
         working-directory: web
         run: pnpm run build
