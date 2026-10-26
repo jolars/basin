@@ -11,16 +11,21 @@
 
 import {
     PROBLEM_LABELS as BASE_PROBLEM_LABELS,
-    SOLVER_LABELS,
-    type Solver,
+    SOLVER_LABELS as BASE_SOLVER_LABELS,
+    type Solver as BaseSolver,
 } from "./benchmarks";
 import rawData from "./competitor-benchmarks.json";
 
-export { SOLVER_LABELS, type Solver };
+export type Solver = BaseSolver | "lbfgsb";
+export const SOLVER_LABELS: Record<Solver, string> = {
+    ...BASE_SOLVER_LABELS,
+    lbfgsb: "L-BFGS-B",
+};
 export const PROBLEM_LABELS: Record<string, string> = {
     ...BASE_PROBLEM_LABELS,
     quadratic_30d: "Constrained quadratic",
     constrained_quadratic: "Ball-constrained quadratic",
+    extended_rosenbrock: "Bounded extended Rosenbrock",
 };
 
 /** Competing libraries a case is run against. */
@@ -30,6 +35,7 @@ export type Library =
     | "gomez"
     | "nlopt"
     | "slsqp"
+    | "lbfgsb"
     | "levenberg-marquardt"
     | "cobyla";
 
@@ -44,6 +50,8 @@ export interface RunSummary {
     constraintCalls: number;
     status: string;
     verified: boolean;
+    iterations?: number;
+    projectedGradient?: number | null;
 }
 
 /** One `(time, suboptimality)` sample on a convergence trace. */
@@ -93,6 +101,7 @@ export const LIBRARY_ORDER: Library[] = [
     "nlopt",
     "levenberg-marquardt",
     "cobyla",
+    "lbfgsb",
 ];
 
 export const LIBRARY_LABELS: Record<Library, string> = {
@@ -103,6 +112,7 @@ export const LIBRARY_LABELS: Record<Library, string> = {
     nlopt: "nlopt",
     "levenberg-marquardt": "LM crate",
     cobyla: "cobyla",
+    lbfgsb: "lbfgsb (C)",
 };
 
 /** Line and legend colors per library, legible on light and dark backgrounds.
@@ -116,6 +126,7 @@ export const LIBRARY_COLORS: Record<Library, string> = {
     nlopt: "#e11d48",
     "levenberg-marquardt": "#f59e0b",
     cobyla: "#14b8a6",
+    lbfgsb: "#14b8a6",
 };
 
 /** One curated competitor case. */
@@ -177,6 +188,13 @@ export const COMPETITOR_CASES: CompetitorCase[] = [
         blurb: "Limited-memory BFGS (m = 10 in all three libraries); Basin and argmin both use a More–Thuente line search; nlopt uses its bundled L-BFGS (no line-search knob exposed).",
     },
     {
+        solver: "lbfgsb",
+        libraries: ["basin", "lbfgsb"],
+        problem: "extended_rosenbrock",
+        n: 20_000,
+        blurb: "Bounded extended Rosenbrock with 20,000 variables, fused analytic gradients, ten curvature pairs, and matched projected-gradient and line-search settings. Compared with Becker's C translation of L-BFGS-B 3.0.",
+    },
+    {
         solver: "newuoa",
         libraries: ["basin", "nlopt"],
         problem: "styblinski",
@@ -216,7 +234,7 @@ export function validateCompetitorResults(raw: unknown): CompetitorResult[] {
         validatePoints(row.points, "subopt", key);
         if (row.violations !== undefined)
             validatePoints(row.violations, "violation", key);
-        if (["lm", "cobyla", "slsqp"].includes(c.solver)) {
+        if (["lm", "cobyla", "slsqp", "lbfgsb"].includes(c.solver)) {
             const s = row.summary;
             if (
                 !s ||
@@ -262,6 +280,27 @@ export function validateCompetitorResults(raw: unknown): CompetitorResult[] {
                 (s.objectiveCalls < 1 || !row.violations?.length)
             )
                 throw new Error(`Missing constrained measurements: ${key}`);
+            if (c.solver === "lbfgsb") {
+                if (
+                    !Number.isInteger(s.iterations) ||
+                    (s.iterations ?? -1) < 0 ||
+                    s.projectedGradient === undefined ||
+                    (s.projectedGradient !== null &&
+                        (!Number.isFinite(s.projectedGradient) ||
+                            s.projectedGradient < 0))
+                )
+                    throw new Error(`Invalid L-BFGS-B diagnostics: ${key}`);
+                if (
+                    s.verified &&
+                    (s.projectedGradient === null ||
+                        s.projectedGradient > 1e-8 * (1 + 1e-6) ||
+                        s.objectiveCalls < 1 ||
+                        s.objectiveCalls !== s.gradientCalls)
+                )
+                    throw new Error(
+                        `Invalid verified L-BFGS-B solution: ${key}`,
+                    );
+            }
         }
     }
     for (const c of COMPETITOR_CASES) {

@@ -1,8 +1,9 @@
 //! Published competitor convergence traces on workloads sized for millisecond solves.
 //!
-//! Run with the default serial features:
-//! `cargo run --release -p competitor-bench --bin trace`.
+//! Run with the serial L-BFGS-B reference feature:
+//! `cargo run --release -p competitor-bench --features lbfgsb-reference --bin trace`.
 //! Append `-- --nm` to run only the shared-simplex Nelder-Mead comparison.
+//! Append `-- --lbfgsb` to run only the bounded L-BFGS-B comparison.
 //! Cases, starts, targets, and remaining comparison asymmetries are documented
 //! on the website's library-benchmark page. These traces measure solver
 //! effectiveness, including differences in trajectories and stopping rules.
@@ -420,12 +421,22 @@ fn print_traces(traces: &[Trace]) {
                     .join(",")
             );
             out.push_str(&format!(
-                ",\"summary\":{{\"point\":{},\"cost\":{},\"violation\":{},\"objectiveCalls\":{},\"residualCalls\":{},\"jacobianCalls\":{},\"gradientCalls\":{},\"constraintCalls\":{},\"status\":{:?},\"verified\":{}}}",
+                ",\"summary\":{{\"point\":{},\"cost\":{},\"violation\":{},\"objectiveCalls\":{},\"residualCalls\":{},\"jacobianCalls\":{},\"gradientCalls\":{},\"constraintCalls\":{},\"status\":{:?},\"verified\":{}",
                 point,
                 json_number(summary.cost), json_number(summary.violation),
                 summary.objective_calls, summary.residual_calls, summary.jacobian_calls, summary.gradient_calls,
                 summary.constraint_calls, summary.status, summary.verified,
             ));
+            if let Some(iterations) = summary.iterations {
+                out.push_str(&format!(",\"iterations\":{iterations}"));
+            }
+            if let Some(pg) = summary.projected_gradient {
+                out.push_str(&format!(
+                    ",\"projectedGradient\":{}",
+                    json_number(pg)
+                ));
+            }
+            out.push('}');
         }
         out.push('}');
         out.push_str(if ti + 1 < traces.len() { ",\n" } else { "\n" });
@@ -560,6 +571,15 @@ fn main() {
     );
     if std::env::args().nth(1).as_deref() == Some("--nm") {
         print_traces(&nm_traces());
+        return;
+    }
+    assert!(
+        cfg!(feature = "lbfgsb-reference"),
+        "Enable --features lbfgsb-reference to generate the complete published dataset"
+    );
+    #[cfg(feature = "lbfgsb-reference")]
+    if std::env::args().nth(1).as_deref() == Some("--lbfgsb") {
+        print_traces(&lbfgsb_traces());
         return;
     }
     // Cost at the shared start, used to give argmin's curve a finite t = 0.
@@ -747,6 +767,8 @@ fn main() {
                         point: result.x,
                         cost: result.cost,
                         violation,
+                        iterations: result.iterations,
+                        projected_gradient: None,
                         objective_calls: result.cost_evals,
                         residual_calls: 0,
                         jacobian_calls: 0,
@@ -793,5 +815,27 @@ fn main() {
             ),
         ));
     }
+    #[cfg(feature = "lbfgsb-reference")]
+    traces.extend(lbfgsb_traces());
     print_traces(&traces);
+}
+
+#[cfg(feature = "lbfgsb-reference")]
+fn lbfgsb_traces() -> Vec<Trace> {
+    use competitor_bench::lbfgsb::{self, Library};
+    [Library::Basin, Library::Reference]
+        .into_iter()
+        .map(|library| {
+            published_trace(
+                "lbfgsb",
+                "extended_rosenbrock",
+                0.0,
+                library.name(),
+                convergence::median_run(
+                    || lbfgsb::run(library, lbfgsb::DIMENSION),
+                    REPS,
+                ),
+            )
+        })
+        .collect()
 }

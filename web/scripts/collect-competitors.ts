@@ -7,7 +7,7 @@
  * writes `web/src/lib/data/competitor-benchmarks.json`.
  *
  * Run with: `npm run collect:competitors` (uses tsx). Produce the input first:
- *   cargo run -p competitor-bench --release --bin trace > target/competitor-traces.json
+ *   cargo run -p competitor-bench --release --features lbfgsb-reference --bin trace > target/competitor-traces.json
  *
  * Like the backend collector, this is deliberately off CI: timings are
  * machine-specific and shared runners are noisy. Refresh locally and commit
@@ -46,7 +46,7 @@ if (!existsSync(tracesFile)) {
     console.error(`✗ no trace output at ${tracesFile}`);
     console.error(
         "  run the harness first:\n" +
-            "  cargo run -p competitor-bench --release --bin trace > target/competitor-traces.json",
+            "  cargo run -p competitor-bench --release --features lbfgsb-reference --bin trace > target/competitor-traces.json",
     );
     process.exit(1);
 }
@@ -74,6 +74,7 @@ const versions = Object.fromEntries(
         "slsqp",
         "nlopt",
         "cobyla",
+        "lbfgsb",
         "levenberg-marquardt",
         "nalgebra",
     ].map((name) => {

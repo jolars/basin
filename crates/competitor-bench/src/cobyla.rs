@@ -350,6 +350,8 @@ impl Case {
                 point: result.point,
                 cost: result.cost,
                 violation,
+                iterations: result.iterations,
+                projected_gradient: None,
                 objective_calls: result.objective_calls,
                 residual_calls: 0,
                 jacobian_calls: 0,

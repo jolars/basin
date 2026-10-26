@@ -64,6 +64,9 @@ nlopt = "0.8"
 cobyla = "1.0.2"
 # Pure-Rust translation of NLopt 2.7.1's SLSQP, compared with Basin and NLopt.
 slsqp = "1.0.2"
+# Becker's C translation of L-BFGS-B 3.0 needs a C compiler and libclang.
+# Keep bindgen optional for the other competitor benchmarks.
+lbfgsb = { version = "=0.1.1", optional = true }
 # Pulled in only by the `parallel` feature: lets the population-scaling
 # bench query the active rayon pool size (`current_num_threads`) so each
 # run self-reports whether it is in the serial (`RAYON_NUM_THREADS=1`) or
@@ -72,6 +75,7 @@ slsqp = "1.0.2"
 rayon = { version = "1", optional = true }
 
 [features]
+lbfgsb-reference = ["dep:lbfgsb"]
 basin-latest = ["basin/nalgebra", "dep:nalgebra_latest"]
 # Off by default so the axis-3 competitor benches (`compare`, `gd_nm`)
 # compile basin *without* rayon—a single-threaded basin vs a
@@ -85,6 +89,10 @@ parallel = ["basin/parallel", "dep:rayon"]
 criterion = { version = "0.8", default-features = false, features = [
   "cargo_bench_support",
 ] }
+
+[[bin]]
+name = "verify_lbfgsb"
+required-features = ["lbfgsb-reference"]
 
 [[bench]]
 name = "compare"

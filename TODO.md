@@ -314,6 +314,12 @@ compatibility and numerical behavior still need verification.
   The existing unconstrained L-BFGS chart and NLopt's L-BFGS are not
   coverage of Basin's L-BFGS-B algorithm.
 
+  - [x] Publish one larger bounded example against the C-backed `lbfgsb`
+    reference on the competitor benchmark page. The 20,000-variable extended
+    Rosenbrock driver takes at least 20 ms per solve for both implementations
+    on the measurement machine. Broader fixture coverage and assessment of
+    `lbfgsb-rs-pure` remain open.
+
 - [ ] **Add active CMA-ES against the Rust `cmaes` crate.** [`cmaes`
   0.2.2](https://docs.rs/cmaes/0.2.2/cmaes/) supplies active covariance
   adaptation and automatic restart strategies. Explicitly select negative

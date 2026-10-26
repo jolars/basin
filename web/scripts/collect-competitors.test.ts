@@ -19,6 +19,7 @@ function fixture(): CompetitorResult[] {
                 : {}),
             ...(c.solver === "cobyla" ||
             c.solver === "slsqp" ||
+            c.solver === "lbfgsb" ||
             c.solver === "lm"
                 ? {
                       summary: {
@@ -32,6 +33,13 @@ function fixture(): CompetitorResult[] {
                           constraintCalls: 5,
                           status: "Converged",
                           verified: true,
+                          ...(c.solver === "lbfgsb"
+                              ? {
+                                    iterations: 40,
+                                    projectedGradient: 1e-9,
+                                    gradientCalls: 5,
+                                }
+                              : {}),
                       },
                   }
                 : {}),
@@ -40,7 +48,7 @@ function fixture(): CompetitorResult[] {
 }
 
 test("collects exactly one measured row per curated case and library", () => {
-    assert.equal(validateCompetitorResults(fixture()).length, 19);
+    assert.equal(validateCompetitorResults(fixture()).length, 21);
     assert.throws(
         () => validateCompetitorResults(fixture().slice(1)),
         /Missing result/,
@@ -125,5 +133,36 @@ test("retains failed runs without treating them as verified solutions", () => {
     assert.throws(
         () => validateCompetitorResults(rows),
         /Invalid verified solution/,
+    );
+});
+
+test("requires L-BFGS-B stationarity and fused callback diagnostics", () => {
+    const rows = fixture();
+    const bounded = rows.find((r) => r.solver === "lbfgsb");
+    assert.ok(bounded?.summary);
+    delete bounded.summary.projectedGradient;
+    assert.throws(
+        () => validateCompetitorResults(rows),
+        /Invalid L-BFGS-B diagnostics/,
+    );
+    bounded.summary.projectedGradient = 1e-3;
+    assert.throws(
+        () => validateCompetitorResults(rows),
+        /Invalid verified L-BFGS-B/,
+    );
+    bounded.summary.verified = false;
+    bounded.summary.projectedGradient = null;
+    assert.equal(validateCompetitorResults(rows).length, 21);
+    bounded.summary.projectedGradient = -1;
+    assert.throws(
+        () => validateCompetitorResults(rows),
+        /Invalid L-BFGS-B diagnostics/,
+    );
+    bounded.summary.projectedGradient = 1e-9;
+    bounded.summary.verified = true;
+    bounded.summary.gradientCalls = 0;
+    assert.throws(
+        () => validateCompetitorResults(rows),
+        /Invalid verified L-BFGS-B/,
     );
 });

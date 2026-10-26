@@ -202,7 +202,7 @@ tasks:
     summary: |
       Runs the `trace` harness, including LM exponential fitting against
       levenberg-marquardt and constrained quadratic optimization against cobyla
-      and native NLopt.
+      and native NLopt, plus bounded L-BFGS-B against Becker's C translation.
       Records convergence against wall-clock time, then wraps the traces with
       compiler, revision, dependency versions, and machine metadata into
       web/src/lib/data/competitor-benchmarks.json, which the
@@ -212,7 +212,7 @@ tasks:
       regenerated JSON. Deliberately not wired into CI — shared runners are too
       noisy for trustworthy timings.
     cmds:
-      - cargo run --locked -p competitor-bench --release --bin trace > target/competitor-traces.json
+      - cargo run --locked -p competitor-bench --release --features lbfgsb-reference --bin trace > target/competitor-traces.json
       - cd web && pnpm collect:competitors
 
   bench:solvers:

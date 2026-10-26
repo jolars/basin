@@ -1,4 +1,4 @@
-//! Callback traces shared by the published LM and COBYLA comparisons.
+//! Traces and run diagnostics shared by the published library comparisons.
 
 use std::time::Instant;
 
@@ -7,6 +7,9 @@ pub struct Summary {
     pub point: Vec<f64>,
     pub cost: f64,
     pub violation: f64,
+    pub iterations: Option<u64>,
+    /// Independently recomputed stationarity for bounded gradient solvers.
+    pub projected_gradient: Option<f64>,
     pub objective_calls: usize,
     pub residual_calls: usize,
     pub jacobian_calls: usize,
@@ -36,6 +39,12 @@ impl Summary {
                 .all(|(&a, &b)| same_float(a, b))
             && same_float(self.cost, other.cost)
             && same_float(self.violation, other.violation)
+            && self.iterations == other.iterations
+            && match (self.projected_gradient, other.projected_gradient) {
+                (Some(a), Some(b)) => same_float(a, b),
+                (None, None) => true,
+                _ => false,
+            }
             && self.objective_calls == other.objective_calls
             && self.residual_calls == other.residual_calls
             && self.jacobian_calls == other.jacobian_calls
@@ -166,6 +175,8 @@ mod tests {
                     point: vec![f64::NAN],
                     cost: f64::NAN,
                     violation: f64::INFINITY,
+                    iterations: None,
+                    projected_gradient: None,
                     objective_calls: 0,
                     residual_calls: 0,
                     jacobian_calls: 0,
@@ -194,6 +205,8 @@ mod tests {
                 point: vec![0.75, 0.75],
                 cost: 0.125,
                 violation: 0.0,
+                iterations: None,
+                projected_gradient: None,
                 objective_calls: 2,
                 residual_calls: 0,
                 jacobian_calls: 0,

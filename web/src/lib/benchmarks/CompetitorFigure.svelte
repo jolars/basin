@@ -91,6 +91,15 @@
                         {#if solver === "lm"}
                             {r.summary.residualCalls} residual and
                             {r.summary.jacobianCalls} Jacobian calls.
+                        {:else if solver === "lbfgsb"}
+                            {r.summary.iterations} iterations;
+                            {r.summary.objectiveCalls} objective and
+                            {r.summary.gradientCalls} gradient calls (fused); bound
+                            violation
+                            {r.summary.violation?.toExponential(3) ??
+                                "nonfinite"}; projected-gradient norm
+                            {r.summary.projectedGradient?.toExponential(3) ??
+                                "nonfinite"}.
                         {:else}
                             Violation
                             {r.summary.violation?.toExponential(3) ??

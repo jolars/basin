@@ -32,6 +32,8 @@
 
 pub mod cobyla;
 pub mod convergence;
+#[cfg(feature = "lbfgsb-reference")]
+pub mod lbfgsb;
 pub mod lm;
 pub mod lm_defaults;
 pub mod nist;

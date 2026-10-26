@@ -15,6 +15,9 @@
   # Nix manages pnpm; downloaded standalone binaries cannot run on NixOS.
   env.pnpm_config_pm_on_fail = "ignore";
 
+  # bindgen loads libclang for the optional C L-BFGS-B benchmark reference.
+  env.LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
+
   packages = with pkgs; [
     go-task
     llvmPackages.bintools
@@ -37,6 +40,7 @@
     shfmt
     resvg # SVG → PNG rasteriser for the `task logo` asset pipeline
     cmake # for nlopt-sys (competitor-bench only; builds bundled NLopt 2.9.1)
+    llvmPackages.clang # for the optional lbfgsb reference and bindgen headers.
   ];
 
   languages = {

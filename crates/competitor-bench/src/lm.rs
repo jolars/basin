@@ -241,6 +241,8 @@ pub fn run(library: Library) -> Run {
             point,
             cost,
             violation: 0.0,
+            iterations: None,
+            projected_gradient: None,
             objective_calls: 0,
             residual_calls,
             jacobian_calls,

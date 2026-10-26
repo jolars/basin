@@ -32,6 +32,7 @@ continuing iterations after reaching the target.
   | Gradient descent    | 100-variable Rosenbrock                                |
   | Nelder–Mead         | 12-variable Rosenbrock                                 |
   | L-BFGS              | 100-variable Rosenbrock                                |
+  | L-BFGS-B            | 20,000-variable extended Rosenbrock with box bounds     |
   | NEWUOA              | 30-variable Styblinski–Tang                            |
 
 Configurations match where the APIs allow it. Line searches, stopping rules, and
@@ -172,6 +173,42 @@ do not prescribe equal work.
 
 <CompetitorFigure solver="lbfgs" problem="rosenbrock" />
 
+## L-BFGS-B
+
+Basin is compared with [lbfgsb](https://docs.rs/lbfgsb/0.1.1/lbfgsb/)
+{data.versions.lbfgsb}, which wraps Stephen Becker's C translation of L-BFGS-B
+3.0. This case scales the reference's [extended Rosenbrock
+driver](https://github.com/stephenbeckr/L-BFGS-B-C/blob/master/src/driver3.c)
+to 20,000 variables:
+
+$$
+  f(\mathbf{x}) = (x_1 - 1)^2 + 4\sum_{i=2}^{n}(x_i - x_{i-1}^2)^2.
+$$
+
+Every coordinate starts at 3. Lower bounds alternate between 1 and $-100$,
+starting with 1, and every upper bound is 100. The all-ones vector attains
+$f^\star = 0$ on the box faces. Both implementations use `Vec<f64>`, fused
+analytic objective and gradient evaluations, and ten curvature pairs.
+
+Both stop when the projected-gradient infinity norm reaches $10^{-8}$.
+The signed relative-reduction tolerance is zero (`factr = 0`), so a
+nonpositive reduction can also stop a run. Both use a Moré–Thuente line search
+with sufficient-decrease coefficient $10^{-3}$, curvature coefficient 0.9,
+relative bracket tolerance 0.1, and at most 20 evaluations per search. Safety
+limits are 2,000 iterations and 10,000 objective calls, checked at accepted
+iteration boundaries.
+
+<CompetitorFigure solver="lbfgsb" problem="extended_rosenbrock" />
+
+The curves sample initialization and accepted iterates, followed by an endpoint
+that includes solver teardown. Independent checks recompute the objective and
+projected gradient, require an objective gap at most $10^{-10}$, and check
+returned and trial bound violations against $10^{-12}$. They check objective
+accuracy and stationarity, rather than coordinate accuracy along this
+ill-conditioned valley. The problem size gives both implementations at least
+20 ms per solve on the measurement machine, including with intermediate trace
+recording disabled.
+
 ## NEWUOA
 
 Basin and NLopt run Powell's model-based derivative-free method on
@@ -202,8 +239,8 @@ timestamps. Repetitions reduce timing noise; they are not independent starting
 points or a measure of reliability across problems.
 
 Timings include initialization and trace instrumentation. Some driving loops
-construct their executor before starting the clock. LM and COBYLA also include
-solver teardown; NLopt curves include an explicit endpoint after optimization.
+construct their executor before starting the clock. LM, COBYLA, and L-BFGS-B also
+include solver teardown; NLopt curves include an explicit endpoint after optimization.
 Independent solution checks and constrained-trace reconstruction happen outside
 the timer. Argmin uses an observer, Basin and gomez use driving loops, and NLopt
 uses objective callbacks, so sampling and instrumentation costs differ.
@@ -219,9 +256,16 @@ From the repository root:
 
 ```sh
 mkdir -p target
-cargo run -p competitor-bench --release --bin trace > target/competitor-traces.json
+cargo run --locked -p competitor-bench --release --features lbfgsb-reference --bin trace > target/competitor-traces.json
 pnpm --dir web collect:competitors
 ```
+
+The optional `lbfgsb-reference` feature requires a C compiler and libclang,
+provided by the development environment. To verify just this case, run
+`cargo run --locked --release -p competitor-bench --features lbfgsb-reference --bin verify_lbfgsb`.
+Append `-- --calibrate` to remeasure untraced solves, starting at 20,000 variables
+and doubling until both medians reach 20 ms. The published dimension remains
+fixed between benchmark refreshes.
 
 The [trace
 harness](https://github.com/jolars/basin/blob/main/crates/competitor-bench/src/bin/trace.rs)
