@@ -42,7 +42,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libclang-dev
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --workspace --all-features --all-targets -- -D warnings
-      - run: cargo test --locked -p competitor-bench --features lbfgsb-reference --lib lbfgsb::
+      - run: 'cargo test --locked -p competitor-bench --features lbfgsb-reference --lib lbfgsb::'
 
   msrv:
     name: MSRV (Rust 1.87)
