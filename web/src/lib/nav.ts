@@ -223,12 +223,30 @@ export const SOLVER_LINKS: DocsNavItem[] = [
     {
         label: "Memetic",
         children: [
-            solver("CMA-ES with local search", "cma-inject"),
-            solver("Bounded CMA-ES with local search", "bounded-cma-inject"),
-            solver("DE with local search", "de-inject"),
-            solver("Local-search chains", "ma-ls-ch"),
-            solver("CMA-ES chains", "ma-ls-ch-cma"),
-            solver("Solis–Wets chains", "ma-ls-ch-sw"),
+            {
+                label: "CMA-ES with local search",
+                href: "guide/solvers/memetic/cma-inject/",
+            },
+            {
+                label: "Bounded CMA-ES with local search",
+                href: "guide/solvers/memetic/bounded-cma-inject/",
+            },
+            {
+                label: "DE with local search",
+                href: "guide/solvers/memetic/de-inject/",
+            },
+            {
+                label: "Local-search chains",
+                href: "guide/solvers/memetic/ma-ls-ch/",
+            },
+            {
+                label: "CMA-ES chains",
+                href: "guide/solvers/memetic/ma-ls-ch-cma/",
+            },
+            {
+                label: "Solis–Wets chains",
+                href: "guide/solvers/memetic/ma-ls-ch-sw/",
+            },
         ],
     },
     {

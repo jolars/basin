@@ -802,5 +802,71 @@
         "issue": "1",
         "page": "27-63",
         "DOI": "10.1162/evco.2010.18.1.18102"
+    },
+    {
+        "id": "hansen-2011",
+        "type": "report",
+        "title": "Injecting External Solutions Into CMA-ES",
+        "author": [
+            {
+                "family": "Hansen",
+                "given": "Nikolaus"
+            }
+        ],
+        "issued": {
+            "date-parts": [[2011]]
+        },
+        "publisher": "INRIA",
+        "number": "7748",
+        "URL": "https://arxiv.org/abs/1110.4181"
+    },
+    {
+        "id": "noman-iba-2008",
+        "type": "article-journal",
+        "title": "Accelerating Differential Evolution Using an Adaptive Local Search",
+        "author": [
+            {
+                "family": "Noman",
+                "given": "Nasimul"
+            },
+            {
+                "family": "Iba",
+                "given": "Hitoshi"
+            }
+        ],
+        "issued": {
+            "date-parts": [[2008]]
+        },
+        "container-title": "IEEE Transactions on Evolutionary Computation",
+        "volume": "12",
+        "issue": "1",
+        "page": "107-125",
+        "DOI": "10.1109/TEVC.2007.895272"
+    },
+    {
+        "id": "molina-lozano-herrera-2010",
+        "type": "paper-conference",
+        "title": "MA-SW-Chains: Memetic Algorithm Based on Local Search Chains for Large Scale Continuous Global Optimization",
+        "author": [
+            {
+                "family": "Molina",
+                "given": "Daniel"
+            },
+            {
+                "family": "Lozano",
+                "given": "Manuel"
+            },
+            {
+                "family": "Herrera",
+                "given": "Francisco"
+            }
+        ],
+        "issued": {
+            "date-parts": [[2010]]
+        },
+        "container-title": "2010 IEEE Congress on Evolutionary Computation",
+        "publisher": "IEEE",
+        "page": "3153-3160",
+        "DOI": "10.1109/CEC.2010.5586034"
     }
 ]

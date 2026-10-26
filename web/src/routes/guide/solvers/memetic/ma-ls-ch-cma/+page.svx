@@ -1,0 +1,172 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# CMA-ES chains
+
+Local-search chains combine a steady-state genetic algorithm with local
+refinement that remembers its previous work. Each promising individual can
+retain a complete local solver and state. Selecting it again extends the
+same search instead of rebuilding its model from the population point.
+
+`MaLsChCma` specializes the framework with CMA-ES. Each saved chain
+retains its covariance, step size, evolution paths, and random generator.
+
+[API reference](https://docs.rs/basin/latest/basin/solver/ma_ls_ch/struct.MaLsCh.html)
+
+| Property | Requirement |
+| --- | --- |
+| Objective | A scalar function with useful local refinement |
+| Evaluations | `CostFunction`, plus the inner operator's requirements |
+| Search | Persistent local-search chains within a steady-state GA |
+| Constraints | SamplingBounds on an unconstrained objective |
+| Parameters | All four dense backends with a compatible inner |
+
+## When to use it
+
+Use chains when local refinement keeps improving a basin and its learned
+search behavior is worth retaining. The framework follows
+[Molina et al. (2010)](#ref-molina-et-al-2010). Compare
+[CMA injection](../cma-inject/) or [DE injection](../de-inject/) when
+independent short local solves are sufficient.
+
+CMA chains learn correlations but store a dense covariance for each retained
+individual. Solis–Wets chains use vector operations and linear storage,
+making them a useful alternative as dimension grows. Neither configuration
+certifies global optimality in a finite run.
+
+## How it works
+
+Each outer iteration first spends `nfrec` objective evaluations generating
+SSGA offspring through negative assortative mating, BLX crossover, BGA
+mutation, and replacement of the worst member. Replacing a member discards
+its old chain.
+
+The solver then selects the best eligible member. A member is eligible if
+it has never received local search or its previous segment improved by at
+least `with_ls_improvement_threshold` (default `1e-8`). If none qualifies,
+the best population member is selected anyway.
+
+A new chain starts with a scale equal to half the nearest-neighbor distance.
+Zero or non-finite distances use `with_initial_scale_fallback`, default
+`1.0`. A retained chain resumes without initialization. Each segment gets
+its own cost budget, and an improved best evaluated point replaces the
+population member. The chain survives only if its improvement meets the
+threshold; otherwise, a later selection starts a fresh chain.
+
+## Example
+
+The sphere has its minimum at the origin, with cost zero. This example
+uses a fixed seed and checks the historical best against that analytic
+reference. A successful result on this objective does not certify global
+optimality on a general problem.
+
+<!-- compile: solver-ma-ls-ch-cma -->
+```rust
+use basin::{
+    BoxBounds, Constrained, ConstraintSet, CostFunction, DenseMatrix, Executor,
+    MaLsChCma, PopulationProgress, SamplingDomain,
+};
+use std::convert::Infallible;
+
+struct Sphere;
+
+impl CostFunction for Sphere {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok(x.iter().map(|v| v * v).sum())
+    }
+}
+
+fn main() {
+    let bounds = BoxBounds::new(Some(vec![-5.0; 2]), Some(vec![5.0; 2]));
+    let problem =
+        Constrained::new(Sphere, ConstraintSet::new().with_bounds(bounds));
+    let solver = MaLsChCma::<Vec<f64>, DenseMatrix>::new(7)
+        .with_pop_size(20)
+        .with_ls_intensity(100);
+
+    let result = Executor::new(
+        SamplingDomain::new(problem),
+        solver,
+        PopulationProgress::<Vec<f64>>::empty(),
+    )
+    .max_cost_evals(10_000)
+    .run()
+    .unwrap();
+
+    assert!(result.best_cost() < 1e-4);
+    assert!(result.best_param().iter().all(|v| v.abs() < 0.01));
+}
+```
+
+## Practical considerations
+
+### Distinguish sampling bounds from constraints
+
+The objective must support `SamplingBounds` and be unconstrained. The
+example explicitly reinterprets a box-only objective with `SamplingDomain`.
+This removes its mathematical constraints: local searches and accepted
+results may leave the sampling box. The objective must remain valid there.
+Use bounded injection instead when the returned result must satisfy a box.
+
+Sampling endpoints must be finite, ordered, and dimensionally consistent.
+Empty progress samples the initial population; explicit progress from
+`PopulationProgress::from_population` must match the configured population
+size and dimension. Fresh initialization projects explicit members into the
+sampling box and reevaluates them.
+
+### Balance global exploration and local refinement
+
+The default population has `60` members. The default local intensity is
+`300` cost evaluations, and `nfrec` follows that intensity unless explicitly
+set with `with_nfrec`. Raising the local share can refine basins more deeply
+but leaves less budget to discover alternatives. The improvement threshold
+controls chain retention and eligibility, rather than outer convergence.
+
+BLX alpha defaults to `0.5`, the mating pool to `4`, mutation probability to
+`0.125`, and BGA range fraction to `0.1`. See the
+[steady-state GA guide](../../global-and-stochastic/ssga/) for the roles
+of those global operators.
+
+### Allow for complete local segments
+
+Set outer execution limits on `Executor`. One outer iteration includes the
+GA phase and a local segment, so the outer evaluation allowance can be
+exceeded by that work. CMA segments complete whole generations and can
+exceed their segment allowance by up to `lambda_inner - 1` evaluations.
+Solis–Wets can spend one extra evaluation on a reversal.
+
+CMA chains start at half the neighbor distance and use a per-segment TolX
+of `1e-12` times the segment's starting scale. `with_inner_lambda` configures
+CMA's population size. Solis–Wets segments use their budget without a
+per-segment tolerance. Its published large-scale configuration used an
+intensity of `500`; Basin keeps the family default of `300`.
+
+An inner `SolverFailed` propagates to the outer solve. Budget stops and
+operator tolerances end a segment cleanly. Enable `with_inner_diagnostics`
+when you need stopping reports instead of inferring local convergence from
+a returned point.
+
+## Implementation
+
+`PopulationProgress` owns the population and historical incumbent. The
+solver owns chains, eligibility history, the operator prototype, and the
+seeded outer RNG. Use `Executor::run_with_solver` to inspect `chain(i)` and
+`ls_application_count(i)` for the currently sorted population.
+
+Fresh initialization discards chains and resets the outer random stream.
+Exact solver-and-state checkpoints retain the chains, population, RNG, and
+evaluation counts and skip initialization. With `serde`, serialization
+requires the local solver, its state, and the parameters to support it.
+A state-only snapshot starts fresh chains.
+
+Both shipped configurations support `Vec<F>`, `nalgebra::DVector<F>`,
+`ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`.
+CMA chains additionally require CMA-ES's matrix capabilities; Solis–Wets
+chains need only vector operations. A custom `ResumableInner` can narrow
+backend support.
+<References entries={["molina-et-al-2010"]} />

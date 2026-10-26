@@ -1,0 +1,153 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# CMA-ES with local search
+
+`CmaInject` combines CMA-ES with local refinement of the best
+population members. The outer search explores the landscape, while a
+configurable inner solver polishes selected points after each generation.
+
+[API reference](https://docs.rs/basin/latest/basin/solver/cma_inject/struct.CmaInject.html)
+
+| Property | Requirement |
+| --- | --- |
+| Objective | A scalar function with useful local refinement |
+| Evaluations | `CostFunction`, plus the inner operator's requirements |
+| Search | Population search with fresh local polishing |
+| Constraints | Unconstrained search |
+| Parameters | All four dense backends with a compatible inner |
+
+## When to use it
+
+Use this hybrid when local refinement improves useful basins cheaply
+enough to justify fewer global samples at the same evaluation budget.
+Compare the unmodified outer solver before increasing local work: repeated
+polishing of one basin can reduce exploration on a multimodal objective.
+For searches that retain each basin's learned local model, compare
+[local-search chains](../ma-ls-ch/).
+
+The inner solver determines derivative requirements. Nelder–Mead uses cost
+values alone, Levenberg–Marquardt needs residuals and a Jacobian, and
+L-BFGS-B uses gradients and a box declaration. Custom inners implement
+`MemeticInner`, extending `WarmStart` with a scale-aware seed.
+
+## How it works
+
+A complete CMA generation runs before the best `k` ranked candidates are
+locally refined. Each inner run starts fresh at its selected candidate,
+with the current CMA step size as a scale hint. Nelder–Mead uses this hint
+for its initial simplex.
+
+The refined displacement from the post-update mean is divided by sigma,
+then clipped in Mahalanobis distance using CMA's covariance. The default
+threshold is `sqrt(n) + 2*n/(n+2)`; `with_c_y` overrides it. The clipped point
+is reconstructed and reevaluated, then enters the population for the next
+ordinary CMA update. This follows
+[Hansen's injection mechanism (2011)](#ref-hansen-2011). Clipping can move
+the point away from the local solver's returned solution.
+
+Injection replaces selected members without DE's strict-improvement test.
+Use the historical `best_cost()` and `best_param()` when reporting results.
+
+## Example
+
+The sphere has its minimum at the origin, with cost zero. This example
+uses a fixed seed and checks the historical best against that analytic
+reference. A successful result on this objective does not certify global
+optimality on a general problem.
+
+<!-- compile: solver-cma-inject -->
+```rust
+use basin::{
+    CmaEs, CmaInject, CostFunction, DenseMatrix, Executor, NelderMead,
+    PopulationProgress,
+};
+use std::convert::Infallible;
+
+struct Sphere;
+
+impl CostFunction for Sphere {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok(x.iter().map(|v| v * v).sum())
+    }
+}
+
+fn main() {
+    let outer = CmaEs::<Vec<f64>, DenseMatrix>::new(7, 0.5);
+    let inner = NelderMead::adaptive();
+    let solver = CmaInject::with_inner_solver(outer, inner)
+        .with_k(1)
+        .with_inner_max_iter(50);
+
+    let result = Executor::new(
+        Sphere,
+        solver,
+        PopulationProgress::from_point(vec![2.0, -2.0]),
+    )
+    .max_iter(100)
+    .run()
+    .unwrap();
+
+    assert!(result.best_cost() < 1e-4);
+    assert!(result.best_param().iter().all(|v| v.abs() < 0.01));
+}
+```
+
+## Practical considerations
+
+### Budget both searches
+
+`with_k` defaults to `1`, and `with_inner_max_iter` defaults to `50` per
+local solve. Increasing either can spend most of the evaluation budget on
+polishing. Outer `max_iter` counts generations, not local iterations.
+Executor budgets are checked between outer steps, so a generation and its
+local work can exceed the remaining allowance.
+
+All inner evaluations use the outer problem's counters. `cost_evals()`
+counts cost requests alone; gradients, residuals, Jacobians, and Hessian
+work keep their own categories. Use
+`max_evaluations(EvaluationKind::TotalWork, n)` to budget their sum.
+Enable `with_inner_diagnostics(true)` and retain the solver to inspect
+`inner_diagnostics()` when local stopping reasons matter.
+
+### Choose a compatible inner solver
+
+The unconstrained outer provides no projection. An unconstrained local
+solver can explore freely, and problem constraint declarations do not turn
+this composition into a constrained method. Use
+[bounded CMA injection](../bounded-cma-inject/) for a shared box.
+
+### Keep the outer distribution useful
+
+Configure the initial sigma, population size, and coordinate scales on the
+CMA solver before wrapping it. A local solution far from the current
+search distribution can be shortened substantially by injection clipping.
+Raising `with_c_y` admits longer injected steps but also changes how strongly
+external solutions can affect the learned distribution. The outer
+`with_absolute_distribution_size_tolerance` remains available on the wrapper.
+
+
+## Implementation
+
+`PopulationProgress` publishes population points, objective costs, and the
+historical incumbent. The wrapper owns the outer solver and inner executor;
+it does not store a persistent chain for each member. Each refinement
+initializes its own local run.
+
+Exact solver-and-state checkpoints retain the outer search, inner solver,
+progress, RNG, and all six evaluation categories. Fresh runs initialize the
+outer search again. With `serde`, serialization requires serializable
+constituent solvers and parameters; application hooks require an owned
+checkpoint.
+
+Supported parameter types are `Vec<F>`, `nalgebra::DVector<F>`,
+`ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`, when
+the chosen inner supports them. Custom inners can narrow coverage.
+CMA injection also needs CMA-ES's dense matrix capabilities.
+
+<References entries={["hansen-2011"]} />

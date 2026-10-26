@@ -59,6 +59,12 @@ export function GET() {
 - [Random search](${guide}/solvers/global-and-stochastic/random-search/): uniform box sampling, elitist selection, seeded populations, and a Rust example
 - [Steady-state genetic algorithm](${guide}/solvers/global-and-stochastic/ssga/): assortative mating, BLX crossover, BGA mutation, replacement, and a Rust example
 - [Basin-hopping](${guide}/solvers/global-and-stochastic/basin-hopping/): local-solver composition, Metropolis acceptance, adaptive steps, and a Rust example
+- [CMA-ES with local search](${guide}/solvers/memetic/cma-inject/): local refinement, composition requirements, evaluation budgets, and a Rust example
+- [Bounded CMA-ES with local search](${guide}/solvers/memetic/bounded-cma-inject/): local refinement, composition requirements, evaluation budgets, and a Rust example
+- [Differential evolution with local search](${guide}/solvers/memetic/de-inject/): local refinement, composition requirements, evaluation budgets, and a Rust example
+- [Local-search chains](${guide}/solvers/memetic/ma-ls-ch/): local refinement, composition requirements, evaluation budgets, and a Rust example
+- [CMA-ES chains](${guide}/solvers/memetic/ma-ls-ch-cma/): local refinement, composition requirements, evaluation budgets, and a Rust example
+- [Solis–Wets chains](${guide}/solvers/memetic/ma-ls-ch-sw/): local refinement, composition requirements, evaluation budgets, and a Rust example
 
 ## Reference
 

@@ -149,6 +149,36 @@
             description:
                 "When to use basin-hopping, how local solves, Metropolis acceptance, and adaptive steps work, and how to run it in Basin, with references.",
         },
+        "/guide/solvers/memetic/cma-inject": {
+            title: "CMA-ES with local search – Basin",
+            description:
+                "When to use CmaInject, how local refinement works, and how to configure and run it in Basin, with references.",
+        },
+        "/guide/solvers/memetic/bounded-cma-inject": {
+            title: "Bounded CMA-ES with local search – Basin",
+            description:
+                "When to use BoundedCmaInject, how local refinement works, and how to configure and run it in Basin, with references.",
+        },
+        "/guide/solvers/memetic/de-inject": {
+            title: "Differential evolution with local search – Basin",
+            description:
+                "When to use DeInject, how local refinement works, and how to configure and run it in Basin, with references.",
+        },
+        "/guide/solvers/memetic/ma-ls-ch": {
+            title: "Local-search chains – Basin",
+            description:
+                "When to use MaLsCh, how local refinement works, and how to configure and run it in Basin, with references.",
+        },
+        "/guide/solvers/memetic/ma-ls-ch-cma": {
+            title: "CMA-ES chains – Basin",
+            description:
+                "When to use MaLsChCma, how local refinement works, and how to configure and run it in Basin, with references.",
+        },
+        "/guide/solvers/memetic/ma-ls-ch-sw": {
+            title: "Solis–Wets chains – Basin",
+            description:
+                "When to use MaLsChSw, how local refinement works, and how to configure and run it in Basin, with references.",
+        },
         "/guide/migrating-to-v3": {
             title: "Migrating to Basin 3.0 – Basin",
             description:

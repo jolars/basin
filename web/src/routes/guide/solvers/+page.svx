@@ -406,6 +406,8 @@ solvers that enforce the same box can be supplied directly.
   `PopulationProgress` and preserves all six evaluation categories. All four
   dense backends support `f32` and `f64` with a compatible inner solver;
   custom inners can narrow that support.
+  Read the [CMA injection](memetic/cma-inject/) and
+  [bounded CMA injection](memetic/bounded-cma-inject/) guides.
 - **<span id="de-inject"></span>[`DeInject`](https://docs.rs/basin/latest/basin/solver/de_inject/struct.DeInject.html)**:
   differential evolution with per-generation top-*k* local refinement and
   conditional write-back. References: Noman & Iba, *Accelerating Differential
@@ -416,6 +418,7 @@ solvers that enforce the same box can be supplied directly.
   Computing, 2009). Publishes `PopulationProgress` and supports all four dense
   backends with `f32` or `f64` when the chosen inner solver does. Nelder-Mead
   with `RelaxedInner` and L-BFGS-B cover all four; custom inners or strategies can narrow support.
+  [Read the DE injection guide](memetic/de-inject/).
 - **<span id="ma-ls-ch"></span><span id="ma-ls-ch-cma"></span>[`MaLsCh`](https://docs.rs/basin/latest/basin/solver/ma_ls_ch/struct.MaLsCh.html)**/**[`MaLsChCma`](https://docs.rs/basin/latest/basin/solver/ma_ls_ch/struct.MaLsCh.html)**:
   a memetic framework with persistent local-search chains and its CMA-ES
   configuration. Molina, Lozano, García-Martínez, and Herrera (2010),
@@ -426,6 +429,8 @@ solvers that enforce the same box can be supplied directly.
   `SamplingBounds` on an unconstrained objective, or `SamplingDomain::new(problem)`
   for an existing box-only objective. Local chains and accepted points may leave
   the sampling box.
+  Read the [local-search chain framework](memetic/ma-ls-ch/) and
+  [CMA-ES chain](memetic/ma-ls-ch-cma/) guides.
 - **<span id="ma-ls-ch-sw"></span>[`MaLsChSw`](https://docs.rs/basin/latest/basin/solver/ma_ls_ch/struct.MaLsCh.html)**:
   the high-dimensional sibling of `MaLsChCma`: the same local-search-chain
   framework with a Solis-Wets inner, whose O(n) chain snapshots keep
@@ -436,6 +441,7 @@ solvers that enforce the same box can be supplied directly.
   Both are type aliases of the generic `MaLsCh<V, LS, F>`, which accepts any
   local-search operator implementing the `ResumableInner` (seed + snapshot +
   resume) trait.
+  [Read the Solis–Wets chain guide](memetic/ma-ls-ch-sw/).
 
 ## Constrained
 
