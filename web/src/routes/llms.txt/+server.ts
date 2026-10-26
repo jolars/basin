@@ -49,6 +49,16 @@ export function GET() {
 - [Levenberg–Marquardt QR](${guide}/solvers/nonlinear-least-squares/levenberg-marquardt-qr/): pivoted QR, numerical rank checks, damping choices, and a Rust example
 - [Bounded Levenberg–Marquardt](${guide}/solvers/nonlinear-least-squares/bounded-levenberg-marquardt/): box scaling, strictly feasible steps, sparse Jacobians, and a Rust example
 - [Trust-region reflective](${guide}/solvers/nonlinear-least-squares/trust-region-reflective/): box bounds, reflected steps, rank-aware dense SVD, and a Rust example
+- [DIRECT](${guide}/solvers/global-and-stochastic/direct/): deterministic box subdivision, normalized stopping tests, and a Rust example
+- [Globalized bounded Nelder–Mead](${guide}/solvers/global-and-stochastic/gbnm/): projected simplex searches, probabilistic restarts, and a Rust example
+- [Simulated annealing](${guide}/solvers/global-and-stochastic/simulated-annealing/): custom neighbors, Metropolis acceptance, cooling schedules, restarts, and a Rust example
+- [CMA-ES](${guide}/solvers/global-and-stochastic/cma-es/): covariance adaptation, step-size control, population state, and a Rust example
+- [Bounded CMA-ES](${guide}/solvers/global-and-stochastic/bounded-cma-es/): box repair, adaptive penalties, raw and ranked costs, and a Rust example
+- [Differential evolution](${guide}/solvers/global-and-stochastic/de/): mutation strategies, crossover, dithering, box bounds, and a Rust example
+- [Particle swarm](${guide}/solvers/global-and-stochastic/global-best-pso/): global-best updates, inertia, velocity limits, boundary policies, and a Rust example
+- [Random search](${guide}/solvers/global-and-stochastic/random-search/): uniform box sampling, elitist selection, seeded populations, and a Rust example
+- [Steady-state genetic algorithm](${guide}/solvers/global-and-stochastic/ssga/): assortative mating, BLX crossover, BGA mutation, replacement, and a Rust example
+- [Basin-hopping](${guide}/solvers/global-and-stochastic/basin-hopping/): local-solver composition, Metropolis acceptance, adaptive steps, and a Rust example
 
 ## Reference
 

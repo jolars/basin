@@ -1,0 +1,212 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# Steady-state genetic algorithm
+
+The steady-state genetic algorithm (SSGA) evolves a population of real-valued
+vectors through crossover and mutation. It evaluates a few children at a time
+and replaces a worst member whenever a child improves on it. Basin combines
+negative assortative mating, BLX-α crossover, and BGA mutation in the SSGA
+component described by Molina and colleagues.
+
+[API reference](https://docs.rs/basin/latest/basin/solver/ssga/struct.Ssga.html)
+
+| Property | Requirement |
+| --- | --- |
+| Objective | A scalar function of continuous parameters |
+| Evaluations | `CostFunction` |
+| Search | Global population search with seeded crossover and mutation |
+| Constraints | A box-only declaration through `Constraints`; finite bounds |
+| Parameters | All four dense backends, with `f32` or `f64` |
+
+## When to use it
+
+Consider SSGA when you want an evolutionary baseline that improves a
+population through a small number of evaluations per iteration. Basin's
+operators follow the genetic component in [Molina et al.
+(2010)](#ref-molina-et-al-2010), Section 4.4. It is also the population
+search used by [MA-LSCh-CMA](../../#ma-ls-ch-cma), which adds local refinement.
+
+Compare [differential evolution](../de/) for generation-wide trial
+construction from population differences. SSGA can use a newly accepted
+child immediately in the next mating event, while DE freezes its parents
+for the entire generation. [Random search](../random-search/) provides a
+simpler comparison that spends evaluations without crossover or mutation.
+
+The real-valued representation suits continuous parameters. It does not
+provide discrete chromosomes, integer constraints, or multiobjective
+selection. A finite run also gives no guarantee of finding a global
+minimum; population diversity and the chosen evaluation budget matter.
+
+## How it works
+
+Initialization draws `pop_size` members uniformly from the problem's box,
+evaluates them, and sorts them by cost. Each iteration then produces
+`offspring_per_step` children, processing them sequentially:
+
+1. Choose the first parent uniformly. Sample `nam_pool - 1` further
+   candidates and choose the one farthest from the first parent in
+   Euclidean distance. This negative assortative mating favors different
+   parents within the sampled pool. Sampling allows repeated members.
+2. For each coordinate, form the interval between the parents and extend
+   it by `blx_alpha` times their separation at both ends. Intersect that
+   interval with the global bounds, then draw the child's coordinate
+   uniformly from it. This is Basin's bounded BLX-α crossover.
+3. Independently mutate each coordinate with probability `mutation_prob`.
+   BGA mutation adds or subtracts a random multiscale perturbation whose
+   range is proportional to that coordinate's full box span, then clamps
+   the result into the box.
+4. Evaluate the child and replace the current worst member only when
+   the child has a strictly lower objective value.
+
+After processing all children, Basin sorts members and their costs
+together and publishes the best member. The best finite objective cannot
+increase. A child need not improve on the best to enter the population;
+beating the worst is sufficient.
+
+The defaults are 60 members, `blx_alpha = 0.5`, `nam_pool = 4`, a
+per-coordinate mutation probability of `0.125`, a BGA range fraction of
+`0.1`, and two children per iteration. The mutation uses 16 binary scales
+with decreasing powers of two, allowing perturbations of different sizes
+without learning a covariance matrix.
+
+## Example
+
+Minimize a quadratic over `[-5, 5]^2`. Its minimum is `[1.0, -2.0]`.
+The example supplies a box through the problem's typed constraint
+declaration and asks SSGA to generate a population with a fixed seed.
+
+<!-- compile: solver-ssga -->
+```rust
+use basin::{
+    BoxBounds, ConstraintDescription, ConstraintSet, Constraints,
+    CostFunction, Executor, PopulationProgress, Ssga,
+};
+use std::convert::Infallible;
+
+struct BoundedQuadratic {
+    lower: Vec<f64>,
+    upper: Vec<f64>,
+}
+
+impl CostFunction for BoundedQuadratic {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok((x[0] - 1.0).powi(2) + 4.0 * (x[1] + 2.0).powi(2))
+    }
+}
+
+impl Constraints for BoundedQuadratic {
+    type Set = ConstraintSet<BoxBounds<Vec<f64>>>;
+
+    fn constraints(&self) -> <Self::Set as ConstraintDescription>::Borrowed<'_> {
+        ConstraintSet::new().with_bounds(BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
+
+fn main() {
+    let problem = BoundedQuadratic {
+        lower: vec![-5.0; 2],
+        upper: vec![5.0; 2],
+    };
+    let solver = Ssga::new(42).with_pop_size(30);
+
+    let result = Executor::new(
+        problem,
+        solver,
+        PopulationProgress::<Vec<f64>>::empty(),
+    )
+    .max_iter(5_000)
+    .run()
+    .unwrap();
+
+    assert!(result.cost() < 1e-4);
+    assert!((result.param()[0] - 1.0).abs() < 0.01);
+    assert!((result.param()[1] + 2.0).abs() < 0.01);
+}
+```
+
+Initialization uses 30 evaluations, followed by two for each complete
+iteration. The final assertions describe this seeded example's accuracy;
+exhausting the iteration budget does not certify convergence.
+
+## Practical considerations
+
+### Preserve useful diversity
+
+`with_pop_size` changes the number of members. A larger population costs
+more to initialize but can retain more distinct candidates. The
+negative assortative pool must contain at least two entries and cannot
+exceed the population size. With `nam_pool = 2`, there is only one
+candidate for the second parent, removing the distance-based choice.
+
+Distances use the raw parameter coordinates. Rescale parameters with
+different units when you want each coordinate to contribute comparably
+to mating decisions. `with_blx_alpha` controls how far the crossover
+interval extends beyond the parent span; zero samples only between
+the parents.
+
+### Tune mutation in relation to the box
+
+`with_mutation_prob` controls the independent per-coordinate probability,
+while `with_bga_range_fraction` scales mutation by each coordinate's box
+width. Wide bounds therefore produce larger possible mutations, even
+when the population has concentrated in a small region. A mutation gate
+can fire without moving a coordinate because all sampled binary scales
+can be zero.
+
+The box must be declared as `ConstraintSet<BoxBounds<V>>`, with both
+bound vectors present, non-empty, finite, equally sized, and ordered.
+Equal bounds fix a coordinate. SSGA rejects unsupported constraint
+blocks; crossover and mutation enforce the box alone.
+
+### Match stopping rules to steady-state progress
+
+`with_offspring_per_step` sets a positive number of children, defaulting
+to two. Changing it changes evaluation cost per iteration and how often
+observers and execution controls run. It does not turn children into
+independent proposals: each accepted child is available to later mating
+events in that iteration.
+
+There is no default solver optimality test. Use executor budgets, a
+known objective target, or a stagnation window. An evaluation limit is
+checked at iteration boundaries, so a full group of children can cross
+the requested count. Optional step- and cost-change checks compare the
+best representative, including unchanged iterations. An unchanged best
+does not imply that the population has stopped evolving.
+
+## Implementation
+
+`PopulationProgress` stores the members, matching objective values, and
+best representative. SSGA owns its configuration and live `ChaCha8Rng`.
+Unlike a generation-wide batch method, it evaluates and considers each
+child for replacement before creating the next one. Its offspring loop
+therefore does not batch objective calls through the `parallel` feature.
+
+Use `PopulationProgress::from_population` to supply exactly `pop_size`
+finite vectors with the bounds' dimension. Fresh initialization resets
+progress and the RNG, projects those members into the box, reevaluates
+them, and sorts them. Reusing final members is a population warm start;
+an empty state with the same seed repeats the original initialization.
+
+Exact continuation preserves solver, state, and raw evaluation counts
+together and skips initialization. With `serde`, both solver and shared
+progress can be serialized, including the live RNG. A population-only
+snapshot loses that random stream and cannot continue exactly.
+
+Supported parameter types are `Vec<F>`, `nalgebra::DVector<F>`,
+`ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`.
+SSGA requires uniform box sampling, vector differences, and squared
+norms, without a matrix factorization or BLAS/LAPACK provider. See the
+API's [Backends
+section](https://docs.rs/basin/latest/basin/solver/ssga/struct.Ssga.html#backends)
+for custom-vector requirements.
+
+<References entries={["molina-et-al-2010"]} />

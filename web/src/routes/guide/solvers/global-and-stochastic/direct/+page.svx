@@ -1,0 +1,208 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# DIRECT
+
+DIRECT is a deterministic global optimizer for a scalar function over a
+finite box. It divides the box into rectangles and samples their centers,
+balancing further exploration of large regions against refinement around
+good objective values. It needs neither derivatives nor a supplied
+Lipschitz constant.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/direct/struct.Direct.html)
+
+| Property | Requirement |
+| --- | --- |
+| Objective | A scalar function on a finite box |
+| Evaluations | `CostFunction` |
+| Search | Deterministic global partitioning |
+| Constraints | A box-only declaration through `Constraints` |
+| Parameters | All four dense backends, with `f32` or `f64` |
+
+## When to use it
+
+Consider DIRECT when the search region has meaningful finite bounds and
+you want a reproducible exploration of several possible minima.
+[Jones, Perttunen, and Stuckman (1993)](#ref-jones-perttunen-stuckman-1993)
+introduced the method to balance local and global search without choosing
+a Lipschitz constant. Its rectangle geometry is most practical when the
+number of free coordinates is modest.
+
+Compare [differential evolution](../de/) or
+[CMA-ES](../cma-es/) when a stochastic population search suits the problem.
+[GBNM](../gbnm/) instead combines bounded local simplex searches with
+random restarts. If you already have a promising starting point and need
+local refinement, consider [BOBYQA](../../derivative-free/bobyqa/).
+
+A finite DIRECT run provides the best sampled point, rather than a
+certificate that no lower point exists elsewhere in the box. In
+particular, a small rectangle around the incumbent describes local search
+resolution; other rectangles can remain large.
+
+## How it works
+
+DIRECT normalizes each free coordinate to `[0, 1]` and evaluates the center
+of the resulting unit box. Coordinates with equal lower and upper bounds
+are fixed and do not enter the partition geometry.
+
+For each rectangle, the solver keeps the objective at its center and the
+length of its Euclidean half-diagonal. A rectangle is potentially optimal
+when its cost minus `K` times its radius is competitive for some positive
+value of `K`, and its predicted improvement clears the configured margin.
+Small values of `K` favor good observed costs; large values favor broad
+unexplored rectangles. Basin selects across these trade-offs using a lower
+convex hull.
+
+The solver samples two new centers along each longest axis of a selected
+rectangle, then trisects along those axes. Axes with better samples split
+first, giving their promising samples larger child rectangles. One
+iteration processes the entire selected set, from larger rectangles to
+smaller ones. Exact cost ties are retained.
+
+Basin implements original DIRECT, using Euclidean half-diagonals. The
+locally biased DIRECT-L variant has different selection behavior and is
+not the algorithm described here.
+
+## Example
+
+This two-dimensional quartic has several local minima on `[-5, 5]²`.
+DIRECT searches the box until it finds an objective below `-78.33` or
+reaches the evaluation budget. The `PointState` parameter supplies the
+vector's shape; each fresh DIRECT run starts at the box midpoint,
+regardless of the values in that vector.
+
+<!-- compile: solver-direct -->
+```rust
+use basin::{
+    BoxBounds, ConstraintDescription, ConstraintSet, Constraints,
+    CostFunction, Direct, Executor, PointState,
+};
+use std::convert::Infallible;
+
+struct BoundedQuartic {
+    lower: Vec<f64>,
+    upper: Vec<f64>,
+}
+
+impl CostFunction for BoundedQuartic {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok(x.iter()
+            .map(|v| 0.5 * (v.powi(4) - 16.0 * v * v + 5.0 * v))
+            .sum())
+    }
+}
+
+impl Constraints for BoundedQuartic {
+    type Set = ConstraintSet<BoxBounds<Vec<f64>>>;
+
+    fn constraints(&self) -> <Self::Set as ConstraintDescription>::Borrowed<'_> {
+        ConstraintSet::new().with_bounds(BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
+
+fn main() {
+    let problem = BoundedQuartic {
+        lower: vec![-5.0; 2],
+        upper: vec![5.0; 2],
+    };
+    let solver = Direct::new();
+
+    let result = Executor::new(problem, solver, PointState::new(vec![0.0; 2]))
+        .target_objective(-78.33)
+        .max_cost_evals(2_000)
+        .run()
+        .unwrap();
+
+    assert!(result.best_cost() < -78.33);
+    assert!(result.best_param().iter().all(|v| (-5.0..=5.0).contains(v)));
+}
+```
+
+The objective target gives this example a useful stopping point. It does
+not ask DIRECT to identify the exact minimizer or exhaust the box.
+
+## Practical considerations
+
+### Choose the box deliberately
+
+The problem must declare `ConstraintSet<BoxBounds<V>>` with both bound
+vectors present, finite, ordered, and matching the parameter dimension.
+Additional constraint blocks are unsupported. Equal endpoints pin a
+coordinate; an entirely fixed box needs just one evaluation.
+
+Normalization gives each free interval the same initial geometric weight.
+Very wide bounds therefore spend resolution over a large physical range,
+even if the useful region occupies a small part of it. Use bounds that
+describe the intended global search region.
+
+### Separate selection from stopping
+
+`with_epsilon` sets the potential-improvement margin and defaults to
+`1e-4`. Smaller values permit more local refinement; zero removes the
+required improvement margin. It controls rectangle selection, rather than
+the accuracy of the reported solution.
+
+`with_absolute_radius_tolerance` defaults to `Some(1e-6)` and measures the
+best rectangle's half-diagonal after normalization. Optional
+`with_relative_volume_tolerance` measures its volume relative to the
+original box and is disabled by default. Enabled geometry checks combine
+with OR. `None` disables a check, and zero requests exact zero. Volumes
+shrink rapidly with dimension, so a small relative volume can coexist with
+substantial uncertainty along individual coordinates.
+
+### Budget for complete sweeps
+
+Use executor limits such as `max_cost_evals`, `max_iter`, or `max_time`.
+The executor checks limits between complete subdivision sweeps. A sweep
+can evaluate many points, particularly when several rectangles tie, so the
+last sweep can exceed an evaluation budget. Storage grows with both the
+number of coordinates and the number of sampled rectangles.
+
+Independent probes use `Problem::cost_batch`. The optional `parallel`
+feature can evaluate them concurrently while preserving the numerical
+results for a deterministic objective. Callback scheduling can change.
+
+### Handle rejected evaluations consistently
+
+`NaN` and positive infinity reject a sample. Basin additionally explores
+the oldest largest rejected rectangle in each sweep, allowing recovery
+when the initial midpoint is rejected. Geometry stopping requires a
+usable incumbent; an all-rejected search needs an executor limit. Negative
+infinity is accepted and stops the search. Application errors propagate.
+
+If floating-point resolution prevents a split from producing distinct
+probes in both normalized and original coordinates, DIRECT reports
+`NumericalNoProgress`. Tighter geometric tolerances cannot overcome that
+limit.
+
+## Implementation
+
+`PointState` publishes the best sampled center and its matching objective.
+The solver owns the partition and all rectangle-selection work. Retain it
+with `Executor::run_with_solver` to inspect `best_rectangle()`, including
+the normalized center, radius, trisection depths, free-coordinate indices,
+and rectangle count. This diagnostic performs no evaluations.
+
+Fresh initialization clears the partition and evaluates the midpoint.
+Reusing a previous point does not warm-start the partition. Exact
+solver-and-state checkpoints preserve the partition and evaluation counts
+and skip initialization. Keep the bounds and objective unchanged across
+that continuation. The evolving solver is serializable with `serde`.
+
+Supported parameter types are `Vec<F>`, `nalgebra::DVector<F>`,
+`ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`. Custom
+vectors need only `Clone`, `VectorLen`, and `VectorIndex<F>`; see the API's
+[Backends
+section](https://docs.rs/basin/latest/basin/solver/direct/struct.Direct.html#backends).
+The solver uses no matrix factorization or BLAS/LAPACK provider.
+
+<References entries={["jones-perttunen-stuckman-1993"]} />

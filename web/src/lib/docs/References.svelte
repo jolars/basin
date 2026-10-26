@@ -28,6 +28,12 @@
                     ({#if reference.edition}{formatEdition(reference.edition)},
                     {/if}pp. {reference.page?.replaceAll("-", "–")}).
                     {reference.publisher}.
+                {:else if reference.type === "paper-conference"}
+                    {reference.title}. In
+                    <cite>{reference["container-title"]}</cite>
+                    ({#if reference.volume}Vol. {reference.volume},
+                    {/if}pp. {reference.page?.replaceAll("-", "–")}).
+                    {reference.publisher}.
                 {:else if reference.type === "report"}
                     <cite>{reference.title}</cite>. Report {reference.number}.
                     {reference.publisher}.

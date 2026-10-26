@@ -178,16 +178,46 @@ export const SOLVER_LINKS: DocsNavItem[] = [
     {
         label: "Global and stochastic",
         children: [
-            solver("DIRECT", "direct"),
-            solver("Globalized bounded Nelder–Mead", "gbnm"),
-            solver("Simulated annealing", "simulated-annealing"),
-            solver("CMA-ES", "cma-es"),
-            solver("Bounded CMA-ES", "bounded-cma-es"),
-            solver("Differential evolution", "de"),
-            solver("Particle swarm", "global-best-pso"),
-            solver("Random search", "random-search"),
-            solver("Steady-state genetic algorithm", "ssga"),
-            solver("Basin-hopping", "basin-hopping"),
+            {
+                label: "DIRECT",
+                href: "guide/solvers/global-and-stochastic/direct/",
+            },
+            {
+                label: "Globalized bounded Nelder–Mead",
+                href: "guide/solvers/global-and-stochastic/gbnm/",
+            },
+            {
+                label: "Simulated annealing",
+                href: "guide/solvers/global-and-stochastic/simulated-annealing/",
+            },
+            {
+                label: "CMA-ES",
+                href: "guide/solvers/global-and-stochastic/cma-es/",
+            },
+            {
+                label: "Bounded CMA-ES",
+                href: "guide/solvers/global-and-stochastic/bounded-cma-es/",
+            },
+            {
+                label: "Differential evolution",
+                href: "guide/solvers/global-and-stochastic/de/",
+            },
+            {
+                label: "Particle swarm",
+                href: "guide/solvers/global-and-stochastic/global-best-pso/",
+            },
+            {
+                label: "Random search",
+                href: "guide/solvers/global-and-stochastic/random-search/",
+            },
+            {
+                label: "Steady-state genetic algorithm",
+                href: "guide/solvers/global-and-stochastic/ssga/",
+            },
+            {
+                label: "Basin-hopping",
+                href: "guide/solvers/global-and-stochastic/basin-hopping/",
+            },
         ],
     },
     {

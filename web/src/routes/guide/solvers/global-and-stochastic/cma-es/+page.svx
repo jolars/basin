@@ -1,0 +1,191 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# CMA-ES
+
+The covariance matrix adaptation evolution strategy, CMA-ES, learns a
+Gaussian search distribution from objective rankings. It adapts the
+distribution's center, overall scale, and shape, including correlations
+between parameters. Basin implements active CMA-ES, which also uses poorly
+ranked samples to reduce exploration in unsuccessful directions.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/cma_es/struct.CmaEs.html)
+
+| Property | Requirement |
+| --- | --- |
+| Objective | A scalar function of continuous parameters |
+| Evaluations | `CostFunction` |
+| Search | Stochastic population search from an initial mean |
+| Constraints | Unconstrained; declarations are ignored |
+| Parameters | All four dense backends, with `f32` or `f64` |
+
+## When to use it
+
+Consider CMA-ES when derivatives are unavailable and interactions between
+parameters make independent coordinate steps ineffective. Learning a full
+covariance can help on elongated valleys and problems whose useful search
+directions do not align with the coordinate axes. [Hansen
+(2016)](#ref-hansen-2016) derives the method and its default parameters.
+
+CMA-ES spends multiple evaluations on each generation and stores a dense
+covariance matrix. It suits small to moderate dimensions when those costs
+are acceptable. If gradients are reliable, compare a local method such as
+[L-BFGS](../../quasi-newton/l-bfgs/). For a population method without covariance
+factorization, compare [differential evolution](../de/).
+
+A single run can concentrate on one local optimum. A learned distribution
+and a low objective value do not certify global optimality. Compare runs
+with different seeds and starting means when finding different basins
+matters. Use [bounded CMA-ES](../bounded-cma-es/) when the objective must
+only receive points inside a box.
+
+## How it works
+
+The search distribution is `N(m, sigma² C)`, with mean `m`, scalar scale
+`sigma`, and covariance shape `C`. Initialization uses `C = I`, or
+`C = diag(stds²)` when configured with `with_stds`. The default population
+size is `lambda = 4 + floor(3 ln n)` for `n` parameters.
+
+Initialization draws and evaluates a population and evaluates its mean.
+Each subsequent generation ranks the previous samples by increasing
+objective value and moves the mean toward a weighted combination of the
+best half. Two smoothed histories of the mean's motion, called evolution
+paths, guide the scale and covariance updates. Persistent movement can
+increase the scale, while short, inconsistent movement can decrease it.
+
+The covariance update combines the selected samples and a history of
+successful directions. Negative weights from poorly ranked samples make
+the update active. Basin refreshes the symmetric eigendecomposition every
+generation, then draws the next population from the updated distribution.
+
+The current result reports the distribution mean and its evaluated cost.
+The historical best considers both the sampled members and the mean, so
+`best_param()` can differ from `param()`. Neither sequence of mean costs
+nor the best member of each new generation must improve monotonically.
+
+## Example
+
+The sphere objective has its unique minimum at the origin. This example
+starts with five coordinates equal to `1`, uses a fixed seed, and stops on
+a small search distribution or the generation budget. The mean and the
+best evaluated point both approach the minimum.
+
+<!-- compile: solver-cma-es -->
+```rust
+use basin::{CmaEs, CostFunction, DenseMatrix, Executor};
+use std::convert::Infallible;
+
+struct Sphere;
+
+impl CostFunction for Sphere {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok(x.iter().map(|v| v * v).sum())
+    }
+}
+
+fn main() {
+    let solver = CmaEs::<Vec<f64>, DenseMatrix>::new(7, 0.5)
+        .with_absolute_distribution_size_tolerance(1e-10);
+
+    let result = Executor::from_start(Sphere, solver, vec![1.0; 5])
+        .max_iter(300)
+        .run()
+        .unwrap();
+
+    assert!(result.cost() < 1e-6);
+    assert!(result.best_cost() <= result.cost());
+    assert!(result.best_param().iter().all(|v| v.abs() < 1e-3));
+}
+```
+
+## Practical considerations
+
+### Choose the initial scale and coordinate units
+
+`CmaEs::new(seed, sigma)` requires a finite, strictly positive `sigma`.
+It sets the initial standard deviation in every coordinate when the
+covariance is isotropic. Match it to the size of the region you want to
+explore around the initial mean.
+
+Use `with_stds` when parameters have different natural scales. Each
+coordinate initially has standard deviation `sigma * stds[i]`; these
+values are relative factors, not replacements for `sigma`. The vector
+must match the mean's dimension and contain finite, strictly positive
+entries. Adaptation can learn correlations later, but useful initial
+scaling can save many evaluations.
+
+### Count generations and evaluations separately
+
+`with_lambda` overrides the population size and requires at least four
+members. A larger population spends more evaluations per update and can
+improve exploration, so compare settings at a fixed evaluation budget.
+`default_lambda(n)` exposes the default formula.
+
+Initialization uses `lambda + 1` objective evaluations, and every completed
+generation uses another `lambda + 1`. The extra evaluation measures the
+mean, even when a sampled member has a lower cost. Executor budgets are
+checked at iteration boundaries and can therefore be exceeded by work
+inside a generation. Set a generation limit as well as any evaluation
+limit needed for your application.
+
+### Interpret distribution convergence carefully
+
+There is no default convergence test. Configure
+`with_absolute_distribution_size_tolerance` for TolX, which compares the
+largest principal-axis standard deviation, `sigma * max(d[i])`, with the
+tolerance. Here `d[i]` is the square root of a covariance eigenvalue.
+`None` disables the check; zero requests exact collapse. A positive
+threshold uses a strict inequality and reports `CmaEsTolerance`.
+
+The tutorial suggests `1e-12 * initial_sigma` for isotropic starts; account
+for the largest initial axis scale when using `with_stds`, and choose a
+threshold appropriate for the scalar precision and parameter units. This
+test describes the search distribution, not a gradient or an error bound.
+Basin does not implement the tutorial's other CMA stopping heuristics,
+including covariance-condition and fitness-stagnation tests.
+
+### Keep the objective defined where sampling can reach
+
+Gaussian sampling has unbounded support. Plain CMA-ES ignores constraint
+declarations and does not repair points. Select bounded CMA-ES for box
+bounds, or apply an explicit problem transformation suited to other
+constraints. Sorting places NaN costs last, but that ordering does not
+make an objective with mostly invalid samples a useful search problem.
+A covariance eigendecomposition failure reports numerical failure.
+
+## Implementation
+
+`PopulationProgress` owns evaluated members, their costs, the evaluated
+mean, and the incumbent. `Executor::from_start` creates it from an initial
+mean; the explicit equivalent is `PopulationProgress::from_point(mean)`.
+The population is sorted by objective cost. The solver owns the mean,
+covariance, eigenpairs, evolution paths, scale, constants, and seeded
+`ChaCha8Rng`.
+
+Retain the solver with `Executor::run_with_solver` to inspect `mean()`,
+`sigma()`, or the borrowed `distribution()` diagnostics. Reading those
+views performs no evaluations. Dense covariance storage costs `O(n²)`,
+population storage costs `O(lambda * n)`, and refreshing its decomposition
+adds cubic dense matrix work per generation.
+
+Fresh initialization restores the original seed and configured scale and
+covariance, then evaluates a new population around the supplied point.
+An exact solver-and-state checkpoint retains the live distribution, RNG,
+population, and counts and skips initialization. A state-only snapshot
+starts a new distribution. Repeated runs with the same seed and backend
+reproduce a deterministic objective's trajectory; different backends can
+round eigendecompositions differently.
+
+Supported pairs are `Vec<F>`/`DenseMatrix<F>`,
+`nalgebra::DVector<F>`/`DMatrix<F>`, `ndarray::Array1<F>`/`Array2<F>`, and
+`faer::Col<F>`/`Mat<F>`, with `F = f32` or `f64`. Specify the matrix type on
+the solver. All four dense paths provide the required symmetric
+eigendecomposition in pure Rust, without a BLAS/LAPACK provider.
+
+<References entries={["hansen-2016"]} />

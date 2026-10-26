@@ -475,5 +475,332 @@
         "issue": "1",
         "page": "1-23",
         "DOI": "10.1137/S1064827595289108"
+    },
+    {
+        "id": "jones-perttunen-stuckman-1993",
+        "type": "article-journal",
+        "title": "Lipschitzian optimization without the Lipschitz constant",
+        "author": [
+            {
+                "family": "Jones",
+                "given": "Donald R."
+            },
+            {
+                "family": "Perttunen",
+                "given": "Cary D."
+            },
+            {
+                "family": "Stuckman",
+                "given": "Bruce E."
+            }
+        ],
+        "issued": {
+            "date-parts": [[1993, 10]]
+        },
+        "container-title": "Journal of Optimization Theory and Applications",
+        "volume": "79",
+        "issue": "1",
+        "page": "157-181",
+        "DOI": "10.1007/BF00941892"
+    },
+    {
+        "id": "luersen-le-riche-2004",
+        "type": "article-journal",
+        "title": "Globalized Nelder–Mead method for engineering optimization",
+        "author": [
+            {
+                "family": "Luersen",
+                "given": "Marco A."
+            },
+            {
+                "family": "Le Riche",
+                "given": "Rodolphe"
+            }
+        ],
+        "issued": {
+            "date-parts": [[2004]]
+        },
+        "container-title": "Computers & Structures",
+        "volume": "82",
+        "issue": "23-26",
+        "page": "2251-2260",
+        "DOI": "10.1016/j.compstruc.2004.03.072"
+    },
+    {
+        "id": "metropolis-1953",
+        "type": "article-journal",
+        "title": "Equation of state calculations by fast computing machines",
+        "author": [
+            {
+                "family": "Metropolis",
+                "given": "Nicholas"
+            },
+            {
+                "family": "Rosenbluth",
+                "given": "Arianna W."
+            },
+            {
+                "family": "Rosenbluth",
+                "given": "Marshall N."
+            },
+            {
+                "family": "Teller",
+                "given": "Augusta H."
+            },
+            {
+                "family": "Teller",
+                "given": "Edward"
+            }
+        ],
+        "issued": {
+            "date-parts": [[1953, 6]]
+        },
+        "container-title": "The Journal of Chemical Physics",
+        "volume": "21",
+        "issue": "6",
+        "page": "1087-1092",
+        "DOI": "10.1063/1.1699114"
+    },
+    {
+        "id": "kirkpatrick-gelatt-vecchi-1983",
+        "type": "article-journal",
+        "title": "Optimization by simulated annealing",
+        "author": [
+            {
+                "family": "Kirkpatrick",
+                "given": "S."
+            },
+            {
+                "family": "Gelatt",
+                "given": "C. D.",
+                "suffix": "Jr."
+            },
+            {
+                "family": "Vecchi",
+                "given": "M. P."
+            }
+        ],
+        "issued": {
+            "date-parts": [[1983, 5, 13]]
+        },
+        "container-title": "Science",
+        "volume": "220",
+        "issue": "4598",
+        "page": "671-680",
+        "DOI": "10.1126/science.220.4598.671"
+    },
+    {
+        "id": "hajek-1988",
+        "type": "article-journal",
+        "title": "Cooling schedules for optimal annealing",
+        "author": [
+            {
+                "family": "Hajek",
+                "given": "Bruce"
+            }
+        ],
+        "issued": {
+            "date-parts": [[1988, 5]]
+        },
+        "container-title": "Mathematics of Operations Research",
+        "volume": "13",
+        "issue": "2",
+        "page": "311-329",
+        "DOI": "10.1287/moor.13.2.311"
+    },
+    {
+        "id": "hansen-2016",
+        "type": "report",
+        "title": "The CMA Evolution Strategy: A Tutorial",
+        "author": [
+            {
+                "family": "Hansen",
+                "given": "Nikolaus"
+            }
+        ],
+        "issued": {
+            "date-parts": [[2016]]
+        },
+        "publisher": "arXiv",
+        "number": "1604.00772",
+        "DOI": "10.48550/arXiv.1604.00772",
+        "URL": "https://arxiv.org/abs/1604.00772"
+    },
+    {
+        "id": "hansen-niederberger-guzzella-koumoutsakos-2009",
+        "type": "article-journal",
+        "title": "A method for handling uncertainty in evolutionary optimization with an application to feedback control of combustion",
+        "author": [
+            {
+                "family": "Hansen",
+                "given": "Nikolaus"
+            },
+            {
+                "family": "Niederberger",
+                "given": "André S. P."
+            },
+            {
+                "family": "Guzzella",
+                "given": "Lino"
+            },
+            {
+                "family": "Koumoutsakos",
+                "given": "Petros"
+            }
+        ],
+        "issued": {
+            "date-parts": [[2009]]
+        },
+        "container-title": "IEEE Transactions on Evolutionary Computation",
+        "volume": "13",
+        "issue": "1",
+        "page": "180-197",
+        "DOI": "10.1109/TEVC.2008.924423",
+        "URL": "https://hal.inria.fr/inria-00276216"
+    },
+    {
+        "id": "wales-doye-1997",
+        "type": "article-journal",
+        "title": "Global optimization by basin-hopping and the lowest energy structures of Lennard-Jones clusters containing up to 110 atoms",
+        "author": [
+            {
+                "family": "Wales",
+                "given": "David J."
+            },
+            {
+                "family": "Doye",
+                "given": "Jonathan P. K."
+            }
+        ],
+        "issued": {
+            "date-parts": [[1997]]
+        },
+        "container-title": "The Journal of Physical Chemistry A",
+        "volume": "101",
+        "issue": "28",
+        "page": "5111-5116",
+        "DOI": "10.1021/jp970984n",
+        "URL": "https://arxiv.org/abs/cond-mat/9803344"
+    },
+    {
+        "id": "storn-price-1997",
+        "type": "article-journal",
+        "title": "Differential Evolution – A Simple and Efficient Heuristic for Global Optimization over Continuous Spaces",
+        "author": [
+            {
+                "family": "Storn",
+                "given": "Rainer"
+            },
+            {
+                "family": "Price",
+                "given": "Kenneth"
+            }
+        ],
+        "issued": {
+            "date-parts": [[1997]]
+        },
+        "container-title": "Journal of Global Optimization",
+        "volume": "11",
+        "issue": "4",
+        "page": "341-359",
+        "DOI": "10.1023/A:1008202821328"
+    },
+    {
+        "id": "kennedy-eberhart-1995",
+        "type": "paper-conference",
+        "title": "Particle swarm optimization",
+        "author": [
+            {
+                "family": "Kennedy",
+                "given": "James"
+            },
+            {
+                "family": "Eberhart",
+                "given": "Russell"
+            }
+        ],
+        "issued": {
+            "date-parts": [[1995]]
+        },
+        "container-title": "Proceedings of ICNN’95 - International Conference on Neural Networks",
+        "publisher": "IEEE",
+        "volume": "4",
+        "page": "1942-1948",
+        "DOI": "10.1109/ICNN.1995.488968"
+    },
+    {
+        "id": "shi-eberhart-1998",
+        "type": "paper-conference",
+        "title": "A modified particle swarm optimizer",
+        "author": [
+            {
+                "family": "Shi",
+                "given": "Yuhui"
+            },
+            {
+                "family": "Eberhart",
+                "given": "Russell"
+            }
+        ],
+        "issued": {
+            "date-parts": [[1998]]
+        },
+        "container-title": "1998 IEEE International Conference on Evolutionary Computation Proceedings",
+        "publisher": "IEEE",
+        "page": "69-73",
+        "DOI": "10.1109/ICEC.1998.699146"
+    },
+    {
+        "id": "bratton-kennedy-2007",
+        "type": "paper-conference",
+        "title": "Defining a standard for particle swarm optimization",
+        "author": [
+            {
+                "family": "Bratton",
+                "given": "Daniel"
+            },
+            {
+                "family": "Kennedy",
+                "given": "James"
+            }
+        ],
+        "issued": {
+            "date-parts": [[2007]]
+        },
+        "container-title": "2007 IEEE Swarm Intelligence Symposium",
+        "publisher": "IEEE",
+        "page": "120-127",
+        "DOI": "10.1109/SIS.2007.368035"
+    },
+    {
+        "id": "molina-et-al-2010",
+        "type": "article-journal",
+        "title": "Memetic Algorithms for Continuous Optimisation Based on Local Search Chains",
+        "author": [
+            {
+                "family": "Molina",
+                "given": "Daniel"
+            },
+            {
+                "family": "Lozano",
+                "given": "Manuel"
+            },
+            {
+                "family": "García-Martínez",
+                "given": "Carlos"
+            },
+            {
+                "family": "Herrera",
+                "given": "Francisco"
+            }
+        ],
+        "issued": {
+            "date-parts": [[2010]]
+        },
+        "container-title": "Evolutionary Computation",
+        "volume": "18",
+        "issue": "1",
+        "page": "27-63",
+        "DOI": "10.1162/evco.2010.18.1.18102"
     }
 ]

@@ -1,0 +1,218 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# Globalized bounded Nelder–Mead
+
+Globalized bounded Nelder–Mead (GBNM) combines local simplex search with
+random restarts inside a finite box. It uses objective values alone and
+remembers previous search starts and possible local optima. Restart
+locations favor less explored regions, while additional simplex tests
+check whether a local search has collapsed or become trapped at a bound.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/gbnm/struct.Gbnm.html)
+
+| Property | Requirement |
+| --- | --- |
+| Objective | A scalar function on a finite box |
+| Evaluations | `CostFunction` |
+| Search | Bounded local searches with seeded global restarts |
+| Constraints | A box-only declaration through `Constraints` |
+| Parameters | All four dense backends, with `f32` or `f64` |
+
+## When to use it
+
+Consider GBNM when derivatives are unavailable, several local solutions
+may exist, and bounded Nelder–Mead searches are a reasonable way to explore
+each region. [Luersen and Le Riche (2004)](#ref-luersen-le-riche-2004)
+developed the method for engineering optimization with a limited
+evaluation budget.
+
+Unlike a fresh uniform restart each time, GBNM uses its search history to
+spread later starts through the box. The first local search starts around
+the point you provide, after projecting it into the bounds, so you can
+begin with a useful existing design.
+
+For one local search, compare [Nelder–Mead](../../derivative-free/nelder-mead/).
+[DIRECT](../direct/) gives deterministic box partitioning, while
+[differential evolution](../de/) maintains a population
+instead of a sequence of simplexes. On a smooth problem where a local
+model is useful, compare [BOBYQA](../../derivative-free/bobyqa/).
+
+Restarts broaden the search but do not certify global optimality in a
+finite run. Evaluate the best result against the budget, several seeds,
+and any known reference solution.
+
+## How it works
+
+With `n` free coordinates, each local search maintains `n + 1` vertices.
+It uses Nelder–Mead reflection, expansion, contraction, and shrink moves,
+projecting trial points into the box before evaluation. Basin starts each
+search with a regular simplex whose edge length is a fraction of the
+smallest free-coordinate box width.
+
+Small-simplex, flat-cost, and degeneracy tests trigger the restart logic.
+Depending on the current test and location, the solver either constructs
+a small or large test simplex around the current best vertex, or makes a
+probabilistic restart elsewhere. These tests help distinguish a possible
+local optimum from a simplex damaged by projection or collapse. Possible
+local optima are retained when the restart tests justify doing so.
+
+For a probabilistic restart, Basin samples 10 candidate centers uniformly
+by default. It selects the candidate with the lowest Parzen density
+relative to previous starts and retained local optima. The Gaussian
+mixture gives greater density near previously visited regions. Its
+default coordinate variance is `0.01 * (upper - lower)²`.
+
+The new simplex edge is then sampled between 2% and 10% of the smallest
+free-coordinate box width. Local convergence starts another search; it
+does not establish convergence of the global algorithm.
+
+## Example
+
+This sphere has its minimum at `[0.0, 0.0]`. The example makes the box
+declaration explicit, seeds the restart generator, and runs a fixed
+evaluation budget. Even on this simple objective, the result should use
+the historical best: the active local search can move to a worse point
+when a restart begins.
+
+<!-- compile: solver-gbnm -->
+```rust
+use basin::{
+    BoxBounds, ConstraintDescription, ConstraintSet, Constraints,
+    CostFunction, Executor, Gbnm,
+};
+use std::convert::Infallible;
+
+struct BoundedSphere {
+    lower: Vec<f64>,
+    upper: Vec<f64>,
+}
+
+impl CostFunction for BoundedSphere {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok(x.iter().map(|v| v * v).sum())
+    }
+}
+
+impl Constraints for BoundedSphere {
+    type Set = ConstraintSet<BoxBounds<Vec<f64>>>;
+
+    fn constraints(&self) -> <Self::Set as ConstraintDescription>::Borrowed<'_> {
+        ConstraintSet::new().with_bounds(BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
+
+fn main() {
+    let problem = BoundedSphere {
+        lower: vec![-5.0; 2],
+        upper: vec![5.0; 2],
+    };
+    let solver = Gbnm::new(42);
+
+    let result = Executor::from_start(problem, solver, vec![4.0, 4.0])
+        .max_cost_evals(2_000)
+        .run()
+        .unwrap();
+
+    assert!(result.best_cost() < 1e-4);
+    assert!(result.best_param().iter().all(|v| (-5.0..=5.0).contains(v)));
+    assert!(result.best_cost() <= result.cost());
+}
+```
+
+The assertions check an analytic reference and bound feasibility. Reaching
+the budget is an execution limit, rather than a global convergence claim.
+
+## Practical considerations
+
+### Declare bounds and scale the coordinates
+
+GBNM requires `ConstraintSet<BoxBounds<V>>` with both bound vectors
+present, finite, ordered, and matching the parameter dimension.
+Declarations with additional constraint blocks are unsupported. Equal
+endpoints pin a coordinate and remove it from simplex geometry, density
+calculations, and local tests. An all-fixed box evaluates its single
+feasible point once.
+
+The smallest free-coordinate interval sets the simplex edge scale. Very
+different coordinate widths can therefore produce small initial moves in
+wide intervals. Rescale the problem when the natural parameter units make
+this geometry unsuitable. `with_initial_simplex_fraction` defaults to
+`0.05` and adjusts the first search's scale.
+
+### Treat tolerances as restart controls
+
+`with_normalized_simplex_size_tolerance` defaults to `1e-6`, and
+`with_absolute_simplex_cost_tolerance` defaults to `1e-20`. These tests
+trigger another local search. They do not stop the outer algorithm.
+The edge-ratio and normalized-determinant degeneracy thresholds both
+default to `1e-7` and have separate setters.
+
+Small- and large-test simplex fractions default to `1e-5` and `0.05`.
+`with_test_simplex_fractions` changes them together. The paper prescribes
+their relative roles without universal numerical sizes; Basin's defaults
+make the small test larger than the default local size tolerance. If you
+change those scales, keep that relationship deliberate.
+
+### Spend restarts where they help
+
+`with_restart_candidates` changes how many possible centers the density
+test compares. Candidate selection uses geometry and history, without
+objective evaluations. More candidates add that work and may choose a
+less explored center, but do not guarantee a better objective.
+`with_gaussian_variance_factor` controls how broadly visited regions
+contribute to the density.
+
+Use `max_cost_evals`, `max_iter`, `max_time`, or `target_objective` on the
+executor. One local simplex operation or restart completes before the
+next budget check. For `n` free coordinates, a local step can evaluate up
+to `n + 2` points, and a restart evaluates `n + 1`, so the cost budget can
+be exceeded by up to `n + 1` evaluations.
+
+### Distinguish the active search from the incumbent
+
+`param()` and `cost()` describe the best vertex of the active local
+search. They can worsen after a restart. `best_param()` and `best_cost()`
+retain the historical objective incumbent across searches. Use checked
+`current()` and `best()` state readers when non-finite evaluations may
+leave either unavailable.
+
+`NaN` costs sort behind comparable values, and positive infinity can
+reject an unsuitable point. A completely non-finite fixed box reports
+failure. Flat regions can trigger many restarts, so inspect the result
+and evaluation budget before interpreting repeated local tests as useful
+exploration.
+
+## Implementation
+
+`PointState` publishes the active local result, historical incumbent, and
+raw evaluation counts. The solver owns the simplex, local Nelder–Mead
+workspace, restart history, and seeded `ChaCha8Rng`. Retain it with
+`Executor::run_with_solver` to inspect `vertices()`, `costs()`,
+`search_starts()`, `local_optima()`, and `restart_count()`.
+
+Fresh initialization resets the RNG to the configured seed, clears the
+history, projects the supplied point, and evaluates a new regular simplex.
+A state-only snapshot therefore starts a new search from its current
+point. Exact solver-and-state checkpoints preserve the live simplex,
+history, RNG, and evaluation counts and skip initialization. The solver
+and progress support serialization with `serde`.
+
+Supported parameter types are `Vec<F>`, `nalgebra::DVector<F>`,
+`ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`. The
+degeneracy test uses internal pure-Rust algebra, without a backend matrix
+operation or BLAS/LAPACK provider. See the API's [Backends
+section](https://docs.rs/basin/latest/basin/solver/gbnm/struct.Gbnm.html#backends)
+for the vector, projection, and uniform-sampling capabilities required by
+custom parameter types.
+
+<References entries={["luersen-le-riche-2004"]} />

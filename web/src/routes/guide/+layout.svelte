@@ -99,6 +99,56 @@
             description:
                 "When to use Solis–Wets, how adaptive random local search works, and how to configure and run it in Basin, with references.",
         },
+        "/guide/solvers/global-and-stochastic/direct": {
+            title: "DIRECT – Basin",
+            description:
+                "When to use DIRECT, how deterministic box subdivision works, and how to configure and run it in Basin, with references.",
+        },
+        "/guide/solvers/global-and-stochastic/gbnm": {
+            title: "Globalized bounded Nelder–Mead – Basin",
+            description:
+                "When to use globalized bounded Nelder–Mead, how simplex searches and probabilistic restarts work, and how to run it in Basin, with references.",
+        },
+        "/guide/solvers/global-and-stochastic/simulated-annealing": {
+            title: "Simulated annealing – Basin",
+            description:
+                "When to use simulated annealing, how neighbors, Metropolis acceptance, cooling, and restarts work, and how to run it in Basin, with references.",
+        },
+        "/guide/solvers/global-and-stochastic/cma-es": {
+            title: "CMA-ES – Basin",
+            description:
+                "When to use CMA-ES, how covariance adaptation and step-size control work, and how to run it in Basin, with references.",
+        },
+        "/guide/solvers/global-and-stochastic/bounded-cma-es": {
+            title: "Bounded CMA-ES – Basin",
+            description:
+                "When to use bounded CMA-ES, how box repair and adaptive penalties work, and how to run it in Basin, with references.",
+        },
+        "/guide/solvers/global-and-stochastic/de": {
+            title: "Differential evolution – Basin",
+            description:
+                "When to use differential evolution, how mutation and crossover work, and how to configure and run it in Basin, with references.",
+        },
+        "/guide/solvers/global-and-stochastic/global-best-pso": {
+            title: "Particle swarm – Basin",
+            description:
+                "When to use global-best particle swarm optimization, how velocity and boundary policies work, and how to run it in Basin, with references.",
+        },
+        "/guide/solvers/global-and-stochastic/random-search": {
+            title: "Random search – Basin",
+            description:
+                "When to use random search, how uniform box sampling and elitist selection work, and how to run it in Basin, with references.",
+        },
+        "/guide/solvers/global-and-stochastic/ssga": {
+            title: "Steady-state genetic algorithm – Basin",
+            description:
+                "When to use the steady-state genetic algorithm, how mating, crossover, mutation, and replacement work, and how to run it in Basin, with references.",
+        },
+        "/guide/solvers/global-and-stochastic/basin-hopping": {
+            title: "Basin-hopping – Basin",
+            description:
+                "When to use basin-hopping, how local solves, Metropolis acceptance, and adaptive steps work, and how to run it in Basin, with references.",
+        },
         "/guide/migrating-to-v3": {
             title: "Migrating to Basin 3.0 – Basin",
             description:

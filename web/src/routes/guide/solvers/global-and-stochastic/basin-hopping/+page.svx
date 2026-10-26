@@ -1,0 +1,205 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# Basin-hopping
+
+Basin-hopping combines random perturbations with repeated local
+minimization. Instead of comparing the objective at nearby arbitrary
+points, it compares the local minima reached from those points. A
+Metropolis acceptance rule permits occasional uphill moves between minima,
+helping the search leave one attractive basin for another.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/basin_hopping/struct.BasinHopping.html)
+
+| Property | Requirement |
+| --- | --- |
+| Objective | A scalar function with useful local minimizations |
+| Evaluations | `CostFunction`, plus the chosen inner solver's requirements |
+| Search | A stochastic walk between locally minimized points |
+| Constraints | Determined by the inner solver and perturbation strategy |
+| Parameters | Intersection of inner-solver and step-strategy support |
+
+## When to use it
+
+Consider basin-hopping when a local solver finds good nearby solutions
+reliably but different starts reach different minima. It is particularly
+useful when many rough features belong to the same underlying basin:
+local minimization removes those features from the outer acceptance
+decision. [Wales and Doye (1997)](#ref-wales-doye-1997) introduced the
+basin-hopping landscape transformation for cluster optimization.
+
+The inner solver determines how much each hop costs. Choose a
+derivative-free method such as [Nelder–Mead](../../derivative-free/nelder-mead/)
+when only objective values are available, or a gradient method when
+derivatives make local refinement cheaper. If local refinement consumes
+too much of the budget, compare a direct population method such as
+[differential evolution](../de/) or [CMA-ES](../cma-es/).
+
+A finite walk can repeatedly visit the same basins. Neither an unchanged
+best cost nor many accepted hops establishes global optimality. Compare
+seeds, starting points, and perturbation scales when assessing reliability.
+
+## How it works
+
+Initialization runs one local minimization from the starting point. Every
+outer iteration then perturbs the current locally minimized point and
+runs a fresh local solve from the proposal. The default `RandomDisplacement`
+adds an independent uniform draw from `[-stepsize, stepsize]` to every
+coordinate.
+
+The default `Metropolis` test accepts a lower or equal minimized cost.
+For an increase `delta`, it accepts with probability `exp(-delta / T)`,
+where `T` is a fixed positive temperature. This is a walk on the locally
+minimized landscape, rather than a cooling schedule on raw objective
+values. Accepted uphill moves change the current point; the framework
+retains the best published point separately.
+
+Adaptive control adjusts the perturbation scale every `50` hops by default.
+It compares the cumulative acceptance rate with a target of `0.5`.
+Above the target, it divides the scale by `0.9`; otherwise, it multiplies
+the scale by `0.9`. The defaults use temperature `1.0` and initial step
+half-width `0.5`.
+
+A candidate from a failed local solve cannot displace an incumbent from
+a successful solve. If the incumbent also came from a failed solve, the
+candidate can pass the usual acceptance test. An inner iteration limit
+counts as a clean stop for this rule, so it does not establish that local
+convergence was reached.
+
+## Example
+
+The two-dimensional Ackley function has a global minimum at the origin
+and many surrounding local minima. Nelder–Mead refines each proposal,
+while the outer walk explores other basins. Read `best_cost()` and
+`best_param()` because the last accepted point can be uphill from an
+earlier solution.
+
+<!-- compile: solver-basin-hopping -->
+```rust
+use basin::{BasinHopping, CostFunction, Executor, NelderMead};
+use std::convert::Infallible;
+use std::f64::consts::{E, PI};
+
+struct Ackley;
+
+impl CostFunction for Ackley {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        let n = x.len() as f64;
+        let squares = x.iter().map(|v| v * v).sum::<f64>() / n;
+        let waves = x.iter().map(|v| (2.0 * PI * v).cos()).sum::<f64>() / n;
+        Ok(-20.0 * (-0.2 * squares.sqrt()).exp() - waves.exp() + 20.0 + E)
+    }
+}
+
+fn main() {
+    let inner = NelderMead::adaptive()
+        .with_absolute_simplex_size_tolerance(1e-10)
+        .with_absolute_simplex_cost_tolerance(1e-10);
+    let solver = BasinHopping::new(inner, 7)
+        .with_stepsize(1.0)
+        .with_temperature(1.0)
+        .with_inner_max_iter(1_000);
+
+    let result = Executor::from_start(Ackley, solver, vec![2.5, -2.5])
+        .max_iter(200)
+        .run()
+        .unwrap();
+
+    assert!(result.best_cost() < 1e-6);
+    assert!(result.best_param().iter().all(|v| v.abs() < 1e-6));
+}
+```
+
+## Practical considerations
+
+### Match perturbations to the separation between minima
+
+`with_stepsize` controls the default displacement's initial half-width.
+Very small steps often return to the same minimum after local refinement;
+very large steps can erase useful information about nearby basins. Scale
+parameters with different units, or implement `StepTaker` for structured
+moves suited to the problem.
+
+Adaptation is enabled by default. Configure its interval, target rate,
+and factor with `with_adaptive_interval`, `with_target_accept_rate`, and
+`with_stepwise_factor`, or hold the scale fixed with `with_adaptive(false)`.
+Custom step takers can implement `adjust_scale`; its default implementation
+does nothing when a scalar scale is inappropriate.
+
+### Interpret temperature in objective units
+
+Choose `with_temperature` relative to cost differences between local
+minima, not the heights of barriers removed by local minimization. A low
+temperature makes uphill moves rare; a high one accepts them more readily.
+The temperature must be positive and remains fixed throughout the run.
+Rescaling the objective changes acceptance unless the temperature changes
+by the same factor.
+
+`with_acceptance_test` replaces Metropolis with a custom `AcceptanceTest`.
+The test receives old and new costs and access to the seeded RNG. It does
+not receive candidate coordinates, so coordinate-dependent feasibility
+checks belong in the problem, inner solver, or perturbation strategy.
+
+### Budget the local work inside every hop
+
+`with_inner_max_iter` caps each local solve and defaults to `1_000`.
+Configure the inner solver's convergence settings to avoid exhausting
+that cap unnecessarily. Initialization performs a local solve even when
+the executor permits no outer hops. The outer `max_iter` counts hops,
+not inner iterations or evaluations.
+
+Every inner call shares the outer problem's evaluation counters.
+`cost_evals()` counts cost requests; derivatives, residuals, and Jacobians
+retain their separate categories. Use
+`max_evaluations(EvaluationKind::TotalWork, n)` to budget their sum. Outer
+budgets are checked between hops, so one local solve can exceed the
+remaining allowance.
+
+Keep outer budgets, objective targets, and stall checks on the executor.
+An accepted hop can move uphill, and a rejected hop leaves the current
+point unchanged; rejected proposals do not trigger optional observed
+step- or cost-change convergence. Enable `with_inner_diagnostics(true)`
+and retain the solver when you need each local solve's stopping report.
+
+### Arrange constraint handling through the components
+
+Basin-hopping adds no projection or constraint enforcement of its own.
+The default displacement can leave any declared box. An unconstrained
+inner solver ignores declarations and may evaluate those infeasible
+points. A constrained composition must use a compatible inner solver
+that can initialize from the proposals, or a step strategy that preserves
+the feasible region.
+
+The inner solver must operate on the same problem and satisfy the outer
+error-type contract. An adapter may be needed for a constrained inner
+solver. An acceptance rule alone cannot protect the objective, because
+the candidate has already been locally minimized before acceptance.
+
+## Implementation
+
+`PointState` publishes the accepted local solution and its cost, with a
+separate historical incumbent. The solver owns the inner executor,
+perturbation and acceptance strategies, adaptive counters, and seeded
+`ChaCha8Rng`. The inner solver implements `WarmStart`; its associated
+state determines how a proposal seeds a new local run.
+
+Fresh initialization resets the RNG, counters, and both strategies, then
+performs the initial local solve. Stateful custom strategies must restore
+their configured behavior through `reset`. Exact solver-and-state
+checkpoints preserve the live strategies, inner solver, RNG, counts, and
+progress and skip initialization. State-only snapshots start a new walk.
+
+The default displacement supports `Vec<F>`, `nalgebra::DVector<F>`,
+`ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`.
+Effective backend and derivative support is the intersection of the
+chosen step taker and inner solver. Retain the solver through
+`Executor::run_with_solver` and inspect `step_taker().stepsize()` to read
+the adapted scale of the default strategy.
+
+<References entries={["wales-doye-1997"]} />

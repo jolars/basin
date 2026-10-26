@@ -1,0 +1,206 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# Bounded CMA-ES
+
+Bounded CMA-ES combines covariance adaptation with an adaptive quadratic
+boundary penalty. It samples in unrestricted model coordinates, clips each
+sample into the feasible box for evaluation, and uses the distance moved
+by that repair to guide selection. Every reported parameter and objective
+value refers to an evaluated point inside the box.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/bounded_cma_es/struct.BoundedCmaEs.html)
+
+| Property | Requirement |
+| --- | --- |
+| Objective | A scalar function of continuous parameters |
+| Evaluations | `CostFunction` and a complete box-only `Constraints` declaration |
+| Search | Stochastic population search from an initial mean |
+| Constraints | Box bounds, including unbounded coordinate sides |
+| Parameters | All four dense backends, with `f32` or `f64` |
+
+## When to use it
+
+Consider bounded CMA-ES when derivatives are unavailable, parameters
+interact strongly, and the objective must only receive feasible points.
+It learns the same full covariance as [CMA-ES](../cma-es/) while handling
+minima on box faces and corners without repeatedly rejecting and redrawing
+infeasible samples.
+
+[Hansen (2016)](#ref-hansen-2016) describes the CMA core. The boundary
+penalty follows [Hansen et al.
+(2009)](#ref-hansen-niederberger-guzzella-koumoutsakos-2009), with the
+specific adaptation used by the pinned
+[`pycma` `BoundPenalty` implementation](https://github.com/CMA-ES/pycma/blob/r4.4.4/cma/boundary_handler.py).
+
+For smooth objectives with reliable gradients, compare
+[L-BFGS-B](../../quasi-newton/l-bfgs-b/). For a local interpolation model and
+an expensive objective, compare [BOBYQA](../../derivative-free/bobyqa/).
+Bounded CMA-ES can explore multiple basins, but one finite run does not
+certify a global minimum. Compare different seeds and starting means.
+
+## How it works
+
+The CMA distribution remains `N(m, sigma² C)` in unrestricted coordinates.
+For each sampled point `x`, the solver constructs its box repair `x_rep`
+by clamping each component. It evaluates only `f(x_rep)` and ranks the
+sample using
+
+```text
+fitness(x) = f(x_rep) + sum(gamma[i] * (x[i] - x_rep[i])²) / n
+```
+
+The original, unrepaired point enters mean and covariance adaptation.
+This distinction lets a sample's distance outside the box influence the
+search model even though the objective never sees that point. The
+per-coordinate penalty weights `gamma` start at `1` and adapt from recent
+objective spreads, coordinate variances, and the mean's boundary violation.
+
+The solver uses active covariance adaptation, evolution paths, and an
+eigendecomposition on every generation, as in plain CMA-ES. The default
+population size is `4 + floor(3 ln n)`. Fresh initialization projects the
+starting mean into the box before drawing the first population.
+
+The published current point is the clipped mean and its raw objective
+value. Population members are also clipped, with raw costs, but retain
+the ranking determined by penalized fitness. Their costs can therefore
+appear out of numerical order. The historical incumbent compares raw
+objective values across these evaluated members and means.
+
+## Example
+
+This objective would minimize at `[2.0, -1.0]` without constraints. The
+declared box restricts its first coordinate to `[-1.0, 1.0]`, so the
+constrained minimum is `[1.0, -1.0]`, with cost `1.0`. The objective
+asserts that every point it receives satisfies the box.
+
+<!-- compile: solver-bounded-cma-es -->
+```rust
+use basin::{
+    BoundedCmaEs, BoxBounds, Constrained, ConstraintSet, CostFunction,
+    DenseMatrix, Executor,
+};
+use std::convert::Infallible;
+
+struct Quadratic;
+
+impl CostFunction for Quadratic {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        assert!((-1.0..=1.0).contains(&x[0]));
+        assert!((-2.0..=2.0).contains(&x[1]));
+        Ok((x[0] - 2.0).powi(2) + (x[1] + 1.0).powi(2))
+    }
+}
+
+fn main() {
+    let bounds = BoxBounds::new(Some(vec![-1.0, -2.0]), Some(vec![1.0, 2.0]));
+    let problem = Constrained::new(
+        Quadratic,
+        ConstraintSet::new().with_bounds(bounds),
+    );
+    let solver = BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(42, 0.6)
+        .with_absolute_distribution_size_tolerance(1e-10);
+
+    let result = Executor::from_start(problem, solver, vec![0.0, 1.0])
+        .max_iter(500)
+        .run()
+        .unwrap();
+
+    assert!((result.best_cost() - 1.0).abs() < 1e-8);
+    assert!((result.best_param()[0] - 1.0).abs() < 1e-6);
+    assert!((result.best_param()[1] + 1.0).abs() < 1e-4);
+}
+```
+
+## Practical considerations
+
+### Declare the complete feasible box
+
+Constraints belong to the problem. `Constrained::new` installs the supplied
+`ConstraintSet` as its complete declaration, replacing any declaration on
+the wrapped objective. You can instead implement `Constraints` directly
+with `Set = ConstraintSet<BoxBounds<V>>`.
+
+This solver requires both lower and upper vectors. Represent an unbounded
+coordinate side with negative infinity in the lower vector or positive
+infinity in the upper vector. Each vector must match the starting mean's
+dimension, and each lower bound must be at most its upper bound. NaN,
+inverted intervals, and infinities on the wrong side are invalid.
+Linear and nonlinear constraint blocks are unsupported by the box-only
+solver contract.
+
+### Keep raw objective values separate from search fitness
+
+`result.cost()` and `result.best_cost()` exclude the boundary penalty.
+Likewise, published population costs match their clipped points. Use
+`penalized_costs()` on a retained solver when inspecting selection order,
+and `genotypes()` for the corresponding unrestricted samples.
+
+The live `mean()` also describes unrestricted model coordinates and can
+move outside the box after initialization. Use the result's `param()` for
+the evaluated, clipped mean. Clipping a model mean can leave the current
+point unchanged even while covariance and penalty adaptation continue.
+That observation alone is insufficient evidence of convergence.
+
+### Scale the initial distribution and budget full generations
+
+`new(seed, sigma)` requires a finite, strictly positive scale. Optional
+`with_stds` sets positive, finite coordinate factors, so the initial
+standard deviation in coordinate `i` is `sigma * stds[i]`. Match these
+scales to the feasible widths and the distance worth exploring. A very
+wide distribution can spend much of its effort on repairs to a small
+part of the boundary.
+
+`with_lambda` requires at least four members. Initialization and each
+completed generation use `lambda + 1` objective evaluations, including
+the repaired mean. The boundary penalty itself requires no additional
+objective calls. Executor budgets are checked at iteration boundaries,
+so one generation can exceed a remaining evaluation allowance.
+
+### Configure a distribution tolerance explicitly
+
+TolX is disabled by default. Set
+`with_absolute_distribution_size_tolerance` to compare
+`sigma * max(d[i])` against a threshold in parameter units, where `d[i]`
+are principal-axis standard deviations before multiplication by `sigma`.
+`None` disables the check, zero requests exact collapse, and positive
+thresholds use a strict inequality. A successful check reports
+`CmaEsTolerance`.
+
+This tests the unrestricted distribution's size. It does not measure a
+projected gradient, a feasible error bound, or global optimality. Keep
+iteration or evaluation budgets on the executor and inspect its report.
+As with plain CMA-ES, other CMA stopping heuristics are not implemented.
+
+## Implementation
+
+`PopulationProgress` stores repaired members, raw costs, the repaired mean,
+and the incumbent. The solver owns unrepaired genotypes, penalized fitness,
+the distribution, penalty weights and history, and its seeded `ChaCha8Rng`.
+`Executor::from_start` supplies the mean; explicitly constructed progress
+can use `PopulationProgress::from_point`.
+
+Retain the solver with `Executor::run_with_solver` to inspect `mean()`,
+`sigma()`, `distribution()`, `genotypes()`, and `penalized_costs()`.
+Fresh initialization resets the distribution, penalty history, and RNG.
+Exact solver-and-state checkpoints preserve them with progress and counts
+and skip initialization; state-only snapshots start a new distribution.
+The same seed reproduces a deterministic objective's trajectory within
+the same backend.
+
+Supported pairs are `Vec<F>`/`DenseMatrix<F>`,
+`nalgebra::DVector<F>`/`DMatrix<F>`, `ndarray::Array1<F>`/`Array2<F>`, and
+`faer::Col<F>`/`Mat<F>`, with `F = f32` or `f64`. All four dense paths
+provide covariance eigendecomposition, diagonal extraction, and box repair
+in pure Rust without a BLAS/LAPACK provider. Dense covariance storage and
+factorization impose the same dimension costs as plain CMA-ES.
+
+<References
+    entries={["hansen-2016", "hansen-niederberger-guzzella-koumoutsakos-2009"]}
+/>

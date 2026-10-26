@@ -1,0 +1,202 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# Random search
+
+Random search draws independent points uniformly from a finite box and
+retains the best point seen. Basin groups new evaluations into batches of
+`lambda` candidates and carries the previous best into the next population.
+It uses objective values alone, without learning directions or adapting a
+local search scale.
+
+[API reference](https://docs.rs/basin/latest/basin/solver/random_search/struct.RandomSearch.html)
+
+| Property | Requirement |
+| --- | --- |
+| Objective | A scalar function |
+| Evaluations | `CostFunction` |
+| Search | Independent uniform sampling with an elite carried between batches |
+| Constraints | A box-only declaration through `Constraints`; finite bounds |
+| Parameters | All four dense backends, with `f32` or `f64` |
+
+## When to use it
+
+Use random search as a simple baseline for a bounded problem, to explore an
+unfamiliar objective, or to generate candidate starting points. Independent
+draws can reach separated basins without crossing the objective barriers
+between them. The broader theory of random-search methods appears in
+[Solis and Wets (1981)](#ref-solis-wets-1981).
+
+The method uses every new evaluation to cover the same box. It does not
+concentrate future draws around promising points, so precise optimization
+can require many samples. Compare [differential evolution](../de/) or
+[particle swarm optimization](../global-best-pso/) when population feedback
+could make better use of the budget. For randomized local improvement from
+one starting point, see [Solis–Wets](../../derivative-free/solis-wets/).
+
+Uniform sampling becomes less effective when good solutions occupy a small
+fraction of a high-dimensional box. If a useful region occupies fraction
+`p` of the box, `N` independent draws hit it with probability
+`1 - (1 - p)^N`. This describes coverage, rather than the probability of
+finding an exact continuous minimizer.
+
+## How it works
+
+Initialization draws `lambda` members uniformly inside the problem's box,
+evaluates them, and sorts them by objective value. You can instead supply
+an explicit population with exactly that many members.
+
+Each subsequent iteration saves the best member and its known cost, then
+draws and evaluates `lambda` new independent candidates. It sorts those
+new candidates together with the saved elite and retains the best `lambda`
+members. The retained elite is not reevaluated. With finite deterministic
+costs, the reported best objective therefore never increases.
+
+Only that one elite affects the next iteration. The remaining population
+members do not contribute directions, mutation scales, or a sampling
+distribution. Changing `lambda` mainly changes batch size, observation
+frequency, and the number of evaluations per iteration.
+
+After `k` complete iterations, the solver has used
+`lambda * (k + 1)` objective evaluations, including initialization. With
+`lambda = 1`, it retains one incumbent and compares one fresh draw against
+it per iteration.
+
+## Example
+
+Search a two-dimensional quadratic over `[-5, 5]^2`. Its minimum is zero
+at `[1.0, -2.0]`. Random search can find a useful approximation within this
+budget, but the example deliberately checks a modest objective threshold
+instead of expecting the accuracy of a local solver.
+
+<!-- compile: solver-random-search -->
+```rust
+use basin::{
+    BoxBounds, ConstraintDescription, ConstraintSet, Constraints,
+    CostFunction, Executor, PopulationProgress, RandomSearch,
+};
+use std::convert::Infallible;
+
+struct BoundedQuadratic {
+    lower: Vec<f64>,
+    upper: Vec<f64>,
+}
+
+impl CostFunction for BoundedQuadratic {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok((x[0] - 1.0).powi(2) + (x[1] + 2.0).powi(2))
+    }
+}
+
+impl Constraints for BoundedQuadratic {
+    type Set = ConstraintSet<BoxBounds<Vec<f64>>>;
+
+    fn constraints(&self) -> <Self::Set as ConstraintDescription>::Borrowed<'_> {
+        ConstraintSet::new().with_bounds(BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
+
+fn main() {
+    let problem = BoundedQuadratic {
+        lower: vec![-5.0; 2],
+        upper: vec![5.0; 2],
+    };
+    let solver = RandomSearch::new(32, 42);
+
+    let result = Executor::new(
+        problem,
+        solver,
+        PopulationProgress::<Vec<f64>>::empty(),
+    )
+    .max_iter(1_000)
+    .run()
+    .unwrap();
+
+    assert!(result.cost() < 0.05);
+    assert!((-5.0..=5.0).contains(&result.param()[0]));
+    assert!((-5.0..=5.0).contains(&result.param()[1]));
+}
+```
+
+The fixed seed makes the example reproducible. Reaching the iteration
+limit reports that the requested search budget was used; it does not
+certify that the best point is globally optimal.
+
+## Practical considerations
+
+### Choose meaningful bounds
+
+The box defines the sampling distribution. Very wide bounds spend most
+evaluations far from a useful region, while bounds that exclude a good
+solution prevent the solver from finding it. If a parameter varies over
+orders of magnitude, consider optimizing its logarithm: a uniform draw in
+the transformed parameter corresponds to a different distribution in the
+original units.
+
+Declare `ConstraintSet<BoxBounds<V>>` with both bound vectors present.
+They must be non-empty, finite, equally sized, and ordered. Equal bounds
+are allowed and fix that coordinate. The solver rejects additional
+constraint blocks; it samples the box rather than a general feasible set.
+
+### Budget objective calls, not just iterations
+
+`RandomSearch::new(lambda, seed)` requires a positive batch size. A larger
+batch uses more cost evaluations per iteration and can expose more
+independent work to the `parallel` feature. Compare runs using cost
+evaluations when their batch sizes differ.
+
+Executor budgets are checked between complete iterations. Initialization
+evaluates a full batch, and the next iteration can finish a batch that
+crosses `max_cost_evals`. Choose `lambda` with that granularity in mind
+when objective calls are expensive.
+
+### Use patience when checking progress
+
+There is no default solver convergence criterion. Set execution limits
+such as `max_iter`, `max_cost_evals`, or `max_time`, and use a target
+objective if a useful threshold is known.
+
+Optional step- and cost-change checks compare successive elite points.
+An iteration without a new record has zero change, even though the next
+independent batch could still improve the result. A stagnation window is
+often more appropriate than stopping after one unchanged representative.
+For a noisy objective, retaining the smallest observed cost can preserve
+an unusually favorable observation, so validate the returned point with
+additional evaluations outside the search.
+
+## Implementation
+
+`PopulationProgress` stores the population and its matching objective
+values, with the best member as its current representative. `RandomSearch`
+owns a `ChaCha8Rng` and the configured seed. It samples proposals in a
+fixed order and batches independent objective evaluations; the `parallel`
+feature preserves that order for a deterministic objective.
+
+`PopulationProgress::from_population` accepts exactly `lambda` finite
+vectors with the bounds' dimension. Fresh initialization resets progress
+and the RNG, projects those members into the box, and reevaluates them.
+This is a population warm start. Since future draws cover the entire box,
+the supplied members do not create a local sampling region.
+
+An empty state with the same seed repeats the original run. An exact
+checkpoint must retain solver, state, and evaluation counts together so
+that it preserves the live RNG and skips initialization. Both solver and
+progress support serialization with the `serde` feature; state alone
+cannot resume the random stream exactly.
+
+Supported parameter types are `Vec<F>`, `nalgebra::DVector<F>`,
+`ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`. Random
+search requires uniform box sampling and coordinate access, without matrix
+operations or a BLAS/LAPACK provider. See the API's [Backends
+section](https://docs.rs/basin/latest/basin/solver/random_search/struct.RandomSearch.html#backends)
+for custom-vector requirements.
+
+<References entries={["solis-wets-1981"]} />

@@ -1,0 +1,211 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# Simulated annealing
+
+Simulated annealing explores a problem with random proposals and sometimes
+accepts a worse objective value. A temperature controls how likely those
+uphill moves are. Cooling gradually makes the search more selective,
+allowing early exploration to give way to local improvement. You supply
+both the proposal rule and the temperature schedule.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/simulated_annealing/struct.SimulatedAnnealing.html)
+
+| Property | Requirement |
+| --- | --- |
+| Objective | A scalar function |
+| Evaluations | `CostFunction` and a `Neighbor` proposal |
+| Search | One seeded chain with uphill acceptance |
+| Constraints | Unconstrained; declarations are ignored |
+| Parameters | Any cloneable type, including all four dense backends |
+
+## When to use it
+
+Consider simulated annealing when you can define a useful random neighbor
+but derivatives or conventional vector steps are unsuitable. A neighbor
+can perturb continuous coordinates, swap elements of a permutation, or
+modify another discrete structure. [Kirkpatrick, Gelatt, and Vecchi
+(1983)](#ref-kirkpatrick-gelatt-vecchi-1983) connect this optimization
+strategy to annealing in statistical mechanics.
+
+The ability to accept uphill moves distinguishes it from strict
+improvement searches such as [Solis–Wets](../../derivative-free/solis-wets/).
+For continuous vectors, compare [differential
+evolution](../de/) or [CMA-ES](../cma-es/) when adapting
+a population is more convenient than designing a neighbor.
+
+A useful result depends on proposals, objective scaling, temperature, and
+budget. The convergence theory for slow logarithmic cooling has specific
+state-space assumptions and a problem-dependent temperature coefficient
+[Hajek (1988)](#ref-hajek-1988). Selecting a logarithmic schedule alone
+does not give an arbitrary finite Basin run a global-optimality guarantee.
+
+## How it works
+
+At temperature `T`, the neighbor proposes a point `y` from the current
+point `x`. Basin accepts any proposal with `f(y) <= f(x)`. A strictly
+uphill proposal is accepted with probability
+`exp(-(f(y) - f(x)) / T)`. This is the classical
+[Metropolis rule](#ref-metropolis-1953). One iteration makes one proposal
+and one objective evaluation.
+
+The accepted point is the current chain position, and it can become worse
+as the search crosses an objective barrier. Basin separately retains the
+best point encountered. Rejected proposals leave the current position
+unchanged and still advance the cooling schedule.
+
+Choose a `TemperatureSchedule` explicitly. Geometric cooling uses
+`T_j = T_0 * alpha^j`, reciprocal cooling uses `T_j = T_0 / (j + 1)`, and
+normalized logarithmic cooling uses `T_j = T_0 * ln(2) / ln(j + 2)`.
+Every schedule starts at `T_0`. With `steps_per_temperature = m`, a
+temperature level lasts `m` proposals before `j` increases.
+
+Optional reannealing resets the cooling age, bringing the next proposal
+back to `T_0`. It can trigger after a fixed number of proposals, a streak
+of rejections, or a period without a new best objective. If any enabled
+trigger fires, all trigger counters reset together. The chain position,
+historical best, and global evaluation counts remain intact.
+
+## Example
+
+Minimize a sphere from `[3.0, -4.0]` using symmetric uniform perturbations.
+Their scale shrinks with the square root of the temperature. Each
+temperature is held for eight proposals, and a fixed seed makes the run
+reproducible for this deterministic objective.
+
+<!-- compile: solver-simulated-annealing -->
+```rust
+use basin::core::rng::{ChaCha8Rng, RngExt};
+use basin::{
+    CostFunction, Executor, SimulatedAnnealing, TemperatureSchedule,
+};
+use std::convert::Infallible;
+
+struct Sphere;
+
+impl CostFunction for Sphere {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok(x.iter().map(|v| v * v).sum())
+    }
+}
+
+fn main() {
+    let neighbor = |x: &Vec<f64>, temperature: f64, rng: &mut ChaCha8Rng| {
+        x.iter()
+            .map(|v| {
+                v + temperature.sqrt() * (2.0 * rng.random::<f64>() - 1.0)
+            })
+            .collect::<Vec<_>>()
+    };
+    let schedule = TemperatureSchedule::geometric(0.995)
+        .with_steps_per_temperature(8);
+    let solver = SimulatedAnnealing::new(neighbor, 2.0, schedule, 42);
+
+    let result = Executor::from_start(Sphere, solver, vec![3.0, -4.0])
+        .max_iter(10_000)
+        .run()
+        .unwrap();
+
+    assert!(result.best_cost() < 1e-2);
+    assert!(result.best_cost() <= result.cost());
+}
+```
+
+The assertion uses the best point rather than the final accepted point.
+The finite iteration budget does not establish convergence to the sphere's
+exact minimum.
+
+## Practical considerations
+
+### Design a reversible neighbor
+
+The classical acceptance rule assumes symmetric proposals, or equal
+forward and reverse proposal mass. Basin does not accept a Hastings
+correction. A symmetric continuous perturbation or a uniformly chosen
+swap can satisfy this contract; a directed move or a boundary repair can
+change the reverse probability and needs separate justification.
+
+Closures with signature `FnMut(&Param, F, &mut R) -> Param` implement
+`Neighbor` automatically and use `Infallible` as their error type. A
+fallible neighbor can implement the trait directly, with the same error
+type as the objective. Proposal errors and objective errors then propagate
+without erasing the application error.
+
+Constraint declarations do not clip, project, or restrict proposals.
+Encode feasible moves in the neighbor, or reject infeasible candidates
+with positive infinity when that policy fits the problem. Keep the
+proposal contract in mind when modifying candidates near a boundary.
+
+### Match temperature to objective differences
+
+The initial temperature must be finite and positive. An uphill difference
+of `delta` is accepted with probability `exp(-delta / T)`, so the
+appropriate scale depends on objective differences, rather than parameter
+units. Multiplying the objective by a constant changes the acceptance
+behavior unless the temperature scale changes with it.
+
+The geometric factor must lie strictly between zero and one. Factors
+near one and more proposals per temperature cool more slowly, spending
+more evaluations before the chain becomes selective. Cooling too quickly
+can leave the chain exploring only one region. Basin clamps underflowed
+temperatures to the scalar's smallest positive normal value.
+
+### Use reannealing and stopping deliberately
+
+`with_reannealing_fixed`, `with_reannealing_accepted`, and
+`with_reannealing_best` compose the three restart triggers. Despite its
+name, the accepted trigger measures consecutive rejected proposals. Each
+threshold must be positive. Reheating can help exploration, but it does
+not independently rescale coordinates or implement adaptive simulated
+annealing.
+
+Use executor iteration, evaluation, or time limits and inspect the
+termination report. The method has no ordinary temperature-based
+convergence test. Rejected proposals do not trigger step- or cost-change
+convergence; acceptance history remains available to executor controls
+such as `no_acceptance`.
+
+Proposed `NaN` and positive infinity are rejected. A finite proposal can
+replace a current positive-infinity cost, but a current `NaN` reports
+failure. Negative infinity is accepted and stops on the next framework
+check. Equal finite costs are accepted.
+
+## Implementation
+
+`ProposalState` publishes the accepted position and matching cost, the
+historical objective incumbent, evaluation counts, and acceptance history.
+The solver owns the working neighbor, RNG, cooling age, and reannealing
+progress. Retain it with `Executor::run_with_solver` to inspect
+`temperature()`, `reannealings()`, and the evolving `neighbor()`.
+
+Fresh initialization reevaluates the start, resets cooling, and clones
+the configured neighbor and RNG into fresh working components. Their
+`Clone` implementations must produce independent evolving state,
+including any state captured by a closure. `seed_chain(seed)` creates an
+independent default-RNG chain from configured settings without consuming
+the current chain's RNG.
+
+Exact solver-and-state checkpoints retain the live components and skip
+initialization. A state-only snapshot starts a fresh chain through
+`Executor::new`. With `serde`, serializable neighbors and RNGs can be
+included in exact checkpoints.
+
+Parameters require only `Clone`. Supported choices include discrete
+structures, `Vec<F>`, `nalgebra::DVector<F>`, `ndarray::Array1<F>`, and
+`faer::Col<F>`, with `F = f32` or `f64`. The default `ChaCha8Rng` works on
+WASM, and `new_with_rng` accepts a custom generator. Each proposal depends
+on the current chain position, so the solver does not use `parallel`.
+
+<References
+    entries={[
+        "metropolis-1953",
+        "kirkpatrick-gelatt-vecchi-1983",
+        "hajek-1988",
+    ]}
+/>
