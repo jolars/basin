@@ -252,9 +252,18 @@ export const SOLVER_LINKS: DocsNavItem[] = [
     {
         label: "General constrained",
         children: [
-            solver("SLSQP", "slsqp"),
-            solver("Barrier method", "barrier-method"),
-            solver("Augmented Lagrangian", "augmented-lagrangian-method"),
+            {
+                label: "SLSQP",
+                href: "guide/solvers/general-constrained/slsqp/",
+            },
+            {
+                label: "Barrier method",
+                href: "guide/solvers/general-constrained/barrier-method/",
+            },
+            {
+                label: "Augmented Lagrangian",
+                href: "guide/solvers/general-constrained/augmented-lagrangian-method/",
+            },
         ],
     },
     {

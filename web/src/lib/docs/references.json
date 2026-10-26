@@ -868,5 +868,27 @@
         "publisher": "IEEE",
         "page": "3153-3160",
         "DOI": "10.1109/CEC.2010.5586034"
+    },
+    {
+        "id": "kraft-1988",
+        "type": "report",
+        "title": "A software package for sequential quadratic programming",
+        "author": [{ "family": "Kraft", "given": "Dieter" }],
+        "issued": { "date-parts": [[1988]] },
+        "number": "DFVLR-FB 88-28",
+        "publisher": "Institut für Dynamik der Flugsysteme, Oberpfaffenhofen",
+        "URL": "https://degenerateconic.com/uploads/2018/03/DFVLR_FB_88_28.pdf"
+    },
+    {
+        "id": "boyd-vandenberghe-2004",
+        "type": "book",
+        "title": "Convex Optimization",
+        "author": [
+            { "family": "Boyd", "given": "Stephen" },
+            { "family": "Vandenberghe", "given": "Lieven" }
+        ],
+        "issued": { "date-parts": [[2004]] },
+        "publisher": "Cambridge University Press",
+        "URL": "https://web.stanford.edu/~boyd/cvxbook/"
     }
 ]

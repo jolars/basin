@@ -17,7 +17,7 @@ algorithm family.
 | Objective values only, with a locally smooth function | [NEWUOA](derivative-free/newuoa/), or [BOBYQA](derivative-free/bobyqa/) with box bounds | Build a quadratic model without gradients. |
 | Objective values only, with linear constraints | [LINCOA](derivative-free/lincoa/) | Build a quadratic objective model while handling linear inequalities. |
 | Objective values only, with nonlinear constraints | [COBYLA](derivative-free/cobyla/) or [constrained MADS](derivative-free/mads/) | COBYLA uses linear interpolation models; MADS uses polling and a progressive barrier. Check each method's supported constraint blocks. |
-| Gradients and general nonlinear constraints | [SLSQP](#slsqp) | Solve local constrained subproblems using objective and constraint derivatives. |
+| Gradients and general nonlinear constraints | [SLSQP](general-constrained/slsqp/) | Solve local constrained subproblems using objective and constraint derivatives. |
 | Several local minima to explore | [CMA-ES](global-and-stochastic/cma-es/), [differential evolution](global-and-stochastic/de/), or [DIRECT](global-and-stochastic/direct/) | Search across a region; check whether the method needs sampling bounds or enforces constraints. |
 | One scalar variable to minimize | [Brent](#brent) or [golden-section search](#golden-section) | Start with an interval bracketing a minimum. |
 | A scalar equation to solve | [Brent root finding](#brent-root) or [TOMS 748](#toms748-root) | Start with a sign-changing bracket; these solve for a zero rather than minimize a cost. |
@@ -463,6 +463,7 @@ solvers that enforce the same box can be supplied directly.
   ([report](https://degenerateconic.com/uploads/2018/03/DFVLR_FB_88_28.pdf)).
   Reference implementation: Jacob Williams's SLSQP 1.6.1, commit
   `97884f98042624007f736dc536fa5636906ff26a`, original NNLS and inexact line search.
+  [Read the SLSQP guide](general-constrained/slsqp/).
 
 The following wrap a gradient inner solver in an outer loop for linear
 constraints:
@@ -475,6 +476,7 @@ constraints:
   domain and a rejection cost of positive infinity outside it. Incumbents
   contain only strictly feasible points. Supports all four dense backends
   with `f32` or `f64`; custom inner solvers can require additional capabilities.
+  [Read the barrier method guide](general-constrained/barrier-method/).
 - **<span id="augmented-lagrangian-method"></span>[`AugmentedLagrangianMethod`](https://docs.rs/basin/latest/basin/solver/augmented_lagrangian_method/struct.AugmentedLagrangianMethod.html)**:
   quadratic penalty plus multiplier updates for linear equality constraints
   (`A x = b`); tolerates an infeasible start (Nocedal & Wright, §17.3, Alg.
@@ -482,6 +484,7 @@ constraints:
   unscaled `L2` constraint-violation report, retaining an incumbent chosen by feasibility
   before objective. Supports all four dense backends with `f32` or `f64`;
   custom inner solvers can require additional capabilities.
+  [Read the augmented Lagrangian guide](general-constrained/augmented-lagrangian-method/).
 
 The pluggable line searches are documented alongside the first-order solvers:
 [`Backtracking`](https://docs.rs/basin/latest/basin/line_search/backtracking/struct.Backtracking.html)

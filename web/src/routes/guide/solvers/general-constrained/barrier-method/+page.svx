@@ -1,0 +1,182 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# Barrier method
+
+`BarrierMethod` minimizes a scalar objective subject to linear inequalities
+`A x <= b`. It solves a sequence of unconstrained log-barrier problems with a
+configurable inner solver. An automatic Phase I searches for a strictly feasible
+point when the supplied start lies on or outside the boundary.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/barrier_method/struct.BarrierMethod.html)
+
+  | Property    | Requirement                                                        |
+  | ----------- | ------------------------------------------------------------------ |
+  | Objective   | A differentiable scalar function inside the feasible region        |
+  | Evaluations | `CostFunction` and `Gradient`, plus a compatible `WarmStart` inner |
+  | Search      | Local continuation through barrier subproblems                     |
+  | Constraints | A linear inequality block with a nonempty strict interior          |
+  | Parameters  | All four dense backends with a compatible inner                    |
+
+## When to use it
+
+Use this wrapper when your constraints are linear inequalities and you want to
+reuse an unconstrained solver. It follows the barrier and feasibility methods in
+[Boyd and Vandenberghe (2004)](#ref-boyd-vandenberghe-2004), §§11.3–11.4.1.
+Convex objectives give the usual central-path interpretation; on a nonconvex
+objective, the inner solves remain local searches.
+
+The complete declaration must contain only a linear inequality block. Bounds,
+equalities, and nonlinear blocks are unsupported. For box bounds alone, compare
+[L-BFGS-B](../../quasi-newton/l-bfgs-b/) or [projected gradient
+descent](../../first-order/projected-gradient-descent/). For mixed constraint
+blocks, compare [SLSQP](../slsqp/). Linear equalities have a separate [augmented
+Lagrangian method](../augmented-lagrangian-method/).
+
+## How it works
+
+Phase II minimizes `phi_mu(x) = f(x) - mu * sum(log(b[i] - a[i]^T x))`. Each
+subproblem starts at the current point with a fresh inner run. Once that point
+sufficiently centers the subproblem, the wrapper divides `mu` by the reduction
+factor and repeats. The barrier returns positive infinity outside the strict
+domain, encouraging accepted iterates to stay inside it.
+
+If the start is not strictly feasible, Phase I first minimizes an auxiliary
+feasibility objective. Basin eliminates the auxiliary scalar analytically, so
+the inner solver still uses the original parameter type. As soon as a strict
+point appears, Phase II starts with the initial barrier weight.
+
+For an exactly centered convex subproblem, `m * mu` bounds objective
+suboptimality, where `m` is the number of inequalities. Basin checks numerical
+centering separately; a small scheduled gap alone does not establish that bound
+for an approximate inner solution.
+
+## Example
+
+This quadratic has its unconstrained minimum at `[2.0, 2.0]`. The inequality
+`x[0] + x[1] <= 2.0` moves the solution to `[1.0, 1.0]`, with cost `2.0`. The
+example starts strictly inside the region and uses Armijo backtracking to keep
+the inner search from accepting steps through the barrier.
+
+<!-- compile: solver-barrier-method -->
+```rust
+use basin::{
+    Backtracking, BarrierMethod, Constrained, ConstraintSet, CostFunction,
+    DenseMatrix, Executor, Gradient, GradientDescent, LinearBlock,
+    TerminationCode,
+};
+use std::convert::Infallible;
+
+struct Quadratic;
+
+impl CostFunction for Quadratic {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok((x[0] - 2.0).powi(2) + (x[1] - 2.0).powi(2))
+    }
+}
+
+impl Gradient for Quadratic {
+    type Gradient = Vec<f64>;
+
+    fn gradient(&self, x: &Self::Param) -> Result<Self::Gradient, Self::Error> {
+        Ok(vec![2.0 * (x[0] - 2.0), 2.0 * (x[1] - 2.0)])
+    }
+}
+
+fn main() {
+    let constraints =
+        ConstraintSet::new().with_linear_inequalities(LinearBlock::new(
+            DenseMatrix::from_row_slice(1, 2, &[1.0, 1.0]),
+            vec![2.0],
+        ));
+    let problem = Constrained::new(Quadratic, constraints);
+    let inner = GradientDescent::with_line_search(Backtracking::new())
+        .with_absolute_gradient_tolerance(1e-8);
+    let solver = BarrierMethod::with_inner_solver(inner);
+    let result = Executor::from_start(problem, solver, vec![0.0, 0.0])
+        .max_iter(50)
+        .run()
+        .unwrap();
+
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
+    let x = result.param();
+    assert!(x[0] + x[1] < 2.0);
+    assert!((x[0] - 1.0).abs() < 1e-4);
+    assert!((x[1] - 1.0).abs() < 1e-4);
+    assert!((result.cost() - 2.0).abs() < 1e-4);
+}
+```
+
+## Practical considerations
+
+### Choose an inner solver that respects the barrier
+
+Pair gradient descent, BFGS, or unbounded L-BFGS with
+[`Backtracking`](https://docs.rs/basin/latest/basin/line_search/backtracking/struct.Backtracking.html).
+A fixed step can cross the boundary, and strong Wolfe searches can stall at the
+infinity wall. Gradient-descent momentum can also carry an iterate outside the
+region because its velocity lies outside the line search's control.
+
+Inners implement `WarmStart` and optimize a `CostFunction + Gradient` surrogate.
+Least-squares inners need residuals and a Jacobian and cannot consume this
+adapter. A derivative-free inner can find feasible points, but Phase I needs a
+gradient convergence certificate to report an empty strict interior. The
+original problem still needs `Gradient` for independent centering checks.
+
+### Allow enough work for centering
+
+The defaults are `mu0 = 1.0`, reduction factor `10.0`, and `50` inner iterations
+per segment. `with_absolute_duality_gap_tolerance` tests `m * mu` and defaults
+to `1e-8`. Centering additionally requires a surrogate-gradient infinity norm at
+most `1e-8`, or a reduction to `1e-3` of its initial norm at that weight.
+
+Configure those guards with `with_absolute_stationarity_tolerance` and
+`with_relative_stationarity_tolerance`. They combine with OR. `None` disables an
+optional test; disabling both stationarity guards permits gap-only continuation
+and stopping. Zero requests exact stationarity.
+
+A capped inner solve supplies a candidate and retries the same weight until
+centering passes. Near active constraints, the barrier can be ill conditioned.
+Choose attainable tolerances, scale variables and constraint rows, and budget
+outer iterations as well as inner segments. Independent verification adds up to
+two counted gradient calls per consumed Phase II result. Executor budgets are
+checked between outer steps, so a segment can exceed a remaining allowance.
+
+### Require a strict interior
+
+A feasible set confined to a boundary has no strict interior. If a centered
+Phase I subproblem reaches `with_absolute_phase_one_gap_tolerance` (default
+`1e-8`) without finding a strict point, the solver reports `SolverFailed`. That
+decision has a numerical scale: finite precision cannot distinguish an empty
+interior from an arbitrarily thin one. Exhausting an inner iteration budget
+alone does not establish infeasibility.
+
+## Implementation
+
+`PointState` publishes the original objective at strictly feasible points and
+positive infinity elsewhere. Phase I rejects points outside the strict domain
+without calling the original objective or gradient. Only strictly feasible
+points with eligible costs can establish an incumbent, so use checked state
+access when a run stops before finding one. The outer state exposes no gradient.
+
+Each inner solve starts fresh. Fresh outer initialization resets the phase,
+weight schedule, and progress; an `ExactCheckpoint` retains them along with the
+inner solver and evaluation counts. Enable `with_inner_diagnostics(true)` and
+use `run_with_solver` to inspect the last attempted segment, including its
+phase, weight, gap, and native outcome. With `serde`, solver checkpoints are
+serializable when their constituent types are.
+
+Supported dense pairs are `Vec<F>`/`DenseMatrix<F>`,
+`nalgebra::DVector<F>`/`DMatrix<F>`, `ndarray::Array1<F>`/`Array2<F>`, and
+`faer::Col<F>`/`Mat<F>`, with `F = f32` or `f64`, when the chosen inner supports
+them. The outer method uses matrix-vector products and transpose products
+without a linear solve. Custom inners can add requirements; the default `Vec`
+example needs no BLAS/LAPACK provider.
+
+<References entries={["boyd-vandenberghe-2004"]} />

@@ -65,6 +65,9 @@ export function GET() {
 - [Local-search chains](${guide}/solvers/memetic/ma-ls-ch/): local refinement, composition requirements, evaluation budgets, and a Rust example
 - [CMA-ES chains](${guide}/solvers/memetic/ma-ls-ch-cma/): local refinement, composition requirements, evaluation budgets, and a Rust example
 - [Solis–Wets chains](${guide}/solvers/memetic/ma-ls-ch-sw/): local refinement, composition requirements, evaluation budgets, and a Rust example
+- [SLSQP](${guide}/solvers/general-constrained/slsqp/): constraint declarations, dense subproblems, convergence diagnostics, and a Rust example
+- [Barrier method](${guide}/solvers/general-constrained/barrier-method/): Phase I feasibility, log-barrier continuation, inner solver requirements, and a Rust example
+- [Augmented Lagrangian](${guide}/solvers/general-constrained/augmented-lagrangian-method/): linear equalities, multiplier and penalty updates, feasibility and stationarity, and a Rust example
 
 ## Reference
 

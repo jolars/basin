@@ -179,6 +179,21 @@
             description:
                 "When to use MaLsChSw, how local refinement works, and how to configure and run it in Basin, with references.",
         },
+        "/guide/solvers/general-constrained/slsqp": {
+            title: "SLSQP – Basin",
+            description:
+                "When to use SLSQP, how constrained subproblems and merit line searches work, and how to configure and run it in Basin, with references.",
+        },
+        "/guide/solvers/general-constrained/barrier-method": {
+            title: "Barrier method – Basin",
+            description:
+                "When to use the barrier method, how Phase I and log-barrier continuation work, and how to configure an inner solver in Basin, with references.",
+        },
+        "/guide/solvers/general-constrained/augmented-lagrangian-method": {
+            title: "Augmented Lagrangian – Basin",
+            description:
+                "When to use the augmented Lagrangian method, how penalty and multiplier updates work, and how to check feasibility and stationarity in Basin, with references.",
+        },
         "/guide/migrating-to-v3": {
             title: "Migrating to Basin 3.0 – Basin",
             description:
