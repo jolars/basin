@@ -19,7 +19,7 @@ algorithm family.
 | Objective values only, with nonlinear constraints | [COBYLA](derivative-free/cobyla/) or [constrained MADS](derivative-free/mads/) | COBYLA uses linear interpolation models; MADS uses polling and a progressive barrier. Check each method's supported constraint blocks. |
 | Gradients and general nonlinear constraints | [SLSQP](general-constrained/slsqp/) | Solve local constrained subproblems using objective and constraint derivatives. |
 | Several local minima to explore | [CMA-ES](global-and-stochastic/cma-es/), [differential evolution](global-and-stochastic/de/), or [DIRECT](global-and-stochastic/direct/) | Search across a region; check whether the method needs sampling bounds or enforces constraints. |
-| One scalar variable to minimize | [Brent](#brent) or [golden-section search](#golden-section) | Start with an interval bracketing a minimum. |
+| One scalar variable to minimize | [Brent](scalar-minimization/brent/), [Brent with derivatives](scalar-minimization/brent-derivative/), or [golden-section search](scalar-minimization/golden-section/) | Supply a finite interval, and use derivatives when they are reliable and cheap. |
 | A scalar equation to solve | [Brent root finding](root-finding/brent/) or [TOMS 748](root-finding/toms748/) | Start with a sign-changing bracket; these solve for a zero rather than minimize a cost. |
 
 These choices are starting points for comparison. A local method depends on
@@ -506,13 +506,21 @@ For a scalar objective on a bracketed interval:
   bracketed interval, the gradient-using sibling of `Brent`/`GoldenSection`
   (uses the sign of `f'` to bracket and secant extrapolation on `f'` to step;
   Brent, 1973, as transcribed in *Numerical Recipes* §10.3).
+  [Read the Brent with derivatives guide](scalar-minimization/brent-derivative/).
 - **<span id="brent"></span>[`Brent`](https://docs.rs/basin/latest/basin/solver/brent/struct.Brent.html)**:
   robust 1-D minimization on a bracketed interval (Brent, 1973, as transcribed
   in *Numerical Recipes* §10.2); also used inside line searches.
+  [Read the Brent minimization guide](scalar-minimization/brent/).
 - **<span id="golden-section"></span>[`GoldenSection`](https://docs.rs/basin/latest/basin/solver/golden_section/struct.GoldenSection.html)**:
   golden-section search: 1-D minimization on a bracketed interval, the robust
   linearly-converging companion to `Brent` (Kiefer, 1953; *Numerical Recipes*
   §10.1).
+  [Read the golden-section search guide](scalar-minimization/golden-section/).
+
+All three support scalar `f32` and `f64` without optional features. Declare
+both finite endpoints through the problem's `ConstraintSet<BoxBounds<F>>`
+and run with an explicit `PointState` (`Brent` and `GoldenSection`) or
+`FirstOrderState` (`BrentDerivative`).
 
 ## Root finding
 

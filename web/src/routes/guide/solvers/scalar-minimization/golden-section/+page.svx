@@ -1,0 +1,170 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# Golden-section search
+
+`GoldenSection` minimizes a function of one scalar variable by repeatedly
+reducing a finite interval. It compares two interior objective values and
+reuses one evaluation after each reduction, without derivatives or an
+interpolation model.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/golden_section/struct.GoldenSection.html)
+
+  | Property    | Requirement                                              |
+  | ----------- | -------------------------------------------------------- |
+  | Objective   | A deterministic scalar function                          |
+  | Evaluations | `CostFunction`                                           |
+  | Search      | Local interval reduction, ideally on a unimodal function  |
+  | Constraints | Scalar box bounds with finite `lower < upper`             |
+  | Parameters  | Scalar `f32` or `f64`, without optional features           |
+
+## When to use it
+
+Consider golden-section search when a minimum lies in a known interval and
+you want predictable progress from objective comparisons. It does not need
+smoothness or a derivative, making it useful for unimodal functions with
+kinks. [Brent](../brent/) usually needs fewer evaluations on smooth objectives
+because it adds parabolic interpolation. Compare [Brent with
+derivatives](../brent-derivative/) when reliable derivatives are cheap.
+
+The interval should contain a function that decreases toward a minimum and
+increases afterward, or is monotone toward a boundary minimum. Multiple local
+minima, noise, or broad flat regions can cause comparisons to discard a better
+region. A small final interval alone does not certify global optimality.
+
+## How it works
+
+Golden-section search belongs to the sequential interval-search methods of
+[Kiefer (1953)](#ref-kiefer-1953). Basin uses the one-dimensional procedure
+described in [Press et al. (1992)](#ref-press-etal-1992), §10.1.
+
+For an interval `[a, b]`, let `r = (sqrt(5) - 1) / 2`, approximately `0.618`.
+The two interior points are `c1 = a + (1 - r) * (b - a)` and
+`c2 = a + r * (b - a)`. If `f(c1) <= f(c2)`, discard the region to the right
+of `c2`; otherwise, discard the region to the left of `c1`.
+
+The retained interval has `r` times the previous width, up to rounding. The
+golden ratio places one old interior point at the correct position for the
+next pair, so only one new objective evaluation is needed per iteration.
+The interval width converges linearly.
+
+## Example
+
+The unconstrained minimum of `(x - 2)^2` is at `2`. Restricting the interval to
+`[3, 5]` moves the solution to its lower boundary, `3`, with cost `1`.
+Golden-section search approaches that boundary from the interior.
+
+<!-- compile: solver-golden-section -->
+```rust
+use basin::{
+    BoxBounds, ConstraintDescription, ConstraintSet, Constraints,
+    CostFunction, Executor, GoldenSection, PointState, TerminationCode,
+};
+use std::convert::Infallible;
+
+struct Quadratic {
+    lower: f64,
+    upper: f64,
+}
+
+impl CostFunction for Quadratic {
+    type Param = f64;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &f64) -> Result<f64, Self::Error> {
+        Ok((x - 2.0).powi(2))
+    }
+}
+
+impl Constraints for Quadratic {
+    type Set = ConstraintSet<BoxBounds<f64>>;
+
+    fn constraints(&self) -> <Self::Set as ConstraintDescription>::Borrowed<'_> {
+        ConstraintSet::new().with_bounds(BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
+
+fn main() {
+    let problem = Quadratic { lower: 3.0, upper: 5.0 };
+    let solver = GoldenSection::new()
+        .with_absolute_position_tolerance(1e-10);
+    let result = Executor::new(problem, solver, PointState::new(4.0))
+        .max_iter(100)
+        .run()
+        .unwrap();
+
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
+    assert!((3.0..=5.0).contains(result.best_param()));
+    assert!((result.best_param() - 3.0).abs() < 1e-6);
+    assert!((result.best_cost() - 1.0).abs() < 1e-6);
+}
+```
+
+## Practical considerations
+
+### Let the interval determine the search
+
+Declare the complete constraint set as `ConstraintSet<BoxBounds<F>>`, with
+both finite endpoints present and `lower < upper`. Linear and nonlinear
+constraint blocks are unsupported. Use a scale where interval arithmetic
+remains finite, and return finite objective values at all sampled points.
+
+Golden-section search ignores the starting point in `PointState`; the bounds
+determine its two initial interior points. It does not separately evaluate
+the endpoints. A monotone objective therefore gives an approximation to its
+boundary minimum rather than an explicit endpoint comparison.
+
+For an unknown interval,
+[`MinimumBracketer`](https://docs.rs/basin/latest/basin/bracket/minimum/struct.MinimumBracketer.html)
+can search for an interior minimum bracket; see the [Brent
+example](../brent/#example). Check `bracketed()` before using its outer
+endpoints. A boundary minimum need not produce an interior bracket, so supply
+known domain bounds directly in that case.
+
+### Choose a width tolerance and a budget
+
+The native test is `b - a <= 2 * tol`, where
+`tol = relative * abs(x) + absolute` and `x` is the better of the two current
+interior points. `with_absolute_position_tolerance` defaults to `1e-12`, and
+`with_relative_position_tolerance` defaults to `sqrt(ε)` for the scalar type.
+Both must be finite and strictly positive; invalid settings panic.
+
+Ignoring rounding, the interval width after `n` iterations is its initial
+width times `r^n`. Budget enough iterations for that reduction with
+`Executor::max_iter`, or limit objective requests with `max_cost_evals`.
+Initialization costs two evaluations, and each completed iteration adds one.
+Check `result.report` to distinguish a budget stop from native convergence.
+
+Tolerances measure position resolution. They do not bound objective error or
+compensate for noisy comparisons. With `f32`, account for its larger machine
+epsilon when choosing meaningful accuracy.
+
+### Read the best recorded objective
+
+The current `param()` and `cost()` describe the new probe, which can be worse
+than a retained point. Use `best_param()` and `best_cost()` for the lowest
+recorded objective, especially if the executor stops before interval
+convergence.
+
+Optional cost-change and step-change tolerances compare successive published
+probes. They combine with the native test using OR and can stop before the
+interval reaches the requested width. Golden-section search publishes no
+gradient, so gradient convergence settings are absent from its API.
+
+## Implementation
+
+`PointState<F, F>` publishes each evaluated trial. The solver owns the
+interval, two interior points, and their cached costs. A fresh run rebuilds
+them from the bounds; an exact solver-and-state checkpoint preserves them
+alongside evaluation counts. Automatic bracketing counts its work separately.
+
+Scalar `f32` and `f64` require no linear-algebra backend or optional feature
+and work on WASM.
+
+<References entries={["kiefer-1953", "press-etal-1992"]} />

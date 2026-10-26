@@ -910,6 +910,43 @@
         "URL": "https://github.com/scipy/scipy/blob/v1.16.3/scipy/optimize/_zeros_py.py#L496"
     },
     {
+        "id": "brent-1973",
+        "type": "book",
+        "title": "Algorithms for Minimization without Derivatives",
+        "author": [{ "family": "Brent", "given": "Richard P." }],
+        "issued": { "date-parts": [[1973]] },
+        "publisher": "Prentice-Hall",
+        "publisher-place": "Englewood Cliffs, NJ",
+        "URL": "https://maths-people.anu.edu.au/brent/pub/pub011.html"
+    },
+    {
+        "id": "press-etal-1992",
+        "type": "book",
+        "title": "Numerical Recipes in C: The Art of Scientific Computing",
+        "author": [
+            { "family": "Press", "given": "William H." },
+            { "family": "Teukolsky", "given": "Saul A." },
+            { "family": "Vetterling", "given": "William T." },
+            { "family": "Flannery", "given": "Brian P." }
+        ],
+        "issued": { "date-parts": [[1992]] },
+        "edition": "2",
+        "publisher": "Cambridge University Press",
+        "URL": "https://numerical.recipes/oldverswitcher.html"
+    },
+    {
+        "id": "kiefer-1953",
+        "type": "article-journal",
+        "title": "Sequential minimax search for a maximum",
+        "author": [{ "family": "Kiefer", "given": "Jack" }],
+        "issued": { "date-parts": [[1953]] },
+        "container-title": "Proceedings of the American Mathematical Society",
+        "volume": "4",
+        "issue": "3",
+        "page": "502-506",
+        "DOI": "10.1090/S0002-9939-1953-0055639-3"
+    },
+    {
         "id": "brent-1971",
         "type": "article-journal",
         "title": "An algorithm with guaranteed convergence for finding a zero of a function",

@@ -1,0 +1,181 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# Brent minimization
+
+Brent's method minimizes a function of one scalar variable on a finite
+interval. It combines parabolic interpolation with a golden-section fallback
+and needs only objective values.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/brent/struct.Brent.html)
+
+  | Property    | Requirement                                              |
+  | ----------- | -------------------------------------------------------- |
+  | Objective   | A deterministic scalar function                          |
+  | Evaluations | `CostFunction`                                           |
+  | Search      | Local interval reduction, ideally on a unimodal function  |
+  | Constraints | Scalar box bounds with finite `lower < upper`             |
+  | Parameters  | Scalar `f32` or `f64`, without optional features           |
+
+## When to use it
+
+Consider Brent when you can isolate a minimum in an interval and do not have
+an inexpensive derivative. On a smooth function, interpolation often reduces
+the number of evaluations compared with [golden-section
+search](../golden-section/). If reliable first derivatives are cheap, compare
+[Brent with derivatives](../brent-derivative/).
+
+Use an interval where the function decreases toward a minimum and increases
+afterward, or is monotone toward a boundary minimum. Several local minima,
+noise, or broad flat regions can make interval reduction discard a better
+region. A narrow final interval does not certify global optimality.
+
+For a scalar equation `f(x) = 0`, see [Brent root
+finding](../../root-finding/brent/).
+
+## How it works
+
+[Brent (1973)](#ref-brent-1973), Chapter 5, combines successive parabolic
+interpolation with golden-section search. Basin follows the form in
+[Press et al. (1992)](#ref-press-etal-1992), §10.2.
+
+The solver retains a best point and two other sampled points. It proposes
+the minimum of a parabola through their objective values, accepting the step
+only when it stays inside the interval and is small enough relative to recent
+steps. Otherwise, it takes a golden-section step toward the larger side of
+the interval.
+
+One new objective evaluation updates the interval and interpolation history.
+A minimum displacement based on the position tolerances keeps probes apart
+at the requested resolution.
+
+## Example
+
+The quadratic `(x - 2)^2` has its minimum at `2`. This example first discovers
+an interval with `MinimumBracketer`, then declares its outer endpoints as
+problem-side bounds and uses the middle point to seed Brent.
+
+<!-- compile: solver-brent -->
+```rust
+use basin::{
+    BoxBounds, Brent, ConstraintDescription, ConstraintSet, Constraints,
+    CostFunction, Executor, MinimumBracketer, PointState, TerminationCode,
+};
+use std::convert::Infallible;
+
+struct Quadratic {
+    lower: f64,
+    upper: f64,
+}
+
+impl CostFunction for Quadratic {
+    type Param = f64;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &f64) -> Result<f64, Self::Error> {
+        Ok((x - 2.0).powi(2))
+    }
+}
+
+impl Constraints for Quadratic {
+    type Set = ConstraintSet<BoxBounds<f64>>;
+
+    fn constraints(&self) -> <Self::Set as ConstraintDescription>::Borrowed<'_> {
+        ConstraintSet::new().with_bounds(BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
+
+fn main() {
+    let search = MinimumBracketer::new(0.0, 0.5, 1.0)
+        .bracket(|x: f64| Ok::<_, Infallible>((x - 2.0).powi(2)))
+        .unwrap();
+    assert!(search.bracketed());
+
+    let (lower, middle, upper) = search.bracket();
+    let solver = Brent::new().with_absolute_position_tolerance(1e-10);
+    let result = Executor::new(
+        Quadratic { lower, upper },
+        solver,
+        PointState::new(middle),
+    )
+    .max_iter(100)
+    .run()
+    .unwrap();
+
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
+    assert!((result.best_param() - 2.0).abs() < 1e-6);
+    assert!(result.best_cost() < 1e-12);
+    let total_evaluations = search.function_evals() + result.counts.cost_evals;
+    assert!(total_evaluations > result.counts.cost_evals);
+}
+```
+
+If you already know the interval, declare its endpoints directly and supply
+an interior seed through `PointState`. Scalar minimizers use `Executor::new`
+with an explicit state.
+
+## Practical considerations
+
+### Supply a finite interval inside the objective's domain
+
+The complete constraint declaration must be `ConstraintSet<BoxBounds<F>>`
+with both endpoints present. Linear and nonlinear blocks are unsupported.
+The endpoints must be finite and strictly ordered. Use a scale where interval
+differences and midpoint calculations remain finite, and return finite
+objective values at every probe.
+
+Brent clamps the initial seed to the interval. If it lands on an endpoint,
+the solver moves it to a golden-section interior point before evaluating.
+An endpoint minimum is approached from within the interval; the solver does
+not separately evaluate both endpoints.
+
+[`MinimumBracketer`](https://docs.rs/basin/latest/basin/bracket/minimum/struct.MinimumBracketer.html)
+searches for an interior minimum bracket, with optional domain limits. Check
+`bracketed()` before using its output. A boundary minimum can exhaust the
+search limits without producing an interior bracket; for a known monotone
+objective, supply the interval directly.
+
+### Choose position accuracy
+
+`with_absolute_position_tolerance` defaults to `1e-12`, and
+`with_relative_position_tolerance` defaults to `sqrt(ε)` for the scalar type.
+For the retained best point `x`, current interval `[a, b]`, and midpoint `m`,
+the native test is `abs(x - m) + (b - a) / 2 <= 2 * tol`, where
+`tol = relative * abs(x) + absolute`.
+
+Both settings must be finite and strictly positive; invalid values panic.
+They also control the minimum trial displacement. Choose tolerances that
+match the scale and precision of the objective, especially with `f32`.
+Shrinking an interval cannot recover position information lost when nearby
+objective values round to the same number.
+
+### Read the best point and termination report
+
+The current `param()` and `cost()` describe the most recent probe, which can
+be worse than an earlier point. Use `best_param()` and `best_cost()` for the
+lowest recorded objective, particularly after an iteration or evaluation
+limit. Set budgets on the executor with `max_iter` or `max_cost_evals`, and
+check `result.report` to distinguish native convergence from a budget stop.
+
+Optional cost-change and step-change tolerances can stop the run before the
+interval test. Those checks compare successive published probes and provide
+different evidence from interval reduction. Brent publishes no gradient, so
+gradient convergence settings are absent from its API.
+
+## Implementation
+
+Brent uses `PointState<F, F>`. Initialization evaluates one seed, and each
+completed iteration requests one new cost. Automatic bracketing counts its
+work separately, and the minimizer reevaluates its seed.
+
+A fresh run resets interpolation history. An exact solver-and-state
+checkpoint retains it with the evaluation counts. Scalar `f32` and `f64`
+require no linear-algebra backend or optional feature and work on WASM.
+
+<References entries={["brent-1973", "press-etal-1992"]} />

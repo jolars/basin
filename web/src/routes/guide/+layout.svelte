@@ -194,6 +194,21 @@
             description:
                 "When to use the augmented Lagrangian method, how penalty and multiplier updates work, and how to check feasibility and stationarity in Basin, with references.",
         },
+        "/guide/solvers/scalar-minimization/brent": {
+            title: "Brent minimization – Basin",
+            description:
+                "When to use Brent minimization, how parabolic interpolation and golden-section steps work, and how to bracket and minimize a scalar objective in Basin, with references.",
+        },
+        "/guide/solvers/scalar-minimization/brent-derivative": {
+            title: "Brent with derivatives – Basin",
+            description:
+                "When to use Brent minimization with derivatives, how safeguarded secant steps work, and how to configure position and gradient tolerances in Basin, with references.",
+        },
+        "/guide/solvers/scalar-minimization/golden-section": {
+            title: "Golden-section search – Basin",
+            description:
+                "When to use golden-section search, how interval reduction reuses objective evaluations, and how to configure scalar bounds and tolerances in Basin, with references.",
+        },
         "/guide/solvers/root-finding/bisection": {
             title: "Bisection root finding – Basin",
             description:

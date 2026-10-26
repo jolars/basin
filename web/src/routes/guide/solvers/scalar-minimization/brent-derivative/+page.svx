@@ -1,0 +1,184 @@
+<script>
+    import References from "#lib/docs/References.svelte";
+</script>
+
+# Brent with derivatives
+
+`BrentDerivative` minimizes a function of one scalar variable on a finite
+interval using objective values and first derivatives. It combines secant
+steps on the derivative with a fallback step guided by the derivative's sign.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/brent_derivative/struct.BrentDerivative.html)
+
+  | Property    | Requirement                                              |
+  | ----------- | -------------------------------------------------------- |
+  | Objective   | A differentiable, deterministic scalar function           |
+  | Evaluations | `CostFunction` and `Gradient` with a scalar derivative     |
+  | Search      | Local interval reduction, ideally on a unimodal function  |
+  | Constraints | Scalar box bounds with finite `lower < upper`             |
+  | Parameters  | Scalar `f32` or `f64`, without optional features           |
+
+## When to use it
+
+Consider this method when an interval isolates a minimum and a reliable first
+derivative is inexpensive. The derivative can guide the search more directly
+than objective values alone and supplies an optional stationarity test. It
+does not require a second derivative.
+
+Compare [Brent](../brent/) when derivatives are expensive or unreliable, and
+[golden-section search](../golden-section/) for a simple method using only
+objective comparisons. All three depend on the interval: multiple minima,
+noise, or misleading derivative signs can undermine the search. They do not
+certify a global minimum on a multimodal objective.
+
+## How it works
+
+Basin follows the `dbrent` routine in [Press et al.
+(1992)](#ref-press-etal-1992), §10.3, the derivative-using companion to
+[Brent's minimization method (1973)](#ref-brent-1973).
+
+The solver retains a best point and two other samples, each with its cost
+and derivative. It forms secant estimates for a zero of the derivative and
+accepts a proposal only when it lies inside the current interval, points
+downhill according to the current derivative, and satisfies a step-size
+safeguard.
+
+If no proposal passes, it moves halfway from the retained best point toward
+the endpoint indicated by the derivative's sign. A positive derivative sends
+the search left; a negative derivative sends it right. Each evaluated cost
+then updates the interval and retained history. Minimum trial displacements
+use the position tolerances.
+
+## Example
+
+The function `x^3 - 3x` has its minimum on `[0, 2]` at `1`, with cost `-2`.
+Its scalar derivative is `3x^2 - 3`. The example supplies both evaluations,
+declares scalar box bounds, and enables an absolute gradient tolerance.
+
+<!-- compile: solver-brent-derivative -->
+```rust
+use basin::{
+    BoxBounds, BrentDerivative, ConstraintDescription, ConstraintSet,
+    Constraints, CostFunction, Executor, FirstOrderState, Gradient,
+    Termination,
+};
+use std::convert::Infallible;
+
+struct Cubic {
+    lower: f64,
+    upper: f64,
+}
+
+impl CostFunction for Cubic {
+    type Param = f64;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &f64) -> Result<f64, Self::Error> {
+        Ok(x.powi(3) - 3.0 * x)
+    }
+}
+
+impl Gradient for Cubic {
+    type Gradient = f64;
+
+    fn gradient(&self, x: &f64) -> Result<f64, Self::Error> {
+        Ok(3.0 * x * x - 3.0)
+    }
+}
+
+impl Constraints for Cubic {
+    type Set = ConstraintSet<BoxBounds<f64>>;
+
+    fn constraints(&self) -> <Self::Set as ConstraintDescription>::Borrowed<'_> {
+        ConstraintSet::new().with_bounds(BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
+
+fn main() {
+    let problem = Cubic { lower: 0.0, upper: 2.0 };
+    let solver = BrentDerivative::new()
+        .with_absolute_gradient_tolerance(1e-8);
+    let result = Executor::new(problem, solver, FirstOrderState::new(0.5))
+        .max_iter(100)
+        .run()
+        .unwrap();
+
+    assert!(matches!(result.report.termination, Termination::Converged(_)));
+    assert!((result.best_param() - 1.0).abs() < 1e-6);
+    assert!((result.best_cost() + 2.0).abs() < 1e-10);
+    assert_eq!(result.counts.cost_evals, result.counts.gradient_evals);
+}
+```
+
+The derivative in `FirstOrderState` belongs to the current probe. Use
+`best_param()` and `best_cost()` for the lowest recorded objective; the most
+recent probe need not improve it.
+
+## Practical considerations
+
+### Declare the interval on the problem
+
+The complete constraint declaration must be `ConstraintSet<BoxBounds<F>>`
+with both finite endpoints present and `lower < upper`. Linear and nonlinear
+constraint blocks are unsupported. Keep interval arithmetic in range and
+return finite costs and derivatives at all sampled points.
+
+Initialization clamps the seed into the interval and moves an endpoint seed
+to a golden-section interior point. A boundary minimum can be approached even
+when its derivative is nonzero. If the interval is unknown,
+[`MinimumBracketer`](https://docs.rs/basin/latest/basin/bracket/minimum/struct.MinimumBracketer.html)
+can search using costs alone; see the [Brent example](../brent/#example).
+Check its success before using the outer endpoints as bounds and its middle
+point as the seed.
+
+### Separate position accuracy from stationarity
+
+The native interval test matches Brent's:
+`abs(x - m) + (b - a) / 2 <= 2 * tol`, where `x` is the retained best point,
+`m = (a + b) / 2`, and `tol = relative * abs(x) + absolute`.
+`with_absolute_position_tolerance` defaults to `1e-12`, and
+`with_relative_position_tolerance` defaults to `sqrt(ε)` for the scalar type.
+Both must be finite and strictly positive; invalid settings panic. They also
+set the minimum trial displacement.
+
+`with_absolute_gradient_tolerance` optionally tests `abs(f'(x))` at the
+current published point. It is disabled by default and combines with the
+native test using OR. `None` disables this optional check, and zero requests
+an exact-zero derivative. A small derivative can also occur at a maximum or
+on a flat region; it is not sufficient evidence of a minimum by itself.
+
+At an active bound, the correct constrained solution can have a nonzero
+derivative. The gradient check uses the ordinary derivative rather than a
+projected stationarity measure, so use the interval test when a boundary
+solution is possible. Optional cost-change and step-change tests also combine
+with OR and may stop before the interval has reached its requested width.
+
+### Account for both evaluations
+
+Initialization and each evaluated trial request `Gradient::cost_and_gradient`.
+Its default implementation calls `cost` and `gradient` separately. Override
+it when they share substantial work; the accounting still charges one cost
+and one gradient request per combined evaluation.
+
+Set iteration and evaluation limits on the executor. Read `result.report`
+before treating a returned point as converged. A run can stop because of a
+budget, an optional tolerance, native interval convergence, or a numerical
+stall when no distinct point remains inside the interval.
+
+## Implementation
+
+`FirstOrderState<F, F>` publishes a matching scalar point, cost, and derivative
+at each evaluated trial. The solver keeps its interpolation history and
+interval separately. A fresh run resets that history; an exact
+solver-and-state checkpoint preserves it and the evaluation counts.
+
+Scalar `f32` and `f64` require no linear-algebra backend or optional feature
+and work on WASM. Choose position and derivative tolerances consistent with
+the scalar type and objective scaling.
+
+<References entries={["brent-1973", "press-etal-1992"]} />

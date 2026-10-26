@@ -269,9 +269,18 @@ export const SOLVER_LINKS: DocsNavItem[] = [
     {
         label: "Scalar minimization",
         children: [
-            solver("Brent", "brent"),
-            solver("Brent with derivatives", "brent-derivative"),
-            solver("Golden-section search", "golden-section"),
+            {
+                label: "Brent",
+                href: "guide/solvers/scalar-minimization/brent/",
+            },
+            {
+                label: "Brent with derivatives",
+                href: "guide/solvers/scalar-minimization/brent-derivative/",
+            },
+            {
+                label: "Golden-section search",
+                href: "guide/solvers/scalar-minimization/golden-section/",
+            },
         ],
     },
     {
@@ -304,10 +313,6 @@ export const SOLVER_LINKS: DocsNavItem[] = [
         ],
     },
 ];
-
-function solver(label: string, fragment: string): DocsNavItem {
-    return { label, href: "guide/solvers/", fragment };
-}
 
 /**
  * The active section for a route. Returns the first path segment
