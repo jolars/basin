@@ -1,6 +1,7 @@
 """Generate scalar reference fixtures with SciPy 1.16.3 and NumPy 2.5.3.
 
-Run with `roots` or `brackets` and redirect stdout to the matching TSV file.
+Run with `roots`, `bisection`, or `brackets` and redirect stdout to the matching
+TSV file.
 The reference libraries remain external to the Rust test suite.
 """
 
@@ -20,8 +21,10 @@ def emit(*values):
                     for v in values))
 
 
-if sys.argv[1] == "roots":
-    print("# SciPy 1.16.3, NumPy 2.5.3, toms748 k=2, xtol=1e-12, rtol=4*eps")
+if sys.argv[1] in ("roots", "bisection"):
+    bisection = sys.argv[1] == "bisection"
+    method = "bisect" if bisection else "toms748 k=2"
+    print(f"# SciPy 1.16.3, NumPy 2.5.3, {method}, xtol=1e-12, rtol=4*eps")
     print("# name lower upper root value nfev nit first_five_evaluation_points")
     cases = [
         ("cubic", 1.0, 2.0, lambda x: x**3 - x - 2),
@@ -37,9 +40,11 @@ if sys.argv[1] == "roots":
             trace.append(float(x))
             return f(x)
 
-        x, result = optimize.toms748(traced, a, b, k=2, xtol=1e-12,
-                                     rtol=4*np.finfo(float).eps,
-                                     full_output=True)
+        solve = optimize.bisect if bisection else optimize.toms748
+        options = {} if bisection else {"k": 2}
+        x, result = solve(traced, a, b, xtol=1e-12,
+                          rtol=4*np.finfo(float).eps,
+                          full_output=True, **options)
         assert result.converged
         emit(name, a, b, float(x), float(f(x)), result.function_calls,
              result.iterations, ",".join(format(x, ".17g") for x in trace[:5]))
@@ -64,4 +69,4 @@ elif sys.argv[1] == "brackets":
              *map(float, result.bracket), *map(float, result.f_bracket),
              result.nfev, result.nit)
 else:
-    raise SystemExit("expected roots or brackets")
+    raise SystemExit("expected roots, bisection, or brackets")

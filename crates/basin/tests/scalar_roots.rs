@@ -2,8 +2,8 @@ use std::cell::Cell;
 use std::convert::Infallible;
 
 use basin::{
-    HalleyRoot, NewtonRoot, RootError, RootResult, RootTerminationReason,
-    SecantRoot, Toms748Root,
+    BisectionRoot, HalleyRoot, NewtonRoot, RootError, RootResult,
+    RootTerminationReason, SecantRoot, Toms748Root,
 };
 
 fn check(result: RootResult, f: impl Fn(f64) -> f64, expected: f64) {
@@ -87,6 +87,7 @@ macro_rules! root_contract {
     };
 }
 
+root_contract!(bisection, BisectionRoot,);
 root_contract!(secant, SecantRoot,);
 root_contract!(toms748, Toms748Root,);
 root_contract!(newton, NewtonRoot, |x: f64| Ok::<_, Infallible>(
@@ -98,6 +99,157 @@ root_contract!(
     |x: f64| Ok::<_, Infallible>(3.0 * x * x - 1.0),
     |x: f64| Ok::<_, Infallible>(6.0 * x)
 );
+
+#[test]
+fn bisection_halves_the_interval_once_per_evaluation() {
+    for sign in [-1.0, 1.0] {
+        for budget in 0..12 {
+            let result = BisectionRoot::new(0.0, 2.0)
+                .with_max_iter(budget)
+                .solve(|x| Ok::<_, Infallible>(sign * (x * x - 2.0)))
+                .unwrap();
+            let (a, b) = result.bracket();
+            assert!(a < 2.0_f64.sqrt() && 2.0_f64.sqrt() < b);
+            assert_eq!(b - a, 2.0 / (1_u64 << budget) as f64);
+            assert_eq!(result.iterations(), budget);
+            assert_eq!(result.function_evals(), budget + 2);
+            assert_eq!(result.callback_evals(), budget + 2);
+            assert_eq!(result.derivative_evals(), 0);
+            assert_eq!(result.second_derivative_evals(), 0);
+            assert_eq!(result.reason(), RootTerminationReason::MaxIter);
+            assert_eq!(result.value(), sign * (result.root().powi(2) - 2.0));
+            assert!(result.root() == a || result.root() == b);
+            assert!(result.value().abs() <= (sign * (a * a - 2.0)).abs());
+            assert!(result.value().abs() <= (sign * (b * b - 2.0)).abs());
+        }
+    }
+}
+
+#[test]
+fn bisection_stops_on_exact_roots_or_the_requested_bracket_width() {
+    let solver = BisectionRoot::new(0.0, 2.0).with_max_iter(1);
+    let exact = solver.solve(|x| Ok::<_, Infallible>(x - 1.0)).unwrap();
+    assert_eq!(exact.bracket(), (1.0, 1.0));
+    assert_eq!(exact.value(), 0.0);
+    assert_eq!(exact.iterations(), 1);
+    assert_eq!(exact.function_evals(), 3);
+    assert!(exact.converged());
+
+    let f = |x| Ok::<_, Infallible>(x * x - 2.0);
+    let result = BisectionRoot::new(0.0, 2.0)
+        .with_absolute_position_tolerance(0.125)
+        .with_max_iter(4)
+        .solve(f)
+        .unwrap();
+    assert_eq!(result.bracket(), (1.375, 1.5));
+    assert_eq!(result.iterations(), 4);
+    assert_eq!(result.function_evals(), 6);
+    assert!(result.converged());
+
+    let result = BisectionRoot::new(2.0, 4.0)
+        .with_absolute_position_tolerance(f64::from_bits(1))
+        .with_relative_position_tolerance(0.25)
+        .solve(|x| Ok::<_, Infallible>(x * x - 8.0))
+        .unwrap();
+    assert_eq!(result.bracket(), (2.5, 3.0));
+    assert_eq!(result.iterations(), 2);
+    assert!(result.converged());
+
+    let result = BisectionRoot::new(1.0, 1.125)
+        .with_absolute_position_tolerance(0.125)
+        .solve(|x| Ok::<_, Infallible>(x - 1.0625))
+        .unwrap();
+    assert_eq!(result.iterations(), 0);
+    assert_eq!(result.function_evals(), 2);
+    assert!(result.converged());
+
+    let repeated = solver.solve(f).unwrap();
+    assert_eq!(repeated.function_evals(), 3);
+    assert_eq!(repeated.bracket(), (1.0, 2.0));
+    assert_eq!(repeated.reason(), RootTerminationReason::MaxIter);
+}
+
+#[test]
+fn bisection_preserves_typed_errors_and_rejects_non_finite_trials() {
+    for failed_x in [0.0, 2.0, 1.0] {
+        let error = BisectionRoot::new(0.0, 2.0)
+            .solve(|x| {
+                if x == failed_x {
+                    Err("application")
+                } else {
+                    Ok(x * x - 2.0)
+                }
+            })
+            .unwrap_err();
+        assert_eq!(error, RootError::Evaluation("application"));
+    }
+    for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        let error = BisectionRoot::new(0.0, 2.0)
+            .solve(|x| {
+                Ok::<_, Infallible>(if x == 1.0 { value } else { x * x - 2.0 })
+            })
+            .unwrap_err();
+        assert!(matches!(error, RootError::NonFiniteValue { x: 1.0, .. }));
+    }
+}
+
+#[test]
+fn bisection_rejects_invalid_tolerances() {
+    for tolerance in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+        assert!(
+            std::panic::catch_unwind(|| {
+                BisectionRoot::new(0.0, 2.0)
+                    .with_absolute_position_tolerance(tolerance)
+            })
+            .is_err()
+        );
+    }
+    for tolerance in [0.0, f64::EPSILON, f64::NAN, f64::INFINITY] {
+        assert!(
+            std::panic::catch_unwind(|| {
+                BisectionRoot::new(0.0, 2.0)
+                    .with_relative_position_tolerance(tolerance)
+            })
+            .is_err()
+        );
+    }
+}
+
+#[test]
+fn bisection_matches_scipy_reference_roots_and_initial_trajectories() {
+    for line in include_str!("fixtures/scalar_bisection.tsv")
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+    {
+        let fields: Vec<_> = line.split('\t').collect();
+        let name = fields[0];
+        let a: f64 = fields[1].parse().unwrap();
+        let b: f64 = fields[2].parse().unwrap();
+        let expected: f64 = fields[3].parse().unwrap();
+        let f = |x: f64| match name {
+            "cubic" => x * x * x - x - 2.0,
+            "cosine" => x.cos() - x,
+            "exponential" => x.exp() - 7.0,
+            "flat" => (x - 0.7).powi(3),
+            "steep" => x.powi(9) - 1.1,
+            _ => panic!("unknown fixture {name}"),
+        };
+        let mut trace = Vec::new();
+        let result = BisectionRoot::new(a, b)
+            .solve(|x| {
+                trace.push(x);
+                Ok::<_, Infallible>(f(x))
+            })
+            .unwrap();
+        check(result, f, expected);
+        assert_eq!(result.function_evals() as usize, trace.len());
+        let reference: Vec<f64> = fields[7]
+            .split(',')
+            .map(|value| value.parse().unwrap())
+            .collect();
+        assert_eq!(trace[..reference.len()], reference, "{name}");
+    }
+}
 
 #[test]
 fn combined_callbacks_share_work_and_match_separate_callbacks() {
@@ -353,6 +505,10 @@ fn extreme_coordinates_and_subnormal_intervals() {
         let scale = b - a;
         let f = |x| Ok::<_, Infallible>((x - target) / scale);
         for result in [
+            BisectionRoot::new(a, b)
+                .with_absolute_position_tolerance(f64::from_bits(1))
+                .solve(f)
+                .unwrap(),
             SecantRoot::new(a, b)
                 .with_absolute_position_tolerance(f64::from_bits(1))
                 .solve(f)

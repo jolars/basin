@@ -2,7 +2,8 @@ use std::fmt;
 
 use crate::core::math::Scalar;
 
-/// Failure to initialize or evaluate a secant, Newton, Halley, or TOMS 748 solve.
+/// Failure to initialize or evaluate a bisection, secant, Newton, Halley, or
+/// TOMS 748 solve.
 ///
 /// Iteration limits return a [`super::RootResult`] instead. Zero or non-finite
 /// derivatives disable interpolation and are not hard errors.

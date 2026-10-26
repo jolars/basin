@@ -513,6 +513,13 @@ For a scalar objective on a bracketed interval:
 
 ## Root finding
 
+- **<span id="bisection-root"></span>[`BisectionRoot`](https://docs.rs/basin/latest/basin/root/bisection/struct.BisectionRoot.html)**:
+  bracketed scalar root finding by interval halving ([GNU Scientific Library
+  Reference Manual](https://www.gnu.org/software/gsl/doc/html/roots.html#root-bracketing-algorithms), "One Dimensional Root-Finding," "Root Bracketing
+  Algorithms," bisection; reference checks use SciPy 1.16.3,
+  `scipy.optimize.bisect`). Each iteration evaluates one midpoint. It returns
+  the evaluated endpoint with the smaller absolute residual and uses Basin's
+  bracket-width convergence rule.
 - **<span id="brent-root"></span>[`BrentRoot`](https://docs.rs/basin/latest/basin/root/brent/struct.BrentRoot.html)**:
   bracketed scalar root finding by bisection, secant steps, and inverse
   quadratic interpolation (Brent, 1971). It uses a direct fallible-closure API
@@ -538,9 +545,10 @@ For a scalar objective on a bracketed interval:
   Zeros of Continuous Functions," _ACM Transactions on Mathematical Software_,
   21(3), 327–344, [doi:10.1145/210089.210111](https://doi.org/10.1145/210089.210111).
 
-All five use direct fallible callbacks and preserve signed function values and
-the final bracket. Newton and Halley accept separate or combined derivative
-callbacks. Convergence requires an exact zero or a sufficiently narrow bracket.
+All six support scalar `f64` and `f32` without optional features, use direct
+fallible callbacks, and preserve signed function values and the final bracket.
+Newton and Halley accept separate or combined derivative callbacks. Convergence
+requires an exact zero or a sufficiently narrow bracket.
 
 [`RootBracketer`](https://docs.rs/basin/latest/basin/bracket/root/struct.RootBracketer.html)
 and

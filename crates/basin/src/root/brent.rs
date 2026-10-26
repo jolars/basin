@@ -71,9 +71,9 @@ impl<F: Scalar> RootResult<F> {
 
     /// Number of algorithm iterations performed.
     ///
-    /// Brent, secant, Newton, and Halley count evaluated trial steps. TOMS
-    /// 748 counts its startup step and subsequent interpolation cycles, each
-    /// of which can evaluate several points.
+    /// Bisection, Brent, secant, Newton, and Halley count evaluated trial steps.
+    /// TOMS 748 counts its startup step and subsequent interpolation cycles,
+    /// each of which can evaluate several points.
     pub fn iterations(&self) -> u64 {
         self.iterations
     }

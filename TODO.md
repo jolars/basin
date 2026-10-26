@@ -128,18 +128,36 @@ numerical work against analytic cases and reference implementations.
   curve_fit](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html)
   as a comparison for convenience and reporting.
 - [x] **Expand scalar roots and bracketing.** Added automatic root and minimum
-  bracketing, safeguarded secant, Newton, and Halley methods, and TOMS 748
-  (`k = 2`). Root solvers retain direct fallible callbacks, signed function
-  values, and bracket-based convergence. Bracketing is an explicit first
-  stage.
+  bracketing, bisection, safeguarded secant, Newton, and Halley methods, and
+  TOMS 748 (`k = 2`). Root solvers retain direct fallible callbacks, signed
+  function values, and bracket-based convergence. Bracketing is an explicit
+  first stage.
+- [ ] **Evaluate ITP for bracketed scalar roots.** Implement the Interpolate,
+  Truncate, Project method of Oliveira and Takahashi (2021),
+  [doi:10.1145/3423597](https://doi.org/10.1145/3423597), and benchmark it
+  against Brent and TOMS 748. Verify its bisection-based worst-case iteration
+  bound, including the zero-slack configuration, under the documented
+  tolerance and floating-point safeguards.
+- [ ] **Add Ridder's scalar root method.** Keep the direct fallible callback,
+  signed-value, and bracket-preservation contracts. Use analytic cases and
+  [SciPy's Ridder implementation](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.ridder.html)
+  as references, and cover extreme function scales and non-finite arithmetic.
+- [ ] **Add unbracketed Newton and secant root solving.** Accept initial
+  guesses without requiring a sign-changing interval, including for
+  even-multiplicity roots such as `(x - 1)^2 = 0`. Require explicit residual
+  validation rather than accepting small steps alone. Keep these convergence
+  and result contracts distinct from bracketed solves, and test zero
+  derivatives, stagnation, divergence, and non-finite evaluations. See
+  [SciPy's Newton API](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.newton.html).
 - [ ] **Add batched independent scalar solves when a consumer needs them.**
   Build on the direct scalar root and bracketing APIs, preserving separate
   root and minimization convergence semantics. See [elementwise
   optimization](https://docs.scipy.org/doc/scipy/reference/optimize.elementwise.html).
 - [ ] **Add multivariate root solving when an integration needs it.** Start with
-  a safeguarded Newton/hybrid method or Broyden, then assess Anderson
-  acceleration and Newton-Krylov. Require residual-based root validation:
-  convergence of a least-squares objective can leave a nonzero residual.
+  Powell's hybrid method or damped Newton, followed by Broyden, then assess
+  Anderson acceleration and Newton-Krylov. Require residual-based root
+  validation: convergence of a least-squares objective can leave a nonzero
+  residual.
   Promote this work if a downstream consumer needs it, including access to
   the final Jacobian for sensitivities. See [SciPy nonlinear
   roots](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.root.html).

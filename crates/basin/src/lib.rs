@@ -412,8 +412,8 @@ pub use crate::line_search::{
     Wolfe,
 };
 pub use crate::root::{
-    BrentRoot, BrentRootError, HalleyRoot, NewtonRoot, RootError, RootResult,
-    RootTerminationReason, SecantRoot, Toms748Root,
+    BisectionRoot, BrentRoot, BrentRootError, HalleyRoot, NewtonRoot,
+    RootError, RootResult, RootTerminationReason, SecantRoot, Toms748Root,
 };
 pub use crate::solver::Bfgs;
 pub use crate::solver::lbfgs::{Lbfgs, Lbfgsb};

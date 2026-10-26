@@ -30,8 +30,8 @@ fn trust_region_reflective_f32() {
 #[test]
 fn scalar_bracketing_and_roots_f32() {
     use basin::{
-        HalleyRoot, MinimumBracketer, NewtonRoot, RootBracketer, SecantRoot,
-        Toms748Root,
+        BisectionRoot, HalleyRoot, MinimumBracketer, NewtonRoot, RootBracketer,
+        SecantRoot, Toms748Root,
     };
     use std::convert::Infallible;
     let f = |x: f32| Ok::<_, Infallible>(x * x - 2.0);
@@ -42,6 +42,7 @@ fn scalar_bracketing_and_roots_f32() {
     assert!(bracket.bracketed());
     let (a, b) = bracket.bracket();
     let results = [
+        BisectionRoot::new(a, b).solve(f).unwrap(),
         SecantRoot::new(a, b).solve(f).unwrap(),
         NewtonRoot::new(a, b).solve(f, |x| Ok(2.0 * x)).unwrap(),
         NewtonRoot::new(a, b)
