@@ -379,34 +379,13 @@ production solvers.
 
 ### In-place problem evaluation
 
-- [x] **Add optional in-place derivative methods.** Extend the existing
-  `residual_into` pattern with `gradient_into`, `jacobian_into`,
-  `hessian_into`, `batch_gradient_into`, and `hessian_product_into`. Default
-  implementations must delegate to the existing owned methods, preserving
-  existing implementations without adding trait bounds or associated types.
-  Define output shapes and error behavior consistently with `residual_into`;
-  callers may supply buffers with arbitrary contents and shapes.
-- [x] **Add optional in-place fused evaluations.** Add `cost_and_gradient_into`,
-  `residual_and_jacobian_into`, and `cost_and_gradient_and_hessian_into`.
-  Their defaults must delegate to the existing fused callbacks so downstream
-  overrides retain their shared computation and behavior. Return scalar
-  costs by value and write vector and matrix outputs into caller-owned
-  buffers. Document that overriding only a separate derivative method does
-  not optimize the default fused path.
-- [x] **Use the in-place methods throughout evaluation and solver paths.** Add
-  counted `Problem` methods, forward overrides through adapters, and reuse
-  solver-owned buffers in optimizers and finite differences. Preserve fused
-  dispatch, evaluation counts, callback errors, non-finite handling,
-  fresh-run resets, and exact continuation. Test default fallbacks and
-  overrides, buffer reuse and resizing, and all supported backends with
-  `f32` and `f64` where applicable. Keep the owned APIs available; these
-  additions do not require a major release.
 - [ ] **Make evaluation buffer reuse automatic in Basin 4.0.** Replace the
-  compatible opt-in evaluation storage on solvers and the robust least-squares
-  adapter with typed storage by default. Basin 4.0 may change public type
-  parameters and their `Send`, `Sync`, `Clone`, and `Copy` implementations as
-  needed. Document the migration from the opt-in builders and preserve callback
-  dispatch, evaluation counts, fresh initialization, and exact continuation.
+  compatible opt-in evaluation storage on solvers and the robust
+  least-squares adapter with typed storage by default. Basin 4.0 may change
+  public type parameters and their `Send`, `Sync`, `Clone`, and `Copy`
+  implementations as needed. Document the migration from the opt-in builders
+  and preserve callback dispatch, evaluation counts, fresh initialization,
+  and exact continuation.
 
 ### Iterative-TRF API prototype
 
