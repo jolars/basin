@@ -151,6 +151,7 @@ macro_rules! forward_residuals {
         impl<P> Residual for $wrapper where P:Residual,$($bound)* {
             type Param=<P as Residual>::Param;type Output=P::Output;type Error=P::Error;
             fn residual(&self,x:&Self::Param)->Result<Self::Output,Self::Error>{self.problem.residual(x)}
+            fn residual_into(&self,x:&Self::Param,out:&mut Self::Output)->Result<(),Self::Error>{self.problem.residual_into(x,out)}
         }
         impl<P> Jacobian for $wrapper where P:Jacobian,$($bound)* {
             type Jacobian=P::Jacobian;
@@ -339,6 +340,13 @@ where
     type Error = P::Error;
     fn residual(&self, x: &Self::Param) -> Result<Self::Output, Self::Error> {
         self.problem.residual(x)
+    }
+    fn residual_into(
+        &self,
+        x: &Self::Param,
+        out: &mut Self::Output,
+    ) -> Result<(), Self::Error> {
+        self.problem.residual_into(x, out)
     }
 }
 impl<P, C> Jacobian for Constrained<P, C>

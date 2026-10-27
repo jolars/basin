@@ -81,6 +81,12 @@ numerical work against analytic cases and reference implementations.
 
 ### Follow-up candidates
 
+- [ ] **Investigate central-difference Jacobian overhead.** Follow up on the
+  [Navette integration review](https://github.com/opticsWolf/Navette/pull/3#issuecomment-6431966233).
+  Compare bounded and unbounded probe counts, base-residual reuse, buffer
+  allocations, and parallel scheduling against Navette's built-in TRF.
+  Both integrations use central differences, so measure matched stencils
+  before attributing the slowdown to the difference scheme.
 - [ ] **Add iterative sparse least squares and Jacobian coloring.** Extend the
   full TRF work with Jacobian and transpose-Jacobian products, an LSMR
   solve, and the two-dimensional subspace method. Add sparsity-pattern-based
@@ -367,6 +373,32 @@ investigation leads, not measured performance findings or commitments to new
 production solvers.
 
 ## General design
+
+### In-place problem evaluation
+
+- [ ] **Add optional in-place derivative methods.** Extend the existing
+  `residual_into` pattern with `gradient_into`, `jacobian_into`,
+  `hessian_into`, `batch_gradient_into`, and `hessian_product_into`.
+  Default implementations must delegate to the existing owned methods,
+  preserving existing implementations without adding trait bounds or
+  associated types. Define output shapes and error behavior consistently
+  with `residual_into`; callers may supply buffers with arbitrary contents
+  and shapes.
+- [ ] **Add optional in-place fused evaluations.** Add
+  `cost_and_gradient_into`, `residual_and_jacobian_into`, and
+  `cost_and_gradient_and_hessian_into`. Their defaults must delegate to the
+  existing fused callbacks so downstream overrides retain their shared
+  computation and behavior. Return scalar costs by value and write vector
+  and matrix outputs into caller-owned buffers. Document that overriding
+  only a separate derivative method does not optimize the default fused path.
+- [ ] **Use the in-place methods throughout evaluation and solver paths.**
+  Add counted `Problem` methods, forward overrides through adapters, and
+  reuse solver-owned buffers in optimizers and finite differences. Preserve
+  fused dispatch, evaluation counts, callback errors, non-finite handling,
+  fresh-run resets, and exact continuation. Test default fallbacks and
+  overrides, buffer reuse and resizing, and all supported backends with
+  `f32` and `f64` where applicable. Keep the owned APIs available; these
+  additions do not require a major release.
 
 ### Iterative-TRF API prototype
 

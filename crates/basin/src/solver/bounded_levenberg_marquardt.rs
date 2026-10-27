@@ -200,6 +200,7 @@ pub struct BoundedLevenbergMarquardt<V, M, F: Scalar = f64> {
     // Jacobian there is unknown (so it's cleared); on reject both are
     // unchanged at the current iterate (both stashed).
     r_cache: Option<V>,
+    trial_residual: Option<V>,
     j_cache: Option<M>,
     model_r_cache: Option<V>,
     failed: bool,
@@ -227,6 +228,7 @@ impl<V, M, F: Scalar> Default for BoundedLevenbergMarquardt<V, M, F> {
             nu: F::from_f64(2.0).unwrap(),
             rejected_step: false,
             r_cache: None,
+            trial_residual: None,
             j_cache: None,
             model_r_cache: None,
             failed: false,
@@ -469,6 +471,7 @@ where
         self.failed = false;
         self.rejected_step = false;
         self.r_cache = None;
+        self.trial_residual = None;
         self.j_cache = None;
         self.model_r_cache = None;
         self.mu = None;
@@ -840,16 +843,15 @@ where
             row.step_norm = Some(alpha * dh_norm_sq.sqrt());
             trace.push(row)
         });
-        let r_trial = match problem.residual(&x_trial) {
-            Ok(r) => r,
-            Err(error) => {
-                if let Some(index) = trial_record {
-                    self.trace.as_mut().unwrap().observations[index].outcome =
-                        Some("callback_failed");
-                }
-                return Err(error);
+        let mut r_trial =
+            self.trial_residual.take().unwrap_or_else(|| r.clone());
+        if let Err(error) = problem.residual_into(&x_trial, &mut r_trial) {
+            if let Some(index) = trial_record {
+                self.trace.as_mut().unwrap().observations[index].outcome =
+                    Some("callback_failed");
             }
-        };
+            return Err(error);
+        }
         let f_trial = problem.cost(&r_trial, |r| half * r.norm_squared());
 
         let prev_cost = state.cost();
@@ -880,6 +882,7 @@ where
             mu = mu * factor.max(one_third);
             nu = two;
             self.r_cache = Some(r_trial);
+            self.trial_residual = Some(r);
             self.j_cache = None;
         } else {
             // Reject. Bump μ geometrically; double ν so consecutive
@@ -889,6 +892,7 @@ where
             mu = mu * nu;
             nu = nu * two;
             self.r_cache = Some(r);
+            self.trial_residual = Some(r_trial);
             self.j_cache = Some(j);
             self.model_r_cache = model_r;
         }

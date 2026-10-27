@@ -110,6 +110,9 @@ use step::{Model, interior, number, update_radius};
 /// and the radius are solver-owned. Fresh runs reset them; exact solver/state
 /// continuation retains them. Rejected trials reuse the current Jacobian, and
 /// every accepted point has a freshly evaluated Jacobian before publication.
+/// Trial evaluations use [`Residual::residual_into`], reusing a native backend
+/// buffer within each iteration's rejection loop. Native buffer allocation
+/// between iterations and the dense model's own allocations remain separate.
 ///
 /// # Backends
 ///
@@ -697,6 +700,9 @@ impl<F: Scalar> TrustRegionReflective<F> {
             .collect();
         let theta = number::<F>(0.995).max(F::one() - work.optimality);
         let old_cost = state.cost();
+        // The public solver is scalar-generic, so native backend storage is
+        // local to this iteration and reused across rejected trials.
+        let mut raw_r = state.param().clone();
         for _ in 0..self.max_inner_attempts {
             let result = svd.trust_step(
                 &rhs,
@@ -836,16 +842,13 @@ impl<F: Scalar> TrustRegionReflective<F> {
                 row.model_solves = 1;
                 trace.push(row)
             });
-            let raw_r = match problem.residual(&trial) {
-                Ok(r) => r,
-                Err(error) => {
-                    if let Some(index) = trial_record {
-                        self.trace.as_mut().unwrap().observations[index]
-                            .outcome = Some("callback_failed");
-                    }
-                    return Err(error);
+            if let Err(error) = problem.residual_into(&trial, &mut raw_r) {
+                if let Some(index) = trial_record {
+                    self.trace.as_mut().unwrap().observations[index].outcome =
+                        Some("callback_failed");
                 }
-            };
+                return Err(error);
+            }
             let r = vector(&raw_r);
             assert_eq!(r.len(), m, "residual shape changed during solve");
             let new_cost = problem.cost(&raw_r, |_| cost(&r));

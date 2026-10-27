@@ -390,6 +390,16 @@ pub trait MiniBatchGradient: CostFunction {
 ///     ) -> Result<Vec<f64>, std::convert::Infallible> {
 ///         Ok(vec![x[0] - 1.0, x[1] - 2.0])
 ///     }
+///     fn residual_into(
+///         &self,
+///         x: &Vec<f64>,
+///         out: &mut Vec<f64>,
+///     ) -> Result<(), std::convert::Infallible> {
+///         out.resize(2, 0.0);
+///         out[0] = x[0] - 1.0;
+///         out[1] = x[1] - 2.0;
+///         Ok(())
+///     }
 /// }
 ///
 /// assert_eq!(Affine.residual(&vec![0.0, 0.0]).unwrap(), vec![-1.0, -2.0]);
@@ -412,6 +422,26 @@ pub trait Residual {
         &self,
         param: &Self::Param,
     ) -> Result<Self::Output, Self::Error>;
+
+    /// Evaluate the residual into a caller-owned buffer.
+    ///
+    /// On success, `out` must equal [`residual`](Self::residual) at `param`,
+    /// including its shape. Its previous contents and shape are unspecified;
+    /// resize or replace it as needed. On error, its contents are unspecified.
+    /// The purity and hard-abort contracts of `residual` also apply here.
+    ///
+    /// The default replaces `out` with the owned result. Override this method
+    /// to reuse storage in repeated solver and finite-difference evaluations.
+    /// Existing implementations need no changes. This does not replace the
+    /// fused [`Jacobian::residual_and_jacobian`] callback.
+    fn residual_into(
+        &self,
+        param: &Self::Param,
+        out: &mut Self::Output,
+    ) -> Result<(), Self::Error> {
+        *out = self.residual(param)?;
+        Ok(())
+    }
 }
 
 /// Analytic Jacobian `J(x) = ∂r/∂x: Param → Jacobian` for least-squares
@@ -1075,6 +1105,17 @@ impl<P: Residual> Problem<P> {
     ) -> Result<<P as Residual>::Output, <P as Residual>::Error> {
         self.counts.residual_evals += 1;
         self.inner.residual(param)
+    }
+
+    /// Counted [`Residual::residual_into`]. One request charges one residual
+    /// evaluation, including when the callback fails.
+    pub fn residual_into(
+        &mut self,
+        param: &P::Param,
+        out: &mut P::Output,
+    ) -> Result<(), P::Error> {
+        self.counts.residual_evals += 1;
+        self.inner.residual_into(param, out)
     }
 }
 

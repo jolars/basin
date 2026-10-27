@@ -209,6 +209,13 @@ impl<P: Residual, F: Scalar> Residual for BoundedFiniteDiff<P, F> {
     fn residual(&self, x: &P::Param) -> Result<P::Output, P::Error> {
         self.problem.residual(x)
     }
+    fn residual_into(
+        &self,
+        x: &P::Param,
+        out: &mut P::Output,
+    ) -> Result<(), P::Error> {
+        self.problem.residual_into(x, out)
+    }
 }
 
 pub(super) struct Options<F> {
@@ -281,6 +288,34 @@ where
     E: MaybeSend,
     C: Fn(&V) -> Result<Vec<F>, E> + MaybeSync,
 {
+    columns_into(
+        x,
+        options,
+        bounds,
+        Vec::new(),
+        |_| Vec::new(),
+        |x, out| {
+            *out = evaluate(x)?;
+            Ok(())
+        },
+    )
+}
+
+fn columns_into<V, R, F, E, C>(
+    x: &V,
+    options: Options<F>,
+    bounds: Option<(&[F], &[F])>,
+    mut base: R,
+    scratch: impl Fn(&R) -> R + MaybeSync,
+    evaluate: C,
+) -> Result<(usize, Vec<Vec<F>>), E>
+where
+    V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
+    R: Clone + VectorLen + VectorIndex<F> + MaybeSync,
+    F: Scalar + MaybeSync + MaybeSend,
+    E: MaybeSend,
+    C: Fn(&V, &mut R) -> Result<(), E> + MaybeSync,
+{
     if let Some((lo, hi)) = bounds {
         assert_eq!(
             x.vec_len(),
@@ -300,8 +335,8 @@ where
             "finite-difference point is outside its bounds"
         );
     }
-    let base = evaluate(x)?;
-    let m = base.len();
+    evaluate(x, &mut base)?;
+    let m = base.vec_len();
     let precision = options.precision.max(F::epsilon());
     let scale = if matches!(options.method, Method::Forward) {
         precision.sqrt()
@@ -311,8 +346,8 @@ where
     let evaluate = &evaluate;
     let columns = try_map_range_with(
         x.vec_len(),
-        || x.clone(),
-        |probe, j| {
+        || (x.clone(), scratch(&base)),
+        |(probe, residual), j| {
             let value = x.get_scalar(j);
             let mut h = options.step.unwrap_or_else(|| {
                 if options.minpack && matches!(options.method, Method::Forward)
@@ -335,23 +370,29 @@ where
                 return Ok(vec![F::zero(); m]);
             }
             probe.set_scalar(j, first);
-            let f1 = evaluate(probe)?;
-            assert_eq!(f1.len(), m, "finite-difference output length changed");
+            evaluate(probe, residual)?;
+            assert_eq!(
+                residual.vec_len(),
+                m,
+                "finite-difference output length changed"
+            );
             let h1 = first - value;
-            let mut col: Vec<_> =
-                f1.iter().zip(&base).map(|(&f, &b)| (f - b) / h1).collect();
+            let mut col: Vec<_> = (0..m)
+                .map(|i| (residual.get_scalar(i) - base.get_scalar(i)) / h1)
+                .collect();
             if let Some(second) = second {
                 probe.set_scalar(j, second);
-                let f2 = evaluate(probe)?;
+                evaluate(probe, residual)?;
                 assert_eq!(
-                    f2.len(),
+                    residual.vec_len(),
                     m,
                     "finite-difference output length changed"
                 );
                 let h2 = second - value;
-                for i in 0..m {
-                    let slope = (f2[i] - base[i]) / h2;
-                    col[i] = col[i] + h1 / (h2 - h1) * (col[i] - slope);
+                for (i, value) in col.iter_mut().enumerate() {
+                    let slope =
+                        (residual.get_scalar(i) - base.get_scalar(i)) / h2;
+                    *value = *value + h1 / (h2 - h1) * (*value - slope);
                 }
             }
             probe.set_scalar(j, value);
@@ -392,15 +433,13 @@ where
 {
     type Jacobian = V::Matrix;
     fn jacobian(&self, x: &V) -> Result<V::Matrix, P::Error> {
-        let (m, cols) = columns(
+        let (m, cols) = columns_into(
             x,
             self.options(true),
             Some((&self.lower, &self.upper)),
-            |x| {
-                self.problem.residual(x).map(|r| {
-                    (0..r.vec_len()).map(|i| r.get_scalar(i)).collect()
-                })
-            },
+            x.clone(),
+            Clone::clone,
+            |x, out| self.problem.residual_into(x, out),
         )?;
         Ok(V::dense_from_fn(m, x.vec_len(), |i, j| cols[j][i]))
     }

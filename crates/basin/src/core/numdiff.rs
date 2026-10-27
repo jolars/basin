@@ -251,6 +251,13 @@ impl<P: Residual> Residual for FiniteDiff<P> {
     ) -> Result<Self::Output, Self::Error> {
         self.problem.residual(param)
     }
+    fn residual_into(
+        &self,
+        param: &Self::Param,
+        out: &mut Self::Output,
+    ) -> Result<(), Self::Error> {
+        self.problem.residual_into(param, out)
+    }
 }
 
 // Forward box bounds so a `CostFunction + BoxBounds` problem wrapped
@@ -493,7 +500,8 @@ where
     P::Error: MaybeSend,
 {
     let n = x.vec_len();
-    let r0 = problem.residual(x)?;
+    let mut r0 = x.clone();
+    problem.residual_into(x, &mut r0)?;
     let m = r0.vec_len();
     let eps = function_precision.max(f64::EPSILON).sqrt();
     let columns = try_map_range_with(
@@ -509,7 +517,8 @@ where
                 }
             };
             probe.set_scalar(j, xj + h);
-            let mut col = problem.residual(probe)?;
+            let mut col = r0.clone();
+            problem.residual_into(probe, &mut col)?;
             probe.set_scalar(j, xj);
             for i in 0..m {
                 col.set_scalar(i, (col.get_scalar(i) - r0.get_scalar(i)) / h);
@@ -542,23 +551,26 @@ where
     P::Error: MaybeSend,
 {
     let n = x.vec_len();
-    let m = problem.residual(x)?.vec_len();
+    let mut r0 = x.clone();
+    problem.residual_into(x, &mut r0)?;
+    let m = r0.vec_len();
     let scale = function_precision.max(f64::EPSILON).cbrt();
     let columns = try_map_range_with(
         n,
-        || x.clone(),
-        |probe, j| {
+        || (x.clone(), r0.clone()),
+        |(probe, residual), j| {
             let xj = x.get_scalar(j);
             let h = nr_step(xj, scale, fixed_step);
             probe.set_scalar(j, xj + h);
-            let mut col = problem.residual(probe)?;
+            problem.residual_into(probe, residual)?;
+            let mut col = residual.clone();
             probe.set_scalar(j, xj - h);
-            let rm = problem.residual(probe)?;
+            problem.residual_into(probe, residual)?;
             probe.set_scalar(j, xj);
             for i in 0..m {
                 col.set_scalar(
                     i,
-                    (col.get_scalar(i) - rm.get_scalar(i)) / (2.0 * h),
+                    (col.get_scalar(i) - residual.get_scalar(i)) / (2.0 * h),
                 );
             }
             Ok(col)

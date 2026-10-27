@@ -333,6 +333,7 @@ pub struct LevenbergMarquardt<V, M, F: Scalar = f64> {
     // Rejected steps leave these quantities valid. Accepted steps retain
     // the trial residual but invalidate the linear model and gradient.
     r_cache: Option<V>,
+    trial_residual: Option<V>,
     model_cache: Option<Result<M, QrSolveError>>,
     jtr_cache: Option<V>,
     failed: bool,
@@ -393,6 +394,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
             rejected_step: false,
             diag: None,
             r_cache: None,
+            trial_residual: None,
             model_cache: None,
             jtr_cache: None,
             failed: false,
@@ -717,6 +719,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             trace.reset();
         }
         self.r_cache = None;
+        self.trial_residual = None;
         self.model_cache = None;
         self.jtr_cache = None;
         self.diag = None;
@@ -1165,16 +1168,15 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             row.predicted_reduction = Some(l_diff);
             trace.push(row)
         });
-        let r_trial = match problem.residual(&x_trial) {
-            Ok(r) => r,
-            Err(error) => {
-                if let Some(index) = trial_record {
-                    self.trace.as_mut().unwrap().observations[index].outcome =
-                        Some("callback_failed");
-                }
-                return Err(error);
+        let mut r_trial =
+            self.trial_residual.take().unwrap_or_else(|| r.clone());
+        if let Err(error) = problem.residual_into(&x_trial, &mut r_trial) {
+            if let Some(index) = trial_record {
+                self.trace.as_mut().unwrap().observations[index].outcome =
+                    Some("callback_failed");
             }
-        };
+            return Err(error);
+        }
         let f_trial = problem.cost(&r_trial, |r| half * r.norm_squared());
 
         let prev_cost = state.cost();
@@ -1227,6 +1229,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             }
             self.first_trust_step = false;
             self.r_cache = Some(r_trial);
+            self.trial_residual = Some(r);
             self.model_cache = None;
             self.jtr_cache = None;
         } else {
@@ -1237,6 +1240,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
                 nu = nu * two;
             }
             self.r_cache = Some(r);
+            self.trial_residual = Some(r_trial);
             self.model_cache = Some(Ok(a));
             self.jtr_cache = Some(g);
         }

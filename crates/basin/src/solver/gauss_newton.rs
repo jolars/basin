@@ -416,7 +416,8 @@ where
             );
             trace.push(row)
         });
-        let r_new = problem.residual(&param).inspect_err(|_| {
+        let mut r_new = r;
+        problem.residual_into(&param, &mut r_new).inspect_err(|_| {
             if let Some(index) = trial {
                 self.trace.as_mut().unwrap().observations[index].outcome =
                     Some("callback_failed");

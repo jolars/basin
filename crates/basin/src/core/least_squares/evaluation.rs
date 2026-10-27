@@ -16,6 +16,7 @@ pub(crate) trait Evaluation<V, M, F: Scalar> {
     type Error;
     const ROBUST: bool;
     fn residual(&mut self, x: &V) -> Result<V, Self::Error>;
+    fn residual_into(&mut self, x: &V, out: &mut V) -> Result<(), Self::Error>;
     fn jacobian(&mut self, x: &V) -> Result<M, Self::Error>;
     fn residual_and_jacobian(&mut self, x: &V) -> Result<(V, M), Self::Error>;
     fn cost(&self, r: &V, quadratic: impl FnOnce(&V) -> F) -> F;
@@ -39,6 +40,9 @@ where
     const ROBUST: bool = false;
     fn residual(&mut self, x: &V) -> Result<V, Self::Error> {
         Problem::residual(self, x)
+    }
+    fn residual_into(&mut self, x: &V, out: &mut V) -> Result<(), Self::Error> {
+        Problem::residual_into(self, x, out)
     }
     fn jacobian(&mut self, x: &V) -> Result<M, Self::Error> {
         Problem::jacobian(self, x)
@@ -73,6 +77,10 @@ macro_rules! robust_evaluation {
             fn residual(&mut self, x: &V) -> Result<V, Self::Error> {
                 self.counts_mut().residual_evals += 1;
                 self.inner()$(.$field)*.problem.residual(x)
+            }
+            fn residual_into(&mut self, x: &V, out: &mut V) -> Result<(), Self::Error> {
+                self.counts_mut().residual_evals += 1;
+                self.inner()$(.$field)*.problem.residual_into(x, out)
             }
             fn jacobian(&mut self, x: &V) -> Result<M, Self::Error> {
                 self.counts_mut().jacobian_evals += 1;
