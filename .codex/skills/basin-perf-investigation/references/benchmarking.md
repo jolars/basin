@@ -18,6 +18,7 @@ older comments still call `competitor-bench` by its former name, `lm-bench`.
   | Public COBYLA versus the `cobyla` crate       | `crates/competitor-bench/benches/gd_nm.rs` and `src/bin/verify_gd_nm.rs`           |
   | Convergence across libraries or Basin solvers | `crates/competitor-bench/src/bin/trace.rs` or `solver_compare.rs`                  |
   | Population solver thread scaling              | `crates/competitor-bench/benches/population_scaling.rs`                            |
+  | Finite-difference kernels, callback work, and allocations | `crates/competitor-bench/benches/numdiff.rs`, `src/bin/verify_numdiff.rs`, and `NUMDIFF.md` in that crate |
 
 For example, verify and then list or run a focused comparison:
 

@@ -387,12 +387,13 @@ semantics. Keep each entry's arithmetic order unchanged to preserve bitwise
 results for deterministic callbacks. Verify changed kernels across supported
 backends and scalar types.
 
-- [ ] **Establish finite-difference benchmarks.** Add focused cases for
+- [x] **Establish finite-difference benchmarks.** Add focused cases for
   gradients, rectangular Jacobians, Hessians, and Hessian-vector products,
   covering owned and `*_into` calls, cheap and expensive callbacks, and small
   and large dimensions. Compare sequential builds with `parallel` at one and
   multiple threads. Measure raw callback counts and allocations separately
   from uninstrumented timings, including repeated calls with reused outputs.
+  See the [benchmark protocol](crates/competitor-bench/NUMDIFF.md).
 - [ ] **Reuse base costs in fused derivative calls.** Pass the cost already
   computed by `cost_and_gradient_into` into forward-gradient and bounded
   probe kernels. Share it with the Hessian in the three-output callback,
