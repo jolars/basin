@@ -5,11 +5,13 @@
 mod factor;
 mod least_squares;
 
+use crate::EvaluationBuffers;
 use crate::ViolationReport;
 use crate::core::constraint::evaluation::{NonlinearSet, SlsqpSet, invalid};
 use crate::core::constraint::{ConstraintError, ConstraintSolveError};
 use crate::core::inner::InitialState;
 use crate::core::math::{Scalar, VectorIndex, VectorLen};
+use crate::core::problem::buffers::BufferStorage;
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{SelectedFirstOrderState, State};
@@ -169,10 +171,12 @@ pub enum SlsqpFailure {
 /// ```
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Slsqp<F: Scalar = f64> {
+pub struct Slsqp<F: Scalar = f64, W = ()> {
     accuracy: Option<F>,
     max_subproblem_iterations: Option<usize>,
     work: Option<Work<F>>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    workspace: W,
 }
 
 impl<F: Scalar> Default for Slsqp<F> {
@@ -187,8 +191,27 @@ impl<F: Scalar> Slsqp<F> {
             accuracy: Some(number(1e-6)),
             max_subproblem_iterations: None,
             work: None,
+            workspace: (),
         }
     }
+    /// Retain an objective-gradient buffer between accepted iterations.
+    ///
+    /// The vector type is inferred from the problem. The solver recycles the
+    /// previous state's gradient after publishing an accepted point. Fresh
+    /// solves reevaluate their seed and allow callbacks to resize storage;
+    /// exact checkpoints retain the buffer.
+    pub fn with_evaluation_buffers<V>(
+        self,
+    ) -> Slsqp<F, EvaluationBuffers<V, ()>> {
+        Slsqp {
+            accuracy: self.accuracy,
+            max_subproblem_iterations: self.max_subproblem_iterations,
+            work: self.work,
+            workspace: EvaluationBuffers::default(),
+        }
+    }
+}
+impl<F: Scalar, W> Slsqp<F, W> {
     /// Set the native composite accuracy. `None` disables convergence and
     /// zero requests exact-zero tests. Negative or non-finite values panic.
     pub fn with_absolute_accuracy_tolerance(
@@ -244,7 +267,7 @@ impl<F: Scalar> Slsqp<F> {
     }
 }
 
-impl<V: Clone, F: Scalar> InitialState<V> for Slsqp<F> {
+impl<V: Clone, F: Scalar, W> InitialState<V> for Slsqp<F, W> {
     type State = SelectedFirstOrderState<V, F>;
     fn seed(&self, x: &V) -> Self::State {
         SelectedFirstOrderState::new(x.clone())
@@ -798,9 +821,10 @@ impl<F: Scalar> Work<F> {
     }
 }
 
-impl<P, V, F> Solver<P, SelectedFirstOrderState<V, F>> for Slsqp<F>
+impl<P, V, F, W> Solver<P, SelectedFirstOrderState<V, F>> for Slsqp<F, W>
 where
     F: Scalar,
+    W: BufferStorage<V, ()>,
     P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
     P: crate::Constraints,
     P::Set: SlsqpSet<P, V, F>,
@@ -882,7 +906,11 @@ where
             complementarity: None,
             scratch: Scratch::default(),
         };
-        let (cost, gradient) = problem.cost_and_gradient(&param)?;
+        let mut gradient = self
+            .workspace
+            .with_buffers(|buffer, _| buffer.take())
+            .unwrap_or_else(|| param.clone());
+        let cost = problem.cost_and_gradient_into(&param, &mut gradient)?;
         assert_eq!(
             gradient.vec_len(),
             n,
@@ -1010,7 +1038,11 @@ where
                 ))),
             )));
         };
-        let gradient = problem.gradient(&param)?;
+        let mut gradient = self
+            .workspace
+            .with_buffers(|buffer, _| buffer.take())
+            .unwrap_or_else(|| param.clone());
+        problem.gradient_into(&param, &mut gradient)?;
         assert_eq!(
             gradient.vec_len(),
             state.param().vec_len(),
@@ -1063,8 +1095,8 @@ where
             work.prepare(&param, self.accuracy, self.max_subproblem_iterations);
         }
         work.diagnostics(&param);
-        state
-            .replace(
+        let previous = state
+            .replace_reusing(
                 param,
                 cost,
                 gradient,
@@ -1073,6 +1105,7 @@ where
                 ),
             )
             .expect("SLSQP gradient dimensions were checked");
+        self.workspace.with_buffers(|buffer, _| *buffer = previous);
         state.select_current();
         Ok(crate::SolverStep::from((state, None)))
     }

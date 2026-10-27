@@ -3,6 +3,17 @@
 //! [`CostFunction`] *and* [`Gradient`]; Nelder-Mead only needs
 //! [`CostFunction`]).
 //!
+//! # Reusing evaluation outputs
+//!
+//! [`Problem`] provides counted `_into` counterparts for the derivative and
+//! fused callbacks. They charge the same categories as the owned methods,
+//! including on errors, and forward directly to the corresponding override.
+//! Built-in drivers reuse retained derivative storage where their typed
+//! workspace permits it. When storage is missing, an owned callback seeds the
+//! buffer without imposing construction bounds on user-defined output types.
+//! Subsequent evaluations overwrite the buffer through the in-place method.
+//! Fused requests continue to use fused callbacks rather than separate methods.
+//!
 //! # Soft reject vs hard abort
 //!
 //! Every problem trait method returns `Result<_, Self::Error>`. The two
@@ -32,6 +43,9 @@
 //! [`!`](https://doc.rust-lang.org/std/primitive.never.html) on nightly).
 //! Niche optimization collapses `Result<f64, Infallible>` to `f64` layout,
 //! so the happy path stays zero-cost.
+
+pub mod buffers;
+pub use buffers::{EvaluationBuffers, SharedEvaluationBuffers};
 
 /// Scalar-valued objective `f(x): Param → Output`. The smallest
 /// problem trait: every solver binds at least on this.
@@ -1247,6 +1261,57 @@ impl<P: CostFunction> Problem<P> {
 }
 
 impl<P: Gradient> Problem<P> {
+    // Associated outputs need not support construction. Seed missing storage
+    // with one owned request, then honor in-place overrides on every reuse.
+    pub(crate) fn gradient_reusing(
+        &mut self,
+        param: &P::Param,
+        buffer: Option<P::Gradient>,
+    ) -> Result<P::Gradient, P::Error> {
+        match buffer {
+            Some(mut out) => {
+                self.gradient_into(param, &mut out)?;
+                Ok(out)
+            }
+            None => self.gradient(param),
+        }
+    }
+    pub(crate) fn cost_and_gradient_reusing(
+        &mut self,
+        param: &P::Param,
+        buffer: Option<P::Gradient>,
+    ) -> Result<(P::Output, P::Gradient), P::Error> {
+        match buffer {
+            Some(mut out) => {
+                let cost = self.cost_and_gradient_into(param, &mut out)?;
+                Ok((cost, out))
+            }
+            None => self.cost_and_gradient(param),
+        }
+    }
+
+    /// Counted [`Gradient::gradient_into`], including failing requests.
+    pub fn gradient_into(
+        &mut self,
+        param: &P::Param,
+        out: &mut P::Gradient,
+    ) -> Result<(), P::Error> {
+        self.counts.gradient_evals += 1;
+        self.inner.gradient_into(param, out)
+    }
+
+    /// Counted [`Gradient::cost_and_gradient_into`]. Charges one cost and
+    /// one gradient request, including when the fused callback fails.
+    pub fn cost_and_gradient_into(
+        &mut self,
+        param: &P::Param,
+        grad: &mut P::Gradient,
+    ) -> Result<P::Output, P::Error> {
+        self.counts.cost_evals += 1;
+        self.counts.gradient_evals += 1;
+        self.inner.cost_and_gradient_into(param, grad)
+    }
+
     /// Counted [`Gradient::gradient`].
     pub fn gradient(
         &mut self,
@@ -1272,6 +1337,33 @@ impl<P: Gradient> Problem<P> {
 }
 
 impl<P: MiniBatchGradient> Problem<P> {
+    pub(crate) fn batch_gradient_reusing(
+        &mut self,
+        param: &P::Param,
+        batch: &[usize],
+        buffer: Option<P::Gradient>,
+    ) -> Result<P::Gradient, P::Error> {
+        match buffer {
+            Some(mut out) => {
+                self.batch_gradient_into(param, batch, &mut out)?;
+                Ok(out)
+            }
+            None => self.batch_gradient(param, batch),
+        }
+    }
+
+    /// Counted [`MiniBatchGradient::batch_gradient_into`]. Charges one gradient
+    /// request regardless of batch size, including failing requests.
+    pub fn batch_gradient_into(
+        &mut self,
+        param: &P::Param,
+        batch: &[usize],
+        out: &mut P::Gradient,
+    ) -> Result<(), P::Error> {
+        self.counts.gradient_evals += 1;
+        self.inner.batch_gradient_into(param, batch, out)
+    }
+
     /// Counted [`MiniBatchGradient::batch_gradient`]: one call bumps
     /// [`EvalCounts::gradient_evals`] by one, regardless of batch
     /// size, the same convention as [`Gradient::gradient`] (one *call* is
@@ -1310,6 +1402,29 @@ impl<P: Residual> Problem<P> {
 }
 
 impl<P: Jacobian> Problem<P> {
+    /// Counted [`Jacobian::jacobian_into`], including failing requests.
+    pub fn jacobian_into(
+        &mut self,
+        param: &P::Param,
+        out: &mut P::Jacobian,
+    ) -> Result<(), P::Error> {
+        self.counts.jacobian_evals += 1;
+        self.inner.jacobian_into(param, out)
+    }
+
+    /// Counted [`Jacobian::residual_and_jacobian_into`]. Charges one residual
+    /// and one Jacobian request, including failing fused requests.
+    pub fn residual_and_jacobian_into(
+        &mut self,
+        param: &P::Param,
+        res: &mut P::Output,
+        jac: &mut P::Jacobian,
+    ) -> Result<(), P::Error> {
+        self.counts.residual_evals += 1;
+        self.counts.jacobian_evals += 1;
+        self.inner.residual_and_jacobian_into(param, res, jac)
+    }
+
     /// Counted [`Jacobian::jacobian`].
     pub fn jacobian(
         &mut self,
@@ -1334,6 +1449,31 @@ impl<P: Jacobian> Problem<P> {
 }
 
 impl<P: Hessian> Problem<P> {
+    /// Counted [`Hessian::hessian_into`], including failing requests.
+    pub fn hessian_into(
+        &mut self,
+        param: &P::Param,
+        out: &mut P::Hessian,
+    ) -> Result<(), P::Error> {
+        self.counts.hessian_evals += 1;
+        self.inner.hessian_into(param, out)
+    }
+
+    /// Counted [`Hessian::cost_and_gradient_and_hessian_into`]. Charges one
+    /// request in each category, including failing fused requests.
+    pub fn cost_and_gradient_and_hessian_into(
+        &mut self,
+        param: &P::Param,
+        grad: &mut P::Gradient,
+        hess: &mut P::Hessian,
+    ) -> Result<P::Output, P::Error> {
+        self.counts.cost_evals += 1;
+        self.counts.gradient_evals += 1;
+        self.counts.hessian_evals += 1;
+        self.inner
+            .cost_and_gradient_and_hessian_into(param, grad, hess)
+    }
+
     /// Counted [`Hessian::hessian`].
     pub fn hessian(
         &mut self,
@@ -1367,6 +1507,17 @@ impl<P: Hessian> Problem<P> {
 }
 
 impl<P: HessianProduct> Problem<P> {
+    /// Counted [`HessianProduct::hessian_product_into`], including failing requests.
+    pub fn hessian_product_into(
+        &mut self,
+        param: &P::Param,
+        v: &P::Param,
+        out: &mut P::Gradient,
+    ) -> Result<(), P::Error> {
+        self.counts.hessian_product_evals += 1;
+        self.inner.hessian_product_into(param, v, out)
+    }
+
     /// Counted [`HessianProduct::hessian_product`].
     pub fn hessian_product(
         &mut self,

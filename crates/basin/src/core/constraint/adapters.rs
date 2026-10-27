@@ -128,19 +128,25 @@ macro_rules! forward_derivatives {
             type Gradient=P::Gradient;
             fn n_samples(&self)->usize{self.problem.n_samples()}
             fn batch_gradient(&self,x:&Self::Param,batch:&[usize])->Result<Self::Gradient,Self::Error>{self.problem.batch_gradient(x,batch)}
+    fn batch_gradient_into(&self, x: &Self::Param, batch: &[usize], out: &mut Self::Gradient) -> Result<(), Self::Error> { self.problem.batch_gradient_into(x, batch, out) }
         }
         impl<P> Gradient for $wrapper where P:Gradient,$($bound)* {
             type Gradient=P::Gradient;
             fn gradient(&self,x:&Self::Param)->Result<Self::Gradient,Self::Error>{self.problem.gradient(x)}
+    fn gradient_into(&self, x: &Self::Param, out: &mut Self::Gradient) -> Result<(), Self::Error> { self.problem.gradient_into(x, out) }
             fn cost_and_gradient(&self,x:&Self::Param)->Result<(Self::Output,Self::Gradient),Self::Error>{self.problem.cost_and_gradient(x)}
+    fn cost_and_gradient_into(&self, x: &Self::Param, out: &mut Self::Gradient) -> Result<Self::Output, Self::Error> { self.problem.cost_and_gradient_into(x, out) }
         }
         impl<P> Hessian for $wrapper where P:Hessian,$($bound)* {
             type Hessian=P::Hessian;
             fn hessian(&self,x:&Self::Param)->Result<Self::Hessian,Self::Error>{self.problem.hessian(x)}
+    fn hessian_into(&self, x: &Self::Param, out: &mut Self::Hessian) -> Result<(), Self::Error> { self.problem.hessian_into(x, out) }
             fn cost_and_gradient_and_hessian(&self,x:&Self::Param)->Result<(Self::Output,Self::Gradient,Self::Hessian),Self::Error>{self.problem.cost_and_gradient_and_hessian(x)}
+    fn cost_and_gradient_and_hessian_into(&self, x: &Self::Param, grad: &mut Self::Gradient, hess: &mut Self::Hessian) -> Result<Self::Output, Self::Error> { self.problem.cost_and_gradient_and_hessian_into(x, grad, hess) }
         }
         impl<P> HessianProduct for $wrapper where P:HessianProduct,$($bound)* {
             fn hessian_product(&self,x:&Self::Param,v:&Self::Param)->Result<Self::Gradient,Self::Error>{self.problem.hessian_product(x,v)}
+    fn hessian_product_into(&self, x: &Self::Param, v: &Self::Param, out: &mut Self::Gradient) -> Result<(), Self::Error> { self.problem.hessian_product_into(x, v, out) }
         }
     }
 }
@@ -156,7 +162,9 @@ macro_rules! forward_residuals {
         impl<P> Jacobian for $wrapper where P:Jacobian,$($bound)* {
             type Jacobian=P::Jacobian;
             fn jacobian(&self,x:&Self::Param)->Result<Self::Jacobian,Self::Error>{self.problem.jacobian(x)}
+    fn jacobian_into(&self, x: &Self::Param, out: &mut Self::Jacobian) -> Result<(), Self::Error> { self.problem.jacobian_into(x, out) }
             fn residual_and_jacobian(&self,x:&Self::Param)->Result<(Self::Output,Self::Jacobian),Self::Error>{self.problem.residual_and_jacobian(x)}
+    fn residual_and_jacobian_into(&self, x: &Self::Param, res: &mut Self::Output, jac: &mut Self::Jacobian) -> Result<(), Self::Error> { self.problem.residual_and_jacobian_into(x, res, jac) }
         }
     }
 }
@@ -358,11 +366,26 @@ where
     fn jacobian(&self, x: &Self::Param) -> Result<Self::Jacobian, Self::Error> {
         self.problem.jacobian(x)
     }
+    fn jacobian_into(
+        &self,
+        x: &Self::Param,
+        out: &mut Self::Jacobian,
+    ) -> Result<(), Self::Error> {
+        self.problem.jacobian_into(x, out)
+    }
     fn residual_and_jacobian(
         &self,
         x: &Self::Param,
     ) -> Result<(Self::Output, Self::Jacobian), Self::Error> {
         self.problem.residual_and_jacobian(x)
+    }
+    fn residual_and_jacobian_into(
+        &self,
+        x: &Self::Param,
+        res: &mut Self::Output,
+        jac: &mut Self::Jacobian,
+    ) -> Result<(), Self::Error> {
+        self.problem.residual_and_jacobian_into(x, res, jac)
     }
 }
 macro_rules! constrained_values {
@@ -404,6 +427,14 @@ where
     ) -> Result<Self::Gradient, Self::Error> {
         self.problem.batch_gradient(x, batch)
     }
+    fn batch_gradient_into(
+        &self,
+        x: &Self::Param,
+        batch: &[usize],
+        out: &mut Self::Gradient,
+    ) -> Result<(), Self::Error> {
+        self.problem.batch_gradient_into(x, batch, out)
+    }
 }
 
 impl<P, C> Gradient for Constrained<P, C>
@@ -415,11 +446,25 @@ where
     fn gradient(&self, x: &Self::Param) -> Result<Self::Gradient, Self::Error> {
         self.problem.gradient(x)
     }
+    fn gradient_into(
+        &self,
+        x: &Self::Param,
+        out: &mut Self::Gradient,
+    ) -> Result<(), Self::Error> {
+        self.problem.gradient_into(x, out)
+    }
     fn cost_and_gradient(
         &self,
         x: &Self::Param,
     ) -> Result<(Self::Output, Self::Gradient), Self::Error> {
         self.problem.cost_and_gradient(x)
+    }
+    fn cost_and_gradient_into(
+        &self,
+        x: &Self::Param,
+        out: &mut Self::Gradient,
+    ) -> Result<Self::Output, Self::Error> {
+        self.problem.cost_and_gradient_into(x, out)
     }
 }
 impl<P, C> Hessian for Constrained<P, C>
@@ -431,12 +476,28 @@ where
     fn hessian(&self, x: &Self::Param) -> Result<Self::Hessian, Self::Error> {
         self.problem.hessian(x)
     }
+    fn hessian_into(
+        &self,
+        x: &Self::Param,
+        out: &mut Self::Hessian,
+    ) -> Result<(), Self::Error> {
+        self.problem.hessian_into(x, out)
+    }
     fn cost_and_gradient_and_hessian(
         &self,
         x: &Self::Param,
     ) -> Result<(Self::Output, Self::Gradient, Self::Hessian), Self::Error>
     {
         self.problem.cost_and_gradient_and_hessian(x)
+    }
+    fn cost_and_gradient_and_hessian_into(
+        &self,
+        x: &Self::Param,
+        grad: &mut Self::Gradient,
+        hess: &mut Self::Hessian,
+    ) -> Result<Self::Output, Self::Error> {
+        self.problem
+            .cost_and_gradient_and_hessian_into(x, grad, hess)
     }
 }
 impl<P, C> HessianProduct for Constrained<P, C>
@@ -450,6 +511,14 @@ where
         v: &Self::Param,
     ) -> Result<Self::Gradient, Self::Error> {
         self.problem.hessian_product(x, v)
+    }
+    fn hessian_product_into(
+        &self,
+        x: &Self::Param,
+        v: &Self::Param,
+        out: &mut Self::Gradient,
+    ) -> Result<(), Self::Error> {
+        self.problem.hessian_product_into(x, v, out)
     }
 }
 impl<I: crate::NativeConvergenceDiagnostics> crate::NativeConvergenceDiagnostics

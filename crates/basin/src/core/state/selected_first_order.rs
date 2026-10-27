@@ -85,6 +85,17 @@ impl<V: VectorLen, F: Scalar> SelectedFirstOrderState<V, F> {
         gradient: V,
         violation: ViolationReport<F>,
     ) -> Result<(), GradientDimensionMismatch> {
+        self.replace_reusing(param, cost, gradient, violation)
+            .map(|_| ())
+    }
+
+    pub(crate) fn replace_reusing(
+        &mut self,
+        param: V,
+        cost: F,
+        gradient: V,
+        violation: ViolationReport<F>,
+    ) -> Result<Option<V>, GradientDimensionMismatch> {
         if param.vec_len() != gradient.vec_len() {
             return Err(GradientDimensionMismatch {
                 param_len: param.vec_len(),
@@ -92,8 +103,7 @@ impl<V: VectorLen, F: Scalar> SelectedFirstOrderState<V, F> {
             });
         }
         self.progress.replace(param, cost, violation);
-        self.gradient = Some(gradient);
-        Ok(())
+        Ok(self.gradient.replace(gradient))
     }
 }
 impl<V: Clone, F: Scalar> SelectedFirstOrderState<V, F> {

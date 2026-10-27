@@ -102,6 +102,8 @@ pub struct Bfgs<
     line_search: S,
     epsilon: F,
     inverse_hessian: Option<M>,
+    #[cfg_attr(feature = "serde", serde(skip, default = "Option::default"))]
+    gradient_buffer: Option<V>,
     initial_scaling_done: bool,
     initial_inverse_hessian: I,
     param: std::marker::PhantomData<V>,
@@ -138,6 +140,7 @@ impl<V: DenseBackend<F>, F: Scalar, M, S> Bfgs<V, F, M, S> {
             line_search,
             epsilon: F::from_f64(1e-10).unwrap(),
             inverse_hessian: None,
+            gradient_buffer: None,
             initial_scaling_done: false,
             initial_inverse_hessian: IdentityInverseHessian,
             param: std::marker::PhantomData,
@@ -222,6 +225,7 @@ impl<V: DenseBackend<F>, F: Scalar, M, S, I> Bfgs<V, F, M, S, I> {
             line_search: self.line_search,
             epsilon: self.epsilon,
             inverse_hessian: self.inverse_hessian,
+            gradient_buffer: self.gradient_buffer,
             initial_scaling_done: self.initial_scaling_done,
             initial_inverse_hessian: initializer,
             param: self.param,
@@ -269,7 +273,8 @@ where
         self.initial_scaling_done =
             !self.initial_inverse_hessian.rescale_on_first_update();
         let param = state.param().clone();
-        let (cost, grad) = problem.cost_and_gradient(&param)?;
+        let (cost, grad) = problem.cost_and_gradient_reusing(&param, None)?;
+        self.gradient_buffer = None;
         state
             .replace(param, cost, grad)
             .expect("gradient dimension differs from parameter");
@@ -338,7 +343,8 @@ where
         // Fused cost+grad at the new iterate: one fused call gives both
         // values consumed below (BFGS update reads g_new; state caches
         // cost_new at the bottom of the iter).
-        let (cost_new, g_new) = problem.cost_and_gradient(&param)?;
+        let (cost_new, g_new) = problem
+            .cost_and_gradient_reusing(&param, self.gradient_buffer.take())?;
 
         // y = g_new − g.
         let mut y = g_new.clone();
@@ -379,6 +385,7 @@ where
         // H update; the line search still produced a descent step, so we
         // continue. If this persists, max_iter or GradientTolerance halt.
 
+        self.gradient_buffer = state.take_evaluation().map(|(_, g)| g);
         state
             .replace(param, cost_new, g_new)
             .expect("gradient dimension differs from parameter");

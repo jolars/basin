@@ -126,7 +126,7 @@ impl Steihaug {
         g: &V,
         radius: F,
         forcing_parameters: Option<(F, F)>,
-        mut bv: impl FnMut(&V) -> Result<V, E>,
+        mut bv: impl FnMut(&V, &mut V) -> Result<(), E>,
     ) -> Result<Step<V, F>, E>
     where
         F: Scalar,
@@ -177,8 +177,9 @@ impl Steihaug {
         let mut d = r.clone();
         d.neg_in_place();
 
+        let mut bd = g.clone();
         for _ in 0..max_iter {
-            let bd = bv(&d)?;
+            bv(&d, &mut bd)?;
             let dbd = d.dot(&bd);
 
             // Non-positive curvature: the model is unbounded along ±d, so
@@ -186,8 +187,8 @@ impl Steihaug {
             if dbd <= F::zero() {
                 let tau = tau_to_boundary(&z, &d, radius);
                 z.scaled_add(tau, &d);
-                let bz = bv(&z)?;
-                let predicted_reduction = model_decrease_from_bd(g, &z, &bz);
+                bv(&z, &mut bd)?;
+                let predicted_reduction = model_decrease_from_bd(g, &z, &bd);
                 return Ok(Step {
                     d: z,
                     predicted_reduction,
@@ -204,8 +205,8 @@ impl Steihaug {
             if z_next.norm_squared().sqrt() >= radius {
                 let tau = tau_to_boundary(&z, &d, radius);
                 z.scaled_add(tau, &d);
-                let bz = bv(&z)?;
-                let predicted_reduction = model_decrease_from_bd(g, &z, &bz);
+                bv(&z, &mut bd)?;
+                let predicted_reduction = model_decrease_from_bd(g, &z, &bd);
                 return Ok(Step {
                     d: z,
                     predicted_reduction,
@@ -222,8 +223,8 @@ impl Steihaug {
             // one caused by underflow in an aggressively tight forcing rule.
             let converged = residual_norm == F::zero() || residual_norm < tol;
             if converged {
-                let bz = bv(&z)?;
-                let predicted_reduction = model_decrease_from_bd(g, &z, &bz);
+                bv(&z, &mut bd)?;
+                let predicted_reduction = model_decrease_from_bd(g, &z, &bd);
                 return Ok(Step {
                     d: z,
                     predicted_reduction,
@@ -241,8 +242,8 @@ impl Steihaug {
         }
 
         // Iteration cap reached: return the best interior iterate so far.
-        let bz = bv(&z)?;
-        let predicted_reduction = model_decrease_from_bd(g, &z, &bz);
+        bv(&z, &mut bd)?;
+        let predicted_reduction = model_decrease_from_bd(g, &z, &bd);
         Ok(Step {
             d: z,
             predicted_reduction,
@@ -270,8 +271,9 @@ where
     M: MatVec<V>,
 {
     fn solve(&self, g: &V, b: &M, radius: F) -> Step<V, F> {
-        match self.solve_with(g, radius, None, |v| {
-            Ok::<_, std::convert::Infallible>(b.matvec(v))
+        match self.solve_with(g, radius, None, |v, out| {
+            *out = b.matvec(v);
+            Ok::<_, std::convert::Infallible>(())
         }) {
             Ok(step) => step,
             Err(never) => match never {},
@@ -290,11 +292,11 @@ where
         + NegInPlace
         + VectorLen,
 {
-    fn solve_hvp<E>(
+    fn solve_hvp_into<E>(
         &self,
         g: &V,
         radius: F,
-        bv: impl FnMut(&V) -> Result<V, E>,
+        bv: impl FnMut(&V, &mut V) -> Result<(), E>,
     ) -> Result<Step<V, F>, E> {
         self.solve_with(g, radius, None, bv)
     }
@@ -346,7 +348,10 @@ where
             g,
             radius,
             Some((self.kappa, self.theta)),
-            |v| Ok::<_, std::convert::Infallible>(b.matvec(v)),
+            |v, out| {
+                *out = b.matvec(v);
+                Ok::<_, std::convert::Infallible>(())
+            },
         ) {
             Ok(step) => step,
             Err(never) => match never {},
@@ -365,11 +370,11 @@ where
         + NegInPlace
         + VectorLen,
 {
-    fn solve_hvp<E>(
+    fn solve_hvp_into<E>(
         &self,
         g: &V,
         radius: F,
-        bv: impl FnMut(&V) -> Result<V, E>,
+        bv: impl FnMut(&V, &mut V) -> Result<(), E>,
     ) -> Result<Step<V, F>, E> {
         self.inner
             .solve_with(g, radius, Some((self.kappa, self.theta)), bv)

@@ -701,6 +701,11 @@ impl<F: Scalar> super::DenseMatrixFromFn<F> for Array1<F> {
     ) -> Self::Matrix {
         Array2::from_shape_fn((rows, cols), |(i, j)| f(i, j))
     }
+    fn dense_from_fn_into<G: FnMut(usize, usize) -> F>(rows: usize, cols: usize, mut f: G, out: &mut Self::Matrix) {
+        if out.dim() != (rows, cols) { *out = Array2::from_shape_fn((rows, cols), |(i, j)| f(i, j)); }
+        else { for ((i, j), value) in out.indexed_iter_mut() { *value = f(i, j); } }
+    }
+
 }
 impl<F: Scalar> super::ScaleRowsInPlace<F> for Array2<F> {
     fn scale_rows_in_place(&mut self, factors: &[F]) {

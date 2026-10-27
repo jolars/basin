@@ -158,7 +158,8 @@ where
         // Seed cost and gradient at the initial param so iter-0 termination
         // checks (e.g. `GradientTolerance` on a near-optimal start) see a
         // complete state. Same work we'd do on iter 1, hoisted.
-        let (cost, grad) = problem.cost_and_gradient(state.param())?;
+        let (cost, grad) =
+            problem.cost_and_gradient_reusing(state.param(), None)?;
         state
             .set_evaluation(cost, grad)
             .expect("gradient dimension differs from parameter");
@@ -170,7 +171,7 @@ where
         problem: &mut Problem<P>,
         mut state: FirstOrderState<V, F>,
     ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
-        let (prev_cost, grad) = state
+        let (prev_cost, mut grad) = state
             .take_evaluation()
             .expect("solver requires initialized progress");
         let mut direction = grad.clone();
@@ -230,7 +231,7 @@ where
             self.velocity = Some(velocity);
         }
 
-        let (cost, grad) = problem.cost_and_gradient(state.param())?;
+        let cost = problem.cost_and_gradient_into(state.param(), &mut grad)?;
         state
             .set_evaluation(cost, grad)
             .expect("gradient dimension differs from parameter");

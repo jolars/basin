@@ -393,7 +393,7 @@ production solvers.
   costs by value and write vector and matrix outputs into caller-owned
   buffers. Document that overriding only a separate derivative method does
   not optimize the default fused path.
-- [ ] **Use the in-place methods throughout evaluation and solver paths.** Add
+- [x] **Use the in-place methods throughout evaluation and solver paths.** Add
   counted `Problem` methods, forward overrides through adapters, and reuse
   solver-owned buffers in optimizers and finite differences. Preserve fused
   dispatch, evaluation counts, callback errors, non-finite handling,
@@ -401,6 +401,12 @@ production solvers.
   overrides, buffer reuse and resizing, and all supported backends with
   `f32` and `f64` where applicable. Keep the owned APIs available; these
   additions do not require a major release.
+- [ ] **Make evaluation buffer reuse automatic in Basin 4.0.** Replace the
+  compatible opt-in evaluation storage on solvers and the robust least-squares
+  adapter with typed storage by default. Basin 4.0 may change public type
+  parameters and their `Send`, `Sync`, `Clone`, and `Copy` implementations as
+  needed. Document the migration from the opt-in builders and preserve callback
+  dispatch, evaluation counts, fresh initialization, and exact continuation.
 
 ### Iterative-TRF API prototype
 

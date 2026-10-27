@@ -1,6 +1,7 @@
 use super::RobustLeastSquares;
 
-impl<P, L, F> crate::NonlinearEqualityValues for RobustLeastSquares<P, L, F>
+impl<P, L, F, W> crate::NonlinearEqualityValues
+    for RobustLeastSquares<P, L, F, W>
 where
     P: crate::NonlinearEqualityValues,
     F: crate::Scalar,
@@ -16,7 +17,8 @@ where
     }
 }
 
-impl<P, L, F> crate::NonlinearInequalityValues for RobustLeastSquares<P, L, F>
+impl<P, L, F, W> crate::NonlinearInequalityValues
+    for RobustLeastSquares<P, L, F, W>
 where
     P: crate::NonlinearInequalityValues,
     F: crate::Scalar,
@@ -32,7 +34,7 @@ where
     }
 }
 
-impl<P, L, F> crate::ConstraintJacobian for RobustLeastSquares<P, L, F>
+impl<P, L, F, W> crate::ConstraintJacobian for RobustLeastSquares<P, L, F, W>
 where
     P: crate::ConstraintJacobian,
     F: crate::Scalar,

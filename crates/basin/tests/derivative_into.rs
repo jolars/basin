@@ -118,7 +118,7 @@ fn check_defaults<V, M, F>(
     let hessian = [f(2.0), f(3.0), f(3.0), f(4.0)];
 
     for (len, rows, cols) in [(0, 0, 0), (1, 1, 1), (2, 3, 2), (4, 2, 3)] {
-        let p = OwnedOnly {
+        let mut p = basin::Problem::new(OwnedOnly {
             param: &x,
             direction: &direction,
             batch: &batch,
@@ -128,7 +128,7 @@ fn check_defaults<V, M, F>(
                 RefCell::new(Some(Ok(matrix(3, 2, &jacobian)))),
                 RefCell::new(Some(Ok(matrix(2, 2, &hessian)))),
             ],
-        };
+        });
         for (kind, expected) in expected_vectors.iter().enumerate() {
             let mut out = vector(&vec![F::nan(); len]);
             match kind {
@@ -165,8 +165,14 @@ fn check_defaults<V, M, F>(
                 }
             }
         }
-        assert!(p.vectors.iter().all(|v| v.borrow().is_none()));
-        assert!(p.matrices.iter().all(|m| m.borrow().is_none()));
+        assert!(p.inner().vectors.iter().all(|v| v.borrow().is_none()));
+        assert!(p.inner().matrices.iter().all(|m| m.borrow().is_none()));
+        let mut expected_counts = basin::EvalCounts::default();
+        expected_counts.gradient_evals = 2;
+        expected_counts.jacobian_evals = 1;
+        expected_counts.hessian_evals = 1;
+        expected_counts.hessian_product_evals = 1;
+        assert_eq!(*p.counts(), expected_counts);
     }
 }
 

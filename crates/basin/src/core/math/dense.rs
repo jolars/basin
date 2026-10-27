@@ -69,6 +69,22 @@ pub struct DenseMatrix<F = f64> {
 }
 
 impl<F: Scalar> DenseMatrix<F> {
+    pub(crate) fn fill_from_fn<G: FnMut(usize, usize) -> F>(
+        &mut self,
+        rows: usize,
+        cols: usize,
+        mut f: G,
+    ) {
+        self.data.resize(rows * cols, F::zero());
+        self.rows = rows;
+        self.cols = cols;
+        for i in 0..rows {
+            for j in 0..cols {
+                self.data[i * cols + j] = f(i, j);
+            }
+        }
+    }
+
     /// Build a `rows × cols` matrix from a **row-major** slice (`data[i * cols
     /// + j] = A[i, j]`). Mirrors `nalgebra::DMatrix::from_row_slice`.
     ///
@@ -482,6 +498,43 @@ where
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn in_place_construction_reuses_storage_in_both_precisions() {
+        fn check<F: super::Scalar>() {
+            use crate::DenseMatrixFromFn;
+            let mut out = <Vec<F>>::dense_from_fn(1, 1, |_, _| F::nan());
+            for (rows, cols) in [(2, 3), (3, 2), (0, 2), (4, 1)] {
+                <Vec<F>>::dense_from_fn_into(
+                    rows,
+                    cols,
+                    |_, _| F::nan(),
+                    &mut out,
+                );
+                let allocation = out.data.as_ptr();
+                for offset in [1, 2] {
+                    <Vec<F>>::dense_from_fn_into(
+                        rows,
+                        cols,
+                        |i, j| F::from_usize(i * cols + j + offset).unwrap(),
+                        &mut out,
+                    );
+                    assert_eq!(out.data.as_ptr(), allocation);
+                    assert_eq!((out.nrows(), out.ncols()), (rows, cols));
+                    for i in 0..rows {
+                        for j in 0..cols {
+                            assert_eq!(
+                                out.get(i, j),
+                                F::from_usize(i * cols + j + offset).unwrap()
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        check::<f32>();
+        check::<f64>();
+    }
+
     use super::*;
 
     /// A non-square `2×3` matrix exercises both ops with distinct input and

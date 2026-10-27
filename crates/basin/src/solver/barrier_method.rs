@@ -737,15 +737,21 @@ where
                         == Some(true)
             })
             .map(|r| {
+                let mut gradient = state.param().clone();
                 // Retried segments solve the same model, so their accuracy target
                 // retains the first reference instead of tightening after each cap.
                 let initial = if self.centering_mu == Some(self.mu) {
                     self.stationarity_initial_norm
                 } else {
-                    barrier_wrapper.gradient(state.param())?.norm_infinity()
+                    barrier_wrapper
+                        .gradient_into(state.param(), &mut gradient)?;
+                    gradient.norm_infinity()
                 };
-                let final_norm =
-                    barrier_wrapper.gradient(r.state.param())?.norm_infinity();
+                let final_norm = {
+                    barrier_wrapper
+                        .gradient_into(r.state.param(), &mut gradient)?;
+                    gradient.norm_infinity()
+                };
                 Ok::<_, Self::Error>((initial, final_norm))
             })
             .transpose();

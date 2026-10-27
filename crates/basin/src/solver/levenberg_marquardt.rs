@@ -1,3 +1,4 @@
+use crate::EvaluationBuffers;
 use crate::core::convergence::{
     NativeConvergenceDiagnostics, NativeConvergenceTest,
 };
@@ -10,6 +11,7 @@ use crate::core::math::{
     RegularizedQrSolve, Scalar, ScaleInPlace, ScaledAdd,
 };
 use crate::core::problem::Problem;
+use crate::core::problem::buffers::BufferStorage;
 #[cfg(test)]
 use crate::core::problem::{Jacobian, Residual};
 use crate::core::solver::Solver;
@@ -336,6 +338,7 @@ pub struct LevenbergMarquardt<V, M, F: Scalar = f64> {
     trial_residual: Option<V>,
     model_cache: Option<Result<M, QrSolveError>>,
     jtr_cache: Option<V>,
+    jacobian_buffer: Option<M>,
     failed: bool,
     native_convergence: Vec<NativeConvergenceTest>,
     trace: Option<Trace<F>>,
@@ -397,6 +400,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
             trial_residual: None,
             model_cache: None,
             jtr_cache: None,
+            jacobian_buffer: None,
             failed: false,
             native_convergence: Vec::new(),
             trace: None,
@@ -675,14 +679,29 @@ where
         problem: &mut Problem<P>,
         state: PointState<V, F>,
     ) -> Result<PointState<V, F>, Self::Error> {
-        self.init_model::<_, M, NormalEquations>(problem, state)
+        let mut buffer = self.jacobian_buffer.take();
+        let result = self.init_model::<_, M, NormalEquations>(
+            problem,
+            state,
+            &mut buffer,
+        );
+        self.jacobian_buffer = buffer;
+        result
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
         state: PointState<V, F>,
     ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
-        self.next_iter_model::<_, M, NormalEquations>(problem, state, None)
+        let mut buffer = self.jacobian_buffer.take();
+        let result = self.next_iter_model::<_, M, NormalEquations>(
+            problem,
+            state,
+            None,
+            &mut buffer,
+        );
+        self.jacobian_buffer = buffer;
+        result
     }
 }
 
@@ -691,6 +710,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         &mut self,
         problem: &mut E,
         mut state: PointState<V, F>,
+        jacobian_buffer: &mut Option<M>,
     ) -> Result<PointState<V, F>, E::Error>
     where
         E: Evaluation<V, M, F>,
@@ -718,16 +738,22 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         if let Some(trace) = &mut self.trace {
             trace.reset();
         }
-        self.r_cache = None;
+        let residual =
+            self.r_cache.take().unwrap_or_else(|| state.param().clone());
         self.trial_residual = None;
         self.model_cache = None;
         self.jtr_cache = None;
+        let jacobian = jacobian_buffer.take();
         self.diag = None;
         self.radius = None;
         self.mu = None;
         self.nu = F::from_f64(2.0).unwrap();
         self.first_trust_step = true;
-        let (r, j) = problem.residual_and_jacobian(state.param())?;
+        let (r, j) = problem.residual_and_jacobian_reusing(
+            state.param(),
+            residual,
+            jacobian,
+        )?;
         state.replace(
             state.param().clone(),
             problem.cost(&r, |r| F::from_f64(0.5).unwrap() * r.norm_squared()),
@@ -765,6 +791,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         self.jtr_cache = Some(gradient);
         self.model_cache = Some(a);
         self.r_cache = Some(r);
+        *jacobian_buffer = Some(j);
         Ok(state)
     }
 
@@ -773,6 +800,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         problem: &mut E,
         mut state: PointState<V, F>,
         rank_tolerance: Option<F>,
+        jacobian_buffer: &mut Option<M>,
     ) -> LmStep<V, F, E::Error>
     where
         E: Evaluation<V, M, F>,
@@ -818,7 +846,8 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         let (a, g) = match (self.model_cache.take(), self.jtr_cache.take()) {
             (Some(a), Some(g)) => (a, g),
             _ => {
-                let j = problem.jacobian(state.param())?;
+                let j = problem
+                    .jacobian_reusing(state.param(), jacobian_buffer.take())?;
                 let Some((model_r, j)) = problem.model(&r, j) else {
                     self.failed = true;
                     if let Some(trace) = &mut self.trace {
@@ -835,10 +864,12 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
                         )),
                     )));
                 };
-                (
+                let model = (
                     Model::prepare(&j, model_r.as_ref().unwrap_or(&r)),
                     j.mat_transpose_vec(model_r.as_ref().unwrap_or(&r)),
-                )
+                );
+                *jacobian_buffer = Some(j);
+                model
             }
         };
         let a = match a {
@@ -1328,7 +1359,9 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
                 if rho > F::zero() {
                     // Acceptance invalidated the base gradient. Cache the same
                     // model the next iteration would construct at this point.
-                    let j = match problem.jacobian(state.param()) {
+                    let j = match problem
+                        .jacobian_reusing(state.param(), jacobian_buffer.take())
+                    {
                         Ok(j) => j,
                         Err(error) => {
                             if let Some(index) = trial_record {
@@ -1366,6 +1399,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
                         &j,
                         model_r.as_ref().unwrap_or(retained_r),
                     ));
+                    *jacobian_buffer = Some(j);
                 }
                 let gradient = self.jtr_cache.as_ref().unwrap();
                 let valid = all_finite(gradient)
@@ -1639,24 +1673,25 @@ where
 ///         .with_absolute_gradient_tolerance(1e-10)
 ///         .with_pivoted_qr();
 /// ```
-pub struct LevenbergMarquardtQr<V, M, F: Scalar = f64>
+pub struct LevenbergMarquardtQr<V, M, F: Scalar = f64, W = ()>
 where
     M: FactorizePivotedQr<V, F>,
 {
     inner: LevenbergMarquardt<V, M::Factorization, F>,
+    workspace: W,
     rank_tolerance: Option<F>,
 }
 
-impl<V, M: FactorizePivotedQr<V, F>, F: Scalar> NativeConvergenceDiagnostics
-    for LevenbergMarquardtQr<V, M, F>
+impl<V, M: FactorizePivotedQr<V, F>, F: Scalar, W> NativeConvergenceDiagnostics
+    for LevenbergMarquardtQr<V, M, F, W>
 {
     fn native_convergence_tests(&self) -> &[NativeConvergenceTest] {
         self.inner.native_convergence_tests()
     }
 }
 
-impl<V, M: FactorizePivotedQr<V, F>, F: Scalar> LeastSquaresDiagnostics<F>
-    for LevenbergMarquardtQr<V, M, F>
+impl<V, M: FactorizePivotedQr<V, F>, F: Scalar, W> LeastSquaresDiagnostics<F>
+    for LevenbergMarquardtQr<V, M, F, W>
 {
     fn least_squares_observations(&self) -> &[LeastSquaresObservation<F>] {
         self.inner.least_squares_observations()
@@ -1690,6 +1725,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
                 ..LevenbergMarquardt::defaults()
             },
             rank_tolerance: None,
+            workspace: (),
         }
     }
 }
@@ -1711,9 +1747,31 @@ where
         Self {
             inner: LevenbergMarquardt::defaults(),
             rank_tolerance: None,
+            workspace: (),
         }
     }
 
+    /// Retain the raw Jacobian between model evaluations.
+    ///
+    /// The first fused evaluation seeds its storage through the owned callback;
+    /// subsequent refreshes use the in-place callbacks. Fresh initialization
+    /// reevaluates the seed and permits resizing. Exact continuation retains
+    /// the buffer along with the factorization.
+    pub fn with_evaluation_buffers(
+        self,
+    ) -> LevenbergMarquardtQr<V, M, F, EvaluationBuffers<(), M>> {
+        LevenbergMarquardtQr {
+            inner: self.inner,
+            rank_tolerance: self.rank_tolerance,
+            workspace: EvaluationBuffers::default(),
+        }
+    }
+}
+
+impl<V, M, F: Scalar, W> LevenbergMarquardtQr<V, M, F, W>
+where
+    M: FactorizePivotedQr<V, F>,
+{
     /// Enable [`LevenbergMarquardt::with_trial_diagnostics`] on the QR route.
     pub fn with_trial_diagnostics(mut self, enabled: bool) -> Self {
         self.inner = self.inner.with_trial_diagnostics(enabled);
@@ -1833,10 +1891,11 @@ where
         self
     }
 }
-impl<P, V, M, F, E> Solver<P, PointState<V, F>>
-    for LevenbergMarquardtQr<V, M, F>
+impl<P, V, M, F, E, W> Solver<P, PointState<V, F>>
+    for LevenbergMarquardtQr<V, M, F, W>
 where
     F: Scalar,
+    W: BufferStorage<(), M>,
     Problem<P>: Evaluation<V, M, F, Error = E>,
     V: ScaledAdd<F>
         + NormSquared<F>
@@ -1867,23 +1926,29 @@ where
         problem: &mut Problem<P>,
         state: PointState<V, F>,
     ) -> Result<PointState<V, F>, Self::Error> {
-        self.inner.init_model::<_, M, PivotedQr>(problem, state)
+        self.workspace.with_buffers(|_, buffer| {
+            self.inner
+                .init_model::<_, M, PivotedQr>(problem, state, buffer)
+        })
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
         state: PointState<V, F>,
     ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
-        self.inner.next_iter_model::<_, M, PivotedQr>(
-            problem,
-            state,
-            self.rank_tolerance,
-        )
+        self.workspace.with_buffers(|_, buffer| {
+            self.inner.next_iter_model::<_, M, PivotedQr>(
+                problem,
+                state,
+                self.rank_tolerance,
+                buffer,
+            )
+        })
     }
 }
 
-impl<V: Clone, M, F: Scalar> crate::core::inner::InitialState<V>
-    for LevenbergMarquardtQr<V, M, F>
+impl<V: Clone, M, F: Scalar, W> crate::core::inner::InitialState<V>
+    for LevenbergMarquardtQr<V, M, F, W>
 where
     M: FactorizePivotedQr<V, F>,
 {
@@ -1892,14 +1957,14 @@ where
         PointState::new(x.clone())
     }
 }
-impl<V: Clone, M, F: Scalar> crate::core::inner::WarmStart<V>
-    for LevenbergMarquardtQr<V, M, F>
+impl<V: Clone, M, F: Scalar, W> crate::core::inner::WarmStart<V>
+    for LevenbergMarquardtQr<V, M, F, W>
 where
     M: FactorizePivotedQr<V, F>,
 {
 }
-impl<V: Clone, M, F: Scalar> super::cma_inject::MemeticInner<V, F>
-    for LevenbergMarquardtQr<V, M, F>
+impl<V: Clone, M, F: Scalar, W> super::cma_inject::MemeticInner<V, F>
+    for LevenbergMarquardtQr<V, M, F, W>
 where
     M: FactorizePivotedQr<V, F>,
 {

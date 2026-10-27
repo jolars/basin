@@ -202,6 +202,7 @@ pub struct BoundedLevenbergMarquardt<V, M, F: Scalar = f64> {
     r_cache: Option<V>,
     trial_residual: Option<V>,
     j_cache: Option<M>,
+    jacobian_buffer: Option<M>,
     model_r_cache: Option<V>,
     failed: bool,
     trace: Option<Trace<F>>,
@@ -230,6 +231,7 @@ impl<V, M, F: Scalar> Default for BoundedLevenbergMarquardt<V, M, F> {
             r_cache: None,
             trial_residual: None,
             j_cache: None,
+            jacobian_buffer: None,
             model_r_cache: None,
             failed: false,
             trace: None,
@@ -381,7 +383,8 @@ where
     }
 }
 
-impl<P, L, V, M, F> Solver<RobustLeastSquares<P, L, F>, PointState<V, F>>
+impl<P, L, V, M, F, RW>
+    Solver<RobustLeastSquares<P, L, F, RW>, PointState<V, F>>
     for BoundedLevenbergMarquardt<V, M, F>
 where
     F: Scalar,
@@ -412,7 +415,7 @@ where
     }
     fn init(
         &mut self,
-        problem: &mut Problem<RobustLeastSquares<P, L, F>>,
+        problem: &mut Problem<RobustLeastSquares<P, L, F, RW>>,
         state: PointState<V, F>,
     ) -> Result<PointState<V, F>, Self::Error> {
         crate::core::constraint::evaluation::validate_box_problem(
@@ -426,7 +429,7 @@ where
     }
     fn next_iter(
         &mut self,
-        problem: &mut Problem<RobustLeastSquares<P, L, F>>,
+        problem: &mut Problem<RobustLeastSquares<P, L, F, RW>>,
         state: PointState<V, F>,
     ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.next_evaluated(problem, state)
@@ -470,13 +473,15 @@ where
         }
         self.failed = false;
         self.rejected_step = false;
-        self.r_cache = None;
+        let residual = self.r_cache.take().unwrap_or_else(|| param.clone());
         self.trial_residual = None;
-        self.j_cache = None;
+        let jacobian =
+            self.j_cache.take().or_else(|| self.jacobian_buffer.take());
         self.model_r_cache = None;
         self.mu = None;
         self.nu = F::from_f64(2.0).unwrap();
-        let (r, j) = problem.residual_and_jacobian(&param)?;
+        let (r, j) = problem
+            .residual_and_jacobian_reusing(&param, residual, jacobian)?;
         state.replace(
             param,
             problem.cost(&r, |r| F::from_f64(0.5).unwrap() * r.norm_squared()),
@@ -548,7 +553,10 @@ where
         let (model_r, j) = match self.j_cache.take() {
             Some(j) => (self.model_r_cache.take(), j),
             None => {
-                let j = problem.jacobian(state.param())?;
+                let j = problem.jacobian_reusing(
+                    state.param(),
+                    self.jacobian_buffer.take(),
+                )?;
                 let Some(model) = problem.model(&r, j) else {
                     self.failed = true;
                     if let Some(trace) = &mut self.trace {
@@ -884,6 +892,7 @@ where
             self.r_cache = Some(r_trial);
             self.trial_residual = Some(r);
             self.j_cache = None;
+            self.jacobian_buffer = Some(j);
         } else {
             // Reject. Bump μ geometrically; double ν so consecutive
             // rejections escalate damping faster. Both r and J remain

@@ -198,7 +198,8 @@ where
         state
             .seed_param_mut()
             .clamp_in_place(problem.inner().lower(), problem.inner().upper());
-        let (cost, grad) = problem.cost_and_gradient(state.param())?;
+        let (cost, grad) =
+            problem.cost_and_gradient_reusing(state.param(), None)?;
         state
             .set_evaluation(cost, grad)
             .expect("gradient dimension differs from parameter");
@@ -210,7 +211,7 @@ where
         problem: &mut Problem<P>,
         mut state: FirstOrderState<V, F>,
     ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
-        let (prev_cost, grad) = state
+        let (prev_cost, mut grad) = state
             .take_evaluation()
             .expect("solver requires initialized progress");
         let mut direction = grad.clone();
@@ -239,7 +240,7 @@ where
         state
             .seed_param_mut()
             .clamp_in_place(problem.inner().lower(), problem.inner().upper());
-        let (cost, grad) = problem.cost_and_gradient(state.param())?;
+        let cost = problem.cost_and_gradient_into(state.param(), &mut grad)?;
         state
             .set_evaluation(cost, grad)
             .expect("gradient dimension differs from parameter");

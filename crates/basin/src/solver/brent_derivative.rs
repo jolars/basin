@@ -151,7 +151,8 @@ where
         if x == a || x == b {
             x = a + golden_c::<F>() * (b - a);
         }
-        let (fx, dx) = problem.cost_and_gradient(&x)?;
+        let mut dx = F::zero();
+        let fx = problem.cost_and_gradient_into(&x, &mut dx)?;
         self.inner = Some(Inner {
             a,
             b,
@@ -278,7 +279,8 @@ where
                 ),
             ));
         }
-        let (fu, du) = problem.cost_and_gradient(&u)?;
+        let mut du = F::zero();
+        let fu = problem.cost_and_gradient_into(&u, &mut du)?;
 
         if fu <= s.fx {
             if u >= s.x {

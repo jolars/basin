@@ -103,6 +103,7 @@ pub struct GaussNewton<V, M, F: Scalar = f64> {
     // is dropped.
     r_cache: Option<V>,
     j_cache: Option<M>,
+    jacobian_buffer: Option<M>,
     model_r_cache: Option<V>,
     failed: bool,
     trace: Option<Trace<F>>,
@@ -121,6 +122,7 @@ impl<V, M, F: Scalar> Default for GaussNewton<V, M, F> {
             tol_grad: Some(F::from_f64(1e-8).unwrap()),
             r_cache: None,
             j_cache: None,
+            jacobian_buffer: None,
             model_r_cache: None,
             failed: false,
             trace: None,
@@ -223,10 +225,16 @@ where
         // state. Both `r(x₀)` and `J(x₀)` are stashed so the first
         // `next_iter` doesn't re-evaluate them at the same point.
         self.failed = false;
-        self.r_cache = None;
-        self.j_cache = None;
+        let residual =
+            self.r_cache.take().unwrap_or_else(|| state.param().clone());
+        let jacobian =
+            self.j_cache.take().or_else(|| self.jacobian_buffer.take());
         self.model_r_cache = None;
-        let (r, j) = problem.residual_and_jacobian(state.param())?;
+        let (r, j) = problem.residual_and_jacobian_reusing(
+            state.param(),
+            residual,
+            jacobian,
+        )?;
         state.replace(
             state.param().clone(),
             problem.cost(&r, |r| F::from_f64(0.5).unwrap() * r.norm_squared()),
@@ -270,7 +278,10 @@ where
         let (model_r, j) = match self.j_cache.take() {
             Some(j) => (self.model_r_cache.take(), j),
             None => {
-                let j = problem.jacobian(state.param())?;
+                let j = problem.jacobian_reusing(
+                    state.param(),
+                    self.jacobian_buffer.take(),
+                )?;
                 let Some(model) = problem.model(&r, j) else {
                     self.failed = true;
                     if let Some(trace) = &mut self.trace {
@@ -432,6 +443,7 @@ where
             row.actual_reduction = Some(row.base_cost - trial_cost);
             row.accepted = Some(true);
         }
+        self.jacobian_buffer = Some(j);
         state.replace(param, trial_cost);
         self.r_cache = Some(r_new);
         self.j_cache = None;

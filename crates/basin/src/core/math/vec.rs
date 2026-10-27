@@ -302,6 +302,14 @@ impl<F: Scalar> super::DenseMatrixFromFn<F> for Vec<F> {
     ) -> Self::Matrix {
         super::DenseMatrix::from_fn(rows, cols, f)
     }
+    fn dense_from_fn_into<G: FnMut(usize, usize) -> F>(
+        rows: usize,
+        cols: usize,
+        f: G,
+        out: &mut Self::Matrix,
+    ) {
+        out.fill_from_fn(rows, cols, f);
+    }
 }
 
 impl<F: Scalar> super::DenseBackend<F> for Vec<F> {

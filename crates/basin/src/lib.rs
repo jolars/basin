@@ -385,8 +385,9 @@ pub use crate::core::observer::{
     History, ObservationEvent, Observe, ObserveSolver, ObserverMode, Report,
 };
 pub use crate::core::problem::{
-    CostFunction, EvalCounts, EvaluationKind, Gradient, Hessian,
-    HessianProduct, Jacobian, MiniBatchGradient, Problem, Residual,
+    CostFunction, EvalCounts, EvaluationBuffers, EvaluationKind, Gradient,
+    Hessian, HessianProduct, Jacobian, MiniBatchGradient, Problem, Residual,
+    SharedEvaluationBuffers,
 };
 pub use crate::core::run_control::RunControl;
 pub use crate::core::solver::{Solver, SolverStep};

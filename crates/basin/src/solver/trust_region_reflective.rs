@@ -2,6 +2,8 @@
 use super::least_squares_diagnostics::{
     LeastSquaresCheck, LeastSquaresDiagnostics, LeastSquaresObservation, Trace,
 };
+use crate::EvaluationBuffers;
+use crate::core::problem::buffers::BufferStorage;
 
 #[cfg(test)]
 mod accounting;
@@ -178,7 +180,7 @@ use step::{Model, interior, number, update_radius};
 /// assert!((result.param()[0] - 1.0).abs() < 1e-7);
 /// ```
 #[derive(Clone, Debug)]
-pub struct TrustRegionReflective<F: Scalar = f64> {
+pub struct TrustRegionReflective<F: Scalar = f64, W = ()> {
     gradient_tolerance: Option<F>,
     initial_radius: Option<F>,
     rank_tolerance: Option<F>,
@@ -187,15 +189,18 @@ pub struct TrustRegionReflective<F: Scalar = f64> {
     work: Option<Work<F>>,
     native_convergence: Vec<NativeConvergenceTest>,
     trace: Option<Trace<F>>,
+    workspace: W,
 }
 
-impl<F: Scalar> NativeConvergenceDiagnostics for TrustRegionReflective<F> {
+impl<F: Scalar, W> NativeConvergenceDiagnostics
+    for TrustRegionReflective<F, W>
+{
     fn native_convergence_tests(&self) -> &[NativeConvergenceTest] {
         &self.native_convergence
     }
 }
 
-impl<F: Scalar> LeastSquaresDiagnostics<F> for TrustRegionReflective<F> {
+impl<F: Scalar, W> LeastSquaresDiagnostics<F> for TrustRegionReflective<F, W> {
     fn least_squares_observations(&self) -> &[LeastSquaresObservation<F>] {
         self.trace.as_ref().map_or(&[], |trace| &trace.observations)
     }
@@ -220,9 +225,33 @@ impl<F: Scalar> TrustRegionReflective<F> {
             work: None,
             native_convergence: Vec::new(),
             trace: None,
+            workspace: (),
         }
     }
 
+    /// Retain native residual and Jacobian storage between evaluations.
+    ///
+    /// Backend types are inferred from the problem. The first fused callback
+    /// seeds storage; later callbacks overwrite it. Fresh solves reevaluate
+    /// their seed and permit resizing, while exact continuation retains storage.
+    pub fn with_evaluation_buffers<V, M>(
+        self,
+    ) -> TrustRegionReflective<F, EvaluationBuffers<V, M>> {
+        TrustRegionReflective {
+            gradient_tolerance: self.gradient_tolerance,
+            initial_radius: self.initial_radius,
+            rank_tolerance: self.rank_tolerance,
+            max_inner_attempts: self.max_inner_attempts,
+            max_subproblem_iterations: self.max_subproblem_iterations,
+            work: self.work,
+            native_convergence: self.native_convergence,
+            trace: self.trace,
+            workspace: EvaluationBuffers::default(),
+        }
+    }
+}
+
+impl<F: Scalar, W> TrustRegionReflective<F, W> {
     /// Enable native model and trial observations (disabled by default).
     ///
     /// Recording adds allocations but no problem evaluations. Fresh runs reset
@@ -289,7 +318,7 @@ impl<F: Scalar> TrustRegionReflective<F> {
     }
 }
 
-impl<V: Clone, F: Scalar> InitialState<V> for TrustRegionReflective<F> {
+impl<V: Clone, F: Scalar, W> InitialState<V> for TrustRegionReflective<F, W> {
     type State = PointState<V, F>;
     fn seed(&self, x: &V) -> Self::State {
         PointState::new(x.clone())
@@ -406,9 +435,10 @@ impl<F: Scalar> Work<F> {
     }
 }
 
-impl<P, V, F> Solver<P, PointState<V, F>> for TrustRegionReflective<F>
+impl<P, V, F, W> Solver<P, PointState<V, F>> for TrustRegionReflective<F, W>
 where
     F: Scalar,
+    W: BufferStorage<V, P::Jacobian>,
     P: Residual<Param = V, Output = V> + Jacobian + BoxProblem<Param = V>,
     P::Jacobian: MatrixIndex<F>,
     V: Clone + VectorLen + VectorIndex<F>,
@@ -454,10 +484,12 @@ where
     }
 }
 
-impl<P, L, V, F> Solver<RobustLeastSquares<P, L, F>, PointState<V, F>>
-    for TrustRegionReflective<F>
+impl<P, L, V, F, W, RW>
+    Solver<RobustLeastSquares<P, L, F, RW>, PointState<V, F>>
+    for TrustRegionReflective<F, W>
 where
     F: Scalar,
+    W: BufferStorage<V, P::Jacobian>,
     P: crate::Constraints<Set = crate::ConstraintSet<crate::BoxBounds<V>>>,
     P: Residual<Param = V, Output = V> + Jacobian + BoxProblem<Param = V>,
     P::Jacobian: MatrixIndex<F>,
@@ -474,14 +506,14 @@ where
     }
     fn check_convergence(
         &mut self,
-        _problem: &Problem<RobustLeastSquares<P, L, F>>,
+        _problem: &Problem<RobustLeastSquares<P, L, F, RW>>,
         state: &PointState<V, F>,
     ) -> Option<Termination<F>> {
         self.check_native_convergence(state.cost())
     }
     fn init(
         &mut self,
-        problem: &mut Problem<RobustLeastSquares<P, L, F>>,
+        problem: &mut Problem<RobustLeastSquares<P, L, F, RW>>,
         state: PointState<V, F>,
     ) -> Result<PointState<V, F>, Self::Error> {
         crate::core::constraint::evaluation::validate_coordinate_box_problem(
@@ -495,7 +527,7 @@ where
     }
     fn next_iter(
         &mut self,
-        problem: &mut Problem<RobustLeastSquares<P, L, F>>,
+        problem: &mut Problem<RobustLeastSquares<P, L, F, RW>>,
         state: PointState<V, F>,
     ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.next_evaluated(problem, state)
@@ -506,11 +538,49 @@ where
     }
 }
 
-impl<F: Scalar> TrustRegionReflective<F> {
+impl<F: Scalar, W> TrustRegionReflective<F, W> {
     fn init_evaluated<V, M, E>(
         &mut self,
         problem: &mut E,
         state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, E::Error>
+    where
+        V: Clone + VectorLen + VectorIndex<F>,
+        M: MatrixIndex<F>,
+        E: BoundedEvaluation<V, M, F>,
+        W: BufferStorage<V, M>,
+    {
+        let mut workspace = std::mem::take(&mut self.workspace);
+        let result = workspace
+            .with_buffers(|r, j| self.init_model(problem, state, r, j));
+        self.workspace = workspace;
+        result
+    }
+
+    fn next_evaluated<V, M, E>(
+        &mut self,
+        problem: &mut E,
+        state: PointState<V, F>,
+    ) -> NllsStep<V, F, E::Error>
+    where
+        V: Clone + VectorLen + VectorIndex<F>,
+        M: MatrixIndex<F>,
+        E: BoundedEvaluation<V, M, F>,
+        W: BufferStorage<V, M>,
+    {
+        let mut workspace = std::mem::take(&mut self.workspace);
+        let result = workspace
+            .with_buffers(|r, j| self.next_model(problem, state, r, j));
+        self.workspace = workspace;
+        result
+    }
+
+    fn init_model<V, M, E>(
+        &mut self,
+        problem: &mut E,
+        state: PointState<V, F>,
+        residual_buffer: &mut Option<V>,
+        jacobian_buffer: &mut Option<M>,
     ) -> Result<PointState<V, F>, E::Error>
     where
         V: Clone + VectorLen + VectorIndex<F>,
@@ -568,28 +638,35 @@ impl<F: Scalar> TrustRegionReflective<F> {
         let mut value = F::infinity();
         if !work.failed {
             if work.free.is_empty() {
-                let r = problem.residual(&param)?;
-                work.residual = vector(&r);
-                value = problem.cost(&r, |_| cost(&work.residual));
+                let r = residual_buffer.get_or_insert_with(|| param.clone());
+                problem.residual_into(&param, r)?;
+                work.residual = vector(r);
+                value = problem.cost(r, |_| cost(&work.residual));
                 work.optimality = F::zero();
             } else {
-                let (r, j) = problem.residual_and_jacobian(&param)?;
+                let (r, j) = problem.residual_and_jacobian_reusing(
+                    &param,
+                    residual_buffer.take().unwrap_or_else(|| param.clone()),
+                    jacobian_buffer.take(),
+                )?;
                 work.residual = vector(&r);
                 value = problem.cost(&r, |_| cost(&work.residual));
                 if let Some((model_r, j)) = problem.model(&r, j) {
                     if let Some(model_r) = model_r {
                         work.residual = vector(&model_r);
                     }
-                    if let Some(j) =
+                    if let Some(values) =
                         jacobian(&j, work.residual.len(), n, &work.free)
                     {
-                        work.jacobian = j;
+                        work.jacobian = values;
                     } else {
                         work.failed = true;
                     }
+                    *jacobian_buffer = Some(j);
                 } else {
                     work.failed = true;
                 }
+                *residual_buffer = Some(r);
             }
             assert!(
                 !work.residual.is_empty(),
@@ -625,10 +702,12 @@ impl<F: Scalar> TrustRegionReflective<F> {
         Ok(state)
     }
 
-    fn next_evaluated<V, M, E>(
+    fn next_model<V, M, E>(
         &mut self,
         problem: &mut E,
         mut state: PointState<V, F>,
+        residual_buffer: &mut Option<V>,
+        jacobian_buffer: &mut Option<M>,
     ) -> NllsStep<V, F, E::Error>
     where
         V: Clone + VectorLen + VectorIndex<F>,
@@ -700,9 +779,8 @@ impl<F: Scalar> TrustRegionReflective<F> {
             .collect();
         let theta = number::<F>(0.995).max(F::one() - work.optimality);
         let old_cost = state.cost();
-        // The public solver is scalar-generic, so native backend storage is
-        // local to this iteration and reused across rejected trials.
-        let mut raw_r = state.param().clone();
+        let raw_r =
+            residual_buffer.get_or_insert_with(|| state.param().clone());
         for _ in 0..self.max_inner_attempts {
             let result = svd.trust_step(
                 &rhs,
@@ -842,16 +920,16 @@ impl<F: Scalar> TrustRegionReflective<F> {
                 row.model_solves = 1;
                 trace.push(row)
             });
-            if let Err(error) = problem.residual_into(&trial, &mut raw_r) {
+            if let Err(error) = problem.residual_into(&trial, raw_r) {
                 if let Some(index) = trial_record {
                     self.trace.as_mut().unwrap().observations[index].outcome =
                         Some("callback_failed");
                 }
                 return Err(error);
             }
-            let r = vector(&raw_r);
+            let r = vector(raw_r);
             assert_eq!(r.len(), m, "residual shape changed during solve");
-            let new_cost = problem.cost(&raw_r, |_| cost(&r));
+            let new_cost = problem.cost(raw_r, |_| cost(&r));
             if let Some(index) = trial_record {
                 self.trace.as_mut().unwrap().observations[index].trial_cost =
                     Some(new_cost);
@@ -886,7 +964,9 @@ impl<F: Scalar> TrustRegionReflective<F> {
                 row.radius_after = Some(work.radius);
             }
             if actual > F::zero() {
-                let j = match problem.jacobian(&trial) {
+                let j = match problem
+                    .jacobian_reusing(&trial, jacobian_buffer.take())
+                {
                     Ok(j) => j,
                     Err(error) => {
                         if let Some(index) = trial_record {
@@ -896,7 +976,7 @@ impl<F: Scalar> TrustRegionReflective<F> {
                         return Err(error);
                     }
                 };
-                let Some((model_r, j)) = problem.model(&raw_r, j) else {
+                let Some((model_r, j)) = problem.model(raw_r, j) else {
                     if let Some(trace) = &mut self.trace {
                         trace.event(
                             old_cost,
@@ -906,9 +986,10 @@ impl<F: Scalar> TrustRegionReflective<F> {
                     }
                     break;
                 };
-                let Some(j) =
-                    jacobian(&j, m, state.param().vec_len(), &work.free)
-                else {
+                let values =
+                    jacobian(&j, m, state.param().vec_len(), &work.free);
+                *jacobian_buffer = Some(j);
+                let Some(j) = values else {
                     if let Some(trace) = &mut self.trace {
                         trace.event(
                             old_cost,

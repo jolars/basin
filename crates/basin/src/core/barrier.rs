@@ -261,6 +261,15 @@ where
 {
     type Gradient = V;
     fn gradient(&self, x: &V) -> Result<V, <Self as CostFunction>::Error> {
+        let mut out = x.clone();
+        self.gradient_into(x, &mut out)?;
+        Ok(out)
+    }
+    fn gradient_into(
+        &self,
+        x: &V,
+        out: &mut V,
+    ) -> Result<(), <Self as CostFunction>::Error> {
         let mut values = self.problem.linear_residual(x).map_err(invalid)?;
         let valid = vector_is_finite(x)
             && vector_is_finite(&values)
@@ -276,18 +285,32 @@ where
         for value in &mut values {
             *value = if valid { self.mu / *value } else { F::zero() };
         }
-        let mut barrier_grad = x.clone();
-        self.problem
-            .linear_transpose(&values, &mut barrier_grad)
-            .map_err(invalid)?;
         match self.objective {
-            BarrierObjective::PhaseOne => Ok(barrier_grad),
+            BarrierObjective::PhaseOne => {
+                if out.vec_len() != x.vec_len() {
+                    *out = x.clone();
+                }
+                self.problem.linear_transpose(&values, out).map_err(invalid)
+            }
             BarrierObjective::PhaseTwo => {
-                let mut g = self.problem.gradient(x)?;
-                g.scaled_add(F::one(), &barrier_grad);
-                Ok(g)
+                let mut barrier_grad = x.clone();
+                self.problem
+                    .linear_transpose(&values, &mut barrier_grad)
+                    .map_err(invalid)?;
+                self.problem.gradient_into(x, out)?;
+                out.scaled_add(F::one(), &barrier_grad);
+                Ok(())
             }
         }
+    }
+    fn cost_and_gradient_into(
+        &self,
+        x: &V,
+        grad: &mut V,
+    ) -> Result<F, Self::Error> {
+        let cost = self.cost(x)?;
+        self.gradient_into(x, grad)?;
+        Ok(cost)
     }
 }
 

@@ -288,6 +288,7 @@ impl<F: Scalar> HagerZhang<F> {
         direction: &V,
         alpha: F,
         evaluations: &mut u32,
+        gradient_buffer: &mut Option<V>,
     ) -> Result<Option<Trial<F>>, P::Error>
     where
         P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
@@ -299,12 +300,11 @@ impl<F: Scalar> HagerZhang<F> {
         let mut point = param.clone();
         point.scaled_add(alpha, direction);
         *evaluations += 1;
-        let (phi, gradient) = problem.cost_and_gradient(&point)?;
-        Ok(Some(Trial {
-            alpha,
-            phi,
-            dphi: gradient.dot(direction),
-        }))
+        let (phi, gradient) = problem
+            .cost_and_gradient_reusing(&point, gradient_buffer.take())?;
+        let dphi = gradient.dot(direction);
+        *gradient_buffer = Some(gradient);
+        Ok(Some(Trial { alpha, phi, dphi }))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -319,6 +319,7 @@ impl<F: Scalar> HagerZhang<F> {
         dphi0: F,
         epsilon_k: F,
         evaluations: &mut u32,
+        gradient_buffer: &mut Option<V>,
     ) -> Result<SearchResult<F>, P::Error>
     where
         P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
@@ -331,8 +332,14 @@ impl<F: Scalar> HagerZhang<F> {
             if !(alpha.is_finite() && a.alpha < alpha && alpha < upper) {
                 return Ok(SearchResult::Failed);
             }
-            let Some(trial) =
-                self.evaluate(problem, param, direction, alpha, evaluations)?
+            let Some(trial) = self.evaluate(
+                problem,
+                param,
+                direction,
+                alpha,
+                evaluations,
+                gradient_buffer,
+            )?
             else {
                 return Ok(SearchResult::Failed);
             };
@@ -364,6 +371,7 @@ impl<F: Scalar> HagerZhang<F> {
         dphi0: F,
         epsilon_k: F,
         evaluations: &mut u32,
+        gradient_buffer: &mut Option<V>,
     ) -> Result<SearchResult<F>, P::Error>
     where
         P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
@@ -398,6 +406,7 @@ impl<F: Scalar> HagerZhang<F> {
             dphi0,
             epsilon_k,
             evaluations,
+            gradient_buffer,
         )
     }
 
@@ -413,6 +422,7 @@ impl<F: Scalar> HagerZhang<F> {
         dphi0: F,
         epsilon_k: F,
         evaluations: &mut u32,
+        gradient_buffer: &mut Option<V>,
     ) -> Result<LineSearchOutcome<F>, P::Error>
     where
         P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
@@ -436,6 +446,7 @@ impl<F: Scalar> HagerZhang<F> {
                 direction,
                 first_alpha,
                 evaluations,
+                gradient_buffer,
             )?
             else {
                 return Ok(LineSearchOutcome::Failed);
@@ -455,6 +466,7 @@ impl<F: Scalar> HagerZhang<F> {
                 dphi0,
                 epsilon_k,
                 evaluations,
+                gradient_buffer,
             )? {
                 SearchResult::Accepted(alpha) => {
                     return Ok(LineSearchOutcome::Step(alpha));
@@ -484,6 +496,7 @@ impl<F: Scalar> HagerZhang<F> {
                         direction,
                         alpha,
                         evaluations,
+                        gradient_buffer,
                     )?
                     else {
                         return Ok(LineSearchOutcome::Failed);
@@ -502,6 +515,7 @@ impl<F: Scalar> HagerZhang<F> {
                         dphi0,
                         epsilon_k,
                         evaluations,
+                        gradient_buffer,
                     )? {
                         SearchResult::Accepted(alpha) => {
                             return Ok(LineSearchOutcome::Step(alpha));
@@ -529,6 +543,7 @@ impl<F: Scalar> HagerZhang<F> {
                     direction,
                     alpha,
                     evaluations,
+                    gradient_buffer,
                 )?
                 else {
                     return Ok(LineSearchOutcome::Failed);
@@ -547,6 +562,7 @@ impl<F: Scalar> HagerZhang<F> {
                     dphi0,
                     epsilon_k,
                     evaluations,
+                    gradient_buffer,
                 )? {
                     SearchResult::Accepted(alpha) => {
                         return Ok(LineSearchOutcome::Step(alpha));
@@ -605,6 +621,7 @@ impl<F: Scalar> HagerZhang<F> {
             return Ok(LineSearchOutcome::Failed);
         }
         let mut evaluations = 0;
+        let mut gradient_buffer = None;
         let mut a = Trial {
             alpha: zero,
             phi: cost,
@@ -619,6 +636,7 @@ impl<F: Scalar> HagerZhang<F> {
                 direction,
                 alpha,
                 &mut evaluations,
+                &mut gradient_buffer,
             )?
             else {
                 return Ok(LineSearchOutcome::Failed);
@@ -648,6 +666,7 @@ impl<F: Scalar> HagerZhang<F> {
                     dphi0,
                     epsilon_k,
                     &mut evaluations,
+                    &mut gradient_buffer,
                 )? {
                     SearchResult::Accepted(alpha) => {
                         return Ok(LineSearchOutcome::Step(alpha));
@@ -677,6 +696,7 @@ impl<F: Scalar> HagerZhang<F> {
             dphi0,
             epsilon_k,
             &mut evaluations,
+            &mut gradient_buffer,
         )
     }
 }

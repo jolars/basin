@@ -201,6 +201,8 @@ use crate::core::state::{PointState, State};
 pub struct Sgd<V, F: Scalar = f64> {
     alpha: F,
     working_param: Option<V>,
+    #[cfg_attr(feature = "serde", serde(skip, default = "Option::default"))]
+    gradient_buffer: Option<V>,
     batch_size: usize,
     seed: u64,
     /// Momentum coefficient `β`; `0.0` disables momentum (plain SGD).
@@ -242,6 +244,7 @@ impl<V, F: Scalar> Sgd<V, F> {
         Self {
             alpha,
             working_param: None,
+            gradient_buffer: None,
             batch_size,
             seed,
             beta: F::zero(),
@@ -318,6 +321,7 @@ where
     ) -> Result<PointState<V, F>, Self::Error> {
         state.reset();
         self.working_param = Some(state.param().clone());
+        self.gradient_buffer = None;
         // Start momentum from rest, even if this solver instance is reused
         // across runs (composition): velocity must not leak between runs.
         self.velocity = None;
@@ -372,7 +376,11 @@ where
         let working = self.working_param.as_mut().expect(
             "working iterate not set: Solver::init must run before next_iter",
         );
-        let grad = problem.batch_gradient(working, batch)?;
+        let mut grad = problem.batch_gradient_reusing(
+            working,
+            batch,
+            self.gradient_buffer.take(),
+        )?;
         self.cursor += bs;
 
         if self.beta == F::zero() {
@@ -381,6 +389,7 @@ where
             // and stepping `x ← x + α·direction`; the latter touched the
             // dim-sized buffer twice per step.
             working.scaled_add(-self.alpha, &grad);
+            self.gradient_buffer = Some(grad);
         } else {
             // Heavy ball: v ← β·v − α·g, then x ← x + v.
             // With v₀ = 0 the first step is just −α·g; form it by consuming
@@ -389,12 +398,12 @@ where
                 Some(mut v) => {
                     v.scale_in_place(self.beta);
                     v.scaled_add(-self.alpha, &grad);
+                    self.gradient_buffer = Some(grad);
                     v
                 }
                 None => {
-                    let mut v = grad;
-                    v.scale_in_place(-self.alpha);
-                    v
+                    grad.scale_in_place(-self.alpha);
+                    grad
                 }
             };
             working.scaled_add(F::one(), &velocity);

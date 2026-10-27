@@ -120,7 +120,7 @@ fn check_defaults<V, M, F>(
     let hessian = [f(2.0), f(0.0), f(0.0), f(2.0)];
 
     for (len, rows, cols) in [(0, 0, 0), (1, 1, 1), (2, 3, 2), (4, 2, 3)] {
-        let p = FusedOnly {
+        let mut p = basin::Problem::new(FusedOnly {
             param: &x,
             pair: RefCell::new(Some(Ok((f(5.0), vector(&gradient))))),
             residual_pair: RefCell::new(Some(Ok((
@@ -132,7 +132,7 @@ fn check_defaults<V, M, F>(
                 vector(&gradient),
                 matrix(2, 2, &hessian),
             )))),
-        };
+        });
         let mut v = vector(&vec![F::nan(); len]);
         let mut m = matrix(rows, cols, &vec![F::nan(); rows * cols]);
         assert_eq!(p.cost_and_gradient_into(&x, &mut v).unwrap(), f(5.0));
@@ -147,9 +147,16 @@ fn check_defaults<V, M, F>(
         );
         check_vector(&v, &gradient);
         check_matrix(&m, 2, 2, &hessian);
-        assert!(p.pair.borrow().is_none());
-        assert!(p.residual_pair.borrow().is_none());
-        assert!(p.triple.borrow().is_none());
+        assert!(p.inner().pair.borrow().is_none());
+        assert!(p.inner().residual_pair.borrow().is_none());
+        assert!(p.inner().triple.borrow().is_none());
+        let mut expected_counts = basin::EvalCounts::default();
+        expected_counts.cost_evals = 2;
+        expected_counts.gradient_evals = 2;
+        expected_counts.residual_evals = 1;
+        expected_counts.jacobian_evals = 1;
+        expected_counts.hessian_evals = 1;
+        assert_eq!(*p.counts(), expected_counts);
     }
 }
 

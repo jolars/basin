@@ -31,6 +31,28 @@ macro_rules! dense_checks {
         let make = $make;
         let x = make(&[3.0, 4.0]);
         assert_eq!(NormSquared::norm_squared(&x), 25.0);
+        let mut filled = <V as basin::DenseMatrixFromFn<F>>::dense_from_fn(
+            0, 0, |_, _| F::NAN,
+        );
+        for (rows, cols) in [(3, 2), (3, 2), (1, 4), (0, 2)] {
+            let mut visits = 0;
+            <V as basin::DenseMatrixFromFn<F>>::dense_from_fn_into(
+                rows, cols,
+                |i, j| {
+                    visits += 1;
+                    (10 * i + j) as F
+                },
+                &mut filled,
+            );
+            assert_eq!(visits, rows * cols);
+            assert_eq!(basin::MatrixShape::matrix_rows(&filled), rows);
+            assert_eq!(basin::MatrixShape::matrix_cols(&filled), cols);
+            for i in 0..rows {
+                for j in 0..cols {
+                    assert_eq!(basin::MatrixIndex::matrix_entry(&filled, i, j), (10 * i + j) as F);
+                }
+            }
+        }
         let identity = <M as MatrixIdentity>::identity(2);
         let product = identity.matvec(&x);
         let solved = identity.solve_spd(&x).unwrap();

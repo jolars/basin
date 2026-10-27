@@ -411,17 +411,33 @@ where
 {
     type Gradient = V;
     fn gradient(&self, x: &V) -> Result<V, P::Error> {
+        let mut out = x.clone();
+        self.gradient_into(x, &mut out)?;
+        Ok(out)
+    }
+    fn gradient_into(&self, x: &V, out: &mut V) -> Result<(), P::Error> {
         let (_, cols) = columns(
             x,
             self.options(false),
             Some((&self.lower, &self.upper)),
             |x| self.problem.cost(x).map(|f| vec![f]),
         )?;
-        let mut result = x.clone();
-        for (j, col) in cols.into_iter().enumerate() {
-            result.set_scalar(j, col[0]);
+        if out.vec_len() != x.vec_len() {
+            *out = x.clone();
         }
-        Ok(result)
+        for (j, col) in cols.into_iter().enumerate() {
+            out.set_scalar(j, col[0]);
+        }
+        Ok(())
+    }
+    fn cost_and_gradient_into(
+        &self,
+        x: &V,
+        grad: &mut V,
+    ) -> Result<F, P::Error> {
+        let cost = self.cost(x)?;
+        self.gradient_into(x, grad)?;
+        Ok(cost)
     }
 }
 impl<P, V, F> Jacobian for BoundedFiniteDiff<P, F>
@@ -433,6 +449,15 @@ where
 {
     type Jacobian = V::Matrix;
     fn jacobian(&self, x: &V) -> Result<V::Matrix, P::Error> {
+        let mut out = V::dense_from_fn(0, 0, |_, _| unreachable!());
+        self.jacobian_into(x, &mut out)?;
+        Ok(out)
+    }
+    fn jacobian_into(
+        &self,
+        x: &V,
+        out: &mut V::Matrix,
+    ) -> Result<(), P::Error> {
         let (m, cols) = columns_into(
             x,
             self.options(true),
@@ -441,7 +466,17 @@ where
             Clone::clone,
             |x, out| self.problem.residual_into(x, out),
         )?;
-        Ok(V::dense_from_fn(m, x.vec_len(), |i, j| cols[j][i]))
+        V::dense_from_fn_into(m, x.vec_len(), |i, j| cols[j][i], out);
+        Ok(())
+    }
+    fn residual_and_jacobian_into(
+        &self,
+        x: &V,
+        res: &mut V,
+        jac: &mut Self::Jacobian,
+    ) -> Result<(), P::Error> {
+        self.residual_into(x, res)?;
+        self.jacobian_into(x, jac)
     }
 }
 

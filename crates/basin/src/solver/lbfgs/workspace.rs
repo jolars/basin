@@ -16,6 +16,8 @@ use crate::solver::lbfgs::{backend::AsFloatSlice, history::newest_products};
 /// Limited-memory model shared by the bounded and unbounded solvers.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(super) struct History<V, F: Scalar = f64> {
+    #[cfg_attr(feature = "serde", serde(skip, default = "Option::default"))]
+    pub(crate) gradient_buffer: Option<V>,
     /// History capacity. Fortran's `m`; recommended `[3, 20]`.
     pub(crate) m_capacity: usize,
     /// `s_k = x_{k+1} − x_k`, chronological, oldest first.
@@ -152,6 +154,7 @@ impl<V, F: Scalar> History<V, F> {
         assert!(m_capacity >= 1, "m_capacity must be ≥ 1");
         let mm = m_capacity * m_capacity;
         Self {
+            gradient_buffer: None,
             m_capacity,
             ws: Vec::with_capacity(m_capacity),
             wy: Vec::with_capacity(m_capacity),
@@ -174,8 +177,8 @@ impl<V, F: Scalar> History<V, F> {
     ///
     /// Returns `false` if `s·y ≤ 0` or any product is non-finite:
     /// the curvature condition is the caller's responsibility, this
-    /// is just a final safeguard. The state is left unchanged in
-    /// that case.
+    /// is just a final safeguard. The curvature history stays unchanged
+    /// in that case, while the output buffer can retain `y`.
     pub(crate) fn append_pair(&mut self, s: V, y: V) -> bool
     where
         V: Dot<F> + AsFloatSlice<F>,
@@ -183,6 +186,7 @@ impl<V, F: Scalar> History<V, F> {
         let sy_dot = s.dot(&y);
         let yy_dot = y.dot(&y);
         if !(sy_dot > F::zero() && sy_dot.is_finite() && yy_dot.is_finite()) {
+            self.gradient_buffer = Some(y);
             return false;
         }
 
@@ -191,7 +195,7 @@ impl<V, F: Scalar> History<V, F> {
         // Drop oldest when at capacity.
         if self.ws.len() == m {
             self.ws.remove(0);
-            self.wy.remove(0);
+            self.gradient_buffer = Some(self.wy.remove(0));
             // Shift the leading `(m-1) × (m-1)` block of sy and ss
             // up-and-left by one row+column. Use a forward sweep:
             // each (i, j) only reads from (i+1, j+1) which we haven't

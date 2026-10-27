@@ -290,6 +290,34 @@ where
             ),
         }
     }
+    fn gradient_into(&self, param: &V, out: &mut V) -> Result<(), P::Error> {
+        match self.gradient_method {
+            Method::Forward => forward_difference_gradient_into(
+                &self.problem,
+                param,
+                self.function_precision,
+                self.fixed_step,
+                out,
+            ),
+            Method::Central => central_difference_gradient_into(
+                &self.problem,
+                param,
+                self.function_precision,
+                self.fixed_step,
+                out,
+            ),
+        }
+    }
+
+    fn cost_and_gradient_into(
+        &self,
+        param: &V,
+        grad: &mut V,
+    ) -> Result<f64, P::Error> {
+        let cost = self.cost(param)?;
+        self.gradient_into(param, grad)?;
+        Ok(cost)
+    }
 }
 
 impl<P, V> Jacobian for FiniteDiff<P>
@@ -320,6 +348,38 @@ where
             ),
         }
     }
+    fn jacobian_into(
+        &self,
+        param: &V,
+        out: &mut Self::Jacobian,
+    ) -> Result<(), P::Error> {
+        match self.jacobian_method {
+            Method::Forward => forward_difference_jacobian_into(
+                &self.problem,
+                param,
+                self.function_precision,
+                self.fixed_step,
+                out,
+            ),
+            Method::Central => central_difference_jacobian_into(
+                &self.problem,
+                param,
+                self.function_precision,
+                self.fixed_step,
+                out,
+            ),
+        }
+    }
+
+    fn residual_and_jacobian_into(
+        &self,
+        param: &V,
+        res: &mut V,
+        jac: &mut Self::Jacobian,
+    ) -> Result<(), P::Error> {
+        self.residual_into(param, res)?;
+        self.jacobian_into(param, jac)
+    }
 }
 
 impl<P, V> Hessian for FiniteDiff<P>
@@ -344,6 +404,39 @@ where
                 self.fixed_step,
             ),
         }
+    }
+    fn hessian_into(
+        &self,
+        param: &V,
+        out: &mut Self::Hessian,
+    ) -> Result<(), P::Error> {
+        match self.hessian_method {
+            Method::Forward => forward_difference_hessian_into(
+                &self.problem,
+                param,
+                self.function_precision,
+                self.fixed_step,
+                out,
+            ),
+            Method::Central => central_difference_hessian_into(
+                &self.problem,
+                param,
+                self.function_precision,
+                self.fixed_step,
+                out,
+            ),
+        }
+    }
+
+    fn cost_and_gradient_and_hessian_into(
+        &self,
+        param: &V,
+        grad: &mut V,
+        hess: &mut Self::Hessian,
+    ) -> Result<f64, P::Error> {
+        let cost = self.cost_and_gradient_into(param, grad)?;
+        self.hessian_into(param, hess)?;
+        Ok(cost)
     }
 }
 
@@ -377,6 +470,31 @@ where
                 v,
                 self.function_precision,
                 self.fixed_step,
+            ),
+        }
+    }
+    fn hessian_product_into(
+        &self,
+        param: &V,
+        v: &V,
+        out: &mut V,
+    ) -> Result<(), P::Error> {
+        match self.hessian_method {
+            Method::Forward => forward_difference_hessian_product_into(
+                self,
+                param,
+                v,
+                self.function_precision,
+                self.fixed_step,
+                out,
+            ),
+            Method::Central => central_difference_hessian_product_into(
+                self,
+                param,
+                v,
+                self.function_precision,
+                self.fixed_step,
+                out,
             ),
         }
     }
@@ -414,6 +532,29 @@ where
     V: Clone + VectorLen + VectorIndex + MaybeSync,
     P::Error: MaybeSend,
 {
+    let mut out = x.clone();
+    central_difference_gradient_into(
+        problem,
+        x,
+        function_precision,
+        fixed_step,
+        &mut out,
+    )?;
+    Ok(out)
+}
+
+fn central_difference_gradient_into<P, V>(
+    problem: &P,
+    x: &V,
+    function_precision: f64,
+    fixed_step: Option<f64>,
+    out: &mut V,
+) -> Result<(), P::Error>
+where
+    P: CostFunction<Param = V, Output = f64> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex + MaybeSync,
+    P::Error: MaybeSend,
+{
     let n = x.vec_len();
     let scale = function_precision.max(f64::EPSILON).cbrt();
     // Each task perturbs coordinate `j` of its own probe buffer, evaluates,
@@ -432,11 +573,13 @@ where
             Ok((fp - fm) / (2.0 * h))
         },
     )?;
-    let mut grad = x.clone();
-    for (j, g) in cols.into_iter().enumerate() {
-        grad.set_scalar(j, g);
+    if out.vec_len() != n {
+        *out = x.clone();
     }
-    Ok(grad)
+    for (j, g) in cols.into_iter().enumerate() {
+        out.set_scalar(j, g);
+    }
+    Ok(())
 }
 
 /// Forward-difference gradient `∇f(x)ⱼ ≈ (f(x+hⱼeⱼ) − f(x)) / hⱼ`.
@@ -450,6 +593,29 @@ pub fn forward_difference_gradient<P, V>(
     function_precision: f64,
     fixed_step: Option<f64>,
 ) -> Result<V, P::Error>
+where
+    P: CostFunction<Param = V, Output = f64> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex + MaybeSync,
+    P::Error: MaybeSend,
+{
+    let mut out = x.clone();
+    forward_difference_gradient_into(
+        problem,
+        x,
+        function_precision,
+        fixed_step,
+        &mut out,
+    )?;
+    Ok(out)
+}
+
+fn forward_difference_gradient_into<P, V>(
+    problem: &P,
+    x: &V,
+    function_precision: f64,
+    fixed_step: Option<f64>,
+    out: &mut V,
+) -> Result<(), P::Error>
 where
     P: CostFunction<Param = V, Output = f64> + MaybeSync,
     V: Clone + VectorLen + VectorIndex + MaybeSync,
@@ -470,11 +636,13 @@ where
             Ok((fp - f0) / h)
         },
     )?;
-    let mut grad = x.clone();
-    for (j, g) in cols.into_iter().enumerate() {
-        grad.set_scalar(j, g);
+    if out.vec_len() != n {
+        *out = x.clone();
     }
-    Ok(grad)
+    for (j, g) in cols.into_iter().enumerate() {
+        out.set_scalar(j, g);
+    }
+    Ok(())
 }
 
 /// Forward-difference Jacobian, column `j ≈ (r(x+hⱼeⱼ) − r(x)) / hⱼ`.
@@ -499,6 +667,34 @@ where
         + MaybeSend,
     P::Error: MaybeSend,
 {
+    let mut out = V::dense_from_fn(0, 0, |_, _| unreachable!());
+    forward_difference_jacobian_into(
+        problem,
+        x,
+        function_precision,
+        fixed_step,
+        &mut out,
+    )?;
+    Ok(out)
+}
+
+fn forward_difference_jacobian_into<P, V>(
+    problem: &P,
+    x: &V,
+    function_precision: f64,
+    fixed_step: Option<f64>,
+    out: &mut <V as DenseMatrixFromFn>::Matrix,
+) -> Result<(), P::Error>
+where
+    P: Residual<Param = V, Output = V> + MaybeSync,
+    V: Clone
+        + VectorLen
+        + VectorIndex
+        + DenseMatrixFromFn
+        + MaybeSync
+        + MaybeSend,
+    P::Error: MaybeSend,
+{
     let n = x.vec_len();
     let mut r0 = x.clone();
     problem.residual_into(x, &mut r0)?;
@@ -506,8 +702,8 @@ where
     let eps = function_precision.max(f64::EPSILON).sqrt();
     let columns = try_map_range_with(
         n,
-        || x.clone(),
-        |probe, j| {
+        || (x.clone(), r0.clone()),
+        |(probe, residual), j| {
             let xj = x.get_scalar(j);
             let h = match fixed_step {
                 Some(h) => h,
@@ -517,8 +713,8 @@ where
                 }
             };
             probe.set_scalar(j, xj + h);
-            let mut col = r0.clone();
-            problem.residual_into(probe, &mut col)?;
+            problem.residual_into(probe, residual)?;
+            let mut col = residual.clone();
             probe.set_scalar(j, xj);
             for i in 0..m {
                 col.set_scalar(i, (col.get_scalar(i) - r0.get_scalar(i)) / h);
@@ -526,7 +722,8 @@ where
             Ok(col)
         },
     )?;
-    Ok(V::dense_from_fn(m, n, |i, j| columns[j].get_scalar(i)))
+    V::dense_from_fn_into(m, n, |i, j| columns[j].get_scalar(i), out);
+    Ok(())
 }
 
 /// Central-difference Jacobian, column `j ≈ (r(x+hⱼeⱼ) − r(x−hⱼeⱼ)) / 2hⱼ`.
@@ -540,6 +737,34 @@ pub fn central_difference_jacobian<P, V>(
     function_precision: f64,
     fixed_step: Option<f64>,
 ) -> Result<<V as DenseMatrixFromFn>::Matrix, P::Error>
+where
+    P: Residual<Param = V, Output = V> + MaybeSync,
+    V: Clone
+        + VectorLen
+        + VectorIndex
+        + DenseMatrixFromFn
+        + MaybeSync
+        + MaybeSend,
+    P::Error: MaybeSend,
+{
+    let mut out = V::dense_from_fn(0, 0, |_, _| unreachable!());
+    central_difference_jacobian_into(
+        problem,
+        x,
+        function_precision,
+        fixed_step,
+        &mut out,
+    )?;
+    Ok(out)
+}
+
+fn central_difference_jacobian_into<P, V>(
+    problem: &P,
+    x: &V,
+    function_precision: f64,
+    fixed_step: Option<f64>,
+    out: &mut <V as DenseMatrixFromFn>::Matrix,
+) -> Result<(), P::Error>
 where
     P: Residual<Param = V, Output = V> + MaybeSync,
     V: Clone
@@ -576,7 +801,8 @@ where
             Ok(col)
         },
     )?;
-    Ok(V::dense_from_fn(m, n, |i, j| columns[j].get_scalar(i)))
+    V::dense_from_fn_into(m, n, |i, j| columns[j].get_scalar(i), out);
+    Ok(())
 }
 
 /// Central-difference Hessian (Numerical Recipes second differences).
@@ -591,6 +817,29 @@ pub fn central_difference_hessian<P, V>(
     function_precision: f64,
     fixed_step: Option<f64>,
 ) -> Result<<V as DenseMatrixFromFn>::Matrix, P::Error>
+where
+    P: CostFunction<Param = V, Output = f64> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + MaybeSync,
+    P::Error: MaybeSend,
+{
+    let mut out = V::dense_from_fn(0, 0, |_, _| unreachable!());
+    central_difference_hessian_into(
+        problem,
+        x,
+        function_precision,
+        fixed_step,
+        &mut out,
+    )?;
+    Ok(out)
+}
+
+fn central_difference_hessian_into<P, V>(
+    problem: &P,
+    x: &V,
+    function_precision: f64,
+    fixed_step: Option<f64>,
+    out: &mut <V as DenseMatrixFromFn>::Matrix,
+) -> Result<(), P::Error>
 where
     P: CostFunction<Param = V, Output = f64> + MaybeSync,
     V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + MaybeSync,
@@ -639,7 +888,8 @@ where
         hess[i * n + j] = v;
         hess[j * n + i] = v;
     }
-    Ok(V::dense_from_fn(n, n, |i, j| hess[i * n + j]))
+    V::dense_from_fn_into(n, n, |i, j| hess[i * n + j], out);
+    Ok(())
 }
 
 /// Forward-difference Hessian (one-sided second differences).
@@ -654,6 +904,29 @@ pub fn forward_difference_hessian<P, V>(
     function_precision: f64,
     fixed_step: Option<f64>,
 ) -> Result<<V as DenseMatrixFromFn>::Matrix, P::Error>
+where
+    P: CostFunction<Param = V, Output = f64> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + MaybeSync,
+    P::Error: MaybeSend,
+{
+    let mut out = V::dense_from_fn(0, 0, |_, _| unreachable!());
+    forward_difference_hessian_into(
+        problem,
+        x,
+        function_precision,
+        fixed_step,
+        &mut out,
+    )?;
+    Ok(out)
+}
+
+fn forward_difference_hessian_into<P, V>(
+    problem: &P,
+    x: &V,
+    function_precision: f64,
+    fixed_step: Option<f64>,
+    out: &mut <V as DenseMatrixFromFn>::Matrix,
+) -> Result<(), P::Error>
 where
     P: CostFunction<Param = V, Output = f64> + MaybeSync,
     V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + MaybeSync,
@@ -707,7 +980,8 @@ where
         hess[i * n + j] = v;
         hess[j * n + i] = v;
     }
-    Ok(V::dense_from_fn(n, n, |i, j| hess[i * n + j]))
+    V::dense_from_fn_into(n, n, |i, j| hess[i * n + j], out);
+    Ok(())
 }
 
 /// Euclidean norm via the scalar accessors; shared by the
@@ -758,13 +1032,39 @@ where
     P: Gradient<Param = V, Gradient = V, Output = f64>,
     V: Clone + VectorLen + VectorIndex,
 {
+    let mut out = x.clone();
+    forward_difference_hessian_product_into(
+        problem,
+        x,
+        v,
+        function_precision,
+        fixed_step,
+        &mut out,
+    )?;
+    Ok(out)
+}
+
+fn forward_difference_hessian_product_into<P, V>(
+    problem: &P,
+    x: &V,
+    v: &V,
+    function_precision: f64,
+    fixed_step: Option<f64>,
+    out: &mut V,
+) -> Result<(), <P as CostFunction>::Error>
+where
+    P: Gradient<Param = V, Gradient = V, Output = f64>,
+    V: Clone + VectorLen + VectorIndex,
+{
+    if out.vec_len() != v.vec_len() {
+        *out = v.clone();
+    }
     let v_norm = vec_norm(v);
     if v_norm == 0.0 {
-        let mut hv = v.clone();
-        for j in 0..hv.vec_len() {
-            hv.set_scalar(j, 0.0);
+        for j in 0..out.vec_len() {
+            out.set_scalar(j, 0.0);
         }
-        return Ok(hv);
+        return Ok(());
     }
     let h = match fixed_step {
         Some(h) => h,
@@ -773,13 +1073,13 @@ where
             eps.sqrt() * vec_norm(x).max(1.0) / v_norm
         }
     };
-    let g0 = problem.gradient(x)?;
-    let gp = problem.gradient(&probe_along(x, v, h))?;
-    let mut hv = v.clone();
-    for j in 0..hv.vec_len() {
-        hv.set_scalar(j, (gp.get_scalar(j) - g0.get_scalar(j)) / h);
+    let mut g0 = x.clone();
+    problem.gradient_into(x, &mut g0)?;
+    problem.gradient_into(&probe_along(x, v, h), out)?;
+    for j in 0..out.vec_len() {
+        out.set_scalar(j, (out.get_scalar(j) - g0.get_scalar(j)) / h);
     }
-    Ok(hv)
+    Ok(())
 }
 
 /// Central-difference Hessian-vector product
@@ -802,13 +1102,39 @@ where
     P: Gradient<Param = V, Gradient = V, Output = f64>,
     V: Clone + VectorLen + VectorIndex,
 {
+    let mut out = x.clone();
+    central_difference_hessian_product_into(
+        problem,
+        x,
+        v,
+        function_precision,
+        fixed_step,
+        &mut out,
+    )?;
+    Ok(out)
+}
+
+fn central_difference_hessian_product_into<P, V>(
+    problem: &P,
+    x: &V,
+    v: &V,
+    function_precision: f64,
+    fixed_step: Option<f64>,
+    out: &mut V,
+) -> Result<(), <P as CostFunction>::Error>
+where
+    P: Gradient<Param = V, Gradient = V, Output = f64>,
+    V: Clone + VectorLen + VectorIndex,
+{
+    if out.vec_len() != v.vec_len() {
+        *out = v.clone();
+    }
     let v_norm = vec_norm(v);
     if v_norm == 0.0 {
-        let mut hv = v.clone();
-        for j in 0..hv.vec_len() {
-            hv.set_scalar(j, 0.0);
+        for j in 0..out.vec_len() {
+            out.set_scalar(j, 0.0);
         }
-        return Ok(hv);
+        return Ok(());
     }
     let h = match fixed_step {
         Some(h) => h,
@@ -817,13 +1143,13 @@ where
             eps.cbrt() * vec_norm(x).max(1.0) / v_norm
         }
     };
-    let gp = problem.gradient(&probe_along(x, v, h))?;
-    let gm = problem.gradient(&probe_along(x, v, -h))?;
-    let mut hv = v.clone();
-    for j in 0..hv.vec_len() {
-        hv.set_scalar(j, (gp.get_scalar(j) - gm.get_scalar(j)) / (2.0 * h));
+    problem.gradient_into(&probe_along(x, v, h), out)?;
+    let mut gm = x.clone();
+    problem.gradient_into(&probe_along(x, v, -h), &mut gm)?;
+    for j in 0..out.vec_len() {
+        out.set_scalar(j, (out.get_scalar(j) - gm.get_scalar(j)) / (2.0 * h));
     }
-    Ok(hv)
+    Ok(())
 }
 
 /// Bound-aware first-derivative adapters.

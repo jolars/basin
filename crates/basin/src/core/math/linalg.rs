@@ -431,6 +431,20 @@ pub trait DenseMatrixFromFn<F = f64>: Sized {
         cols: usize,
         f: G,
     ) -> Self::Matrix;
+
+    /// Fill a `rows × cols` output, replacing its previous contents and shape.
+    ///
+    /// The default constructs a matrix through [`Self::dense_from_fn`]. Built-in
+    /// backends reuse storage when the shape matches. Calls `f` once per entry
+    /// in backend-defined order and requires no additional matrix capabilities.
+    fn dense_from_fn_into<G: FnMut(usize, usize) -> F>(
+        rows: usize,
+        cols: usize,
+        f: G,
+        out: &mut Self::Matrix,
+    ) {
+        *out = Self::dense_from_fn(rows, cols, f);
+    }
 }
 
 /// Read the shape and individual entries of a dense matrix.

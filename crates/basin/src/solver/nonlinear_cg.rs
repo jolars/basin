@@ -166,6 +166,8 @@ pub struct NonlinearCg<L, V, F: Scalar = f64> {
     eta: F,
     restart_interval: Option<u64>,
     direction: Option<V>,
+    #[cfg_attr(feature = "serde", serde(skip, default = "Option::default"))]
+    gradient_buffer: Option<V>,
     steepest: bool,
     steps_since_restart: u64,
 }
@@ -192,6 +194,7 @@ impl<L, V, F: Scalar> NonlinearCg<L, V, F> {
             eta: F::from_f64(0.01).unwrap(),
             restart_interval: None,
             direction: None,
+            gradient_buffer: None,
             steepest: true,
             steps_since_restart: 0,
         }
@@ -388,7 +391,10 @@ where
             if !usable_displacement(param, &next) {
                 return Ok(None);
             }
-            let (cost, gradient) = problem.cost_and_gradient(&next)?;
+            let (cost, gradient) = problem.cost_and_gradient_reusing(
+                &next,
+                self.gradient_buffer.take(),
+            )?;
             LineSearchEvaluation::new(next, cost, gradient)
         };
         Ok((evaluation.gradient.vec_len() == param.vec_len()
@@ -431,7 +437,9 @@ where
         self.direction = None;
         self.steepest = true;
         self.steps_since_restart = 0;
-        let (cost, gradient) = problem.cost_and_gradient(state.param())?;
+        let (cost, gradient) =
+            problem.cost_and_gradient_reusing(state.param(), None)?;
+        self.gradient_buffer = None;
         self.direction = Some(negative(&gradient));
         state
             .set_evaluation(cost, gradient)
@@ -493,6 +501,7 @@ where
             &evaluation.gradient,
             &direction,
         ));
+        self.gradient_buffer = state.take_evaluation().map(|(_, g)| g);
         state
             .replace(evaluation.param, evaluation.cost, evaluation.gradient)
             .expect("accepted gradient dimension was checked");

@@ -255,12 +255,14 @@ impl<F: Scalar> MoreThuente<F> {
 
         let mut stp = self.alpha_init;
 
+        let mut gradient_buffer = None;
         for _ in 0..self.maxfev {
             // Evaluate f(stp), g(stp): Fortran `task = 'FG'` callback.
             let mut trial = param.clone();
             trial.scaled_add(stp, direction);
             let counts_before = *problem.counts();
-            let result = problem.cost_and_gradient(&trial);
+            let result = problem
+                .cost_and_gradient_reusing(&trial, gradient_buffer.take());
             let slope = result.as_ref().ok().map(|(_, g)| g.dot(direction));
             if trace.enabled {
                 trace.trials.push(SearchTrial {
@@ -356,6 +358,8 @@ impl<F: Scalar> MoreThuente<F> {
                     stp, trial, f, g_full,
                 ));
             }
+
+            gradient_buffer = Some(g_full);
 
             // Step update via `dcstep`, with optional modified-function
             // path in stage 1 (Fortran lines 3600–3630).

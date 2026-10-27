@@ -22,7 +22,10 @@
 //! are forwarded. Losses and scale must remain fixed during a solve or exact
 //! continuation; changing them requires a fresh solve.
 
-use crate::core::math::{MatTransposeVec, Scalar, VectorIndex, VectorLen};
+use crate::SharedEvaluationBuffers;
+use crate::core::math::{
+    MatTransposeVec, MatTransposeVecInto, Scalar, VectorIndex, VectorLen,
+};
 use crate::core::problem::{CostFunction, Gradient, Jacobian, Residual};
 
 mod constraints;
@@ -162,10 +165,11 @@ impl<F: Scalar, L: LossFunction<F> + ?Sized> LossFunction<F> for &L {
 /// assert!((result.param()[0] - 1.0 / 3.0).abs() < 1e-7);
 /// ```
 #[derive(Clone, Copy, Debug)]
-pub struct RobustLeastSquares<P, L, F: Scalar = f64> {
+pub struct RobustLeastSquares<P, L, F: Scalar = f64, W = ()> {
     problem: P,
     loss: L,
     scale: F,
+    workspace: W,
 }
 
 impl<P, L, F: Scalar> RobustLeastSquares<P, L, F> {
@@ -175,9 +179,39 @@ impl<P, L, F: Scalar> RobustLeastSquares<P, L, F> {
             problem,
             loss,
             scale: F::one(),
+            workspace: (),
         }
     }
 
+    /// Retain raw residuals, Jacobians, and loss derivatives between requests.
+    ///
+    /// The first request seeds backend storage through the owned callbacks;
+    /// later requests call their in-place counterparts. Fused gradient requests
+    /// preserve the raw fused callback. Concurrent calls and clones share
+    /// synchronized scratch space, but every call reevaluates the problem.
+    /// The buffered gradient path requires [`MatTransposeVecInto`].
+    #[allow(clippy::type_complexity)]
+    pub fn with_evaluation_buffers(
+        self,
+    ) -> RobustLeastSquares<
+        P,
+        L,
+        F,
+        SharedEvaluationBuffers<P::Output, P::Jacobian, F>,
+    >
+    where
+        P: Jacobian,
+    {
+        RobustLeastSquares {
+            problem: self.problem,
+            loss: self.loss,
+            scale: self.scale,
+            workspace: SharedEvaluationBuffers::default(),
+        }
+    }
+}
+
+impl<P, L, F: Scalar, W> RobustLeastSquares<P, L, F, W> {
     /// Set the residual scale. Panics unless it is finite and strictly positive.
     pub fn with_scale(mut self, scale: F) -> Self {
         assert!(
@@ -212,7 +246,7 @@ struct Term<F> {
     curvature: F,
 }
 
-impl<P, L: LossFunction<F>, F: Scalar> RobustLeastSquares<P, L, F> {
+impl<P, L: LossFunction<F>, F: Scalar, W> RobustLeastSquares<P, L, F, W> {
     fn term(&self, r: F) -> Option<Term<F>> {
         if !r.is_finite() {
             return None;
@@ -331,7 +365,7 @@ where
     }
 }
 
-impl<P, L, F> crate::Constraints for RobustLeastSquares<P, L, F>
+impl<P, L, F, W> crate::Constraints for RobustLeastSquares<P, L, F, W>
 where
     P: crate::Constraints,
     F: crate::Scalar,
@@ -341,5 +375,95 @@ where
         &self,
     ) -> <Self::Set as crate::ConstraintDescription>::Borrowed<'_> {
         self.problem.constraints()
+    }
+}
+
+impl<P, L, R, M, F> CostFunction
+    for RobustLeastSquares<P, L, F, SharedEvaluationBuffers<R, M, F>>
+where
+    F: Scalar,
+    P: Residual<Output = R>,
+    R: VectorLen + VectorIndex<F>,
+    L: LossFunction<F>,
+{
+    type Param = P::Param;
+    type Output = F;
+    type Error = P::Error;
+    fn cost(&self, x: &P::Param) -> Result<F, P::Error> {
+        self.workspace.with_buffers(|buffers, _| {
+            if let Some(r) = &mut buffers.vector {
+                self.problem.residual_into(x, r)?;
+            } else {
+                buffers.vector = Some(self.problem.residual(x)?);
+            }
+            Ok(self.residual_cost(buffers.vector.as_ref().unwrap()))
+        })
+    }
+}
+
+impl<P, L, V, M, F> Gradient
+    for RobustLeastSquares<P, L, F, SharedEvaluationBuffers<V, M, F>>
+where
+    F: Scalar,
+    P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
+    M: MatTransposeVecInto<V, F>,
+    V: Clone + VectorLen + VectorIndex<F>,
+    L: LossFunction<F>,
+{
+    type Gradient = V;
+    fn gradient(&self, x: &V) -> Result<V, P::Error> {
+        let mut out = x.clone();
+        self.gradient_into(x, &mut out)?;
+        Ok(out)
+    }
+    fn gradient_into(&self, x: &V, out: &mut V) -> Result<(), P::Error> {
+        self.cost_and_gradient_into(x, out).map(|_| ())
+    }
+    fn cost_and_gradient(&self, x: &V) -> Result<(F, V), P::Error> {
+        let mut out = x.clone();
+        let cost = self.cost_and_gradient_into(x, &mut out)?;
+        Ok((cost, out))
+    }
+    fn cost_and_gradient_into(
+        &self,
+        x: &V,
+        out: &mut V,
+    ) -> Result<F, P::Error> {
+        self.workspace.with_buffers(|buffers, derivatives| {
+            match (&mut buffers.vector, &mut buffers.matrix) {
+                (Some(r), Some(j)) => {
+                    self.problem.residual_and_jacobian_into(x, r, j)?
+                }
+                _ => {
+                    let (r, j) = self.problem.residual_and_jacobian(x)?;
+                    buffers.vector = Some(r);
+                    buffers.matrix = Some(j);
+                }
+            }
+            let r = buffers.vector.as_ref().unwrap();
+            let j = buffers.matrix.as_ref().unwrap();
+            let cost = self.residual_cost(r);
+            derivatives.clear();
+            let mut valid = true;
+            for i in 0..r.vec_len() {
+                derivatives.push(self.term(r.get_scalar(i)).map_or_else(
+                    || {
+                        valid = false;
+                        F::nan()
+                    },
+                    |t| t.derivative,
+                ));
+            }
+            if out.vec_len() != x.vec_len() {
+                *out = x.clone();
+            }
+            j.mat_transpose_vec_into(derivatives, out);
+            if !valid {
+                for i in 0..out.vec_len() {
+                    out.set_scalar(i, F::nan());
+                }
+            }
+            Ok(cost)
+        })
     }
 }

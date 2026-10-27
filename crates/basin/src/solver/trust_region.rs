@@ -47,11 +47,13 @@ pub use steihaug::Steihaug;
 
 use std::marker::PhantomData;
 
+use crate::EvaluationBuffers;
 use crate::core::inner::InitialState;
 use crate::core::math::{
     Dot, MatVec, NegInPlace, NormSquared, Scalar, ScaleInPlace, ScaledAdd,
     VectorLen,
 };
+use crate::core::problem::buffers::BufferStorage;
 use crate::core::problem::{
     CostFunction, Gradient, Hessian, HessianProduct, Problem,
 };
@@ -104,11 +106,24 @@ pub(crate) trait Subproblem<V, M, F> {
 pub(crate) trait SubproblemHvp<V, F> {
     /// Approximately minimize `m(p) = gᵀp + ½ pᵀ B p` over `‖p‖ ≤ radius`,
     /// touching `B` only through `bv`.
+    #[cfg(test)]
     fn solve_hvp<E>(
         &self,
         gradient: &V,
         radius: F,
-        bv: impl FnMut(&V) -> Result<V, E>,
+        mut bv: impl FnMut(&V) -> Result<V, E>,
+    ) -> Result<Step<V, F>, E> {
+        self.solve_hvp_into(gradient, radius, |v, out| {
+            *out = bv(v)?;
+            Ok(())
+        })
+    }
+
+    fn solve_hvp_into<E>(
+        &self,
+        gradient: &V,
+        radius: F,
+        bv: impl FnMut(&V, &mut V) -> Result<(), E>,
     ) -> Result<Step<V, F>, E>;
 }
 
@@ -215,11 +230,11 @@ where
     F: Scalar,
     V: Clone + Dot<F> + NormSquared<F> + ScaleInPlace<F> + NegInPlace,
 {
-    fn solve_hvp<E>(
+    fn solve_hvp_into<E>(
         &self,
         g: &V,
         radius: F,
-        mut bv: impl FnMut(&V) -> Result<V, E>,
+        mut bv: impl FnMut(&V, &mut V) -> Result<(), E>,
     ) -> Result<Step<V, F>, E> {
         let g_norm = g.norm_squared().sqrt();
         if g_norm <= F::zero() {
@@ -232,7 +247,8 @@ where
                 hit_boundary: false,
             });
         }
-        let bg = bv(g)?;
+        let mut bg = g.clone();
+        bv(g, &mut bg)?;
         let gbg = g.dot(&bg);
         let tau = if gbg <= F::zero() {
             F::one()
@@ -453,7 +469,12 @@ where
 /// assert!(result.cost() < 1e-16);
 /// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct TrustRegion<Sub = Steihaug, F: Scalar = f64, Mode = ExactHessian> {
+pub struct TrustRegion<
+    Sub = Steihaug,
+    F: Scalar = f64,
+    Mode = ExactHessian,
+    W = (),
+> {
     subproblem: Sub,
     /// Current trust radius `Δ`, mutated across iterations. Reset to
     /// `initial_radius` by [`Solver::init`].
@@ -466,6 +487,8 @@ pub struct TrustRegion<Sub = Steihaug, F: Scalar = f64, Mode = ExactHessian> {
     #[cfg_attr(feature = "serde", serde(skip))]
     trials: Option<Vec<diagnostics::Trial<F>>>,
     mode: PhantomData<Mode>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    workspace: W,
 }
 
 /// Marker for [`TrustRegion`]'s default mode: the full Hessian matrix `B`
@@ -527,11 +550,36 @@ impl<Sub, F: Scalar> TrustRegion<Sub, F, MatrixFree> {
             rejected_step: false,
             trials: None,
             mode: PhantomData,
+            workspace: (),
         }
     }
 }
 
 impl<Sub, F: Scalar> TrustRegion<Sub, F> {
+    /// Retain a typed Hessian buffer between outer iterations.
+    ///
+    /// The matrix type is inferred from the problem. The first Hessian request
+    /// seeds the buffer through the owned callback; later requests call
+    /// [`Hessian::hessian_into`]. Fresh runs reevaluate the Hessian and permit
+    /// the callback to resize retained storage. Exact checkpoints retain it.
+    /// The original constructor and its backend bounds remain available.
+    pub fn with_evaluation_buffers<M>(
+        self,
+    ) -> TrustRegion<Sub, F, ExactHessian, EvaluationBuffers<(), M>> {
+        TrustRegion {
+            subproblem: self.subproblem,
+            radius: self.radius,
+            initial_radius: self.initial_radius,
+            max_radius: self.max_radius,
+            eta: self.eta,
+            max_inner: self.max_inner,
+            rejected_step: self.rejected_step,
+            trials: self.trials,
+            mode: PhantomData,
+            workspace: EvaluationBuffers::default(),
+        }
+    }
+
     /// Trust-region solver with an explicit subproblem strategy
     /// ([`Steihaug`], [`Dogleg`], [`MoreSorensen`], or [`CauchyPoint`]).
     pub fn with_subproblem(subproblem: Sub) -> Self {
@@ -545,11 +593,12 @@ impl<Sub, F: Scalar> TrustRegion<Sub, F> {
             rejected_step: false,
             trials: None,
             mode: PhantomData,
+            workspace: (),
         }
     }
 }
 
-impl<Sub, F: Scalar, Mode> TrustRegion<Sub, F, Mode> {
+impl<Sub, F: Scalar, Mode, W> TrustRegion<Sub, F, Mode, W> {
     /// Enable native trial records without changing the numerical policy.
     pub fn with_trial_diagnostics(mut self, enabled: bool) -> Self {
         self.trials = enabled.then(Vec::new);
@@ -607,7 +656,7 @@ impl<Sub, F: Scalar, Mode> TrustRegion<Sub, F, Mode> {
     }
 }
 
-impl<Sub, V, F, Mode> InitialState<V> for TrustRegion<Sub, F, Mode>
+impl<Sub, V, F, Mode, W> InitialState<V> for TrustRegion<Sub, F, Mode, W>
 where
     F: Scalar,
     V: Clone,
@@ -636,7 +685,8 @@ where
     state.reset();
     // A reused solver instance must restart from the configured radius.
     *radius = initial_radius;
-    let (cost, grad) = problem.cost_and_gradient(state.param())?;
+    let (cost, grad) =
+        problem.cost_and_gradient_reusing(state.param(), None)?;
     state
         .set_evaluation(cost, grad)
         .expect("gradient dimension differs from parameter");
@@ -670,7 +720,7 @@ where
     P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
     V: Clone + ScaledAdd<F> + NormSquared<F> + VectorLen,
 {
-    let (cost_old, g) = state
+    let (cost_old, mut g) = state
         .take_evaluation()
         .expect("trust region requires initialized progress");
 
@@ -800,13 +850,13 @@ where
             // Accept: move to the trial point and refresh the gradient
             // there (second-order information is recomputed by the next
             // iteration).
-            let g_new = problem.gradient(&trial)?;
+            problem.gradient_into(&trial, &mut g)?;
             if let Some(record) = trials.as_mut().and_then(|r| r.last_mut()) {
                 record.phase = diagnostics::Phase::Accepted;
                 record.counts_after = *problem.counts();
             }
             state
-                .replace(trial, cost_trial, g_new)
+                .replace(trial, cost_trial, g)
                 .expect("gradient dimension differs from parameter");
             return Ok((state, None, true));
         }
@@ -823,8 +873,8 @@ where
     Ok((state, None, false))
 }
 
-impl<P, Sub, V, M, F> Solver<P, FirstOrderState<V, F>>
-    for TrustRegion<Sub, F, ExactHessian>
+impl<P, Sub, V, M, F, W> Solver<P, FirstOrderState<V, F>>
+    for TrustRegion<Sub, F, ExactHessian, W>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>
@@ -832,6 +882,7 @@ where
         + Hessian<Hessian = M>,
     V: Clone + ScaledAdd<F> + NormSquared<F> + VectorLen,
     Sub: Subproblem<V, M, F>,
+    W: BufferStorage<(), M>,
 {
     type Error = P::Error;
 
@@ -859,20 +910,29 @@ where
         // One Hessian per outer iteration, reused across all inner radius
         // reductions at zero extra derivative evaluations (the gradient is
         // likewise fixed while x is).
-        let b = problem.hessian(state.param())?;
-        let subproblem = &self.subproblem;
-        let (state, reason, accepted) = tr_next_iter(
-            &mut self.radius,
-            self.max_radius,
-            self.eta,
-            self.max_inner,
-            &mut self.trials,
-            problem,
-            state,
-            |_, _, g, radius| Ok(subproblem.solve(g, &b, radius)),
-        )?;
-        self.rejected_step = !accepted;
-        Ok(crate::SolverStep::from((state, reason)))
+        self.workspace.with_buffers(|_, buffer| {
+            let b = if let Some(mut b) = buffer.take() {
+                problem.hessian_into(state.param(), &mut b)?;
+                b
+            } else {
+                problem.hessian(state.param())?
+            };
+            let subproblem = &self.subproblem;
+            let result = tr_next_iter(
+                &mut self.radius,
+                self.max_radius,
+                self.eta,
+                self.max_inner,
+                &mut self.trials,
+                problem,
+                state,
+                |_, _, g, radius| Ok(subproblem.solve(g, &b, radius)),
+            );
+            *buffer = Some(b);
+            let (state, reason, accepted) = result?;
+            self.rejected_step = !accepted;
+            Ok(crate::SolverStep::from((state, reason)))
+        })
     }
 }
 
@@ -924,8 +984,9 @@ where
             problem,
             state,
             |problem, x, g, radius| {
-                subproblem
-                    .solve_hvp(g, radius, |v| problem.hessian_product(x, v))
+                subproblem.solve_hvp_into(g, radius, |v, out| {
+                    problem.hessian_product_into(x, v, out)
+                })
             },
         )?;
         self.rejected_step = !accepted;

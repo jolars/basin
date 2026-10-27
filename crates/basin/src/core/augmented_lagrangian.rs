@@ -120,6 +120,15 @@ where
 {
     type Gradient = X;
     fn gradient(&self, x: &X) -> Result<X, <Self as CostFunction>::Error> {
+        let mut out = x.clone();
+        self.gradient_into(x, &mut out)?;
+        Ok(out)
+    }
+    fn gradient_into(
+        &self,
+        x: &X,
+        out: &mut X,
+    ) -> Result<(), <Self as CostFunction>::Error> {
         let c = self.problem.linear_residual(x).map_err(invalid)?;
         crate::core::constraint::model::dimension(
             crate::ConstraintBlock::LinearEqualities,
@@ -135,9 +144,18 @@ where
         self.problem
             .linear_transpose(&weights, &mut contribution)
             .map_err(invalid)?;
-        let mut g = self.problem.gradient(x)?;
-        g.scaled_add(F::one(), &contribution);
-        Ok(g)
+        self.problem.gradient_into(x, out)?;
+        out.scaled_add(F::one(), &contribution);
+        Ok(())
+    }
+    fn cost_and_gradient_into(
+        &self,
+        x: &X,
+        grad: &mut X,
+    ) -> Result<F, Self::Error> {
+        let cost = self.cost(x)?;
+        self.gradient_into(x, grad)?;
+        Ok(cost)
     }
 }
 

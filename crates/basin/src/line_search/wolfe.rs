@@ -140,6 +140,7 @@ where
         let mut phi_prev = phi0;
         let mut alpha = self.alpha_init.min(self.alpha_max);
 
+        let mut gradient_buffer = None;
         for i in 0..self.max_iter {
             let mut trial = param.clone();
             trial.scaled_add(alpha, direction);
@@ -151,13 +152,22 @@ where
                 || (i > 0 && phi >= phi_prev)
             {
                 return self.zoom(
-                    problem, param, direction, phi0, phi0_prime, alpha_prev,
-                    phi_prev, alpha,
+                    problem,
+                    param,
+                    direction,
+                    phi0,
+                    phi0_prime,
+                    alpha_prev,
+                    phi_prev,
+                    alpha,
+                    &mut gradient_buffer,
                 );
             }
 
-            let g_trial = problem.gradient(&trial)?;
+            let g_trial =
+                problem.gradient_reusing(&trial, gradient_buffer.take())?;
             let phi_prime = g_trial.dot(direction);
+            gradient_buffer = Some(g_trial);
 
             // Strong curvature satisfied → accept.
             if phi_prime.abs() <= -self.c2 * phi0_prime {
@@ -169,8 +179,15 @@ where
             // assumed inside zoom (matches N&W).
             if phi_prime >= F::zero() {
                 return self.zoom(
-                    problem, param, direction, phi0, phi0_prime, alpha, phi,
+                    problem,
+                    param,
+                    direction,
+                    phi0,
+                    phi0_prime,
+                    alpha,
+                    phi,
                     alpha_prev,
+                    &mut gradient_buffer,
                 );
             }
 
@@ -231,6 +248,7 @@ impl<F: Scalar> Wolfe<F> {
         mut alpha_lo: F,
         mut phi_lo: F,
         mut alpha_hi: F,
+        gradient_buffer: &mut Option<V>,
     ) -> Result<F, P::Error>
     where
         P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
@@ -250,8 +268,10 @@ impl<F: Scalar> Wolfe<F> {
             {
                 alpha_hi = alpha_j;
             } else {
-                let g_j = problem.gradient(&trial)?;
+                let g_j =
+                    problem.gradient_reusing(&trial, gradient_buffer.take())?;
                 let phi_j_prime = g_j.dot(direction);
+                *gradient_buffer = Some(g_j);
 
                 if phi_j_prime.abs() <= -self.c2 * phi0_prime {
                     return Ok(alpha_j);

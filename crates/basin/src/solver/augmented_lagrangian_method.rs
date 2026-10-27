@@ -507,10 +507,15 @@ where
                     )
             })
             .map(|r| {
-                let initial =
-                    al_wrapper.gradient(state.param())?.norm_infinity();
-                let final_norm =
-                    al_wrapper.gradient(r.state.param())?.norm_infinity();
+                let mut gradient = state.param().clone();
+                let initial = {
+                    al_wrapper.gradient_into(state.param(), &mut gradient)?;
+                    gradient.norm_infinity()
+                };
+                let final_norm = {
+                    al_wrapper.gradient_into(r.state.param(), &mut gradient)?;
+                    gradient.norm_infinity()
+                };
                 Ok::<_, Self::Error>((initial, final_norm))
             })
             .transpose();

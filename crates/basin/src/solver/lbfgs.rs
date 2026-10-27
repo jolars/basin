@@ -503,7 +503,8 @@ where
             &mut work.boxed,
         );
 
-        let (cost, grad) = problem.cost_and_gradient(state.param())?;
+        let (cost, grad) =
+            problem.cost_and_gradient_reusing(state.param(), None)?;
         state
             .set_evaluation(cost, grad)
             .expect("gradient dimension differs from parameter");
@@ -968,7 +969,10 @@ where
                     {
                         evaluation
                     } else {
-                        problem.cost_and_gradient(&param)?
+                        problem.cost_and_gradient_reusing(
+                            &param,
+                            history.gradient_buffer.take(),
+                        )?
                     };
                     // A line-search warning can select an invalid callback
                     // result. Keep the last finite iterate and use the normal
@@ -1114,6 +1118,7 @@ where
                 // Skip the update; matches Fortran's `nskip += 1` path.
                 let work = history.work.as_mut().unwrap();
                 work.updatd = false;
+                history.gradient_buffer = Some(g_v);
             }
 
             state
@@ -1158,7 +1163,8 @@ where
         self.trace.sequence = 0;
         self.line_search.reset();
         self.history = Some(History::new(self.m_capacity));
-        let (cost, grad) = problem.cost_and_gradient(state.param())?;
+        let (cost, grad) =
+            problem.cost_and_gradient_reusing(state.param(), None)?;
         state
             .set_evaluation(cost, grad)
             .expect("gradient dimension differs from parameter");
@@ -1297,7 +1303,10 @@ where
             } else {
                 let mut param = state.param().clone();
                 param.scaled_add(stp, &d_v);
-                let (cost, gradient) = problem.cost_and_gradient(&param)?;
+                let (cost, gradient) = problem.cost_and_gradient_reusing(
+                    &param,
+                    history.gradient_buffer.take(),
+                )?;
                 (param, cost, gradient)
             };
         if !finite_evaluation(&param_new, f_new, &g_new) {
@@ -1346,6 +1355,7 @@ where
             history.append_pair(s_v, y_v);
         }
 
+        history.gradient_buffer = Some(g_v);
         state
             .replace(param_new, f_new, g_new)
             .expect("gradient dimension differs from parameter");
