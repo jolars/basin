@@ -82,11 +82,12 @@ numerical work against analytic cases and reference implementations.
 ### Follow-up candidates
 
 - [ ] **Investigate central-difference Jacobian overhead.** Follow up on the
-  [Navette integration review](https://github.com/opticsWolf/Navette/pull/3#issuecomment-6431966233).
+  [Navette integration
+  review](https://github.com/opticsWolf/Navette/pull/3#issuecomment-6431966233).
   Compare bounded and unbounded probe counts, base-residual reuse, buffer
-  allocations, and parallel scheduling against Navette's built-in TRF.
-  Both integrations use central differences, so measure matched stencils
-  before attributing the slowdown to the difference scheme.
+  allocations, and parallel scheduling against Navette's built-in TRF. Both
+  integrations use central differences, so measure matched stencils before
+  attributing the slowdown to the difference scheme.
 - [ ] **Add iterative sparse least squares and Jacobian coloring.** Extend the
   full TRF work with Jacobian and transpose-Jacobian products, an LSMR
   solve, and the two-dimensional subspace method. Add sparsity-pattern-based
@@ -141,20 +142,23 @@ numerical work against analytic cases and reference implementations.
 - [ ] **Evaluate ITP for bracketed scalar roots.** Implement the Interpolate,
   Truncate, Project method of Oliveira and Takahashi (2021),
   [doi:10.1145/3423597](https://doi.org/10.1145/3423597), and benchmark it
-  against Brent and TOMS 748. Verify its bisection-based worst-case iteration
-  bound, including the zero-slack configuration, under the documented
-  tolerance and floating-point safeguards.
+  against Brent and TOMS 748. Verify its bisection-based worst-case
+  iteration bound, including the zero-slack configuration, under the
+  documented tolerance and floating-point safeguards.
 - [ ] **Add Ridder's scalar root method.** Keep the direct fallible callback,
   signed-value, and bracket-preservation contracts. Use analytic cases and
-  [SciPy's Ridder implementation](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.ridder.html)
-  as references, and cover extreme function scales and non-finite arithmetic.
-- [ ] **Add unbracketed Newton and secant root solving.** Accept initial
-  guesses without requiring a sign-changing interval, including for
+  [SciPy's Ridder
+  implementation](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.ridder.html)
+  as references, and cover extreme function scales and non-finite
+  arithmetic.
+- [ ] **Add unbracketed Newton and secant root solving.** Accept initial guesses
+  without requiring a sign-changing interval, including for
   even-multiplicity roots such as `(x - 1)^2 = 0`. Require explicit residual
   validation rather than accepting small steps alone. Keep these convergence
   and result contracts distinct from bracketed solves, and test zero
   derivatives, stagnation, divergence, and non-finite evaluations. See
-  [SciPy's Newton API](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.newton.html).
+  [SciPy's Newton
+  API](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.newton.html).
 - [ ] **Add batched independent scalar solves when a consumer needs them.**
   Build on the direct scalar root and bracketing APIs, preserving separate
   root and minimization convergence semantics. See [elementwise
@@ -163,9 +167,8 @@ numerical work against analytic cases and reference implementations.
   Powell's hybrid method or damped Newton, followed by Broyden, then assess
   Anderson acceleration and Newton-Krylov. Require residual-based root
   validation: convergence of a least-squares objective can leave a nonzero
-  residual.
-  Promote this work if a downstream consumer needs it, including access to
-  the final Jacobian for sensitivities. See [SciPy nonlinear
+  residual. Promote this work if a downstream consumer needs it, including
+  access to the final Jacobian for sensitivities. See [SciPy nonlinear
   roots](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.root.html).
 - [ ] **Evaluate COBYQA.** Add a quadratic-model method for nonlinear
   constraints if benchmarks justify it alongside COBYLA, BOBYQA, and LINCOA.
@@ -378,23 +381,22 @@ production solvers.
 
 - [x] **Add optional in-place derivative methods.** Extend the existing
   `residual_into` pattern with `gradient_into`, `jacobian_into`,
-  `hessian_into`, `batch_gradient_into`, and `hessian_product_into`.
-  Default implementations must delegate to the existing owned methods,
-  preserving existing implementations without adding trait bounds or
-  associated types. Define output shapes and error behavior consistently
-  with `residual_into`; callers may supply buffers with arbitrary contents
-  and shapes.
-- [x] **Add optional in-place fused evaluations.** Add
-  `cost_and_gradient_into`, `residual_and_jacobian_into`, and
-  `cost_and_gradient_and_hessian_into`. Their defaults must delegate to the
-  existing fused callbacks so downstream overrides retain their shared
-  computation and behavior. Return scalar costs by value and write vector
-  and matrix outputs into caller-owned buffers. Document that overriding
-  only a separate derivative method does not optimize the default fused path.
-- [ ] **Use the in-place methods throughout evaluation and solver paths.**
-  Add counted `Problem` methods, forward overrides through adapters, and
-  reuse solver-owned buffers in optimizers and finite differences. Preserve
-  fused dispatch, evaluation counts, callback errors, non-finite handling,
+  `hessian_into`, `batch_gradient_into`, and `hessian_product_into`. Default
+  implementations must delegate to the existing owned methods, preserving
+  existing implementations without adding trait bounds or associated types.
+  Define output shapes and error behavior consistently with `residual_into`;
+  callers may supply buffers with arbitrary contents and shapes.
+- [x] **Add optional in-place fused evaluations.** Add `cost_and_gradient_into`,
+  `residual_and_jacobian_into`, and `cost_and_gradient_and_hessian_into`.
+  Their defaults must delegate to the existing fused callbacks so downstream
+  overrides retain their shared computation and behavior. Return scalar
+  costs by value and write vector and matrix outputs into caller-owned
+  buffers. Document that overriding only a separate derivative method does
+  not optimize the default fused path.
+- [ ] **Use the in-place methods throughout evaluation and solver paths.** Add
+  counted `Problem` methods, forward overrides through adapters, and reuse
+  solver-owned buffers in optimizers and finite differences. Preserve fused
+  dispatch, evaluation counts, callback errors, non-finite handling,
   fresh-run resets, and exact continuation. Test default fallbacks and
   overrides, buffer reuse and resizing, and all supported backends with
   `f32` and `f64` where applicable. Keep the owned APIs available; these
@@ -627,7 +629,7 @@ and callback-domain contract; `RelaxedInner` does not provide that contract.
 
 - [x] **Prototype shared progress states with solver-owned machinery.** Follow
   the [state and lifecycle
-  contracts](CONTRIBUTING.md#state-and-lifecycle-contracts). Exercise BFGS
+  contracts](CONTRIBUTING.md#state-and-lifecyclecontracts). Exercise BFGS
   and L-BFGS for ownership and backend inference, Nelder-Mead for
   observation, and simulated annealing for continuation. Preserve Basin 1.x
   public APIs and behavior while evaluating compatible additions.
