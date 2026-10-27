@@ -17,7 +17,7 @@ instead. The unbounded finite-difference API currently requires `f64`.
 | Operation | Parameter dimensions | Residual dimensions |
 | --- | --- | --- |
 | Gradient, fused cost/gradient, and Hessian-vector product | 4, 256 | None |
-| Hessian and fused cost/gradient/Hessian | 4, 64 | None |
+| Hessian and fused cost/gradient/Hessian | 4, 64, 256 | None |
 | Jacobian and fused residual/Jacobian | 4, 16, 64, 256 | 16, 4, 256, 64, respectively |
 
 Each operation has forward and central stencils, cheap and expensive callbacks,
@@ -34,6 +34,12 @@ Jacobians, diagonal Hessians, and Hessian-vector products. Validation checks
 every output entry, matrix dimensions, fused values, and exact Hessian symmetry
 outside the measured region. Tolerances account for each stencil's truncation
 and roundoff error.
+
+The `n=256` Hessian cases expose assembly storage at larger dimensions. Use
+`--filter hessian/cheap/` for allocation accounting of both Hessian and fused
+cost/gradient/Hessian calls, or the Criterion regex
+`numdiff/.*/hessian/cheap/.*/n256_m0/` to time Hessians on every backend.
+Keep owned and reused-output results separate.
 
 Hessian-vector products use `FiniteDiff`'s fallback that differences its own
 numerical gradients, with the selected stencil at both levels. A fixed step of
@@ -70,8 +76,8 @@ RAYON_NUM_THREADS=4 cargo run --release -p competitor-bench \
 Each CSV row reports **totals over the `repeats` column**, not per-request
 averages. Divide by that column for a per-request comparison. `--filter
 SUBSTRING` selects matching benchmark names, and an unmatched filter fails.
-For example, `--filter numdiff/vec/hessian/cheap/central/` selects the two Vec
-Hessian sizes and both output APIs. Without a filter, there are 832 rows.
+For example, `--filter numdiff/vec/hessian/cheap/central/` selects the three Vec
+Hessian sizes and both output APIs. Without a filter, there are 960 rows.
 
 The callback pass counts calls at the wrapped function boundary, including
 callbacks on Rayon workers. `cost_calls` counts underlying objective calls.

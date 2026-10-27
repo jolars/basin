@@ -82,9 +82,7 @@
 //! feature there is no such bound and the evaluation is sequential.
 
 use crate::core::math::{DenseMatrixFromFn, VectorIndex, VectorLen};
-use crate::core::parallel::{
-    MaybeSend, MaybeSync, try_map_range_with, try_map_slice_with,
-};
+use crate::core::parallel::{MaybeSend, MaybeSync, try_map_range_with};
 use crate::core::problem::{
     CostFunction, Gradient, Hessian, HessianProduct, Jacobian, Residual,
 };
@@ -953,6 +951,41 @@ where
     Ok(())
 }
 
+struct HessianTriangle {
+    row_offsets: Vec<usize>,
+    len: usize,
+}
+
+impl HessianTriangle {
+    fn new(n: usize) -> Self {
+        let mut len = 0;
+        let row_offsets = (0..n)
+            .map(|i| {
+                let offset = len;
+                len += n - i;
+                offset
+            })
+            .collect();
+        Self { row_offsets, len }
+    }
+
+    fn coordinates(&self, index: usize, row: &mut usize) -> (usize, usize) {
+        // Consecutive probes usually share a row, including within Rayon tasks.
+        let start = self.row_offsets[*row];
+        if index < start || index - start >= self.row_offsets.len() - *row {
+            *row =
+                self.row_offsets.partition_point(|&offset| offset <= index) - 1;
+        }
+        let i = *row;
+        (i, i + index - self.row_offsets[i])
+    }
+
+    fn symmetric_index(&self, i: usize, j: usize) -> usize {
+        let row = i.min(j);
+        self.row_offsets[row] + i.max(j) - row
+    }
+}
+
 /// Central-difference Hessian (Numerical Recipes second differences).
 ///
 /// Diagonal `Hᵢᵢ = (f(x+hᵢeᵢ) − 2f(x) + f(x−hᵢeᵢ)) / hᵢ²`; off-diagonal the
@@ -1022,13 +1055,13 @@ where
     let h: Vec<f64> = (0..n)
         .map(|j| nr_step(x.get_scalar(j), scale, fixed_step))
         .collect();
-    // Upper-triangular entries (i ≤ j); each is independent given `f0`/`h`.
-    let pairs: Vec<(usize, usize)> =
-        (0..n).flat_map(|i| (i..n).map(move |j| (i, j))).collect();
-    let values = try_map_slice_with(
-        &pairs,
-        || x.clone(),
-        |probe, &(i, j)| {
+    // Row offsets avoid storing a pair of indices for every packed entry.
+    let triangle = HessianTriangle::new(n);
+    let values = try_map_range_with(
+        triangle.len,
+        || (x.clone(), 0),
+        |(probe, row), index| {
+            let (i, j) = triangle.coordinates(index, row);
             let xi = x.get_scalar(i);
             if i == j {
                 probe.set_scalar(i, xi + h[i]);
@@ -1054,12 +1087,12 @@ where
             }
         },
     )?;
-    let mut hess = vec![0.0_f64; n * n];
-    for (&(i, j), &v) in pairs.iter().zip(&values) {
-        hess[i * n + j] = v;
-        hess[j * n + i] = v;
-    }
-    V::dense_from_fn_into(n, n, |i, j| hess[i * n + j], out);
+    V::dense_from_fn_into(
+        n,
+        n,
+        |i, j| values[triangle.symmetric_index(i, j)],
+        out,
+    );
     Ok(())
 }
 
@@ -1144,13 +1177,12 @@ where
             Ok(f)
         },
     )?;
-    // Upper-triangular entries (i ≤ j); each is independent given `fi`/`f0`/`h`.
-    let pairs: Vec<(usize, usize)> =
-        (0..n).flat_map(|i| (i..n).map(move |j| (i, j))).collect();
-    let values = try_map_slice_with(
-        &pairs,
-        || x.clone(),
-        |probe, &(i, j)| {
+    let triangle = HessianTriangle::new(n);
+    let values = try_map_range_with(
+        triangle.len,
+        || (x.clone(), 0),
+        |(probe, row), index| {
+            let (i, j) = triangle.coordinates(index, row);
             let xi = x.get_scalar(i);
             let cross = if i == j {
                 probe.set_scalar(i, xi + 2.0 * h[i]);
@@ -1169,12 +1201,12 @@ where
             Ok((cross - fi[i] - fi[j] + f0) / (h[i] * h[j]))
         },
     )?;
-    let mut hess = vec![0.0_f64; n * n];
-    for (&(i, j), &v) in pairs.iter().zip(&values) {
-        hess[i * n + j] = v;
-        hess[j * n + i] = v;
-    }
-    V::dense_from_fn_into(n, n, |i, j| hess[i * n + j], out);
+    V::dense_from_fn_into(
+        n,
+        n,
+        |i, j| values[triangle.symmetric_index(i, j)],
+        out,
+    );
     Ok(())
 }
 

@@ -401,7 +401,7 @@ backends and scalar types.
   unbounded forward cost-and-gradient request should use `n + 1` underlying
   cost calls instead of `n + 2`. Add callback-count and numerical regression
   tests for both wrappers, stencil choices, and empty parameter vectors.
-- [ ] **Remove redundant Hessian assembly storage.** Both Hessian kernels
+- [x] **Remove redundant Hessian assembly storage.** Both Hessian kernels
   allocate explicit upper-triangle index pairs, packed values, and a full
   temporary matrix before filling the output. Generate indices implicitly
   or in row blocks, and fill the backend matrix from packed values directly.

@@ -252,7 +252,7 @@ pub fn cases() -> Vec<Case> {
                 let shapes: &[(usize, usize)] = if kernel.is_jacobian() {
                     &[(4, 16), (16, 4), (64, 256), (256, 64)]
                 } else if kernel.is_hessian() {
-                    &[(4, 0), (64, 0)]
+                    &[(4, 0), (64, 0), (256, 0)]
                 } else {
                     &[(4, 0), (256, 0)]
                 };
