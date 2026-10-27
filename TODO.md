@@ -378,6 +378,93 @@ production solvers.
 
 ## General design
 
+### Finite-difference performance
+
+Source review of `core/numdiff.rs` and its child modules on 2026-10-27.
+These are optimization candidates; speedups have not been measured. Preserve
+stencils, step rules, feasible probes, error propagation, and request-count
+semantics. Keep each entry's arithmetic order unchanged to preserve bitwise
+results for deterministic callbacks. Verify changed kernels across supported
+backends and scalar types.
+
+- [ ] **Establish finite-difference benchmarks.** Add focused cases for
+  gradients, rectangular Jacobians, Hessians, and Hessian-vector products,
+  covering owned and `*_into` calls, cheap and expensive callbacks, and small
+  and large dimensions. Compare sequential builds with `parallel` at one and
+  multiple threads. Measure raw callback counts and allocations separately
+  from uninstrumented timings, including repeated calls with reused outputs.
+- [ ] **Reuse base costs in fused derivative calls.** Pass the cost already
+  computed by `cost_and_gradient_into` into forward-gradient and bounded
+  probe kernels. Share it with the Hessian in the three-output callback,
+  and route owned fused methods through the same implementation. An
+  unbounded forward cost-and-gradient request should use `n + 1` underlying
+  cost calls instead of `n + 2`. Add callback-count and numerical regression
+  tests for both wrappers, stencil choices, and empty parameter vectors.
+- [ ] **Remove redundant Hessian assembly storage.** Both Hessian kernels
+  allocate explicit upper-triangle index pairs, packed values, and a full
+  temporary matrix before filling the output. Generate indices implicitly
+  or in row blocks, and fill the backend matrix from packed values directly.
+  Compare allocation counts, requested bytes, and timings at larger `n`;
+  preserve exact symmetry and each entry's arithmetic order.
+- [ ] **Use scalar probe results for bounded gradients.** Replace the
+  `vec![f]` callback adapter and one-element column vectors with a scalar
+  kernel that shares the bound-aware stencil rules. Cover `f32` and `f64`,
+  fixed coordinates, adjacent-float bounds, and one-sided central stencils.
+  Measure allocations with a cheap objective to expose the adapter overhead.
+- [ ] **Remove temporary gradient result vectors.** Gradient `*_into`
+  kernels collect a temporary vector before copying into the output.
+  Benchmark direct sequential writes and reusable or chunked parallel
+  staging. Preserve shape replacement and the documented output-on-error
+  contract, and measure repeated calls with an already sized output.
+- [ ] **Reduce Jacobian column allocation and copying.** Both unbounded
+  Jacobian kernels clone residual vectors into separately allocated columns,
+  then copy those columns into the backend matrix. Compare flat or chunked
+  staging, reusable column storage, and direct sequential matrix fills.
+  Include tall and wide Jacobians, storage orders across backends, and
+  callbacks that override `residual_into` to reuse their output buffers.
+- [ ] **Reuse HVP probe and gradient scratch.** The HVP helpers clone `x`
+  to construct directional probes and temporary gradients on every call.
+  Measure repeated products at one point and assess reusing those buffers
+  through caller-owned scratch where justified. Preserve zero-direction
+  behavior, output resizing, thread safety, and the wrappers' existing
+  `Clone` and `Copy` contracts.
+- [ ] **Tune Rayon task and scratch granularity.** The parallel map helpers
+  use `map_init`, which initializes scratch per job rather than guaranteeing
+  one buffer per worker. Count probe-buffer clones and compare minimum job
+  lengths or chunked tasks for gradients, Jacobians, and Hessians. Measure
+  small cheap cases as well as expensive callbacks before choosing a serial
+  fallback or exposing a granularity control. Correct the per-thread wording
+  in the helper documentation.
+- [ ] **Remove forward-Hessian probe barriers.** Schedule base,
+  single-coordinate, and two-coordinate evaluations together, then combine
+  their results. The probe evaluations do not depend on each other; their
+  final arithmetic needs the shared results. Compare low-dimensional cases
+  and uneven callback costs across thread counts, keeping probe counts fixed.
+- [ ] **Overlap base evaluations with derivative probes.** Evaluate `f(x)`
+  or `r(x)` concurrently with the independent probes for forward gradients
+  and Jacobians, then form differences once the base is available. Apply the
+  same assessment to the central Hessian's base cost. Preserve residual shape
+  checks, empty-input behavior, base reuse, and hard-error propagation.
+- [ ] **Overlap independent work in fused derivative calls.** Compare
+  concurrent cost and central-gradient evaluations, overlapping gradient and
+  Hessian probe sets, and concurrent base-residual and central-Jacobian
+  evaluations. Reuse shared base values in forward stencils first. Measure
+  the benefit when inner derivative loops already use the Rayon pool, and
+  account for any additional vector or matrix thread-safety bounds.
+- [ ] **Parallelize independent HVP gradient evaluations.** Compare a
+  feature-gated `rayon::join` for the two gradient calls in both forward and
+  central HVPs. Include expensive analytic gradients and synthesized
+  gradients to expose nested overhead. Explicitly address compatibility
+  before adding `Send` or `Sync` bounds to the currently unrestricted HVP
+  free functions, and retain the zero-direction shortcut.
+- [ ] **Evaluate parallelism within central stencils.** Expose the positive
+  and negative gradient and Jacobian probes, and the four off-diagonal
+  Hessian probes, as separate tasks when the existing column or entry tasks
+  cannot occupy the pool. Compare flattened probe batches with selective
+  joins, including extra scratch memory, cloning, and scheduling costs.
+  Keep all new threading behind `parallel` and preserve the sequential WASM
+  path.
+
 ### In-place problem evaluation
 
 - [ ] **Make evaluation buffer reuse automatic in Basin 4.0.** Replace the
