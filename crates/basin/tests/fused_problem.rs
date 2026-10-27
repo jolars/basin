@@ -52,6 +52,33 @@ impl Gradient for Sphere {
     }
 }
 
+impl basin::Residual for Sphere {
+    type Param = Vec<f64>;
+    type Output = Vec<f64>;
+    type Error = std::convert::Infallible;
+
+    fn residual(&self, x: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
+        Ok(x.clone())
+    }
+}
+
+impl basin::Jacobian for Sphere {
+    type Jacobian = basin::DenseMatrix<f64>;
+
+    fn jacobian(
+        &self,
+        x: &Vec<f64>,
+    ) -> Result<Self::Jacobian, std::convert::Infallible> {
+        Ok(basin::DenseMatrix::from_row_slice(
+            x.len(),
+            x.len(),
+            &(0..x.len())
+                .flat_map(|i| (0..x.len()).map(move |j| f64::from(i == j)))
+                .collect::<Vec<_>>(),
+        ))
+    }
+}
+
 #[test]
 fn default_fused_matches_separate_calls() {
     let p = Sphere;
@@ -59,6 +86,24 @@ fn default_fused_matches_separate_calls() {
     let (fused_cost, fused_grad) = p.cost_and_gradient(&x).unwrap();
     assert_eq!(fused_cost, p.cost(&x).unwrap());
     assert_eq!(fused_grad, p.gradient(&x).unwrap());
+    let mut gradient = vec![];
+    let cost = p.cost_and_gradient_into(&x, &mut gradient).unwrap();
+    assert_eq!(cost, fused_cost);
+    assert_eq!(gradient, fused_grad);
+}
+
+#[test]
+fn default_fused_residual_into_matches_separate_calls() {
+    use basin::{Jacobian, Residual};
+
+    let x = vec![1.5, -2.25, 0.5];
+    let mut residual = vec![];
+    let mut jacobian = basin::DenseMatrix::from_row_slice(0, 0, &[]);
+    Sphere
+        .residual_and_jacobian_into(&x, &mut residual, &mut jacobian)
+        .unwrap();
+    assert_eq!(residual, Sphere.residual(&x).unwrap());
+    assert_eq!(jacobian, Sphere.jacobian(&x).unwrap());
 }
 
 #[test]
@@ -230,6 +275,12 @@ mod hessian {
         assert_eq!(c, p.cost(&x).unwrap());
         assert_eq!(g, p.gradient(&x).unwrap());
         assert_eq!(h, p.hessian(&x).unwrap());
+        let mut gradient = DVector::zeros(0);
+        let mut hessian = DMatrix::zeros(0, 0);
+        let cost = p
+            .cost_and_gradient_and_hessian_into(&x, &mut gradient, &mut hessian)
+            .unwrap();
+        assert_eq!((cost, gradient, hessian), (c, g, h));
     }
 
     /// User overrides `cost_and_gradient_and_hessian` to share work.

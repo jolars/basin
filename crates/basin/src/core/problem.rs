@@ -254,6 +254,31 @@ pub trait Gradient: CostFunction {
     ) -> Result<(Self::Output, Self::Gradient), Self::Error> {
         Ok((self.cost(param)?, self.gradient(param)?))
     }
+
+    /// Evaluate cost and gradient, writing the gradient into a caller-owned
+    /// buffer and returning the cost by value.
+    ///
+    /// On success, the cost and `gradient` must equal
+    /// [`cost_and_gradient`](Self::cost_and_gradient) at `param`, including
+    /// the gradient's shape, which must match `param`. The buffer's previous
+    /// contents and shape are unspecified; resize or replace it as needed.
+    /// On error, its contents are unspecified. The purity and hard-abort
+    /// contracts of `cost_and_gradient` also apply here.
+    ///
+    /// The default calls `cost_and_gradient` once and replaces `gradient`
+    /// with the owned result, preserving existing fused overrides. Override
+    /// this method to reuse storage and share computation. Overriding only
+    /// [`gradient_into`](Self::gradient_into) does not optimize this default
+    /// fused path.
+    fn cost_and_gradient_into(
+        &self,
+        param: &Self::Param,
+        gradient: &mut Self::Gradient,
+    ) -> Result<Self::Output, Self::Error> {
+        let (cost, grad) = self.cost_and_gradient(param)?;
+        *gradient = grad;
+        Ok(cost)
+    }
 }
 
 /// Finite-sum gradient `(1/|B|) Σ_{i ∈ B} ∇fᵢ(x)` over a chosen subset
@@ -626,6 +651,34 @@ pub trait Jacobian: Residual {
     > {
         Ok((self.residual(param)?, self.jacobian(param)?))
     }
+
+    /// Evaluate residual and Jacobian into caller-owned buffers.
+    ///
+    /// On success, `residual` and `jacobian` must equal
+    /// [`residual_and_jacobian`](Self::residual_and_jacobian) at `param`,
+    /// including their shapes: residual length `m` and Jacobian shape
+    /// `m × n`, where `n` is the parameter length. The buffers' previous
+    /// contents and shapes are unspecified; resize or replace them as needed.
+    /// On error, their contents are unspecified. The purity and hard-abort
+    /// contracts of `residual_and_jacobian` also apply here.
+    ///
+    /// The default calls `residual_and_jacobian` once and replaces both
+    /// buffers with the owned results, preserving existing fused overrides.
+    /// Override this method to reuse storage and share computation.
+    /// Overriding only [`Residual::residual_into`] or
+    /// [`jacobian_into`](Self::jacobian_into) does not optimize this default
+    /// fused path.
+    fn residual_and_jacobian_into(
+        &self,
+        param: &Self::Param,
+        residual: &mut <Self as Residual>::Output,
+        jacobian: &mut Self::Jacobian,
+    ) -> Result<(), <Self as Residual>::Error> {
+        let (res, jac) = self.residual_and_jacobian(param)?;
+        *residual = res;
+        *jacobian = jac;
+        Ok(())
+    }
 }
 
 /// Analytic Hessian `H(x) = ∇²f(x): Param → Hessian` for second-order
@@ -766,6 +819,37 @@ pub trait Hessian: Gradient {
     > {
         let (cost, grad) = self.cost_and_gradient(param)?;
         Ok((cost, grad, self.hessian(param)?))
+    }
+
+    /// Evaluate cost, gradient, and Hessian, writing derivatives into
+    /// caller-owned buffers and returning the cost by value.
+    ///
+    /// On success, the cost, `gradient`, and `hessian` must equal
+    /// [`cost_and_gradient_and_hessian`](Self::cost_and_gradient_and_hessian)
+    /// at `param`, including their shapes: gradient length `n` and symmetric
+    /// Hessian shape `n × n`, where `n` is the parameter length. The buffers'
+    /// previous contents and shapes are unspecified; resize or replace them
+    /// as needed. On error, their contents are unspecified. The purity and
+    /// hard-abort contracts of `cost_and_gradient_and_hessian` also apply here.
+    ///
+    /// The default calls `cost_and_gradient_and_hessian` once and replaces
+    /// both buffers with the owned results, preserving existing fused
+    /// overrides. Override this method to reuse storage and share computation.
+    /// Overriding only [`Gradient::gradient_into`] or
+    /// [`hessian_into`](Self::hessian_into) does not optimize this default
+    /// fused path. Overriding only [`Gradient::cost_and_gradient_into`] does
+    /// not optimize it either.
+    fn cost_and_gradient_and_hessian_into(
+        &self,
+        param: &Self::Param,
+        gradient: &mut Self::Gradient,
+        hessian: &mut Self::Hessian,
+    ) -> Result<<Self as CostFunction>::Output, <Self as CostFunction>::Error>
+    {
+        let (cost, grad, hess) = self.cost_and_gradient_and_hessian(param)?;
+        *gradient = grad;
+        *hessian = hess;
+        Ok(cost)
     }
 }
 

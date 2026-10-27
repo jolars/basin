@@ -384,7 +384,7 @@ production solvers.
   associated types. Define output shapes and error behavior consistently
   with `residual_into`; callers may supply buffers with arbitrary contents
   and shapes.
-- [ ] **Add optional in-place fused evaluations.** Add
+- [x] **Add optional in-place fused evaluations.** Add
   `cost_and_gradient_into`, `residual_and_jacobian_into`, and
   `cost_and_gradient_and_hessian_into`. Their defaults must delegate to the
   existing fused callbacks so downstream overrides retain their shared
