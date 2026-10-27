@@ -301,20 +301,10 @@ where
     )
 }
 
-fn columns_into<V, R, F, E, C>(
-    x: &V,
-    options: Options<F>,
-    bounds: Option<(&[F], &[F])>,
-    mut base: R,
-    scratch: impl Fn(&R) -> R + MaybeSync,
-    evaluate: C,
-) -> Result<(usize, Vec<Vec<F>>), E>
+fn validate_point<V, F>(x: &V, bounds: Option<(&[F], &[F])>)
 where
-    V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
-    R: Clone + VectorLen + VectorIndex<F> + MaybeSync,
-    F: Scalar + MaybeSync + MaybeSend,
-    E: MaybeSend,
-    C: Fn(&V, &mut R) -> Result<(), E> + MaybeSync,
+    V: VectorLen + VectorIndex<F>,
+    F: Scalar,
 {
     if let Some((lo, hi)) = bounds {
         assert_eq!(
@@ -335,7 +325,43 @@ where
             "finite-difference point is outside its bounds"
         );
     }
+}
+
+fn columns_into<V, R, F, E, C>(
+    x: &V,
+    options: Options<F>,
+    bounds: Option<(&[F], &[F])>,
+    mut base: R,
+    scratch: impl Fn(&R) -> R + MaybeSync,
+    evaluate: C,
+) -> Result<(usize, Vec<Vec<F>>), E>
+where
+    V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
+    R: Clone + VectorLen + VectorIndex<F> + MaybeSync,
+    F: Scalar + MaybeSync + MaybeSend,
+    E: MaybeSend,
+    C: Fn(&V, &mut R) -> Result<(), E> + MaybeSync,
+{
+    validate_point(x, bounds);
     evaluate(x, &mut base)?;
+    columns_with_base(x, options, bounds, &base, scratch, evaluate)
+}
+
+fn columns_with_base<V, R, F, E, C>(
+    x: &V,
+    options: Options<F>,
+    bounds: Option<(&[F], &[F])>,
+    base: &R,
+    scratch: impl Fn(&R) -> R + MaybeSync,
+    evaluate: C,
+) -> Result<(usize, Vec<Vec<F>>), E>
+where
+    V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
+    R: Clone + VectorLen + VectorIndex<F> + MaybeSync,
+    F: Scalar + MaybeSync + MaybeSend,
+    E: MaybeSend,
+    C: Fn(&V, &mut R) -> Result<(), E> + MaybeSync,
+{
     let m = base.vec_len();
     let precision = options.precision.max(F::epsilon());
     let scale = if matches!(options.method, Method::Forward) {
@@ -346,7 +372,7 @@ where
     let evaluate = &evaluate;
     let columns = try_map_range_with(
         x.vec_len(),
-        || (x.clone(), scratch(&base)),
+        || (x.clone(), scratch(base)),
         |(probe, residual), j| {
             let value = x.get_scalar(j);
             let mut h = options.step.unwrap_or_else(|| {
@@ -469,14 +495,34 @@ where
         V::dense_from_fn_into(m, x.vec_len(), |i, j| cols[j][i], out);
         Ok(())
     }
+    fn residual_and_jacobian(
+        &self,
+        x: &V,
+    ) -> Result<(V, Self::Jacobian), P::Error> {
+        let mut res = x.clone();
+        let mut jac = V::dense_from_fn(0, 0, |_, _| unreachable!());
+        self.residual_and_jacobian_into(x, &mut res, &mut jac)?;
+        Ok((res, jac))
+    }
     fn residual_and_jacobian_into(
         &self,
         x: &V,
         res: &mut V,
         jac: &mut Self::Jacobian,
     ) -> Result<(), P::Error> {
+        let bounds = Some((&self.lower[..], &self.upper[..]));
+        validate_point(x, bounds);
         self.residual_into(x, res)?;
-        self.jacobian_into(x, jac)
+        let (m, cols) = columns_with_base(
+            x,
+            self.options(true),
+            bounds,
+            res,
+            Clone::clone,
+            |x, out| self.problem.residual_into(x, out),
+        )?;
+        V::dense_from_fn_into(m, x.vec_len(), |i, j| cols[j][i], jac);
+        Ok(())
     }
 }
 

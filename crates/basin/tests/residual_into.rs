@@ -321,43 +321,84 @@ where
     V::Matrix: MatrixIndex<F>,
     F: Scalar + Send + Sync,
 {
+    let zero = F::zero();
+    let one = F::one();
     for method in [Method::Forward, Method::Central] {
-        let calls = Arc::new(Calls::default());
-        let fd = BoundedFiniteDiff::new(
-            Probes {
-                make,
-                calls: Arc::clone(&calls),
-            },
-            make(&[F::zero(); 2]),
-            make(&[F::one(); 2]),
-        )
-        .jacobian_method(method);
-        let x = make(&[F::zero(), F::one()]);
-        let j = fd.jacobian(&x).unwrap();
-        assert_eq!((j.matrix_rows(), j.matrix_cols()), (3, 2));
-        let tolerance = F::epsilon().sqrt() * F::from_f64(10.0).unwrap();
-        for row in 0..3 {
-            for col in 0..2 {
-                let expected = if row == col || row == 2 {
-                    F::one()
+        for (lower, upper, point) in [
+            (
+                [zero, zero],
+                [one, one],
+                [F::from_f64(0.25).unwrap(), F::from_f64(0.75).unwrap()],
+            ),
+            ([zero, zero], [one, one], [zero, one]),
+            ([zero, one], [one, one], [zero, one]),
+            ([zero, one], [zero, one], [zero, one]),
+        ] {
+            let calls = Arc::new(Calls::default());
+            let fd = BoundedFiniteDiff::new(
+                Probes {
+                    make,
+                    calls: Arc::clone(&calls),
+                },
+                make(&lower),
+                make(&upper),
+            )
+            .jacobian_method(method);
+            let x = make(&point);
+            let free = (0..2).filter(|&j| lower[j] != upper[j]).count();
+            let expected_calls = 1 + free
+                * if matches!(method, Method::Central) {
+                    2
                 } else {
-                    F::zero()
+                    1
                 };
-                assert!(
-                    (j.matrix_entry(row, col) - expected).abs() < tolerance
-                );
+            let verify = |j: &V::Matrix| {
+                assert_eq!((j.matrix_rows(), j.matrix_cols()), (3, 2));
+                let tolerance =
+                    F::epsilon().sqrt() * F::from_f64(10.0).unwrap();
+                for row in 0..3 {
+                    for col in 0..2 {
+                        let expected = if lower[col] != upper[col]
+                            && (row == col || row == 2)
+                        {
+                            one
+                        } else {
+                            zero
+                        };
+                        assert!(
+                            (j.matrix_entry(row, col) - expected).abs()
+                                < tolerance
+                        );
+                    }
+                }
+                assert_eq!(calls.in_place.swap(0, Relaxed), expected_calls);
+            };
+            let mut j = fd.jacobian(&x).unwrap();
+            verify(&j);
+            fd.jacobian_into(&x, &mut j).unwrap();
+            verify(&j);
+            let (res, fused) = fd.residual_and_jacobian(&x).unwrap();
+            verify(&fused);
+            let mut out = make(&[one]);
+            fd.residual_and_jacobian_into(&x, &mut out, &mut j).unwrap();
+            verify(&j);
+            for residual in [&res, &out] {
+                assert_eq!(residual.vec_len(), 3);
+                assert_eq!(residual.get_scalar(0), point[0]);
+                assert_eq!(residual.get_scalar(1), point[1]);
+                assert_eq!(residual.get_scalar(2), point[0] + point[1]);
             }
+            calls.fail.store(true, Relaxed);
+            assert!(matches!(fd.jacobian(&x), Err("probe failed")));
+            assert!(matches!(
+                fd.residual_and_jacobian(&x),
+                Err("probe failed")
+            ));
+            assert_eq!(
+                fd.residual_and_jacobian_into(&x, &mut out, &mut j),
+                Err("probe failed")
+            );
         }
-        assert_eq!(
-            calls.in_place.load(Relaxed),
-            if matches!(method, Method::Forward) {
-                3
-            } else {
-                5
-            }
-        );
-        calls.fail.store(true, Relaxed);
-        assert!(matches!(fd.jacobian(&x), Err("probe failed")));
     }
 }
 
@@ -400,34 +441,186 @@ fn bounded_probes_faer() {
     });
 }
 
-#[test]
-fn unbounded_probes_use_in_place_evaluation() {
+fn unbounded_probes<V>(make: fn(&[f64]) -> V)
+where
+    V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + Send + Sync,
+    V::Matrix: MatrixIndex,
+{
     for method in [Method::Forward, Method::Central] {
         let calls = Arc::new(Calls::default());
         let fd = FiniteDiff::new(Probes {
-            make: |x: &[f64]| x.to_vec(),
+            make,
             calls: Arc::clone(&calls),
         })
         .jacobian_method(method);
-        let j = fd.jacobian(&vec![0.25, 0.75]).unwrap();
-        for row in 0..3 {
-            for col in 0..2 {
-                let expected = if row == col || row == 2 { 1.0 } else { 0.0 };
-                assert!((j.matrix_entry(row, col) - expected).abs() < 1e-8);
+        let x = make(&[0.25, 0.75]);
+        let central = matches!(method, Method::Central);
+        let verify = |j: &V::Matrix, expected_calls| {
+            assert_eq!((j.matrix_rows(), j.matrix_cols()), (3, 2));
+            for row in 0..3 {
+                for col in 0..2 {
+                    let expected =
+                        if row == col || row == 2 { 1.0 } else { 0.0 };
+                    assert!((j.matrix_entry(row, col) - expected).abs() < 1e-8);
+                }
+            }
+            assert_eq!(calls.in_place.swap(0, Relaxed), expected_calls);
+        };
+        let mut j = fd.jacobian(&x).unwrap();
+        verify(&j, if central { 4 } else { 3 });
+        fd.jacobian_into(&x, &mut j).unwrap();
+        verify(&j, if central { 4 } else { 3 });
+        let (res, fused) = fd.residual_and_jacobian(&x).unwrap();
+        verify(&fused, if central { 5 } else { 3 });
+        let mut out = make(&[9.0]);
+        fd.residual_and_jacobian_into(&x, &mut out, &mut j).unwrap();
+        verify(&j, if central { 5 } else { 3 });
+        for residual in [&res, &out] {
+            assert_eq!(residual.vec_len(), 3);
+            for (i, value) in [0.25, 0.75, 1.0].iter().enumerate() {
+                assert_eq!(residual.get_scalar(i), *value);
             }
         }
-        assert_eq!(
-            calls.in_place.load(Relaxed),
-            if matches!(method, Method::Forward) {
-                3
-            } else {
-                5
-            }
-        );
         calls.fail.store(true, Relaxed);
-        assert!(matches!(
-            fd.jacobian(&vec![0.25, 0.75]),
+        assert!(matches!(fd.jacobian(&x), Err("probe failed")));
+        assert!(matches!(fd.residual_and_jacobian(&x), Err("probe failed")));
+        assert_eq!(
+            fd.residual_and_jacobian_into(&x, &mut out, &mut j),
             Err("probe failed")
-        ));
+        );
     }
+}
+
+#[test]
+fn unbounded_probes_use_in_place_evaluation() {
+    unbounded_probes(|x| x.to_vec());
+}
+
+#[cfg(feature = "nalgebra_all")]
+#[test]
+fn unbounded_probes_nalgebra() {
+    unbounded_probes(backend_aliases::nalgebra::DVector::from_column_slice);
+}
+#[cfg(feature = "ndarray_all")]
+#[test]
+fn unbounded_probes_ndarray() {
+    unbounded_probes(|x| {
+        backend_aliases::ndarray::Array1::from_vec(x.to_vec())
+    });
+}
+#[cfg(feature = "faer_all")]
+#[test]
+fn unbounded_probes_faer() {
+    unbounded_probes(|x| {
+        backend_aliases::faer::Col::from_fn(x.len(), |i| x[i])
+    });
+}
+
+#[test]
+fn central_jacobians_preserve_empty_shapes_without_duplicate_base_calls() {
+    struct Constant {
+        calls: Arc<AtomicUsize>,
+        rows: usize,
+    }
+    impl Residual for Constant {
+        type Param = Vec<f64>;
+        type Output = Vec<f64>;
+        type Error = &'static str;
+        fn residual(&self, _: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
+            self.calls.fetch_add(1, Relaxed);
+            Ok(vec![1.0; self.rows])
+        }
+    }
+    for rows in [0, 3] {
+        for n in [0, 2] {
+            let calls = Arc::new(AtomicUsize::new(0));
+            let fd = FiniteDiff::new(Constant {
+                calls: Arc::clone(&calls),
+                rows,
+            })
+            .jacobian_method(Method::Central);
+            let x = vec![0.5; n];
+            let mut j = fd.jacobian(&x).unwrap();
+            assert_eq!((j.nrows(), j.ncols()), (rows, n));
+            assert_eq!(calls.swap(0, Relaxed), if n == 0 { 1 } else { 2 * n });
+            let (res, fused) = fd.residual_and_jacobian(&x).unwrap();
+            assert_eq!(res, vec![1.0; rows]);
+            assert_eq!((fused.nrows(), fused.ncols()), (rows, n));
+            assert_eq!(calls.swap(0, Relaxed), 2 * n + 1);
+            let mut res = vec![9.0];
+            fd.residual_and_jacobian_into(&x, &mut res, &mut j).unwrap();
+            assert_eq!(res, vec![1.0; rows]);
+            assert_eq!((j.nrows(), j.ncols()), (rows, n));
+            assert_eq!(calls.swap(0, Relaxed), 2 * n + 1);
+
+            let bounded = BoundedFiniteDiff::new(
+                Constant {
+                    calls: Arc::clone(&calls),
+                    rows,
+                },
+                vec![0.0; n],
+                vec![1.0; n],
+            )
+            .jacobian_method(Method::Central);
+            bounded
+                .residual_and_jacobian_into(&x, &mut res, &mut j)
+                .unwrap();
+            assert_eq!((j.nrows(), j.ncols()), (rows, n));
+            assert_eq!(calls.swap(0, Relaxed), 2 * n + 1);
+        }
+    }
+}
+
+#[test]
+fn central_jacobian_propagates_probe_errors_and_preserves_nonfinite_values() {
+    struct Domain {
+        fail_at: Option<f64>,
+        nan_at: Option<f64>,
+    }
+    impl Residual for Domain {
+        type Param = Vec<f64>;
+        type Output = Vec<f64>;
+        type Error = &'static str;
+        fn residual(&self, x: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
+            if Some(x[0]) == self.fail_at {
+                return Err("domain error");
+            }
+            Ok(vec![if Some(x[0]) == self.nan_at {
+                f64::NAN
+            } else {
+                x[0] * x[0]
+            }])
+        }
+    }
+    for location in [0.375, 0.625] {
+        let fd = FiniteDiff::new(Domain {
+            fail_at: Some(location),
+            nan_at: None,
+        })
+        .jacobian_method(Method::Central)
+        .with_step(0.125);
+        assert_eq!(fd.jacobian(&vec![0.5]).unwrap_err(), "domain error");
+        assert_eq!(
+            fd.residual_and_jacobian(&vec![0.5]).unwrap_err(),
+            "domain error"
+        );
+        let fd = FiniteDiff::new(Domain {
+            fail_at: None,
+            nan_at: Some(location),
+        })
+        .jacobian_method(Method::Central)
+        .with_step(0.125);
+        assert!(fd.jacobian(&vec![0.5]).unwrap().get(0, 0).is_nan());
+    }
+    let fd = FiniteDiff::new(Domain {
+        fail_at: Some(0.5),
+        nan_at: None,
+    })
+    .jacobian_method(Method::Central)
+    .with_step(0.125);
+    assert_eq!(fd.jacobian(&vec![0.5]).unwrap().get(0, 0), 1.0);
+    assert_eq!(
+        fd.residual_and_jacobian(&vec![0.5]).unwrap_err(),
+        "domain error"
+    );
 }

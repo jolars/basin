@@ -81,13 +81,14 @@ numerical work against analytic cases and reference implementations.
 
 ### Follow-up candidates
 
-- [ ] **Investigate central-difference Jacobian overhead.** Follow up on the
-  [Navette integration
-  review](https://github.com/opticsWolf/Navette/pull/3#issuecomment-6431966233).
-  Compare bounded and unbounded probe counts, base-residual reuse, buffer
-  allocations, and parallel scheduling against Navette's built-in TRF. Both
-  integrations use central differences, so measure matched stencils before
-  attributing the slowdown to the difference scheme.
+- [x] **Investigate central-difference Jacobian overhead.** Compared matched
+  stencils against Navette's Jacobian builder, following the
+  [integration review](https://github.com/opticsWolf/Navette/pull/3#issuecomment-6431966233).
+  Unbounded central Jacobians now avoid the base-residual evaluation, and
+  fused finite-difference Jacobians reuse the base residual for forward and
+  bounded stencils. Regression tests verify callback counts and numerical
+  results across the dense backends, with checks for feasible probes and
+  empty shapes.
 - [ ] **Add iterative sparse least squares and Jacobian coloring.** Extend the
   full TRF work with Jacobian and transpose-Jacobian products, an LSMR
   solve, and the two-dimensional subspace method. Add sparsity-pattern-based

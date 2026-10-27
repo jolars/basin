@@ -42,7 +42,7 @@
 //! - **Evaluation counting.** One counted [`Gradient::gradient`],
 //!   [`Jacobian::jacobian`], or [`Hessian::hessian`] call performs *many*
 //!   internal cost or residual evaluations (`2n` central/`n+1` forward
-//!   gradient, `n+1`/`2n` Jacobian columns, `~2n²` Hessian). As specified by
+//!   gradient, `n+1`/`2n` Jacobian probes, `~2n²` Hessian). As specified by
 //!   [`EvalCounts`](crate::EvalCounts), counters record requests at the
 //!   [`Problem`](crate::Problem) boundary. A derivative request charges its
 //!   category once; its internal probes add no cost or residual counts.
@@ -65,9 +65,10 @@
 //! The probes of one derivative are independent, so with the `parallel`
 //! feature they fan across a `rayon` thread pool: the `n` gradient/Jacobian
 //! columns, and the `n(n+1)/2` upper-triangular Hessian entries, are evaluated
-//! concurrently (the shared `f(x)`/`r(x)` base evaluation runs once up
-//! front). The result is **bit-identical** to the sequential path (each
-//! output slot is written independently and collected in order, with no
+//! concurrently. When the stencil needs a shared `f(x)`/`r(x)` base,
+//! it runs once up front; unbounded central Jacobians infer their output
+//! shape from the probes instead. The result is **bit-identical** to the
+//! sequential path (each output slot is written independently and collected in order, with no
 //! floating-point reduction), so enabling the feature never changes the
 //! numbers, only the wall-clock.
 //!
@@ -366,9 +367,20 @@ where
                 param,
                 self.function_precision,
                 self.fixed_step,
+                None,
                 out,
             ),
         }
+    }
+
+    fn residual_and_jacobian(
+        &self,
+        param: &V,
+    ) -> Result<(V, Self::Jacobian), P::Error> {
+        let mut res = param.clone();
+        let mut jac = V::dense_from_fn(0, 0, |_, _| unreachable!());
+        self.residual_and_jacobian_into(param, &mut res, &mut jac)?;
+        Ok((res, jac))
     }
 
     fn residual_and_jacobian_into(
@@ -378,7 +390,24 @@ where
         jac: &mut Self::Jacobian,
     ) -> Result<(), P::Error> {
         self.residual_into(param, res)?;
-        self.jacobian_into(param, jac)
+        match self.jacobian_method {
+            Method::Forward => forward_difference_jacobian_with_base_into(
+                &self.problem,
+                param,
+                self.function_precision,
+                self.fixed_step,
+                res,
+                jac,
+            ),
+            Method::Central => central_difference_jacobian_into(
+                &self.problem,
+                param,
+                self.function_precision,
+                self.fixed_step,
+                Some(res),
+                jac,
+            ),
+        }
     }
 }
 
@@ -695,9 +724,37 @@ where
         + MaybeSend,
     P::Error: MaybeSend,
 {
-    let n = x.vec_len();
     let mut r0 = x.clone();
     problem.residual_into(x, &mut r0)?;
+    forward_difference_jacobian_with_base_into(
+        problem,
+        x,
+        function_precision,
+        fixed_step,
+        &r0,
+        out,
+    )
+}
+
+fn forward_difference_jacobian_with_base_into<P, V>(
+    problem: &P,
+    x: &V,
+    function_precision: f64,
+    fixed_step: Option<f64>,
+    r0: &V,
+    out: &mut <V as DenseMatrixFromFn>::Matrix,
+) -> Result<(), P::Error>
+where
+    P: Residual<Param = V, Output = V> + MaybeSync,
+    V: Clone
+        + VectorLen
+        + VectorIndex
+        + DenseMatrixFromFn
+        + MaybeSync
+        + MaybeSend,
+    P::Error: MaybeSend,
+{
+    let n = x.vec_len();
     let m = r0.vec_len();
     let eps = function_precision.max(f64::EPSILON).sqrt();
     let columns = try_map_range_with(
@@ -728,9 +785,9 @@ where
 
 /// Central-difference Jacobian, column `j ≈ (r(x+hⱼeⱼ) − r(x−hⱼeⱼ)) / 2hⱼ`.
 ///
-/// More accurate than [`forward_difference_jacobian`] (`O(h²)`) at `2n+1`
-/// residual evaluations. Result shape is `m × n`. Returns `Err` if any
-/// probe's `residual` does.
+/// More accurate than [`forward_difference_jacobian`] (`O(h²)`) at `2n`
+/// residual evaluations (`1` when `n = 0`, to determine the output shape).
+/// Result shape is `m × n`. Returns `Err` if any probe's `residual` does.
 pub fn central_difference_jacobian<P, V>(
     problem: &P,
     x: &V,
@@ -753,6 +810,7 @@ where
         x,
         function_precision,
         fixed_step,
+        None,
         &mut out,
     )?;
     Ok(out)
@@ -763,6 +821,7 @@ fn central_difference_jacobian_into<P, V>(
     x: &V,
     function_precision: f64,
     fixed_step: Option<f64>,
+    base: Option<&V>,
     out: &mut <V as DenseMatrixFromFn>::Matrix,
 ) -> Result<(), P::Error>
 where
@@ -776,13 +835,22 @@ where
     P::Error: MaybeSend,
 {
     let n = x.vec_len();
-    let mut r0 = x.clone();
-    problem.residual_into(x, &mut r0)?;
-    let m = r0.vec_len();
+    if n == 0 {
+        // With no probes, only a base evaluation can reveal the output shape.
+        let mut residual = x.clone();
+        let m = if let Some(base) = base {
+            base.vec_len()
+        } else {
+            problem.residual_into(x, &mut residual)?;
+            residual.vec_len()
+        };
+        V::dense_from_fn_into(m, 0, |_, _| unreachable!(), out);
+        return Ok(());
+    }
     let scale = function_precision.max(f64::EPSILON).cbrt();
     let columns = try_map_range_with(
         n,
-        || (x.clone(), r0.clone()),
+        || (x.clone(), base.unwrap_or(x).clone()),
         |(probe, residual), j| {
             let xj = x.get_scalar(j);
             let h = nr_step(xj, scale, fixed_step);
@@ -792,6 +860,12 @@ where
             probe.set_scalar(j, xj - h);
             problem.residual_into(probe, residual)?;
             probe.set_scalar(j, xj);
+            let m = col.vec_len();
+            assert_eq!(
+                residual.vec_len(),
+                m,
+                "finite-difference output length changed"
+            );
             for i in 0..m {
                 col.set_scalar(
                     i,
@@ -801,6 +875,11 @@ where
             Ok(col)
         },
     )?;
+    let m = base.map_or_else(|| columns[0].vec_len(), VectorLen::vec_len);
+    assert!(
+        columns.iter().all(|col| col.vec_len() == m),
+        "finite-difference output length changed"
+    );
     V::dense_from_fn_into(m, n, |i, j| columns[j].get_scalar(i), out);
     Ok(())
 }
