@@ -394,7 +394,7 @@ backends and scalar types.
   multiple threads. Measure raw callback counts and allocations separately
   from uninstrumented timings, including repeated calls with reused outputs.
   See the [benchmark protocol](crates/competitor-bench/NUMDIFF.md).
-- [ ] **Reuse base costs in fused derivative calls.** Pass the cost already
+- [x] **Reuse base costs in fused derivative calls.** Pass the cost already
   computed by `cost_and_gradient_into` into forward-gradient and bounded
   probe kernels. Share it with the Hessian in the three-output callback,
   and route owned fused methods through the same implementation. An

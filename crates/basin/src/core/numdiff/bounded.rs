@@ -27,7 +27,9 @@ use crate::core::problem::{CostFunction, Gradient, Jacobian, Residual};
 /// derivatives. Counters and evaluation budgets follow [`crate::EvalCounts`]:
 /// they charge derivative requests at the [`crate::Problem`] boundary and
 /// exclude internal probes. Probe counts depend on the chosen stencils and
-/// fixed coordinates. The optional `parallel` feature evaluates independent
+/// fixed coordinates. Fused cost/gradient calls reuse the returned cost as
+/// the base value for either stencil, in both owned and `*_into` methods.
+/// The optional `parallel` feature evaluates independent
 /// columns concurrently without changing their arithmetic or result ordering.
 ///
 /// # Backends
@@ -428,6 +430,40 @@ where
     Ok((m, columns))
 }
 
+impl<P, V, F> BoundedFiniteDiff<P, F>
+where
+    P: CostFunction<Param = V, Output = F> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
+    F: Scalar + MaybeSync + MaybeSend,
+    P::Error: MaybeSend,
+{
+    fn gradient_with_base_into(
+        &self,
+        x: &V,
+        cost: F,
+        out: &mut V,
+    ) -> Result<(), P::Error> {
+        let (_, cols) = columns_with_base(
+            x,
+            self.options(false),
+            Some((&self.lower, &self.upper)),
+            &vec![cost],
+            |_| Vec::new(),
+            |x, out| {
+                *out = vec![self.problem.cost(x)?];
+                Ok(())
+            },
+        )?;
+        if out.vec_len() != x.vec_len() {
+            *out = x.clone();
+        }
+        for (j, col) in cols.into_iter().enumerate() {
+            out.set_scalar(j, col[0]);
+        }
+        Ok(())
+    }
+}
+
 impl<P, V, F> Gradient for BoundedFiniteDiff<P, F>
 where
     P: CostFunction<Param = V, Output = F> + MaybeSync,
@@ -442,19 +478,14 @@ where
         Ok(out)
     }
     fn gradient_into(&self, x: &V, out: &mut V) -> Result<(), P::Error> {
-        let (_, cols) = columns(
-            x,
-            self.options(false),
-            Some((&self.lower, &self.upper)),
-            |x| self.problem.cost(x).map(|f| vec![f]),
-        )?;
-        if out.vec_len() != x.vec_len() {
-            *out = x.clone();
-        }
-        for (j, col) in cols.into_iter().enumerate() {
-            out.set_scalar(j, col[0]);
-        }
-        Ok(())
+        validate_point(x, Some((&self.lower, &self.upper)));
+        let cost = self.cost(x)?;
+        self.gradient_with_base_into(x, cost, out)
+    }
+    fn cost_and_gradient(&self, x: &V) -> Result<(F, V), P::Error> {
+        let mut grad = x.clone();
+        let cost = self.cost_and_gradient_into(x, &mut grad)?;
+        Ok((cost, grad))
     }
     fn cost_and_gradient_into(
         &self,
@@ -462,7 +493,8 @@ where
         grad: &mut V,
     ) -> Result<F, P::Error> {
         let cost = self.cost(x)?;
-        self.gradient_into(x, grad)?;
+        validate_point(x, Some((&self.lower, &self.upper)));
+        self.gradient_with_base_into(x, cost, grad)?;
         Ok(cost)
     }
 }

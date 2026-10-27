@@ -51,6 +51,8 @@
 //!   callbacks separately to measure their actual evaluations. A change in
 //!   stencil, fixed coordinates, or future Jacobian coloring can change probe
 //!   work without changing the reported derivative-request count.
+//!   Fused cost/gradient and cost/gradient/Hessian calls share one base cost
+//!   evaluation, with identical probes for owned and `*_into` methods.
 //! - **Domain & hard-abort.** Each probe `?`-propagates the inner
 //!   function's [`Error`](CostFunction::Error). If the inner `cost` /
 //!   `residual` returns `Err`, the derivative call returns the same `Err`:
@@ -310,13 +312,29 @@ where
         }
     }
 
+    fn cost_and_gradient(&self, param: &V) -> Result<(f64, V), P::Error> {
+        let mut grad = param.clone();
+        let cost = self.cost_and_gradient_into(param, &mut grad)?;
+        Ok((cost, grad))
+    }
+
     fn cost_and_gradient_into(
         &self,
         param: &V,
         grad: &mut V,
     ) -> Result<f64, P::Error> {
         let cost = self.cost(param)?;
-        self.gradient_into(param, grad)?;
+        match self.gradient_method {
+            Method::Forward => forward_difference_gradient_with_base_into(
+                &self.problem,
+                param,
+                self.function_precision,
+                self.fixed_step,
+                cost,
+                grad,
+            ),
+            Method::Central => self.gradient_into(param, grad),
+        }?;
         Ok(cost)
     }
 }
@@ -457,6 +475,17 @@ where
         }
     }
 
+    fn cost_and_gradient_and_hessian(
+        &self,
+        param: &V,
+    ) -> Result<(f64, V, Self::Hessian), P::Error> {
+        let mut grad = param.clone();
+        let mut hess = V::dense_from_fn(0, 0, |_, _| unreachable!());
+        let cost = self
+            .cost_and_gradient_and_hessian_into(param, &mut grad, &mut hess)?;
+        Ok((cost, grad, hess))
+    }
+
     fn cost_and_gradient_and_hessian_into(
         &self,
         param: &V,
@@ -464,7 +493,24 @@ where
         hess: &mut Self::Hessian,
     ) -> Result<f64, P::Error> {
         let cost = self.cost_and_gradient_into(param, grad)?;
-        self.hessian_into(param, hess)?;
+        match self.hessian_method {
+            Method::Forward => forward_difference_hessian_with_base_into(
+                &self.problem,
+                param,
+                self.function_precision,
+                self.fixed_step,
+                cost,
+                hess,
+            ),
+            Method::Central => central_difference_hessian_with_base_into(
+                &self.problem,
+                param,
+                self.function_precision,
+                self.fixed_step,
+                cost,
+                hess,
+            ),
+        }?;
         Ok(cost)
     }
 }
@@ -650,9 +696,32 @@ where
     V: Clone + VectorLen + VectorIndex + MaybeSync,
     P::Error: MaybeSend,
 {
+    let f0 = problem.cost(x)?;
+    forward_difference_gradient_with_base_into(
+        problem,
+        x,
+        function_precision,
+        fixed_step,
+        f0,
+        out,
+    )
+}
+
+fn forward_difference_gradient_with_base_into<P, V>(
+    problem: &P,
+    x: &V,
+    function_precision: f64,
+    fixed_step: Option<f64>,
+    f0: f64,
+    out: &mut V,
+) -> Result<(), P::Error>
+where
+    P: CostFunction<Param = V, Output = f64> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex + MaybeSync,
+    P::Error: MaybeSend,
+{
     let n = x.vec_len();
     let scale = function_precision.max(f64::EPSILON).sqrt();
-    let f0 = problem.cost(x)?;
     let cols = try_map_range_with(
         n,
         || x.clone(),
@@ -924,9 +993,32 @@ where
     V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + MaybeSync,
     P::Error: MaybeSend,
 {
+    let f0 = problem.cost(x)?;
+    central_difference_hessian_with_base_into(
+        problem,
+        x,
+        function_precision,
+        fixed_step,
+        f0,
+        out,
+    )
+}
+
+fn central_difference_hessian_with_base_into<P, V>(
+    problem: &P,
+    x: &V,
+    function_precision: f64,
+    fixed_step: Option<f64>,
+    f0: f64,
+    out: &mut <V as DenseMatrixFromFn>::Matrix,
+) -> Result<(), P::Error>
+where
+    P: CostFunction<Param = V, Output = f64> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + MaybeSync,
+    P::Error: MaybeSend,
+{
     let n = x.vec_len();
     let scale = function_precision.max(f64::EPSILON).powf(0.25);
-    let f0 = problem.cost(x)?;
     let h: Vec<f64> = (0..n)
         .map(|j| nr_step(x.get_scalar(j), scale, fixed_step))
         .collect();
@@ -1011,9 +1103,32 @@ where
     V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + MaybeSync,
     P::Error: MaybeSend,
 {
+    let f0 = problem.cost(x)?;
+    forward_difference_hessian_with_base_into(
+        problem,
+        x,
+        function_precision,
+        fixed_step,
+        f0,
+        out,
+    )
+}
+
+fn forward_difference_hessian_with_base_into<P, V>(
+    problem: &P,
+    x: &V,
+    function_precision: f64,
+    fixed_step: Option<f64>,
+    f0: f64,
+    out: &mut <V as DenseMatrixFromFn>::Matrix,
+) -> Result<(), P::Error>
+where
+    P: CostFunction<Param = V, Output = f64> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + MaybeSync,
+    P::Error: MaybeSend,
+{
     let n = x.vec_len();
     let scale = function_precision.max(f64::EPSILON).powf(0.25);
-    let f0 = problem.cost(x)?;
     let h: Vec<f64> = (0..n)
         .map(|j| nr_step(x.get_scalar(j), scale, fixed_step))
         .collect();
