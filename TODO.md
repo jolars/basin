@@ -407,7 +407,7 @@ backends and scalar types.
   or in row blocks, and fill the backend matrix from packed values directly.
   Compare allocation counts, requested bytes, and timings at larger `n`;
   preserve exact symmetry and each entry's arithmetic order.
-- [ ] **Use scalar probe results for bounded gradients.** Replace the
+- [x] **Use scalar probe results for bounded gradients.** Replace the
   `vec![f]` callback adapter and one-element column vectors with a scalar
   kernel that shares the bound-aware stencil rules. Cover `f32` and `f64`,
   fixed coordinates, adjacent-float bounds, and one-sided central stencils.

@@ -200,6 +200,7 @@ where
     F: Scalar + Send + Sync,
     V::Matrix: MatrixIndex<F>,
 {
+    check_scalar_probe_results(make);
     use basin::ConstraintJacobian;
     for method in [Method::Forward, Method::Central] {
         let p = BoundedFiniteDiff::new(
@@ -229,6 +230,159 @@ where
             assert!((c.matrix_entry(1, 0) - a - a).abs() < tolerance);
             assert_eq!(j.matrix_entry(0, 1), F::zero());
             assert_eq!(c.matrix_entry(1, 1), F::zero());
+        }
+    }
+}
+
+#[derive(Clone)]
+struct ScalarObjective<V, F> {
+    make: fn(&[F]) -> V,
+    lower: Vec<F>,
+    upper: Vec<F>,
+    linear: bool,
+}
+
+impl<V: VectorLen + VectorIndex<F>, F: Scalar> CostFunction
+    for ScalarObjective<V, F>
+{
+    type Param = V;
+    type Output = F;
+    type Error = &'static str;
+
+    fn cost(&self, x: &V) -> Result<F, Self::Error> {
+        let mut cost = F::zero();
+        for j in 0..x.vec_len() {
+            let value = x.get_scalar(j);
+            if value < self.lower[j] || value > self.upper[j] {
+                return Err("outside domain");
+            }
+            cost = cost
+                + if self.linear {
+                    value
+                } else {
+                    value * value + F::from_f64(3.0).unwrap() * value
+                };
+        }
+        Ok(cost)
+    }
+}
+
+impl<V: VectorLen + VectorIndex<F>, F: Scalar> Residual
+    for ScalarObjective<V, F>
+{
+    type Param = V;
+    type Output = V;
+    type Error = &'static str;
+
+    fn residual(&self, x: &V) -> Result<V, Self::Error> {
+        Ok((self.make)(&[self.cost(x)?]))
+    }
+}
+
+fn check_scalar_probe_results<V, F>(make: fn(&[F]) -> V)
+where
+    V: Clone + VectorLen + VectorIndex<F> + DenseMatrixFromFn<F> + Sync,
+    V::Matrix: MatrixIndex<F>,
+    F: Scalar + Send + Sync,
+{
+    let zero = F::zero();
+    let one = F::one();
+    let half = F::from_f64(0.5).unwrap();
+    let adjacent = one + F::epsilon();
+    for (values, lower, upper, linear) in [
+        (vec![], vec![], vec![], false),
+        (vec![one], vec![one], vec![one], false),
+        (vec![one], vec![one], vec![adjacent], true),
+        (vec![adjacent], vec![one], vec![adjacent], true),
+        (
+            vec![zero, one, half, half],
+            vec![zero; 4],
+            vec![one, one, one, half],
+            false,
+        ),
+        (
+            vec![half],
+            vec![F::neg_infinity()],
+            vec![F::infinity()],
+            false,
+        ),
+    ] {
+        let x = make(&values);
+        for method in [Method::Forward, Method::Central] {
+            for step in [None, Some(half), Some(F::min_positive_value())] {
+                let mut p = BoundedFiniteDiff::new(
+                    ScalarObjective {
+                        make,
+                        lower: lower.clone(),
+                        upper: upper.clone(),
+                        linear,
+                    },
+                    make(&lower),
+                    make(&upper),
+                )
+                .gradient_method(method)
+                .jacobian_method(method);
+                if let Some(step) = step {
+                    p = p.with_step(step);
+                }
+                // All free coordinates have magnitude at most one. Match the
+                // gradient's step explicitly to bypass MINPACK Jacobian scaling.
+                let reference_step = step.unwrap_or_else(|| match method {
+                    Method::Forward => F::epsilon().sqrt(),
+                    _ => F::epsilon().cbrt(),
+                });
+                let reference =
+                    p.clone().with_step(reference_step).jacobian(&x).unwrap();
+                let owned = p.gradient(&x).unwrap();
+                let (cost, fused) = p.cost_and_gradient(&x).unwrap();
+                assert_eq!(cost, p.cost(&x).unwrap());
+                let mut into = make(&[]);
+                let mut fused_into = make(&vec![one; values.len() + 1]);
+                for _ in 0..2 {
+                    p.gradient_into(&x, &mut into).unwrap();
+                    assert_eq!(
+                        p.cost_and_gradient_into(&x, &mut fused_into).unwrap(),
+                        cost
+                    );
+                    for result in [&owned, &fused, &into, &fused_into] {
+                        assert_eq!(result.vec_len(), values.len());
+                        for j in 0..values.len() {
+                            let actual = result.get_scalar(j);
+                            assert_eq!(
+                                actual.to_f64().unwrap().to_bits(),
+                                reference
+                                    .matrix_entry(0, j)
+                                    .to_f64()
+                                    .unwrap()
+                                    .to_bits()
+                            );
+                            let expected = if lower[j] == upper[j] {
+                                zero
+                            } else if linear {
+                                one
+                            } else {
+                                values[j]
+                                    + values[j]
+                                    + F::from_f64(3.0).unwrap()
+                            };
+                            let tolerance = if method == Method::Forward {
+                                0.51
+                            } else {
+                                0.01
+                            };
+                            // Tiny requested steps can cancel in the objective;
+                            // bit equality above still checks the original behavior.
+                            if step != Some(F::min_positive_value()) || linear {
+                                assert!(
+                                    (actual - expected).abs().to_f64().unwrap()
+                                        < tolerance,
+                                    "{method:?}, step={step:?}, coordinate={j}: {actual:?} != {expected:?}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

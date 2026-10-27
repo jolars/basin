@@ -431,10 +431,11 @@ fn fused_errors_preserve_request_counts() {
                     BoundedFiniteDiff::new(failing(), vec![0.0], vec![1.0])
                         .gradient_method(method),
                 );
+                let mut out = vec![123.0, 456.0];
                 let result = if owned {
                     p.cost_and_gradient(&x).map(|_| ())
                 } else {
-                    p.cost_and_gradient_into(&x, &mut vec![]).map(|_| ())
+                    p.cost_and_gradient_into(&x, &mut out).map(|_| ())
                 };
                 assert_eq!(
                     result,
@@ -449,6 +450,58 @@ fn fused_errors_preserve_request_counts() {
                 if at == 0.0 {
                     assert_eq!(p.inner().get_ref().calls.load(Relaxed), 1);
                 }
+                if !owned && result.is_err() {
+                    assert_eq!(out, vec![123.0, 456.0]);
+                    assert_eq!(
+                        p.inner().gradient_into(&x, &mut out),
+                        Err("probe failed")
+                    );
+                    assert_eq!(out, vec![123.0, 456.0]);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn bounded_probe_errors_leave_outputs_untouched() {
+    struct FailingLast(f64);
+    impl CostFunction for FailingLast {
+        type Param = Vec<f64>;
+        type Output = f64;
+        type Error = &'static str;
+
+        fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
+            if x[1] >= self.0 {
+                Err("probe failed")
+            } else {
+                Ok(x.iter().map(|v| v * v).sum())
+            }
+        }
+    }
+
+    for method in [Method::Forward, Method::Central] {
+        for at in [0.0, 0.1, 0.2] {
+            if at == 0.2 && method == Method::Forward {
+                continue;
+            }
+            let p = BoundedFiniteDiff::new(
+                FailingLast(at),
+                vec![0.0; 2],
+                vec![1.0; 2],
+            )
+            .gradient_method(method)
+            .with_step(0.125);
+            for initial in [vec![123.0], vec![123.0, 456.0]] {
+                let mut out = initial.clone();
+                let x = vec![0.0; 2];
+                assert_eq!(p.gradient_into(&x, &mut out), Err("probe failed"));
+                assert_eq!(out, initial);
+                assert_eq!(
+                    p.cost_and_gradient_into(&x, &mut out),
+                    Err("probe failed")
+                );
+                assert_eq!(out, initial);
             }
         }
     }

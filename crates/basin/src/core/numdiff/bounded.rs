@@ -227,6 +227,32 @@ pub(super) struct Options<F> {
     pub minpack: bool,
 }
 
+impl<F: Scalar> Options<F> {
+    fn scale(&self) -> F {
+        let precision = self.precision.max(F::epsilon());
+        if matches!(self.method, Method::Forward) {
+            precision.sqrt()
+        } else {
+            precision.cbrt()
+        }
+    }
+
+    fn probes(&self, value: F, scale: F, lo: F, hi: F) -> (F, Option<F>) {
+        let mut h = self.step.unwrap_or_else(|| {
+            if self.minpack && matches!(self.method, Method::Forward) {
+                let h = scale * value.abs();
+                if h == F::zero() { scale } else { h }
+            } else {
+                scale * value.abs().max(F::one())
+            }
+        });
+        if value + h == value || value - h == value {
+            h = scale * value.abs().max(F::one());
+        }
+        probes(value, h, lo, hi, self.method)
+    }
+}
+
 fn probes<F: Scalar>(
     x: F,
     h: F,
@@ -365,35 +391,18 @@ where
     C: Fn(&V, &mut R) -> Result<(), E> + MaybeSync,
 {
     let m = base.vec_len();
-    let precision = options.precision.max(F::epsilon());
-    let scale = if matches!(options.method, Method::Forward) {
-        precision.sqrt()
-    } else {
-        precision.cbrt()
-    };
+    let scale = options.scale();
     let evaluate = &evaluate;
     let columns = try_map_range_with(
         x.vec_len(),
         || (x.clone(), scratch(base)),
         |(probe, residual), j| {
             let value = x.get_scalar(j);
-            let mut h = options.step.unwrap_or_else(|| {
-                if options.minpack && matches!(options.method, Method::Forward)
-                {
-                    let h = scale * value.abs();
-                    if h == F::zero() { scale } else { h }
-                } else {
-                    scale * value.abs().max(F::one())
-                }
-            });
-            if value + h == value || value - h == value {
-                h = scale * value.abs().max(F::one());
-            }
             let (lo, hi) = bounds
                 .map_or((F::neg_infinity(), F::infinity()), |(lo, hi)| {
                     (lo[j], hi[j])
                 });
-            let (first, second) = probes(value, h, lo, hi, options.method);
+            let (first, second) = options.probes(value, scale, lo, hi);
             if first == value {
                 return Ok(vec![F::zero(); m]);
             }
@@ -443,22 +452,39 @@ where
         cost: F,
         out: &mut V,
     ) -> Result<(), P::Error> {
-        let (_, cols) = columns_with_base(
-            x,
-            self.options(false),
-            Some((&self.lower, &self.upper)),
-            &vec![cost],
-            |_| Vec::new(),
-            |x, out| {
-                *out = vec![self.problem.cost(x)?];
-                Ok(())
+        let options = self.options(false);
+        let scale = options.scale();
+        let values = try_map_range_with(
+            x.vec_len(),
+            || x.clone(),
+            |probe, j| {
+                let value = x.get_scalar(j);
+                let (first, second) =
+                    options.probes(value, scale, self.lower[j], self.upper[j]);
+                if first == value {
+                    return Ok(F::zero());
+                }
+                probe.set_scalar(j, first);
+                let first_cost = self.problem.cost(probe)?;
+                let h1 = first - value;
+                let mut derivative = (first_cost - cost) / h1;
+                if let Some(second) = second {
+                    probe.set_scalar(j, second);
+                    let second_cost = self.problem.cost(probe)?;
+                    let h2 = second - value;
+                    let slope = (second_cost - cost) / h2;
+                    derivative =
+                        derivative + h1 / (h2 - h1) * (derivative - slope);
+                }
+                probe.set_scalar(j, value);
+                Ok(derivative)
             },
         )?;
         if out.vec_len() != x.vec_len() {
             *out = x.clone();
         }
-        for (j, col) in cols.into_iter().enumerate() {
-            out.set_scalar(j, col[0]);
+        for (j, value) in values.into_iter().enumerate() {
+            out.set_scalar(j, value);
         }
         Ok(())
     }
