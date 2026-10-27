@@ -376,7 +376,7 @@ production solvers.
 
 ### In-place problem evaluation
 
-- [ ] **Add optional in-place derivative methods.** Extend the existing
+- [x] **Add optional in-place derivative methods.** Extend the existing
   `residual_into` pattern with `gradient_into`, `jacobian_into`,
   `hessian_into`, `batch_gradient_into`, and `hessian_product_into`.
   Default implementations must delegate to the existing owned methods,

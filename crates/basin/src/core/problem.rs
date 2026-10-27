@@ -212,6 +212,27 @@ pub trait Gradient: CostFunction {
         param: &Self::Param,
     ) -> Result<Self::Gradient, Self::Error>;
 
+    /// Evaluate the gradient into a caller-owned buffer.
+    ///
+    /// On success, `out` must equal [`gradient`](Self::gradient) at `param`,
+    /// including its shape, which must match `param`. Its previous contents
+    /// and shape are unspecified; resize or replace it as needed. On error,
+    /// its contents are unspecified. The purity and hard-abort contracts of
+    /// `gradient` also apply here.
+    ///
+    /// The default replaces `out` with the owned result. Override this method
+    /// to reuse storage in repeated evaluations. This does not replace the
+    /// fused [`cost_and_gradient`](Self::cost_and_gradient) or
+    /// [`Hessian::cost_and_gradient_and_hessian`] callbacks.
+    fn gradient_into(
+        &self,
+        param: &Self::Param,
+        out: &mut Self::Gradient,
+    ) -> Result<(), Self::Error> {
+        *out = self.gradient(param)?;
+        Ok(())
+    }
+
     /// Evaluate cost *and* gradient at `param` in one call. The default
     /// body delegates to [`CostFunction::cost`] and
     /// [`Gradient::gradient`]; override when shared intermediate work
@@ -345,6 +366,27 @@ pub trait MiniBatchGradient: CostFunction {
         param: &Self::Param,
         batch: &[usize],
     ) -> Result<Self::Gradient, Self::Error>;
+
+    /// Evaluate the averaged batch gradient into a caller-owned buffer.
+    ///
+    /// On success, `out` must equal [`batch_gradient`](Self::batch_gradient)
+    /// at `(param, batch)`, including its shape, which must match `param`.
+    /// Its previous contents and shape are unspecified; resize or replace it
+    /// as needed. On error, its contents are unspecified. The purity,
+    /// averaging, valid-batch, and hard-abort contracts of `batch_gradient`
+    /// also apply here.
+    ///
+    /// The default replaces `out` with the owned result. Override this method
+    /// to reuse storage in repeated evaluations.
+    fn batch_gradient_into(
+        &self,
+        param: &Self::Param,
+        batch: &[usize],
+        out: &mut Self::Gradient,
+    ) -> Result<(), Self::Error> {
+        *out = self.batch_gradient(param, batch)?;
+        Ok(())
+    }
 }
 
 /// Vector-valued residual `r(x): Param → Output` for least-squares
@@ -541,6 +583,27 @@ pub trait Jacobian: Residual {
         param: &Self::Param,
     ) -> Result<Self::Jacobian, <Self as Residual>::Error>;
 
+    /// Evaluate the Jacobian into a caller-owned buffer.
+    ///
+    /// On success, `out` must equal [`jacobian`](Self::jacobian) at `param`,
+    /// including its `m × n` shape, where `m` is the residual length and `n`
+    /// is the parameter length. Its previous contents and shape are
+    /// unspecified; resize or replace it as needed. On error, its contents
+    /// are unspecified. The purity and hard-abort contracts of `jacobian`
+    /// also apply here.
+    ///
+    /// The default replaces `out` with the owned result. Override this method
+    /// to reuse storage in repeated evaluations. This does not replace the
+    /// fused [`residual_and_jacobian`](Self::residual_and_jacobian) callback.
+    fn jacobian_into(
+        &self,
+        param: &Self::Param,
+        out: &mut Self::Jacobian,
+    ) -> Result<(), <Self as Residual>::Error> {
+        *out = self.jacobian(param)?;
+        Ok(())
+    }
+
     /// Evaluate residual *and* Jacobian at `param` in one call. The
     /// default body delegates to [`Residual::residual`] and
     /// [`Jacobian::jacobian`]; override when shared intermediate work
@@ -661,6 +724,27 @@ pub trait Hessian: Gradient {
         param: &Self::Param,
     ) -> Result<Self::Hessian, <Self as CostFunction>::Error>;
 
+    /// Evaluate the Hessian into a caller-owned buffer.
+    ///
+    /// On success, `out` must equal [`hessian`](Self::hessian) at `param`,
+    /// including its symmetric `n × n` shape, where `n` is the parameter
+    /// length. Its previous contents and shape are unspecified; resize or
+    /// replace it as needed. On error, its contents are unspecified. The
+    /// purity and hard-abort contracts of `hessian` also apply here.
+    ///
+    /// The default replaces `out` with the owned result. Override this method
+    /// to reuse storage in repeated evaluations. This does not replace the
+    /// fused [`cost_and_gradient_and_hessian`](Self::cost_and_gradient_and_hessian)
+    /// callback.
+    fn hessian_into(
+        &self,
+        param: &Self::Param,
+        out: &mut Self::Hessian,
+    ) -> Result<(), <Self as CostFunction>::Error> {
+        *out = self.hessian(param)?;
+        Ok(())
+    }
+
     /// Evaluate cost, gradient, *and* Hessian at `param` in one call.
     /// The default body delegates to [`Gradient::cost_and_gradient`]
     /// followed by [`Hessian::hessian`]; override when all three share
@@ -761,6 +845,28 @@ pub trait HessianProduct: Gradient {
         param: &Self::Param,
         v: &Self::Param,
     ) -> Result<<Self as Gradient>::Gradient, <Self as CostFunction>::Error>;
+
+    /// Evaluate the Hessian-vector product into a caller-owned buffer.
+    ///
+    /// On success, `out` must equal
+    /// [`hessian_product`](Self::hessian_product) at `(param, v)`, including
+    /// its shape, which must match `param`. The direction `v` must also match
+    /// `param` in shape. The previous contents and shape of `out` are
+    /// unspecified; resize or replace it as needed. On error, its contents
+    /// are unspecified. The purity, linearity, and hard-abort contracts of
+    /// `hessian_product` also apply here.
+    ///
+    /// The default replaces `out` with the owned result. Override this method
+    /// to reuse storage in repeated evaluations.
+    fn hessian_product_into(
+        &self,
+        param: &Self::Param,
+        v: &Self::Param,
+        out: &mut <Self as Gradient>::Gradient,
+    ) -> Result<(), <Self as CostFunction>::Error> {
+        *out = self.hessian_product(param, v)?;
+        Ok(())
+    }
 }
 
 /// Per-kind evaluation counters carried by [`Problem`].
