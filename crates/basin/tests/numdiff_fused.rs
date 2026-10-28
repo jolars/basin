@@ -289,6 +289,101 @@ fn vec_fused_derivatives() {
     check_bounded::<Vec<f32>, f32>(|x| x.to_vec());
 }
 
+fn check_gradient_staging<V, F, P>(
+    make: fn(&[F]) -> V,
+    wrap: impl Fn(Quadratic<V, F>, usize, Method) -> P,
+) where
+    V: Clone + VectorLen + VectorIndex<F>,
+    F: Scalar,
+    P: Gradient<Param = V, Output = F, Gradient = V, Error = &'static str>,
+{
+    let quarter = F::from_f64(0.25).unwrap();
+    let step = F::from_f64(0.125).unwrap();
+    for n in [0, 1, 4, 31, 32, 33, 256, 257] {
+        let x = make(&vec![quarter; n]);
+        for method in [Method::Forward, Method::Central] {
+            for fail in [false, true] {
+                let mut upper = vec![F::one(); n];
+                if fail && n > 0 {
+                    // Earlier coordinates succeed before the last probe fails.
+                    upper[n - 1] = quarter;
+                }
+                let problem = Quadratic::new(
+                    x.clone(),
+                    Some((vec![F::zero(); n], upper)),
+                );
+                let p = wrap(problem, n, method);
+                for size in [0, n, n + 1] {
+                    let initial = make(&vec![F::from_f64(99.0).unwrap(); size]);
+                    let mut out = initial.clone();
+                    for _ in 0..2 {
+                        for fused in [false, true] {
+                            let result = if fused {
+                                p.cost_and_gradient_into(&x, &mut out)
+                                    .map(|_| ())
+                            } else {
+                                p.gradient_into(&x, &mut out)
+                            };
+                            if fail && n > 0 {
+                                assert_eq!(result, Err("outside domain"));
+                                same_vector(&out, &initial);
+                            } else {
+                                result.unwrap();
+                                assert_eq!(out.vec_len(), n);
+                                for j in 0..n {
+                                    let mut expected = F::from_usize(n + j + 1)
+                                        .unwrap()
+                                        / (F::one() + F::one());
+                                    if method == Method::Forward {
+                                        expected = expected
+                                            + F::from_usize(j + 2).unwrap()
+                                                * step;
+                                    }
+                                    same_scalar(out.get_scalar(j), expected);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn check_unbounded_gradient_staging<V>(make: fn(&[f64]) -> V)
+where
+    V: Clone + VectorLen + VectorIndex + Send + Sync,
+{
+    check_gradient_staging(make, |problem, _, method| {
+        FiniteDiff::new(problem)
+            .gradient_method(method)
+            .with_step(0.125)
+    });
+}
+
+fn check_bounded_gradient_staging<V, F>(make: fn(&[F]) -> V)
+where
+    V: Clone + VectorLen + VectorIndex<F> + Send + Sync,
+    F: Scalar + Send + Sync,
+{
+    check_gradient_staging(make, |problem, n, method| {
+        BoundedFiniteDiff::new(
+            problem,
+            make(&vec![F::zero(); n]),
+            make(&vec![F::one(); n]),
+        )
+        .gradient_method(method)
+        .with_step(F::from_f64(0.125).unwrap())
+    });
+}
+
+#[test]
+fn vec_gradient_staging() {
+    check_unbounded_gradient_staging(|x| x.to_vec());
+    check_bounded_gradient_staging(|x: &[f64]| x.to_vec());
+    check_bounded_gradient_staging(|x: &[f32]| x.to_vec());
+}
+
 macro_rules! backend_tests {
     ($name:ident, $feature:literal, $make64:expr, $make32:expr) => {
         #[cfg(feature = $feature)]
@@ -298,6 +393,9 @@ macro_rules! backend_tests {
             check_unbounded(make64);
             check_bounded(make64);
             check_bounded($make32);
+            check_unbounded_gradient_staging(make64);
+            check_bounded_gradient_staging(make64);
+            check_bounded_gradient_staging($make32);
         }
     };
 }

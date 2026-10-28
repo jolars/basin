@@ -412,11 +412,12 @@ backends and scalar types.
   kernel that shares the bound-aware stencil rules. Cover `f32` and `f64`,
   fixed coordinates, adjacent-float bounds, and one-sided central stencils.
   Measure allocations with a cheap objective to expose the adapter overhead.
-- [ ] **Remove temporary gradient result vectors.** Gradient `*_into`
-  kernels collect a temporary vector before copying into the output.
-  Benchmark direct sequential writes and reusable or chunked parallel
-  staging. Preserve shape replacement and the documented output-on-error
-  contract, and measure repeated calls with an already sized output.
+- [x] **Reduce gradient result staging.** Stage up to 32 scalar results on
+  the stack and allocate larger buffers at their final size. Fill parallel
+  staging slots directly instead of collecting per-task result vectors.
+  Keep output publication after successful probes to preserve shape
+  replacement and unchanged outputs on errors. Benchmarked repeated calls
+  with sized outputs on all four backends, sequentially and with Rayon.
 - [ ] **Reduce Jacobian column allocation and copying.** Both unbounded
   Jacobian kernels clone residual vectors into separately allocated columns,
   then copy those columns into the backend matrix. Compare flat or chunked

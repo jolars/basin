@@ -41,6 +41,16 @@ cost/gradient/Hessian calls, or the Criterion regex
 `numdiff/.*/hessian/cheap/.*/n256_m0/` to time Hessians on every backend.
 Keep owned and reused-output results separate.
 
+For gradient result storage, use `--filter gradient/` in the accounting
+executable to select ordinary and fused gradients, with and without bounds.
+The corresponding Criterion regex is
+`numdiff/.*/(gradient|cost_gradient|bounded_gradient|bounded_cost_gradient)/`.
+Append `cheap/.*/n4_m0/into_reused` to isolate small gradients whose callback
+cost exposes staging overhead. Gradient results use stack staging through 32
+coordinates and a single preallocated scalar buffer above that size. Both
+paths publish the output only after all probes succeed. Allocation totals
+also include probe-vector clones, including those created by Rayon tasks.
+
 Hessian-vector products use `FiniteDiff`'s fallback that differences its own
 numerical gradients, with the selected stencil at both levels. A fixed step of
 `1e-3` avoids amplifying roundoff through two nested differences. The other

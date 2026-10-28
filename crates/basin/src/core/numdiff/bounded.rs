@@ -1,6 +1,6 @@
 //! Shared first-derivative probes with explicit domain bounds.
 
-use super::{FiniteDiff, Method};
+use super::{FiniteDiff, Method, gradient_from_probes_into};
 use crate::core::math::{DenseMatrixFromFn, Scalar, VectorIndex, VectorLen};
 use crate::core::parallel::{MaybeSend, MaybeSync, try_map_range_with};
 use crate::core::problem::{CostFunction, Gradient, Jacobian, Residual};
@@ -454,39 +454,27 @@ where
     ) -> Result<(), P::Error> {
         let options = self.options(false);
         let scale = options.scale();
-        let values = try_map_range_with(
-            x.vec_len(),
-            || x.clone(),
-            |probe, j| {
-                let value = x.get_scalar(j);
-                let (first, second) =
-                    options.probes(value, scale, self.lower[j], self.upper[j]);
-                if first == value {
-                    return Ok(F::zero());
-                }
-                probe.set_scalar(j, first);
-                let first_cost = self.problem.cost(probe)?;
-                let h1 = first - value;
-                let mut derivative = (first_cost - cost) / h1;
-                if let Some(second) = second {
-                    probe.set_scalar(j, second);
-                    let second_cost = self.problem.cost(probe)?;
-                    let h2 = second - value;
-                    let slope = (second_cost - cost) / h2;
-                    derivative =
-                        derivative + h1 / (h2 - h1) * (derivative - slope);
-                }
-                probe.set_scalar(j, value);
-                Ok(derivative)
-            },
-        )?;
-        if out.vec_len() != x.vec_len() {
-            *out = x.clone();
-        }
-        for (j, value) in values.into_iter().enumerate() {
-            out.set_scalar(j, value);
-        }
-        Ok(())
+        gradient_from_probes_into(x, out, |probe, j| {
+            let value = x.get_scalar(j);
+            let (first, second) =
+                options.probes(value, scale, self.lower[j], self.upper[j]);
+            if first == value {
+                return Ok(F::zero());
+            }
+            probe.set_scalar(j, first);
+            let first_cost = self.problem.cost(probe)?;
+            let h1 = first - value;
+            let mut derivative = (first_cost - cost) / h1;
+            if let Some(second) = second {
+                probe.set_scalar(j, second);
+                let second_cost = self.problem.cost(probe)?;
+                let h2 = second - value;
+                let slope = (second_cost - cost) / h2;
+                derivative = derivative + h1 / (h2 - h1) * (derivative - slope);
+            }
+            probe.set_scalar(j, value);
+            Ok(derivative)
+        })
     }
 }
 

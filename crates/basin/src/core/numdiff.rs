@@ -81,7 +81,7 @@
 //! (and its param vector/error type) to be [`Sync`]/[`Send`]; without the
 //! feature there is no such bound and the evaluation is sequential.
 
-use crate::core::math::{DenseMatrixFromFn, VectorIndex, VectorLen};
+use crate::core::math::{DenseMatrixFromFn, Scalar, VectorIndex, VectorLen};
 use crate::core::parallel::{MaybeSend, MaybeSync, try_map_range_with};
 use crate::core::problem::{
     CostFunction, Gradient, Hessian, HessianProduct, Jacobian, Residual,
@@ -616,6 +616,56 @@ where
     Ok(out)
 }
 
+fn gradient_from_probes_into<V, F, E, C>(
+    x: &V,
+    out: &mut V,
+    evaluate: C,
+) -> Result<(), E>
+where
+    V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
+    F: Scalar + MaybeSend,
+    E: MaybeSend,
+    C: Fn(&mut V, usize) -> Result<F, E> + MaybeSync,
+{
+    let n = x.vec_len();
+    // Stage until every probe succeeds to preserve the output on error. Small
+    // gradients need no heap storage; larger ones allocate their final size once.
+    let mut inline = [F::zero(); 32];
+    let mut heap = Vec::new();
+    let values = if n <= inline.len() {
+        &mut inline[..n]
+    } else {
+        heap.resize(n, F::zero());
+        &mut heap[..]
+    };
+
+    #[cfg(feature = "parallel")]
+    {
+        use rayon::prelude::*;
+        values.par_iter_mut().enumerate().try_for_each_init(
+            || x.clone(),
+            |probe, (j, value)| {
+                *value = evaluate(probe, j)?;
+                Ok::<(), E>(())
+            },
+        )?;
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let mut probe = x.clone();
+        for (j, value) in values.iter_mut().enumerate() {
+            *value = evaluate(&mut probe, j)?;
+        }
+    }
+    if out.vec_len() != n {
+        *out = x.clone();
+    }
+    for (j, &value) in values.iter().enumerate() {
+        out.set_scalar(j, value);
+    }
+    Ok(())
+}
+
 fn central_difference_gradient_into<P, V>(
     problem: &P,
     x: &V,
@@ -628,31 +678,19 @@ where
     V: Clone + VectorLen + VectorIndex + MaybeSync,
     P::Error: MaybeSend,
 {
-    let n = x.vec_len();
     let scale = function_precision.max(f64::EPSILON).cbrt();
     // Each task perturbs coordinate `j` of its own probe buffer, evaluates,
     // and resets it, so the buffer stays equal to `x` between indices.
-    let cols = try_map_range_with(
-        n,
-        || x.clone(),
-        |probe, j| {
-            let xj = x.get_scalar(j);
-            let h = nr_step(xj, scale, fixed_step);
-            probe.set_scalar(j, xj + h);
-            let fp = problem.cost(probe)?;
-            probe.set_scalar(j, xj - h);
-            let fm = problem.cost(probe)?;
-            probe.set_scalar(j, xj);
-            Ok((fp - fm) / (2.0 * h))
-        },
-    )?;
-    if out.vec_len() != n {
-        *out = x.clone();
-    }
-    for (j, g) in cols.into_iter().enumerate() {
-        out.set_scalar(j, g);
-    }
-    Ok(())
+    gradient_from_probes_into(x, out, |probe, j| {
+        let xj = x.get_scalar(j);
+        let h = nr_step(xj, scale, fixed_step);
+        probe.set_scalar(j, xj + h);
+        let fp = problem.cost(probe)?;
+        probe.set_scalar(j, xj - h);
+        let fm = problem.cost(probe)?;
+        probe.set_scalar(j, xj);
+        Ok((fp - fm) / (2.0 * h))
+    })
 }
 
 /// Forward-difference gradient `∇f(x)ⱼ ≈ (f(x+hⱼeⱼ) − f(x)) / hⱼ`.
@@ -718,27 +756,15 @@ where
     V: Clone + VectorLen + VectorIndex + MaybeSync,
     P::Error: MaybeSend,
 {
-    let n = x.vec_len();
     let scale = function_precision.max(f64::EPSILON).sqrt();
-    let cols = try_map_range_with(
-        n,
-        || x.clone(),
-        |probe, j| {
-            let xj = x.get_scalar(j);
-            let h = nr_step(xj, scale, fixed_step);
-            probe.set_scalar(j, xj + h);
-            let fp = problem.cost(probe)?;
-            probe.set_scalar(j, xj);
-            Ok((fp - f0) / h)
-        },
-    )?;
-    if out.vec_len() != n {
-        *out = x.clone();
-    }
-    for (j, g) in cols.into_iter().enumerate() {
-        out.set_scalar(j, g);
-    }
-    Ok(())
+    gradient_from_probes_into(x, out, |probe, j| {
+        let xj = x.get_scalar(j);
+        let h = nr_step(xj, scale, fixed_step);
+        probe.set_scalar(j, xj + h);
+        let fp = problem.cost(probe)?;
+        probe.set_scalar(j, xj);
+        Ok((fp - f0) / h)
+    })
 }
 
 /// Forward-difference Jacobian, column `j ≈ (r(x+hⱼeⱼ) − r(x)) / hⱼ`.
