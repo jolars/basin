@@ -10,6 +10,38 @@ The examples below migrate *uses* of Argmin solvers. A custom Argmin `Solver` or
 state machine is a separate port because Basin does not provide a generic
 adapter for those extension points.
 
+## Agent instructions
+
+Copy this Markdown into your coding agent's prompt or your project's agent
+instructions when migrating an existing application:
+
+```markdown
+Migrate this project's Argmin integration to Basin while preserving its
+optimization behavior.
+
+Read https://basin.rs/guide/migrating-from-argmin/ first. It covers Argmin 0.11
+to Basin 3.0; check the project's versions before applying its examples.
+Use https://docs.rs/basin/ for the API matching the selected Basin release.
+
+1. Inventory Argmin dependencies, backend versions, solvers, problem traits,
+   initialization, stopping rules, bounds, observers, and checkpoints.
+2. Follow the guide's "Install Basin," "The basic executor migration," and
+   "Common API mappings" sections. Select backend features matching the
+   application's existing backend versions.
+3. Read the sections for each solver and for typed errors, finite differences,
+   bounds, observers, and cancellation as applicable. Preserve the algorithm
+   first, and report unsupported features or custom solver ports explicitly.
+4. Preserve initialization, constraints, error handling, and stopping behavior.
+   Check tolerance definitions and defaults instead of copying numeric values
+   blindly. Consult the solver API for checkpoint and resume guarantees.
+5. Follow "Check compatibility before removing Argmin." Keep both integrations
+   behind features while comparing representative numerical results,
+   termination reasons, evaluation counts, and runtime. Use deterministic seeds
+   for stochastic tests without assuming identical trajectories.
+6. Run the project's checks, remove Argmin once the comparisons pass, and
+   summarize the changes and any remaining behavioral differences.
+```
+
 ## Install Basin
 
 Plain `Vec<f64>` needs no backend feature:
