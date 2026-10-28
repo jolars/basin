@@ -7,13 +7,8 @@ or lifecycle changes, read its [state and lifecycle
 contracts](CONTRIBUTING.md#state-and-lifecycle-contracts) and preserve the
 stated ownership and lifecycle contracts.
 
-For backports and releases, follow [MAINTENANCE.md](MAINTENANCE.md). `main`
-prepares Basin 3.0, while `v1` maintains the latest 1.x release. Each branch
-owns its release configuration, versions, changelog, and baseline manifest.
-The Basin 1.x compatibility requirements in this guide and `CONTRIBUTING.md`
-apply to the `v1` branch. On `main`, implement the optional constraint API for Basin 3.0 and document
-migration in `web/src/routes/guide/migrating-to-v3/+page.svx`. Do not release
-these breaking changes as a Basin 2.x patch or minor update.
+For backports and releases, follow the [maintenance and release
+procedures](CONTRIBUTING.md#maintenance-and-releases).
 
 ## Project priorities
 
@@ -21,12 +16,12 @@ Basin is a semver-stable Rust numerical-optimization library with a generic
 `Executor`/`Solver`/`State` core and support for `Vec<f64>`, nalgebra, ndarray,
 and faer backends.
 
-- Preserve public API compatibility on `v1`. Treat changes to public signatures,
-  required trait methods, enum variants, generic defaults, feature semantics,
-  and re-exports as potentially breaking. Prefer additive changes and
-  default-bodied trait methods for backports. On `main`, planned 2.0 changes
-  may replace or remove 1.x APIs; document replacement types, signatures,
-  settings, and behavior as part of each change.
+- Preserve public API compatibility within each major release. Treat changes to
+  public signatures, required trait methods, enum variants, generic defaults,
+  feature semantics, and re-exports as potentially breaking. Prefer additive
+  changes and default-bodied trait methods for compatible updates. Breaking
+  changes require a major release. Document replacement types, signatures,
+  settings, and behavior in a migration guide as part of each change.
 - Preserve the default `wasm32-unknown-unknown` build. Gate file I/O, threads,
   rayon, and BLAS/LAPACK-linked math behind non-default features. Use `web-time`
   rather than `std::time::Instant` in default paths.
@@ -41,7 +36,11 @@ and faer backends.
 
 Run focused tests while developing, then the checks matching the changed scope:
 
-- Rust formatting: `cargo fmt --all -- --check`.
+- Rust formatting: run all three formatting commands in the `fmt` job in
+  [`.github/workflows/ci.yml`](.github/workflows/ci.yml). In addition to
+  `cargo fmt --all -- --check`, it checks shared sources expanded with
+  `include!` and the separate backend fixture workspace, which Cargo's root
+  formatting command skips.
 - Routine pure-Rust tests:
   `cargo test -p basin --features nalgebra,ndarray,faer,problems,parallel`.
 - Workspace lint: `cargo clippy --workspace --all-targets --all-features -- -D warnings`.
@@ -56,10 +55,10 @@ Run focused tests while developing, then the checks matching the changed scope:
 Do not assume `cargo test --all-features` links without a BLAS/LAPACK provider.
 The `nalgebra-lapack` and `ndarray-blas` features intentionally select no
 provider. Supply one through linker flags when those tests are required; clippy
-and rustdoc only check and do not link. The package MSRV is Rust 1.87.0; CI
-checks it separately. The dev environment pins Rust 1.89.0, supplies the WASM
-target and project tooling, and runs all-feature clippy and rustfmt in
-pre-commit.
+and rustdoc only check and do not link. The workspace `Cargo.toml` declares the
+package MSRV; CI checks it separately. `rust-toolchain.toml` pins the development
+toolchain. The dev environment supplies the WASM target and project tooling and
+runs all-feature clippy and rustfmt in pre-commit.
 
 ## Architecture and repository shape
 
@@ -100,17 +99,16 @@ belong in the core crate.
    unversioned aliases move to the newest supported release, while deprecated
    `*_latest` features forward to them. Implement every enabled backend version
    independently; enabling another version must preserve existing implementations.
-   On `v1`, legacy backend-specific quasi-Newton state aliases select the newest
-   enabled version for compatibility. On `main`, BFGS uses `FirstOrderState<V, F>`
-   and infers its matrix through `DenseBackend`.
+   BFGS uses `FirstOrderState<V, F>` and infers its matrix through
+   `DenseBackend`.
 3. Numerical convergence settings belong on the solver, with one owner per
    test and shared internal calculations. Execution budgets, targets, stalls,
    cancellation, and application stops belong to the executor. Bind optional
    checks to the minimum state shape and backend capabilities they need. Use
    explicit `with_absolute_*_tolerance` / `with_relative_*_tolerance` names
    where applicable; `None` disables optional checks and zero means exact-zero.
-   Keep algorithm controls distinct and preserve deprecated 1.x behavior until
-   its scheduled removal in Basin 2.0.
+   Keep algorithm controls distinct, and preserve deprecated behavior within a
+   major release.
 4. Constraints optionally describe problems: keep them problem-side, never on
    state or as executor configuration. Evaluation traits stand alone. Constrained
    solvers require a complete typed declaration and reject unsupported blocks;

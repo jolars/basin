@@ -32,8 +32,8 @@ the Worker and assets together; it requires Wrangler authentication or a
 builds must leave `BASIN_BASE_PATH` unset.
 
 The Website workflow deploys only the current stable release, as described in
-[MAINTENANCE.md](../../MAINTENANCE.md#website-deployment). Configure these GitHub
-Actions settings before deploying:
+[the contributing guide](../../CONTRIBUTING.md#website-deployment). Configure
+these GitHub Actions settings before deploying:
 
 - Secret `CLOUDFLARE_API_TOKEN`: Workers Scripts Edit for the hosting account,
   plus Workers Routes Edit and Zone Read for the `basin.rs` zone.

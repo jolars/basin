@@ -2,14 +2,11 @@
 
 ## State
 
-Basin 3.0 development takes place on `main`. The optional constraint API
-requires a major release; do not publish it as a Basin 2.x fix. Follow
-[Maintenance and releases](MAINTENANCE.md) for release procedures and
-[the migration guide](web/src/routes/guide/migrating-to-v3/+page.svx) for API changes.
-
 Basin follows [semantic versioning]. Breaking changes ship only in a major
 release, while new solvers, backends, and opt-in features arrive in minor
-releases.
+releases. Follow [Maintenance and releases](#maintenance-and-releases) for
+backport and release procedures. Document breaking changes in a migration guide
+under `web/src/routes/guide/`.
 
 [semantic versioning]: https://semver.org/
 
@@ -328,13 +325,13 @@ These shape API decisions and are non-obvious from the code alone.
 The built-in line-search configurations `Backtracking`, `Wolfe`, `MoreThuente`,
 and `HagerZhang` are non-exhaustive, with public fields, default constructors,
 and builders. Future controls must default to behavior compatible with existing
-constructors, without requiring callers to supply new settings during Basin
-2.x. Document builders as the usual construction path, retain public field
+constructors, without requiring callers to supply new settings within a major
+release. Document builders as the usual construction path, retain public field
 access and mutation, and decide serialization compatibility separately.
 
 ### Enum payloads and complete values
 
-Public enum variants keep their existing field lists throughout Basin 2.x. An
+Public enum variants keep their existing field lists within a major release. An
 enum-level `#[non_exhaustive]` permits new variants; existing variants remain
 directly constructible and support complete field patterns. Do not mark existing
 variants themselves non-exhaustive or add fields to them.
@@ -373,10 +370,10 @@ continuation preserves convergence history and publishes a new event.
 `SolverStep` and `IncumbentRef` are non-exhaustive publication records with
 complete public constructors. Future optional metadata must have defaults that
 preserve existing constructor behavior; adding fields cannot require external
-solver or state implementations to supply new information during Basin 2.x.
+solver or state implementations to supply new information within a major release.
 
 `ConvergenceCriterion` and `ApplicationStop` follow the same extension policy:
-their public constructors remain sufficient throughout Basin 2.x, and future
+their public constructors remain sufficient within a major release, and future
 optional metadata must default to behavior compatible with those constructors.
 `Threshold` remains exhaustive because its fields describe a complete
 mathematical comparison. Different comparison rules require distinct evidence
@@ -385,7 +382,7 @@ representations.
 `ViolationReport` is also a non-exhaustive publication record. Its constructor
 requires the value and measure, with unscaled, identity defaults; optional
 builders describe existing scaling and transformations. Future optional fields
-must preserve these defaults throughout Basin 2.x. Reports preserve evaluated
+must preserve these defaults within a major release. Reports preserve evaluated
 values, including NaN and infinity, without validation or extra callbacks.
 Only the scalar `value` field is public; metadata readers borrow shared
 descriptors. Built-in combinations use static storage without allocations or
@@ -519,3 +516,81 @@ business in the core crate:
 - Python bindings -> `basin-py`.
 
 If the only reason is "feels tidy", keep it in `basin` behind a feature.
+
+## Maintenance and releases
+
+### Supported release lines
+
+Basin develops new releases on `main` and maintains the latest 1.x release on
+`v1`. Keep published releases available when introducing breaking changes. The
+1.x line receives correctness, regression, and security fixes through at least
+April 19, 2027, and for at least six months after the first stable 2.0.0 release,
+whichever is later. We will announce the end of support in the release notes.
+
+Only the latest 1.x patch release is maintained; earlier minor releases do not
+have separate maintenance branches. The `v1` branch preserves its public API,
+convergence defaults, backend feature meanings, Rust 1.87-compatible feature
+set, and default WASM build. New features land on `main`; breaking changes
+require a major release. Do not backport breaking API changes.
+
+### Backporting fixes
+
+Fixes normally land on `main` first. For a bug affecting 1.x, cherry-pick the
+fix and its regression test with `git cherry-pick -x <commit>` onto a branch
+based on `origin/v1`. Adapt the implementation if the APIs have diverged, run
+the relevant [verification commands](#commands), and open a PR targeting `v1`.
+A fix developed on `v1` should also be ported to `main` when applicable.
+
+Keep the conventional `fix:` commit or PR title so Versionary proposes a patch
+release. Review the planned version before merging a release PR: Versionary does
+not enforce a version range from the branch name.
+
+Backport source changes and tests. Each branch owns its versions, changelog, and
+`.versionary-manifest.json`; let Versionary generate those independently. Do not
+merge `main` into `v1` or cherry-pick release bookkeeping between them.
+
+### Release automation
+
+CI checks pushes and PRs targeting both base branches. Versionary runs after
+the CI checks pass, with one release job at a time per branch.
+`VERSIONARY_BASE_BRANCH` selects the base branch, while `release-branch` in that
+branch's `versionary.jsonc` names the generated release PR branch:
+
+| Base branch | Generated release PR branch | Purpose                          |
+| ----------- | --------------------------- | -------------------------------- |
+| `main`      | `versionary/release`         | Prepare the next release.        |
+| `v1`        | `versionary/release-v1`      | Release compatible fixes for 1.x. |
+
+Merging a release PR creates its tag and GitHub Release. The existing Publish
+Crates workflow publishes the tagged crate to crates.io. The `RELEASE_TOKEN`
+must allow the tag and release events to trigger these downstream workflows.
+
+The `main` branch sets `release-latest` to `true`; the `v1` branch sets it to
+`false`. Maintenance releases therefore leave GitHub's Latest designation
+unchanged. The setting does not turn a release into a prerelease or prevent
+crates.io publication. Publishing beta or RC versions needs a separate
+prerelease policy.
+
+### Website deployment
+
+The Website workflow builds and checks both branches. Deployment starts from a
+published release, after its GitHub metadata exists. Only a stable
+`vMAJOR.MINOR.PATCH` tag that is currently marked Latest may deploy to
+<https://basin.rs/> on Cloudflare Workers. Prereleases and maintenance releases
+not marked Latest cannot replace the current stable documentation. Deployments
+are serialized and recheck Latest immediately before deploying.
+
+The build job uploads the checked static site as an artifact. The deployment job
+publishes that artifact and the Worker together, using the `cloudflare-workers`
+environment. It needs the `CLOUDFLARE_API_TOKEN` repository secret and
+`CLOUDFLARE_ACCOUNT_ID` repository variable. See the [hosting
+guide](web/worker/README.md) for local preview, credentials, and domain
+migration. Keep the deployment workflow and Worker configuration synchronized
+between `main` and `v1`.
+
+To redeploy, manually run the Website workflow on `main` or `v1` and set
+`release_tag` to the current stable tag. The workflow builds the tagged site's
+sources with the selected branch's hosting tools, then rechecks Latest before
+publishing. Leave the input empty to build and check the selected branch without
+deploying. Tags that already contain the Workers workflow can also be dispatched
+directly. Do not rerun older tags' GitHub Pages deployment workflows.
