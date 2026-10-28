@@ -424,7 +424,7 @@ backends and scalar types.
   staging, reusable column storage, and direct sequential matrix fills.
   Include tall and wide Jacobians, storage orders across backends, and
   callbacks that override `residual_into` to reuse their output buffers.
-- [ ] **Reuse HVP probe and gradient scratch.** The HVP helpers clone `x`
+- [x] **Reuse HVP probe and gradient scratch.** The HVP helpers clone `x`
   to construct directional probes and temporary gradients on every call.
   Measure repeated products at one point and assess reusing those buffers
   through caller-owned scratch where justified. Preserve zero-direction

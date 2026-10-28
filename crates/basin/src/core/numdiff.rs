@@ -573,6 +573,42 @@ where
     }
 }
 
+impl<P, V> FiniteDiff<P>
+where
+    P: CostFunction<Param = V, Output = f64> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex + MaybeSync,
+    P::Error: MaybeSend,
+{
+    /// Evaluate a Hessian-vector product with caller-owned probe and gradient
+    /// storage. Uses this wrapper's Hessian stencil, precision, and step, just
+    /// like [`HessianProduct::hessian_product_into`].
+    ///
+    /// Reuse `scratch` across products to avoid allocating these two buffers
+    /// again. Numerical gradient evaluations may still allocate their own
+    /// workspace. Scratch retains no evaluated values, so changing the point,
+    /// direction, or wrapper settings always recomputes both gradients.
+    /// See [`HessianProductScratch`] for an example and the buffer contracts.
+    pub fn hessian_product_with_scratch_into(
+        &self,
+        param: &V,
+        v: &V,
+        out: &mut V,
+        scratch: &mut HessianProductScratch<V>,
+    ) -> Result<(), P::Error> {
+        scratch.difference_into(
+            self,
+            param,
+            v,
+            HessianProductOptions {
+                method: self.hessian_method,
+                function_precision: self.function_precision,
+                fixed_step: self.fixed_step,
+            },
+            out,
+        )
+    }
+}
+
 // Step-size helper.
 
 /// Numerical-Recipes adaptive step `scale · max(|xⱼ|, 1)`, re-rounded so
@@ -1248,13 +1284,229 @@ fn vec_norm<V: VectorLen + VectorIndex>(x: &V) -> f64 {
         .sqrt()
 }
 
-/// `x + h·v`, built through the scalar accessors.
-fn probe_along<V: Clone + VectorLen + VectorIndex>(x: &V, v: &V, h: f64) -> V {
-    let mut probe = x.clone();
+fn probe_along_into<V: VectorLen + VectorIndex>(
+    x: &V,
+    v: &V,
+    h: f64,
+    probe: &mut V,
+) {
     for j in 0..x.vec_len() {
         probe.set_scalar(j, x.get_scalar(j) + h * v.get_scalar(j));
     }
+}
+
+fn probe_along<V: Clone + VectorLen + VectorIndex>(x: &V, v: &V, h: f64) -> V {
+    let mut probe = x.clone();
+    probe_along_into(x, v, h, &mut probe);
     probe
+}
+
+/// Caller-owned buffers for finite-difference Hessian-vector products.
+///
+/// Reuse this scratch with [`Self::forward_into`], [`Self::central_into`], or
+/// [`FiniteDiff::hessian_product_with_scratch_into`] for repeated products.
+/// The first nonzero product initializes one probe vector and one temporary
+/// gradient. Later calls reuse them, resizing buffers when dimensions change.
+/// A zero direction needs no scratch and makes no gradient evaluations.
+///
+/// Every successful nonzero product calls [`Gradient::gradient_into`] twice. Only storage
+/// is retained between calls; no gradient or point is cached. Callbacks that
+/// override `gradient_into` to reuse their output can avoid all allocations
+/// after warm-up when the output and scratch have the correct shape. The
+/// default callback may still allocate, as may numerical gradients.
+///
+/// The point and direction must have the same shape. The output is resized
+/// when needed, and its contents are unspecified on error. Errors propagate
+/// from the gradient callback, and scratch can be reused after an error.
+/// Independent scratch buffers can share the same immutable problem across
+/// threads when its type permits it. The scratch adds no thread-safety bounds
+/// to the gradient problem or parameter vector.
+///
+/// # Backends
+///
+/// Products require only `V: Clone + VectorLen + VectorIndex`, supporting
+/// `Vec<f64>`, nalgebra `DVector<f64>`, ndarray `Array1<f64>`, and faer
+/// `Col<f64>`, without matrix operations.
+///
+/// # Examples
+///
+/// ```
+/// use basin::{CostFunction, FiniteDiff, HessianProductScratch};
+///
+/// #[derive(Clone, Copy)]
+/// struct Sphere;
+/// impl CostFunction for Sphere {
+///     type Param = Vec<f64>;
+///     type Output = f64;
+///     type Error = std::convert::Infallible;
+///     fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
+///         Ok(x.iter().map(|xi| xi * xi).sum())
+///     }
+/// }
+///
+/// let fd = FiniteDiff::new(Sphere).with_step(1e-3);
+/// let x = vec![1.0, 2.0];
+/// let mut scratch = HessianProductScratch::new();
+/// let mut out = Vec::new();
+/// for direction in [vec![1.0, 0.0], vec![0.0, 1.0]] {
+///     fd.hessian_product_with_scratch_into(
+///         &x, &direction, &mut out, &mut scratch,
+///     ).unwrap();
+///     for (actual, v) in out.iter().zip(direction) {
+///         assert!((actual - 2.0 * v).abs() < 1e-6);
+///     }
+/// }
+/// ```
+#[derive(Debug, Clone)]
+pub struct HessianProductScratch<V> {
+    buffers: Option<(V, V)>,
+}
+
+impl<V> Default for HessianProductScratch<V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<V> HessianProductScratch<V> {
+    /// Create empty scratch. Buffers are initialized lazily by the first
+    /// nonzero product, so construction does not allocate or clone a vector.
+    pub const fn new() -> Self {
+        Self { buffers: None }
+    }
+}
+
+struct HessianProductOptions {
+    method: Method,
+    function_precision: f64,
+    fixed_step: Option<f64>,
+}
+
+impl<V: Clone + VectorLen + VectorIndex> HessianProductScratch<V> {
+    /// Evaluate [`forward_difference_hessian_product`] into `out`, reusing
+    /// probe and temporary-gradient storage. Step sizes, zero directions, and
+    /// callback counts follow the free function's contract.
+    pub fn forward_into<P>(
+        &mut self,
+        problem: &P,
+        x: &V,
+        v: &V,
+        function_precision: f64,
+        fixed_step: Option<f64>,
+        out: &mut V,
+    ) -> Result<(), P::Error>
+    where
+        P: Gradient<Param = V, Gradient = V, Output = f64>,
+    {
+        self.difference_into(
+            problem,
+            x,
+            v,
+            HessianProductOptions {
+                method: Method::Forward,
+                function_precision,
+                fixed_step,
+            },
+            out,
+        )
+    }
+
+    /// Evaluate [`central_difference_hessian_product`] into `out`, reusing
+    /// one probe for both directions and temporary-gradient storage. Step
+    /// sizes, zero directions, and callback counts follow the free function's
+    /// contract.
+    pub fn central_into<P>(
+        &mut self,
+        problem: &P,
+        x: &V,
+        v: &V,
+        function_precision: f64,
+        fixed_step: Option<f64>,
+        out: &mut V,
+    ) -> Result<(), P::Error>
+    where
+        P: Gradient<Param = V, Gradient = V, Output = f64>,
+    {
+        self.difference_into(
+            problem,
+            x,
+            v,
+            HessianProductOptions {
+                method: Method::Central,
+                function_precision,
+                fixed_step,
+            },
+            out,
+        )
+    }
+
+    fn difference_into<P>(
+        &mut self,
+        problem: &P,
+        x: &V,
+        v: &V,
+        options: HessianProductOptions,
+        out: &mut V,
+    ) -> Result<(), P::Error>
+    where
+        P: Gradient<Param = V, Gradient = V, Output = f64>,
+    {
+        if out.vec_len() != v.vec_len() {
+            *out = v.clone();
+        }
+        let v_norm = vec_norm(v);
+        if v_norm == 0.0 {
+            for j in 0..out.vec_len() {
+                out.set_scalar(j, 0.0);
+            }
+            return Ok(());
+        }
+        let h = options.fixed_step.unwrap_or_else(|| {
+            let eps = options.function_precision.max(f64::EPSILON);
+            let scale = match options.method {
+                Method::Forward => eps.sqrt(),
+                Method::Central => eps.cbrt(),
+            };
+            scale * vec_norm(x).max(1.0) / v_norm
+        });
+        let (probe, gradient) =
+            self.buffers.get_or_insert_with(|| (x.clone(), x.clone()));
+        if probe.vec_len() != x.vec_len() {
+            probe.clone_from(x);
+        }
+        if gradient.vec_len() != x.vec_len() {
+            gradient.clone_from(x);
+        }
+        match options.method {
+            Method::Forward => {
+                problem.gradient_into(x, gradient)?;
+                probe_along_into(x, v, h, probe);
+                problem.gradient_into(probe, out)?;
+                for j in 0..out.vec_len() {
+                    out.set_scalar(
+                        j,
+                        (out.get_scalar(j) - gradient.get_scalar(j)) / h,
+                    );
+                }
+            }
+            Method::Central => {
+                probe_along_into(x, v, h, probe);
+                problem.gradient_into(probe, out)?;
+                // Rebuild from x to preserve rounding rather than subtracting
+                // twice the step from the positive probe.
+                probe_along_into(x, v, -h, probe);
+                problem.gradient_into(probe, gradient)?;
+                for j in 0..out.vec_len() {
+                    out.set_scalar(
+                        j,
+                        (out.get_scalar(j) - gradient.get_scalar(j))
+                            / (2.0 * h),
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Forward-difference Hessian-vector product
@@ -1273,6 +1525,7 @@ fn probe_along<V: Clone + VectorLen + VectorIndex>(x: &V, v: &V, h: f64) -> V {
 /// `v`. `fixed_step`, when `Some`, overrides `h` with the raw step along
 /// `v`. `‖v‖ = 0` short-circuits to the zero vector (exact by linearity).
 /// Returns `Err` if either gradient evaluation does.
+/// Use [`HessianProductScratch::forward_into`] to reuse buffers across products.
 pub fn forward_difference_hessian_product<P, V>(
     problem: &P,
     x: &V,
@@ -1343,6 +1596,7 @@ where
 /// The step is `h = ∛eps_f · max(‖x‖, 1) / ‖v‖`; `fixed_step` and `‖v‖ = 0`
 /// behave as in the forward variant. Returns `Err` if either gradient
 /// evaluation does.
+/// Use [`HessianProductScratch::central_into`] to reuse buffers across products.
 pub fn central_difference_hessian_product<P, V>(
     problem: &P,
     x: &V,
@@ -1378,30 +1632,14 @@ where
     P: Gradient<Param = V, Gradient = V, Output = f64>,
     V: Clone + VectorLen + VectorIndex,
 {
-    if out.vec_len() != v.vec_len() {
-        *out = v.clone();
-    }
-    let v_norm = vec_norm(v);
-    if v_norm == 0.0 {
-        for j in 0..out.vec_len() {
-            out.set_scalar(j, 0.0);
-        }
-        return Ok(());
-    }
-    let h = match fixed_step {
-        Some(h) => h,
-        None => {
-            let eps = function_precision.max(f64::EPSILON);
-            eps.cbrt() * vec_norm(x).max(1.0) / v_norm
-        }
-    };
-    problem.gradient_into(&probe_along(x, v, h), out)?;
-    let mut gm = x.clone();
-    problem.gradient_into(&probe_along(x, v, -h), &mut gm)?;
-    for j in 0..out.vec_len() {
-        out.set_scalar(j, (out.get_scalar(j) - gm.get_scalar(j)) / (2.0 * h));
-    }
-    Ok(())
+    HessianProductScratch::new().central_into(
+        problem,
+        x,
+        v,
+        function_precision,
+        fixed_step,
+        out,
+    )
 }
 
 /// Bound-aware first-derivative adapters.

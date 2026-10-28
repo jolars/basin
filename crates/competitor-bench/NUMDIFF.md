@@ -51,20 +51,35 @@ coordinates and a single preallocated scalar buffer above that size. Both
 paths publish the output only after all probes succeed. Allocation totals
 also include probe-vector clones, including those created by Rayon tasks.
 
-Hessian-vector products use `FiniteDiff`'s fallback that differences its own
+The `hessian_product` cases use `FiniteDiff`'s fallback that differences its own
 numerical gradients, with the selected stencil at both levels. A fixed step of
 `1e-3` avoids amplifying roundoff through two nested differences. The other
-operations use the wrappers' default adaptive steps. These HVP cases do not
-measure differencing an analytic gradient.
+operations use the wrappers' default adaptive steps. The
+`analytic_hessian_product` cases difference an analytic gradient that overrides
+`gradient_into` to reuse its output, with the same scalar function, point, and
+direction as the numerical-gradient cases.
+
+Both HVP kernels include `scratch_reused` calls with a caller-owned
+`HessianProductScratch`. The numerical-gradient cases also retain `owned` and
+`into_reused`; the analytic-gradient cases compare the owned free functions
+with the scratch API. This latter comparison includes the owned result's
+allocation. Compare numerical `into_reused` with `scratch_reused` to isolate
+scratch reuse with a reused result in both cases. The scratch stores probe and
+temporary-gradient buffers, and every nonzero product still evaluates both
+gradients. It retains no evaluated values between products. Use the Criterion
+filter `numdiff/.*/(hessian_product|analytic_hessian_product)/` and accounting
+filter `hessian_product/` to select these cases on all four backends.
 
 Input construction, wrapper construction, output sizing, validation, and the
 first warm-up request are outside timing and accounting. Each measured request
 uses the same immutable point and direction. Owned calls include allocating
 their results and dropping the previous result. `into_reused` calls repeatedly
-overwrite already sized outputs, including residuals in fused calls. Both
-charge the kernel's internal allocations and scratch cleanup. Fixture teardown
-after the final request is excluded. These are steady-state measurements, not
-cold output-resizing measurements.
+overwrite already sized outputs, including residuals in fused calls.
+`scratch_reused` also retains the HVP scratch initialized by the warm-up call.
+All variants charge the internal allocations and cleanup performed during each
+request. Caller-owned HVP scratch remains alive until fixture teardown after
+the final request, which is excluded. These are steady-state measurements,
+not cold output-resizing measurements.
 
 ## Validate and count work
 
@@ -87,15 +102,18 @@ Each CSV row reports **totals over the `repeats` column**, not per-request
 averages. Divide by that column for a per-request comparison. `--filter
 SUBSTRING` selects matching benchmark names, and an unmatched filter fails.
 For example, `--filter numdiff/vec/hessian/cheap/central/` selects the three Vec
-Hessian sizes and both output APIs. Without a filter, there are 960 rows.
+Hessian sizes and both output APIs. Without a filter, every configured case runs.
 
 The callback pass counts calls at the wrapped function boundary, including
 callbacks on Rayon workers. `cost_calls` counts underlying objective calls.
 `residual_calls` and `residual_into_calls` distinguish the two residual APIs;
 their sum is the number of underlying residual evaluations. An owned residual
 callback's internal use of its own fill method counts once. These numbers are
-different from `Problem::counts()`, which counts derivative requests rather
-than the raw probes. The executable checks that repeated calls preserve the
+complemented by `gradient_calls` and `gradient_into_calls`, which count the
+analytic-gradient callbacks used by `analytic_hessian_product`. Every nonzero
+analytic HVP makes exactly two gradient calls, including with reused scratch.
+These numbers differ from `Problem::counts()`, which counts derivative requests
+rather than the raw probes. The executable checks that repeated calls preserve the
 single-call callback counts and validates the final outputs.
 
 The allocation pass uses callbacks without counters and a process-wide

@@ -4,8 +4,9 @@ use std::{convert::Infallible, hint::black_box, marker::PhantomData};
 
 use basin::{
     BoundedFiniteDiff, CostFunction, DenseMatrixFromFn, FiniteDiff, Gradient,
-    Hessian, HessianProduct, Jacobian, MatrixIndex, MatrixShape, Method,
-    Residual, VectorIndex, VectorLen,
+    Hessian, HessianProduct, HessianProductScratch, Jacobian, MatrixIndex,
+    MatrixShape, Method, Residual, VectorIndex, VectorLen,
+    central_difference_hessian_product, forward_difference_hessian_product,
 };
 
 pub trait BenchVector:
@@ -132,6 +133,7 @@ pub enum Kernel {
     Hessian,
     CostGradientHessian,
     HessianProduct,
+    AnalyticHessianProduct,
 }
 
 impl Kernel {
@@ -147,6 +149,7 @@ impl Kernel {
             Self::Hessian => "hessian",
             Self::CostGradientHessian => "cost_gradient_hessian",
             Self::HessianProduct => "hessian_product",
+            Self::AnalyticHessianProduct => "analytic_hessian_product",
         }
     }
 
@@ -175,6 +178,7 @@ impl Kernel {
 pub enum Call {
     Owned,
     IntoReused,
+    ScratchReused,
 }
 
 impl Call {
@@ -184,6 +188,7 @@ impl Call {
         match self {
             Self::Owned => "owned",
             Self::IntoReused => "into_reused",
+            Self::ScratchReused => "scratch_reused",
         }
     }
 }
@@ -198,6 +203,16 @@ pub struct Case {
 }
 
 impl Case {
+    pub fn calls(self) -> &'static [Call] {
+        if matches!(self.kernel, Kernel::AnalyticHessianProduct) {
+            &[Call::Owned, Call::ScratchReused]
+        } else if matches!(self.kernel, Kernel::HessianProduct) {
+            &[Call::Owned, Call::IntoReused, Call::ScratchReused]
+        } else {
+            &Call::ALL
+        }
+    }
+
     pub fn name(self) -> String {
         let method = match self.method {
             Method::Forward => "forward",
@@ -246,6 +261,7 @@ pub fn cases() -> Vec<Case> {
         Kernel::Hessian,
         Kernel::CostGradientHessian,
         Kernel::HessianProduct,
+        Kernel::AnalyticHessianProduct,
     ] {
         for work in [Work::Cheap, Work::Expensive] {
             for method in [Method::Forward, Method::Central] {
@@ -298,6 +314,25 @@ impl<V: BenchVector> CostFunction for Function<V> {
     }
 }
 
+impl<V: BenchVector> Gradient for Function<V> {
+    type Gradient = V;
+
+    fn gradient(&self, x: &V) -> Result<V, Infallible> {
+        let mut out = V::from_fn(x.vec_len(), |_| 0.0);
+        self.gradient_into(x, &mut out)?;
+        Ok(out)
+    }
+
+    fn gradient_into(&self, x: &V, out: &mut V) -> Result<(), Infallible> {
+        V::fill(
+            x.vec_len(),
+            |j| weight(j) * self.case.work.first(x.get_scalar(j)),
+            out,
+        );
+        Ok(())
+    }
+}
+
 impl<V: BenchVector> Residual for Function<V> {
     type Param = V;
     type Output = V;
@@ -335,11 +370,13 @@ fn row_weight(i: usize, m: usize) -> f64 {
 
 pub struct Fixture<V: BenchVector, P> {
     case: Case,
+    problem: P,
     fd: FiniteDiff<P>,
     bounded: BoundedFiniteDiff<P>,
     x: V,
     direction: V,
     gradient: V,
+    product_scratch: HessianProductScratch<V>,
     residual: V,
     matrix: V::Matrix,
     cost: f64,
@@ -353,6 +390,7 @@ where
         + Send
         + Sync
         + CostFunction<Param = V, Output = f64, Error = Infallible>
+        + Gradient<Gradient = V>
         + Residual<Param = V, Output = V, Error = Infallible>,
 {
     pub fn new(case: Case, problem: P) -> Self {
@@ -365,7 +403,7 @@ where
             fd = fd.with_step(1e-3);
         }
         let bounded = BoundedFiniteDiff::new(
-            problem,
+            problem.clone(),
             vec![-1.0; case.n],
             (0..case.n)
                 .map(|j| if case.fixed(j) { -1.0 } else { 1.0 })
@@ -382,11 +420,13 @@ where
         };
         Self {
             case,
+            problem,
             fd,
             bounded,
             x: V::from_fn(case.n, |j| case.coordinate(j)),
             direction: V::from_fn(case.n, |j| 0.25 + (j % 3) as f64 / 8.0),
             gradient: V::from_fn(case.n, |_| 0.0),
+            product_scratch: HessianProductScratch::new(),
             residual: V::from_fn(case.m, |_| 0.0),
             matrix: V::dense_from_fn(rows, cols, |_, _| 0.0),
             cost: 0.0,
@@ -486,6 +526,61 @@ where
                     &mut self.gradient,
                 )
                 .unwrap(),
+            (Kernel::AnalyticHessianProduct, Call::Owned) => {
+                self.gradient = match self.case.method {
+                    Method::Forward => forward_difference_hessian_product(
+                        &self.problem,
+                        x,
+                        black_box(&self.direction),
+                        f64::EPSILON,
+                        None,
+                    ),
+                    Method::Central => central_difference_hessian_product(
+                        &self.problem,
+                        x,
+                        black_box(&self.direction),
+                        f64::EPSILON,
+                        None,
+                    ),
+                    _ => unreachable!(),
+                }
+                .unwrap();
+            }
+            (Kernel::AnalyticHessianProduct, Call::IntoReused) => {
+                unreachable!()
+            }
+            (Kernel::HessianProduct, Call::ScratchReused) => self
+                .fd
+                .hessian_product_with_scratch_into(
+                    x,
+                    black_box(&self.direction),
+                    &mut self.gradient,
+                    &mut self.product_scratch,
+                )
+                .unwrap(),
+            (Kernel::AnalyticHessianProduct, Call::ScratchReused) => {
+                match self.case.method {
+                    Method::Forward => self.product_scratch.forward_into(
+                        &self.problem,
+                        x,
+                        black_box(&self.direction),
+                        f64::EPSILON,
+                        None,
+                        &mut self.gradient,
+                    ),
+                    Method::Central => self.product_scratch.central_into(
+                        &self.problem,
+                        x,
+                        black_box(&self.direction),
+                        f64::EPSILON,
+                        None,
+                        &mut self.gradient,
+                    ),
+                    _ => unreachable!(),
+                }
+                .unwrap();
+            }
+            (_, Call::ScratchReused) => unreachable!(),
         }
         black_box((&self.gradient, &self.residual, &self.matrix, self.cost));
     }
@@ -560,12 +655,19 @@ where
             for j in 0..case.n {
                 let (expected, tolerance) = if case.fixed(j) {
                     (0.0, 0.0)
-                } else if matches!(case.kernel, Kernel::HessianProduct) {
+                } else if matches!(
+                    case.kernel,
+                    Kernel::HessianProduct | Kernel::AnalyticHessianProduct
+                ) {
                     (
                         weight(j)
                             * case.work.second(case.coordinate(j))
                             * self.direction.get_scalar(j),
-                        1e-2,
+                        if matches!(case.kernel, Kernel::HessianProduct) {
+                            1e-2
+                        } else {
+                            2e-5
+                        },
                     )
                 } else {
                     (weight(j) * case.work.first(case.coordinate(j)), 2e-5)

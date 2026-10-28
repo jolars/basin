@@ -5,7 +5,7 @@ mod support;
 
 use basin::MatrixIndex;
 use criterion::{Criterion, criterion_group, criterion_main};
-use support::{BenchVector, Call, Fixture, Function};
+use support::{BenchVector, Fixture, Function};
 
 fn backend<V>(c: &mut Criterion, backend: &str)
 where
@@ -14,7 +14,7 @@ where
 {
     let mut group = c.benchmark_group(format!("numdiff/{backend}"));
     for case in support::cases() {
-        for call in Call::ALL {
+        for &call in case.calls() {
             let name = format!("{}/{}", case.name(), call.name());
             group.bench_function(name, |b| {
                 let mut fixture =

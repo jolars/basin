@@ -12,8 +12,8 @@ use std::{
     },
 };
 
-use basin::{CostFunction, MatrixIndex, Residual};
-use support::{BenchVector, Call, Fixture, Function};
+use basin::{CostFunction, Gradient, MatrixIndex, Residual};
+use support::{BenchVector, Fixture, Function};
 
 static RECORDING: AtomicBool = AtomicBool::new(false);
 static ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
@@ -71,6 +71,8 @@ static ALLOCATOR: CountingAllocator = CountingAllocator;
 #[derive(Default)]
 struct Callbacks {
     cost: AtomicUsize,
+    gradient: AtomicUsize,
+    gradient_into: AtomicUsize,
     residual: AtomicUsize,
     residual_into: AtomicUsize,
 }
@@ -78,15 +80,19 @@ struct Callbacks {
 impl Callbacks {
     fn reset(&self) {
         self.cost.store(0, Relaxed);
+        self.gradient.store(0, Relaxed);
+        self.gradient_into.store(0, Relaxed);
         self.residual.store(0, Relaxed);
         self.residual_into.store(0, Relaxed);
     }
 
-    fn snapshot(&self) -> [usize; 3] {
+    fn snapshot(&self) -> [usize; 5] {
         [
             self.cost.load(Relaxed),
             self.residual.load(Relaxed),
             self.residual_into.load(Relaxed),
+            self.gradient.load(Relaxed),
+            self.gradient_into.load(Relaxed),
         ]
     }
 }
@@ -121,6 +127,20 @@ impl<V: BenchVector> Residual for Counted<Function<V>> {
     fn residual_into(&self, x: &V, out: &mut V) -> Result<(), Infallible> {
         self.callbacks.residual_into.fetch_add(1, Relaxed);
         self.inner.residual_into(x, out)
+    }
+}
+
+impl<V: BenchVector> Gradient for Counted<Function<V>> {
+    type Gradient = V;
+
+    fn gradient(&self, x: &V) -> Result<V, Infallible> {
+        self.callbacks.gradient.fetch_add(1, Relaxed);
+        self.inner.gradient(x)
+    }
+
+    fn gradient_into(&self, x: &V, out: &mut V) -> Result<(), Infallible> {
+        self.callbacks.gradient_into.fetch_add(1, Relaxed);
+        self.inner.gradient_into(x, out)
     }
 }
 
@@ -191,7 +211,7 @@ where
 {
     let mut checked = 0;
     for case in support::cases() {
-        for call in Call::ALL {
+        for &call in case.calls() {
             let name =
                 format!("numdiff/{backend}/{}/{}", case.name(), call.name());
             if !name.contains(&options.filter) {
@@ -235,8 +255,13 @@ where
             let bytes = BYTES.load(Relaxed);
             fixture.verify();
             println!(
-                "{mode},{name},{},{},{},{},{allocations},{reallocations},{bytes}",
-                options.repeats, counts[0], counts[1], counts[2]
+                "{mode},{name},{},{},{},{},{},{},{allocations},{reallocations},{bytes}",
+                options.repeats,
+                counts[0],
+                counts[1],
+                counts[2],
+                counts[3],
+                counts[4]
             );
             checked += 1;
         }
@@ -254,7 +279,7 @@ fn main() {
         options.repeats
     );
     println!(
-        "execution,benchmark,repeats,cost_calls,residual_calls,residual_into_calls,alloc_calls,realloc_calls,requested_bytes"
+        "execution,benchmark,repeats,cost_calls,residual_calls,residual_into_calls,gradient_calls,gradient_into_calls,alloc_calls,realloc_calls,requested_bytes"
     );
     let checked = backend::<Vec<f64>>(&options, &mode, "vec")
         + backend::<support::NalgebraVector>(&options, &mode, "nalgebra")
