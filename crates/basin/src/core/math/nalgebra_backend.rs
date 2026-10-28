@@ -532,11 +532,21 @@ impl<F: Scalar> DenseMatrixFromFn<F> for DVector<F> {
     ) -> DMatrix<F> {
         DMatrix::from_fn(rows, cols, f)
     }
-    fn dense_from_fn_into<G: FnMut(usize, usize) -> F>(rows: usize, cols: usize, mut f: G, out: &mut Self::Matrix) {
-        if out.shape() != (rows, cols) { out.resize_mut(rows, cols, F::zero()); }
-        for j in 0..cols { for i in 0..rows { out[(i, j)] = f(i, j); } }
+    fn dense_from_fn_into<G: FnMut(usize, usize) -> F>(
+        rows: usize,
+        cols: usize,
+        mut f: G,
+        out: &mut Self::Matrix,
+    ) {
+        if out.shape() != (rows, cols) {
+            out.resize_mut(rows, cols, F::zero());
+        }
+        for j in 0..cols {
+            for i in 0..rows {
+                out[(i, j)] = f(i, j);
+            }
+        }
     }
-
 }
 
 // Pure-Rust symmetric eigendecomposition (default), generic over every

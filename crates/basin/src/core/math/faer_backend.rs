@@ -452,11 +452,19 @@ impl<F: Scalar> DenseMatrixFromFn<F> for Col<F> {
     ) -> Mat<F> {
         Mat::from_fn(rows, cols, f)
     }
-    fn dense_from_fn_into<G: FnMut(usize, usize) -> F>(rows: usize, cols: usize, mut f: G, out: &mut Self::Matrix) {
+    fn dense_from_fn_into<G: FnMut(usize, usize) -> F>(
+        rows: usize,
+        cols: usize,
+        mut f: G,
+        out: &mut Self::Matrix,
+    ) {
         out.resize_with(rows, cols, |_, _| F::zero());
-        for j in 0..cols { for i in 0..rows { out[(i, j)] = f(i, j); } }
+        for j in 0..cols {
+            for i in 0..rows {
+                out[(i, j)] = f(i, j);
+            }
+        }
     }
-
 }
 
 impl<F> SymmetricEigen<Col<F>> for Mat<F>
