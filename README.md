@@ -4,6 +4,8 @@
 [![Coverage](https://codecov.io/gh/jolars/basin/branch/main/graph/badge.svg)](https://app.codecov.io/gh/jolars/basin/tree/main)
 [![crates.io](https://img.shields.io/crates/v/basin.svg)](https://crates.io/crates/basin)
 [![docs.rs](https://img.shields.io/docsrs/basin)](https://docs.rs/basin)
+[![Software
+DOI](https://img.shields.io/badge/Software_DOI-10.5281%2Fzenodo.20610944-blue)](https://doi.org/10.5281/zenodo.20610944)
 
 Basin is a numerical optimization library for Rust. Solve problems with or
 without derivatives, fit models with nonlinear least squares, and handle
@@ -190,8 +192,13 @@ If you use Basin in your research, please cite the paper:
 
 </details>
 
-[CITATION.cff](CITATION.cff) carries the same reference in machine-readable
-form, and [basin.rs/guide] renders it in APA, BibTeX, and BibLaTeX.
+For reproducibility, also cite the software release you used. Select that
+release in the [Zenodo archive](https://doi.org/10.5281/zenodo.20610944) and
+export its citation. The concept DOI `10.5281/zenodo.20610944` identifies Basin
+across all releases.
+
+[CITATION.cff](CITATION.cff) contains the software metadata and preferred paper
+citation, and \[basin.rs/guide\] renders the paper in APA, BibTeX, and BibLaTeX.
 
 ## Acknowledgements
 
