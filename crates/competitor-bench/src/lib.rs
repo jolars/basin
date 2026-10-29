@@ -30,6 +30,7 @@
 //! comparisons to confirm the solvers reach the same optimum in
 //! comparable work before the timings are trusted.
 
+pub mod cmaes;
 pub mod cobyla;
 pub mod convergence;
 #[cfg(feature = "lbfgsb-reference")]

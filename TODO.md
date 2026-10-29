@@ -312,6 +312,12 @@ compatibility and numerical behavior still need verification.
   first; report IPOP/BIPOP restarts and local injections separately. Do not
   infer bounded-CMA equivalence from unconstrained CMA-ES results.
 
+  - [x] Publish standalone active CMA-ES against `cmaes` 0.2.2 on a
+    40-variable rotated ellipsoid and Ackley, each with five fixed seeds.
+    Match population, mean, sigma, target, and evaluation budget; report
+    per-seed traces, success counts, actual objective calls, and backend
+    differences. Broader workloads and restart comparisons remain open.
+
 - [ ] **Add bounded least squares against `rmpfit`.** [`rmpfit`
   2.0.0](https://docs.rs/rmpfit/2.0.0/rmpfit/) is a pure-Rust CMPFIT port
   with analytic or numerical derivatives, parameter bounds, and fixed

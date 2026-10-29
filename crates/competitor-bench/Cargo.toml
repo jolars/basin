@@ -64,6 +64,8 @@ nlopt = "0.8"
 cobyla = "1.0.2"
 # Pure-Rust translation of NLopt 2.7.1's SLSQP, compared with Basin and NLopt.
 slsqp = "1.0.2"
+# Active CMA-ES reference uses its own nalgebra 0.33 and serial `next` API.
+cmaes = { version = "=0.2.2", default-features = false }
 # Becker's C translation of L-BFGS-B 3.0 needs a C compiler and libclang.
 # Keep bindgen optional for the other competitor benchmarks.
 lbfgsb = { version = "=0.1.1", optional = true }

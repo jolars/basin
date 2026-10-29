@@ -26,6 +26,8 @@ export const PROBLEM_LABELS: Record<string, string> = {
     quadratic_30d: "Constrained quadratic",
     constrained_quadratic: "Ball-constrained quadratic",
     extended_rosenbrock: "Bounded extended Rosenbrock",
+    rotated_ellipsoid: "Rotated ellipsoid",
+    ackley: "Ackley",
 };
 
 /** Competing libraries a case is run against. */
@@ -36,6 +38,7 @@ export type Library =
     | "nlopt"
     | "slsqp"
     | "lbfgsb"
+    | "cmaes"
     | "levenberg-marquardt"
     | "cobyla";
 
@@ -67,6 +70,8 @@ export interface CompetitorResult {
     problem: string;
     n: number;
     library: Library;
+    /** Each stochastic seed retains its own trace and diagnostics. */
+    seed?: number;
     points: TracePoint[];
     violations?: { tNs: number; violation: number }[];
     summary?: RunSummary;
@@ -102,6 +107,7 @@ export const LIBRARY_ORDER: Library[] = [
     "levenberg-marquardt",
     "cobyla",
     "lbfgsb",
+    "cmaes",
 ];
 
 export const LIBRARY_LABELS: Record<Library, string> = {
@@ -113,6 +119,7 @@ export const LIBRARY_LABELS: Record<Library, string> = {
     "levenberg-marquardt": "LM crate",
     cobyla: "cobyla",
     lbfgsb: "lbfgsb (C)",
+    cmaes: "cmaes",
 };
 
 /** Line and legend colors per library, legible on light and dark backgrounds.
@@ -127,6 +134,7 @@ export const LIBRARY_COLORS: Record<Library, string> = {
     "levenberg-marquardt": "#f59e0b",
     cobyla: "#14b8a6",
     lbfgsb: "#14b8a6",
+    cmaes: "#f59e0b",
 };
 
 /** One curated competitor case. */
@@ -137,6 +145,7 @@ export interface CompetitorCase {
     blurb: string;
     n: number;
     libraries: Library[];
+    seeds?: number[];
 }
 
 /**
@@ -201,6 +210,22 @@ export const COMPETITOR_CASES: CompetitorCase[] = [
         n: 30,
         blurb: "Powell's model-based derivative-free NEWUOA. Basin's implementation is based on the modernized version from PRIMA, whereas nlopt uses Powell's reference.",
     },
+    {
+        solver: "cmaes",
+        problem: "rotated_ellipsoid",
+        n: 40,
+        libraries: ["basin", "cmaes"],
+        seeds: [0, 1, 2, 3, 4],
+        blurb: "Active CMA-ES on a densely rotated quadratic with condition number 10⁶. Five seeds, a population of 16, and a shared objective target and evaluation budget.",
+    },
+    {
+        solver: "cmaes",
+        problem: "ackley",
+        n: 40,
+        libraries: ["basin", "cmaes"],
+        seeds: [0, 1, 2, 3, 4],
+        blurb: "Standalone active CMA-ES on multimodal Ackley. Each seed starts from the same mean and step size; failed runs remain visible alongside successes.",
+    },
 ];
 
 /** Libraries a case actually has data for, in canonical order. */
@@ -225,16 +250,23 @@ export function validateCompetitorResults(raw: unknown): CompetitorResult[] {
         const c = COMPETITOR_CASES.find(
             (c) => c.solver === row?.solver && c.problem === row?.problem,
         );
-        const key = `${row?.solver}/${row?.problem}/${row?.library}`;
+        const key = resultKey(row);
         if (!c?.libraries.includes(row.library) || keys.has(key))
             throw new Error(`Unexpected or duplicate result: ${key}`);
+        if (
+            c.seeds
+                ? !Number.isInteger(row.seed) ||
+                  !c.seeds.includes(row.seed as number)
+                : row.seed !== undefined
+        )
+            throw new Error(`Unexpected seed: ${key}`);
         keys.add(key);
         if (!Number.isInteger(row.n) || row.n !== c.n)
             throw new Error(`Invalid dimension: ${key}`);
         validatePoints(row.points, "subopt", key);
         if (row.violations !== undefined)
             validatePoints(row.violations, "violation", key);
-        if (["lm", "cobyla", "slsqp", "lbfgsb"].includes(c.solver)) {
+        if (["lm", "cobyla", "slsqp", "lbfgsb", "cmaes"].includes(c.solver)) {
             const s = row.summary;
             if (
                 !s ||
@@ -301,15 +333,47 @@ export function validateCompetitorResults(raw: unknown): CompetitorResult[] {
                         `Invalid verified L-BFGS-B solution: ${key}`,
                     );
             }
+            if (c.solver === "cmaes") {
+                if (
+                    !Number.isInteger(s.iterations) ||
+                    (s.iterations ?? -1) < 0 ||
+                    (s.iterations ?? Infinity) > 10_000 ||
+                    s.objectiveCalls > 100_000 + 16 ||
+                    s.residualCalls !== 0 ||
+                    s.jacobianCalls !== 0 ||
+                    s.gradientCalls !== 0 ||
+                    s.constraintCalls !== 0
+                )
+                    throw new Error(`Invalid CMA-ES diagnostics: ${key}`);
+                if (
+                    s.verified &&
+                    (s.cost === null ||
+                        s.cost < 0 ||
+                        s.cost > 1e-8 ||
+                        (s.iterations ?? 0) < 1 ||
+                        s.objectiveCalls !==
+                            (s.iterations ?? 0) *
+                                (row.library === "basin" ? 17 : 16))
+                )
+                    throw new Error(`Invalid verified CMA-ES solution: ${key}`);
+            }
         }
     }
     for (const c of COMPETITOR_CASES) {
         for (const library of c.libraries) {
-            const key = `${c.solver}/${c.problem}/${library}`;
-            if (!keys.has(key)) throw new Error(`Missing result: ${key}`);
+            for (const seed of c.seeds ?? [undefined]) {
+                const key = resultKey({ ...c, library, seed });
+                if (!keys.has(key)) throw new Error(`Missing result: ${key}`);
+            }
         }
     }
     return rows;
+}
+
+function resultKey(
+    row: Pick<CompetitorResult, "solver" | "problem" | "library" | "seed">,
+) {
+    return `${row?.solver}/${row?.problem}/${row?.library}${row?.seed === undefined ? "" : `/seed${row.seed}`}`;
 }
 
 function validatePoints(

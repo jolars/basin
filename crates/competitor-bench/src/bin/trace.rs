@@ -3,6 +3,7 @@
 //! Run with the serial L-BFGS-B reference feature:
 //! `cargo run --release -p competitor-bench --features lbfgsb-reference --bin trace`.
 //! Append `-- --nm` to run only the shared-simplex Nelder-Mead comparison.
+//! Append `-- --cmaes` to run only the seeded active CMA-ES comparisons.
 //! Append `-- --lbfgsb` to run only the bounded L-BFGS-B comparison.
 //! Cases, starts, targets, and remaining comparison asymmetries are documented
 //! on the website's library-benchmark page. These traces measure solver
@@ -29,7 +30,7 @@ use basin::{
     State as BasinState, StepOutcome,
 };
 use competitor_bench::{
-    ArgminProblem, GomezProblem, cobyla, convergence, lm, nm, slsqp,
+    ArgminProblem, GomezProblem, cmaes, cobyla, convergence, lm, nm, slsqp,
 };
 use gomez::OptimizerDriver;
 
@@ -361,6 +362,7 @@ fn median_reps(mut run: impl FnMut() -> Vec<(u128, f64)>) -> Vec<(u128, f64)> {
 // ---------------------------------------------------------------------
 
 struct Trace {
+    seed: Option<u64>,
     solver: &'static str,
     problem: &'static str,
     n: usize,
@@ -398,6 +400,9 @@ fn print_traces(traces: &[Trace]) {
             out.push_str(&format!("{{\"tNs\":{t_ns},\"subopt\":{subopt}}}"));
         }
         out.push(']');
+        if let Some(seed) = t.seed {
+            out.push_str(&format!(",\"seed\":{seed}"));
+        }
         if !t.violations.is_empty() {
             out.push_str(",\"violations\":[");
             for (i, &(time, violation)) in t.violations.iter().enumerate() {
@@ -470,6 +475,7 @@ fn published_trace(
         run.summary.verified
     );
     Trace {
+        seed: None,
         solver,
         problem,
         n: run.summary.point.len(),
@@ -486,6 +492,7 @@ fn nm_traces() -> Vec<Trace> {
     vec![
         // ---- Nelder-Mead (standard coeffs, identical initial simplex) ----
         Trace {
+            seed: None,
             violations: Vec::new(),
             summary: None,
             solver: "nm",
@@ -507,6 +514,7 @@ fn nm_traces() -> Vec<Trace> {
             }),
         },
         Trace {
+            seed: None,
             violations: Vec::new(),
             summary: None,
             solver: "nm",
@@ -535,6 +543,7 @@ fn nm_traces() -> Vec<Trace> {
             ),
         },
         Trace {
+            seed: None,
             violations: Vec::new(),
             summary: None,
             solver: "nm",
@@ -545,6 +554,7 @@ fn nm_traces() -> Vec<Trace> {
             points: median_reps(|| gomez_trace_nm(nm_f0)),
         },
         Trace {
+            seed: None,
             violations: Vec::new(),
             summary: None,
             solver: "nm",
@@ -573,6 +583,10 @@ fn main() {
         print_traces(&nm_traces());
         return;
     }
+    if std::env::args().nth(1).as_deref() == Some("--cmaes") {
+        print_traces(&cmaes_traces());
+        return;
+    }
     assert!(
         cfg!(feature = "lbfgsb-reference"),
         "Enable --features lbfgsb-reference to generate the complete published dataset"
@@ -588,6 +602,7 @@ fn main() {
     let mut traces = vec![
         // ---- gradient descent (steepest + More-Thuente) ----
         Trace {
+            seed: None,
             violations: Vec::new(),
             summary: None,
             solver: "gd",
@@ -607,6 +622,7 @@ fn main() {
             }),
         },
         Trace {
+            seed: None,
             violations: Vec::new(),
             summary: None,
             solver: "gd",
@@ -636,6 +652,7 @@ fn main() {
         },
         // ---- L-BFGS (limited memory m = 10, More-Thuente) ----
         Trace {
+            seed: None,
             violations: Vec::new(),
             summary: None,
             solver: "lbfgs",
@@ -655,6 +672,7 @@ fn main() {
             }),
         },
         Trace {
+            seed: None,
             violations: Vec::new(),
             summary: None,
             solver: "lbfgs",
@@ -689,6 +707,7 @@ fn main() {
             ),
         },
         Trace {
+            seed: None,
             violations: Vec::new(),
             summary: None,
             solver: "lbfgs",
@@ -710,6 +729,7 @@ fn main() {
         //      ρ_beg/ρ_end and `npt = 2n+1`, on Styblinski–Tang at n = 30 from the
         //      origin. Both run to natural ρ-convergence (not the iter cap). ----
         Trace {
+            seed: None,
             violations: Vec::new(),
             summary: None,
             solver: "newuoa",
@@ -731,6 +751,7 @@ fn main() {
             }),
         },
         Trace {
+            seed: None,
             violations: Vec::new(),
             summary: None,
             solver: "newuoa",
@@ -817,6 +838,7 @@ fn main() {
     }
     #[cfg(feature = "lbfgsb-reference")]
     traces.extend(lbfgsb_traces());
+    traces.extend(cmaes_traces());
     print_traces(&traces);
 }
 
@@ -838,4 +860,27 @@ fn lbfgsb_traces() -> Vec<Trace> {
             )
         })
         .collect()
+}
+
+fn cmaes_traces() -> Vec<Trace> {
+    let mut traces = Vec::new();
+    for case in [cmaes::Case::RotatedEllipsoid, cmaes::Case::Ackley] {
+        for seed in cmaes::SEEDS {
+            for library in [cmaes::Library::Basin, cmaes::Library::Reference] {
+                let mut trace = published_trace(
+                    "cmaes",
+                    case.name(),
+                    0.0,
+                    library.name(),
+                    convergence::median_run(
+                        || cmaes::run(library, case, seed),
+                        REPS,
+                    ),
+                );
+                trace.seed = Some(seed);
+                traces.push(trace);
+            }
+        }
+    }
+    traces
 }

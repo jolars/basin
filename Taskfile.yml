@@ -203,6 +203,8 @@ tasks:
       Runs the `trace` harness, including LM exponential fitting against
       levenberg-marquardt and constrained quadratic optimization against cobyla
       and native NLopt, plus bounded L-BFGS-B against Becker's C translation.
+      Also compares standalone active CMA-ES against the Rust cmaes crate on
+      a rotated ellipsoid and Ackley, each with five fixed seeds.
       Records convergence against wall-clock time, then wraps the traces with
       compiler, revision, dependency versions, and machine metadata into
       web/src/lib/data/competitor-benchmarks.json, which the

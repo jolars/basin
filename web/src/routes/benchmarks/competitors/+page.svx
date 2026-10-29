@@ -4,6 +4,7 @@
     import { COMPETITOR_BENCHMARKS as data } from "#lib/data/competitors.ts";
 
     const lmVersion = data.versions["levenberg-marquardt"];
+    const cmaesNalgebraVersion = data.versions["nalgebra-cmaes"];
     const revisionNote = data.env.dirty ? " with local changes" : "";
 </script>
 
@@ -34,6 +35,7 @@ continuing iterations after reaching the target.
   | L-BFGS              | 100-variable Rosenbrock                                |
   | L-BFGS-B            | 20,000-variable extended Rosenbrock with box bounds     |
   | NEWUOA              | 30-variable Styblinski–Tang                            |
+  | Active CMA-ES       | 40-variable rotated ellipsoid and Ackley, five seeds each |
 
 Configurations match where the APIs allow it. Line searches, stopping rules, and
 numerical safeguards can still produce different paths. These are comparisons of
@@ -224,12 +226,69 @@ and NLopt a 10,000-evaluation cap.
 A single start does not measure the probability of finding the global minimum on
 a multimodal problem.
 
+## Active CMA-ES
+
+Basin is compared with [cmaes](https://docs.rs/cmaes/0.2.2/cmaes/)
+{data.versions.cmaes} on two unconstrained problems with 40 variables. Both
+use active covariance adaptation; the reference explicitly selects
+`Weights::Negative`. Both start with mean $(3,\ldots,3)$, identity covariance,
+step size $\sigma_0 = 2$, and a population of 16. Runs use seeds 0 through 4,
+without restarts or local search. Matching seed numbers do not produce the same
+random samples across libraries.
+
+The rotated ellipsoid is a nonseparable quadratic with condition number $10^6$:
+
+$$
+  f(\mathbf{x}) = \sum_{i=0}^{39} 10^{6i/39}(Q\mathbf{x})_i^2,
+$$
+
+where $Q$ is the orthonormal discrete cosine transform, with
+$Q_{0j} = 1/\sqrt{40}$ and
+$Q_{ij} = \sqrt{2/40}\cos(\pi i(j+1/2)/40)$ for $i > 0$. Its global minimum
+is zero at the origin. The dense rotation prevents the solvers from exploiting
+coordinate separability.
+
+<CompetitorFigure solver="cmaes" problem="rotated_ellipsoid" />
+
+[Ackley](https://docs.rs/basin/latest/basin/problems/ackley/struct.Ackley.html)
+has a broad outer funnel and many local minima. We use Basin's standard formula
+with $a = 20$, $b = 0.2$, and
+$c = 2\pi$, whose global minimum is also zero at the origin. These runs impose
+no box bounds.
+
+<CompetitorFigure solver="cmaes" problem="ackley" />
+
+Both drivers seek a best evaluated objective of at most $10^{-8}$, with safety
+caps of 100,000 objective calls and 10,000 sampled generations. Budgets are
+checked at generation boundaries, so a run can exceed its evaluation cap by
+less than one generation. The reference's optional objective-change and
+distribution-size tolerances are zeroed, and its stagnation window lies beyond
+the generation cap. Its intrinsic numerical safeguards remain enabled, and
+their termination reasons remain visible. Basin's optional distribution-size
+check is disabled. Independent checks recompute the best returned point's
+objective outside the timer; a budget or safeguard stop alone does not count
+as success.
+
+Basin uses nalgebra {data.versions.nalgebra}, while `cmaes` uses nalgebra
+{cmaesNalgebraVersion}. Basin evaluates the mean as well as the 16
+population members, charging 17 objective calls per sampled generation; the
+reference evaluates only the 16 members. Basin refreshes its eigendecomposition
+every generation, while the reference refreshes periodically. These differences
+affect trajectories, evaluation counts, and runtime.
+
+Use the seed selector to inspect individual convergence curves. The table
+reports how many of the five seeds reached the common target, plus the ranges
+of final times and objective calls across all seeds. Each seed warms up once
+and uses {data.repetitions} timing repetitions of that same numerical path.
+Five seeds on two problems give limited evidence of stochastic reliability.
+
 ## Methodology and reproduction
 
 Measured {data.generatedAt} on {data.env.cpu} ({data.env.os}/{data.env.arch}),
 using {data.env.compiler}. Serial runs use {data.env.threads} thread. LM uses
-nalgebra {data.versions.nalgebra}; other cases use `Vec<f64>`, except for
-gomez's bundled `nalgebra::DVector<f64>`. Native NLopt is accessed through the
+nalgebra {data.versions.nalgebra}; CMA-ES uses the nalgebra versions documented
+above. Other cases use `Vec<f64>`, except for gomez's bundled
+`nalgebra::DVector<f64>`. Native NLopt is accessed through the
 Rust `nlopt` bindings, version {data.versions.nlopt}.
 
 Each case warms up once. Each timestamp is the median at the corresponding
@@ -239,8 +298,9 @@ timestamps. Repetitions reduce timing noise; they are not independent starting
 points or a measure of reliability across problems.
 
 Timings include initialization and trace instrumentation. Some driving loops
-construct their executor before starting the clock. LM, COBYLA, and L-BFGS-B also
-include solver teardown; NLopt curves include an explicit endpoint after optimization.
+construct their executor before starting the clock. LM, COBYLA, CMA-ES, and
+L-BFGS-B also include solver teardown; NLopt curves include an explicit endpoint
+after optimization.
 Independent solution checks and constrained-trace reconstruction happen outside
 the timer. Argmin uses an observer, Basin and gomez use driving loops, and NLopt
 uses objective callbacks, so sampling and instrumentation costs differ.
@@ -255,9 +315,9 @@ machine. Results use source revision
 From the repository root:
 
 ```sh
-mkdir -p target
-cargo run --locked -p competitor-bench --release --features lbfgsb-reference --bin trace > target/competitor-traces.json
-pnpm --dir web collect:competitors
+compute run -- cargo build --locked -p competitor-bench --release --features lbfgsb-reference --bin trace
+compute bench --reason "Refresh competitor convergence traces" -- bash -c './target/release/trace > target/competitor-traces.json'
+compute run -- pnpm --dir web collect:competitors
 ```
 
 The optional `lbfgsb-reference` feature requires a C compiler and libclang,
@@ -266,6 +326,12 @@ provided by the development environment. To verify just this case, run
 Append `-- --calibrate` to remeasure untraced solves, starting at 20,000 variables
 and doubling until both medians reach 20 ms. The published dimension remains
 fixed between benchmark refreshes.
+
+To verify both CMA-ES problems and all five seeds, run
+`compute bench --reason "Verify active CMA-ES" -- cargo run --locked --release -p competitor-bench --bin verify_cmaes`.
+Append `-- --untraced` to disable intermediate trace recording. The verifier
+reports timing ranges across repetitions, objective counts, and target checks.
+To generate only the CMA-ES traces, pass `--cmaes` to the prebuilt `trace` binary.
 
 The [trace
 harness](https://github.com/jolars/basin/blob/main/crates/competitor-bench/src/bin/trace.rs)
