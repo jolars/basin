@@ -26,6 +26,25 @@ pub const MAX_EVALUATIONS: usize = 100_000;
 pub const MAX_GENERATIONS: usize = 10_000;
 pub const SEEDS: [u64; 5] = [0, 1, 2, 3, 4];
 
+/// Investigation settings; published traces retain the defaults.
+#[derive(Clone, Copy, Debug)]
+pub struct Configuration {
+    pub dimension: usize,
+    pub eigen_update_period: u64,
+    /// A fixed amount of work, with the objective target disabled.
+    pub generations: Option<usize>,
+}
+
+impl Default for Configuration {
+    fn default() -> Self {
+        Self {
+            dimension: DIMENSION,
+            eigen_update_period: 1,
+            generations: None,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum Case {
     RotatedEllipsoid,
@@ -145,23 +164,25 @@ struct Outcome {
 fn basin_solve(
     problem: &Workload,
     seed: u64,
+    config: Configuration,
     record: &mut impl FnMut(f64),
 ) -> Outcome {
     let solver = CmaEs::<BasinVector<f64>, BasinMatrix<f64>>::new(seed, SIGMA)
         .with_lambda(POPULATION)
+        .with_eigen_update_period(config.eigen_update_period)
         .with_absolute_distribution_size_tolerance(None);
     let state = PopulationProgress::from_point(BasinVector::from_element(
         problem.weights.len(),
         3.0,
     ));
     let mut stepper = Executor::new(problem, solver, state)
-        .max_iter((MAX_GENERATIONS - 1) as u64)
+        .max_iter((config.generations.unwrap_or(MAX_GENERATIONS) - 1) as u64)
         .into_stepper()
         .unwrap();
     let status = loop {
         let (_, cost) = stepper.state().best().unwrap();
         record(cost);
-        if cost <= TARGET {
+        if config.generations.is_none() && cost <= TARGET {
             break "TargetReached".into();
         }
         if problem.calls() >= MAX_EVALUATIONS {
@@ -199,12 +220,22 @@ fn reference_options(n: usize, seed: u64) -> ::cmaes::CMAESOptions {
         .tol_stagnation(MAX_GENERATIONS + 1)
 }
 
+/// The reference's actual refresh cadence for this dimension and population.
+pub fn reference_eigen_update_period(n: usize) -> usize {
+    reference_options(n, 0)
+        .build(|_: &::cmaes::DVector<f64>| 0.0)
+        .unwrap()
+        .generations_per_eigen_update()
+}
+
 fn reference_solve(
     problem: &Workload,
     seed: u64,
+    config: Configuration,
     record: &mut impl FnMut(f64),
 ) -> Outcome {
     let mut solver = reference_options(problem.weights.len(), seed)
+        .max_generations(config.generations.unwrap_or(MAX_GENERATIONS))
         .build(|x: &::cmaes::DVector<f64>| problem.evaluate(x.as_slice()))
         .unwrap();
     let status = loop {
@@ -216,7 +247,7 @@ fn reference_solve(
         if let Some(termination) = termination {
             break format!("{:?}", termination.reasons);
         }
-        if cost <= TARGET {
+        if config.generations.is_none() && cost <= TARGET {
             break "TargetReached".into();
         }
     };
@@ -244,17 +275,23 @@ pub fn run_logged(
     seed: u64,
     tracing: bool,
 ) -> Run {
-    run_sized(library, case, seed, DIMENSION, tracing)
+    run_configured(library, case, seed, Configuration::default(), tracing)
 }
 
-fn run_sized(
+/// Run a target solve or a fixed number of generations without publishing data.
+pub fn run_configured(
     library: Library,
     case: Case,
     seed: u64,
-    n: usize,
+    config: Configuration,
     tracing: bool,
 ) -> Run {
-    let problem = Workload::new(case, n);
+    assert!(
+        config
+            .generations
+            .is_none_or(|n| (1..=MAX_GENERATIONS).contains(&n))
+    );
+    let problem = Workload::new(case, config.dimension);
     let mut points = Vec::new();
     let start = Instant::now();
     let mut record = |cost: f64| {
@@ -263,8 +300,10 @@ fn run_sized(
         }
     };
     let outcome = match library {
-        Library::Basin => basin_solve(&problem, seed, &mut record),
-        Library::Reference => reference_solve(&problem, seed, &mut record),
+        Library::Basin => basin_solve(&problem, seed, config, &mut record),
+        Library::Reference => {
+            reference_solve(&problem, seed, config, &mut record)
+        }
     };
     let elapsed = start.elapsed().as_nanos();
     if outcome.cost.is_finite() {
@@ -325,13 +364,49 @@ mod tests {
         assert_eq!(options.seed, Some(42));
         assert_eq!(options.population_size, POPULATION);
         assert_eq!(options.initial_step_size, SIGMA);
+        assert_eq!(reference_eigen_update_period(DIMENSION), 3);
+    }
+
+    #[test]
+    fn fixed_work_keeps_the_mean_evaluation_and_generation_accounting() {
+        for library in [Library::Basin, Library::Reference] {
+            let run = run_configured(
+                library,
+                Case::Ackley,
+                0,
+                Configuration {
+                    dimension: 8,
+                    eigen_update_period: 3,
+                    generations: Some(12),
+                },
+                false,
+            );
+            assert_eq!(run.summary.iterations, Some(12));
+            let evaluations = match library {
+                Library::Basin => 17,
+                Library::Reference => 16,
+            };
+            assert_eq!(run.summary.objective_calls, 12 * evaluations);
+            assert!(run.summary.point.iter().all(|x| x.is_finite()));
+            assert!(run.summary.cost.is_finite());
+            assert_ne!(run.summary.status, "TargetReached");
+        }
     }
 
     #[test]
     fn both_drivers_reach_the_target_and_count_all_objective_calls() {
         for case in [Case::RotatedEllipsoid, Case::Ackley] {
             for library in [Library::Basin, Library::Reference] {
-                let run = run_sized(library, case, 0, 4, true);
+                let run = run_configured(
+                    library,
+                    case,
+                    0,
+                    Configuration {
+                        dimension: 4,
+                        ..Configuration::default()
+                    },
+                    true,
+                );
                 assert!(
                     run.summary.verified,
                     "{case:?}/{library:?}: {:?}",

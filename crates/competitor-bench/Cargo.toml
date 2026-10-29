@@ -88,6 +88,7 @@ basin-latest = ["basin/nalgebra", "dep:nalgebra_latest"]
 parallel = ["basin/parallel", "dep:rayon"]
 
 [dev-dependencies]
+nalgebra_reference = { package = "nalgebra", version = "0.33" }
 criterion = { version = "0.8", default-features = false, features = [
   "cargo_bench_support",
 ] }
@@ -114,6 +115,10 @@ harness = false
 
 [[bench]]
 name = "numdiff"
+harness = false
+
+[[bench]]
+name = "cmaes"
 harness = false
 
 # Serial-vs-parallel scaling of basin's population solvers (axis 4:

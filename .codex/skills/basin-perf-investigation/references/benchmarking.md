@@ -18,6 +18,7 @@ older comments still call `competitor-bench` by its former name, `lm-bench`.
   | Public COBYLA versus the `cobyla` crate       | `crates/competitor-bench/benches/gd_nm.rs` and `src/bin/verify_gd_nm.rs`           |
   | Convergence across libraries or Basin solvers | `crates/competitor-bench/src/bin/trace.rs` or `solver_compare.rs`                  |
   | Population solver thread scaling              | `crates/competitor-bench/benches/population_scaling.rs`                            |
+  | Active CMA-ES solver and eigen-kernel comparisons | `crates/competitor-bench/src/bin/verify_cmaes.rs` and `benches/cmaes.rs` in that crate |
   | Finite-difference kernels, callback work, and allocations | `crates/competitor-bench/benches/numdiff.rs`, `src/bin/verify_numdiff.rs`, and `NUMDIFF.md` in that crate |
 
 For example, verify and then list or run a focused comparison:
@@ -47,6 +48,14 @@ separate benchmark and allocation tests. For LM, use `src/bin/verify.rs`,
 `verify_lm_qr.rs`, and `verify_lm_stopping.rs` in `competitor-bench`.
 Neither maintained comparison needs GlobalSearch.
 Historical measurements are leads to remeasure, not current facts.
+
+For CMA-ES, `verify_cmaes --untraced` checks all published seeds without trace
+sampling. It also accepts `--dimension`, `--eigen-update-period`,
+`--generations` (fixed work with the target disabled), and `--repetitions`.
+The default retains the published settings; periodic eigen refresh changes
+trajectories and must be reported explicitly. The `cmaes` Criterion benchmark
+isolates eigendecomposition on identical covariances, including a reference
+with Basin's tolerance and iteration cap.
 
 Extend a nearby harness when needed. Keep native competitors and instrumentation
 in `competitor-bench` or an isolated investigation workspace. Profile the actual

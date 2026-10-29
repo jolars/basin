@@ -59,6 +59,76 @@ fn fresh_run_reevaluates_and_resets_distribution() {
     assert_eq!(fresh.iter(), 0);
     assert_eq!(fresh.counts.cost_evals, 7);
 }
+
+#[test]
+fn periodic_axes_refresh_on_schedule() {
+    use basin::SymmetricEigen;
+    let mut stepper = Executor::new(
+        basin::SamplingDomain::new(Sphere::new(4)),
+        CmaEs::<_, DenseMatrix>::new(91, 0.7)
+            .with_lambda(8)
+            .with_eigen_update_period(3),
+        PopulationProgress::from_point(vec![0.4; 4]),
+    )
+    .into_stepper()
+    .unwrap();
+    for generation in 1..=9 {
+        let before = stepper.solver().distribution().unwrap();
+        let axes = before.principal_axis_stds.clone();
+        let covariance = before.covariance.clone();
+        assert!(matches!(
+            stepper.step().unwrap(),
+            basin::StepOutcome::Continue
+        ));
+        let after = stepper.solver().distribution().unwrap();
+        assert_eq!(after.generation, generation);
+        assert_ne!(*after.covariance, covariance);
+        if generation % 3 == 0 {
+            let (_, values) = after.covariance.try_eigh().unwrap();
+            let expected: Vec<_> =
+                values.iter().map(|v| v.max(1e-30).sqrt()).collect();
+            assert_eq!(*after.principal_axis_stds, expected);
+            assert_ne!(*after.principal_axis_stds, axes);
+        } else {
+            assert_eq!(*after.principal_axis_stds, axes);
+        }
+        assert_eq!(stepper.counts().cost_evals, (generation + 1) * 9);
+    }
+}
+
+#[test]
+fn explicit_every_generation_matches_default() {
+    let run = |solver| {
+        Executor::new(
+            basin::SamplingDomain::new(Sphere::new(4)),
+            solver,
+            PopulationProgress::from_point(vec![0.4; 4]),
+        )
+        .max_iter(12)
+        .run_with_solver()
+        .unwrap()
+    };
+    let a = run(CmaEs::<_, DenseMatrix>::new(91, 0.7));
+    let b =
+        run(CmaEs::<_, DenseMatrix>::new(91, 0.7).with_eigen_update_period(1));
+    assert_eq!(a.state, b.state);
+    assert_eq!(a.counts, b.counts);
+}
+
+#[cfg(feature = "serde")]
+#[test]
+fn refresh_period_accepts_older_maps_and_rejects_zero() {
+    type Cma = CmaEs<Vec<f64>, DenseMatrix>;
+    let mut value = serde_json::to_value(Cma::new(91, 0.7)).unwrap();
+    value.as_object_mut().unwrap().remove("eigen_update_period");
+    let restored: Cma = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(
+        serde_json::to_value(restored).unwrap()["eigen_update_period"],
+        1
+    );
+    value["eigen_update_period"] = 0.into();
+    assert!(serde_json::from_value::<Cma>(value).is_err());
+}
 #[test]
 fn categories_are_raw() {
     let mut state = PopulationProgress::<Vec<f64>>::from_point(vec![0.4; 2]);
@@ -183,6 +253,15 @@ continuation!(
     CmaEs::<_, DenseMatrix>::new(91, 0.7)
         .with_lambda(6)
         .with_stds(vec![1.0, 0.3]),
+    false,
+    basin::SamplingDomain::new
+);
+continuation!(
+    periodic_owned_and_serialized_continuation,
+    CmaEs::<_, DenseMatrix>::new(91, 0.7)
+        .with_lambda(6)
+        .with_stds(vec![1.0, 0.3])
+        .with_eigen_update_period(3),
     false,
     basin::SamplingDomain::new
 );

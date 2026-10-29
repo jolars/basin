@@ -11,6 +11,9 @@ use crate::core::math::Scalar;
 /// eigenvalues, before multiplication by the overall step size. After a
 /// covariance update, the solver floors each eigenvalue at `1e-30` before
 /// taking its square root. Initialization retains the configured axes.
+/// With [`CmaEs::with_eigen_update_period`](super::CmaEs::with_eigen_update_period),
+/// the axes describe the last refreshed sampling distribution and can lag the
+/// covariance, which still updates every generation.
 /// The backend's symmetric eigensolver reads the covariance's lower triangle;
 /// rank-one update rounding can make its upper triangle differ. Coordinate
 /// standard deviations instead use the covariance diagonal. The two evolution

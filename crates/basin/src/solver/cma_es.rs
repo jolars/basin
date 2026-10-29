@@ -57,18 +57,18 @@ use workspace::Distribution;
 /// C ← (1 + c_1 δ_h − c_1 − c_µ Σ w_j) C
 ///     + c_1 p_c p_cᵀ + c_µ Σ_i w_i° y_{i:λ} y_{i:λ}ᵀ        # eq. 47
 ///
-/// # refresh eigendecomposition of new C → (B, d²)
+/// # on an eigen refresh: decompose new C → (B, d²)
 /// d_i ← max(d²_i, 0)^(1/2);  d_i^{−1} ← 1 / d_i
 ///
 /// # sample new generation
 /// for k = 1..λ:  z_k ~ N(0, I);  x_k = m + σ B (d ⊙ z_k)
 /// ```
 ///
-/// The eigendecomposition is refreshed every iteration. Hansen's
-/// suggested optimization (eigendecompose every `max(1, ⌊1/(10n(c_1+c_µ))⌋)`
-/// generations, Appendix B.2) is deferred; at small to moderate `n`
-/// the cost is dominated by `f` evaluations anyway, and the refresh
-/// frequency would change the per-iteration cost calculus.
+/// The eigendecomposition is refreshed every iteration by default.
+/// [`with_eigen_update_period`](Self::with_eigen_update_period) can amortize
+/// this cubic cost over several generations when objective evaluations are
+/// cheap. The covariance still updates every generation; sampling and whitening
+/// use the most recently refreshed eigenpairs. This changes seeded trajectories.
 ///
 /// # Result: mean vs best sample
 ///
@@ -100,6 +100,8 @@ use workspace::Distribution;
 /// Exact continuation retains the solver, progress, and counts together and
 /// skips initialization. With `serde`, all distribution and RNG fields serialize
 /// when `V`, `M`, and `F` do. Basin 1.x state files do not preserve this layout.
+/// The refresh period defaults to one when absent from map-based formats.
+/// Binary checkpoints require the matching solver layout.
 ///
 /// # Contract
 ///
@@ -171,6 +173,15 @@ pub struct CmaEs<V, M, F: Scalar = f64> {
     initial_stds: Option<V>,
     seed: u64,
     pub(crate) work: Option<Distribution<V, M, F>>,
+    #[cfg_attr(
+        feature = "serde",
+        serde(default = "default_eigen_update_period")
+    )]
+    eigen_update_period: std::num::NonZeroU64,
+}
+
+fn default_eigen_update_period() -> std::num::NonZeroU64 {
+    std::num::NonZeroU64::MIN
 }
 
 /// Derived CMA-ES constants (Hansen 2016 Table 1), rebuilt at fresh initialization.
@@ -241,7 +252,26 @@ impl<V, M, F: Scalar> CmaEs<V, M, F> {
             initial_stds: None,
             seed,
             work: None,
+            eigen_update_period: default_eigen_update_period(),
         }
+    }
+
+    /// Refresh the covariance eigendecomposition every `generations` updates.
+    ///
+    /// The default is one. Larger periods reduce eigensolver work while the
+    /// covariance continues to adapt every generation (Hansen 2016 Appendix
+    /// B.2). Sampling, whitening, principal-axis diagnostics, and the TolX test
+    /// use the last refreshed eigenpairs, which can lag the covariance. Larger
+    /// periods change the numerical trajectory and can affect convergence.
+    /// Fresh initialization restarts the schedule; exact continuation retains it.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `generations` is zero.
+    pub fn with_eigen_update_period(mut self, generations: u64) -> Self {
+        self.eigen_update_period = std::num::NonZeroU64::new(generations)
+            .expect("eigen update period must be at least one generation");
+        self
     }
 
     /// Set initial per-coordinate standard deviations. `None` restores isotropy.
@@ -703,31 +733,33 @@ where
         // Drop y_sorted now to free memory before the eigendecomposition.
         drop(std::mem::take(&mut y_sorted));
 
-        // Refresh eigendecomposition of the new C.
-        let (b_new, eigs) = match work.c.try_eigh() {
-            Ok(pair) => pair,
-            Err(_) => {
-                state.candidates = std::mem::take(&mut work.candidates);
-                state.costs = std::mem::take(&mut work.costs);
-                return Ok(crate::SolverStep::from((
-                    state,
-                    Some(Termination::numerical_failure(
-                        "CMA-ES covariance eigendecomposition failed.",
-                    )),
-                )));
+        // Keep the sampling and whitening factors together between refreshes.
+        if work.generation % self.eigen_update_period.get() == 0 {
+            let (b_new, eigs) = match work.c.try_eigh() {
+                Ok(pair) => pair,
+                Err(_) => {
+                    state.candidates = std::mem::take(&mut work.candidates);
+                    state.costs = std::mem::take(&mut work.costs);
+                    return Ok(crate::SolverStep::from((
+                        state,
+                        Some(Termination::numerical_failure(
+                            "CMA-ES covariance eigendecomposition failed.",
+                        )),
+                    )));
+                }
+            };
+            work.b = b_new;
+            // d_i = √max(λ_i, 0); d_inv_i = 1/d_i. Floating-point can produce
+            // tiny negative eigenvalues even when the algorithm preserves
+            // positive definiteness; clamp to a small positive floor before
+            // taking the square root.
+            let eig_floor = F::from_f64(1e-30).unwrap();
+            for i in 0..k.n {
+                let lam = eigs[i].max(eig_floor);
+                let s = lam.sqrt();
+                work.d[i] = s;
+                work.d_inv[i] = one / s;
             }
-        };
-        work.b = b_new;
-        // d_i = √max(λ_i, 0); d_inv_i = 1/d_i. Floating-point can produce
-        // tiny negative eigenvalues even when the algorithm preserves
-        // positive definiteness; clamp to a small positive floor before
-        // taking the square root.
-        let eig_floor = F::from_f64(1e-30).unwrap();
-        for i in 0..k.n {
-            let lam = eigs[i].max(eig_floor);
-            let s = lam.sqrt();
-            work.d[i] = s;
-            work.d_inv[i] = one / s;
         }
 
         // Sample new generation: x_k = m + σ B (D ⊙ z_k). Sampling is
@@ -806,6 +838,7 @@ where
             initial_stds: self.initial_stds.clone(),
             seed,
             work: None,
+            eigen_update_period: self.eigen_update_period,
         };
         (cma, PopulationProgress::from_point(x.clone()))
     }
@@ -948,5 +981,32 @@ mod zero_tolerance_tests {
     fn zero_tolx_observes_exact_distribution_collapse() {
         check::<f64>();
         check::<f32>();
+    }
+
+    #[test]
+    fn periodic_refresh_retains_eigensolver_failure_reporting() {
+        let mut problem = Problem::new(crate::SamplingDomain::new(FlatBox(
+            vec![-1.0; 3],
+            vec![1.0; 3],
+        )));
+        let mut solver = CmaEs::<Vec<f64>, DenseMatrix>::new(42, 1.0)
+            .with_eigen_update_period(3);
+        let mut state = solver
+            .init(&mut problem, PopulationProgress::from_point(vec![0.0; 3]))
+            .unwrap();
+        for _ in 0..2 {
+            state = solver.next_iter(&mut problem, state).unwrap().state;
+        }
+        let prior = state.clone();
+        let invalid = DenseMatrix::from_row_slice(3, 3, &[f64::NAN; 9]);
+        assert!(invalid.try_eigh().is_err());
+        solver.work.as_mut().unwrap().c = invalid;
+        let step = solver.next_iter(&mut problem, state).unwrap();
+        assert!(!step.completed);
+        assert_eq!(
+            step.termination.unwrap().code(),
+            crate::TerminationCode::SolverFailed
+        );
+        assert_eq!(step.state, prior);
     }
 }

@@ -30,9 +30,10 @@ unsupported operation to the universal tier.
 Use a profile to locate cost and ordinary unprofiled timings to establish a
 speedup. Build optimized code with debug information and resolved symbols. For
 Linux frame-pointer unwinding, compile with `-C force-frame-pointers=yes` and
-record with `--call-graph fp`. Preserve other relevant build flags and use a the
-workspace's `profiling` Cargo profile so the optimized binary retains debug
-information and lives separately from ordinary release and benchmark outputs.
+record with `--call-graph fp --user-callchains`. Preserve other relevant build
+flags and use the workspace's `profiling` Cargo profile so the optimized binary
+retains debug information and lives separately from ordinary release and
+benchmark outputs.
 
 The development environment provides `perf`, `cargo-flamegraph`, and `samply`.
 The `profiling` profile inherits release optimizations, including thin LTO and
@@ -44,10 +45,10 @@ mkdir -p target/perf-investigation
 RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C force-frame-pointers=yes" \
 cargo flamegraph --profile profiling -p competitor-bench --bench gd_nm \
   --output target/perf-investigation/gd.svg \
-  --cmd 'record -e cycles:u -F 997 --call-graph fp -o target/perf-investigation/gd.data' \
+  --cmd 'record -e cycles:u -F 997 --call-graph fp --user-callchains -o target/perf-investigation/gd.data' \
   -- --bench 'gd_rosenbrock_n2/basin' --exact --profile-time 10
 
-perf report --stdio --children --no-inline \
+perf report --stdio --children --inline \
   -i target/perf-investigation/gd.data
 perf report --stdio --no-children --no-inline \
   -i target/perf-investigation/gd.data
@@ -55,6 +56,14 @@ perf report --stdio --no-children --no-inline \
 
 The custom `-o` path is used for recording and conversion by
 [cargo-flamegraph](https://github.com/flamegraph-rs/flamegraph/blob/v0.6.14/src/lib.rs#L83-L149).
+
+Use both `cycles:u` and `--user-callchains` for user-space profiling. The event
+modifier excludes kernel events, but call-graph recording can still request
+kernel call chains unless they are explicitly excluded. With
+`kernel.perf_event_paranoid = 2`, that request can fail with a permission error
+even though sampling without call graphs works. Retry with `--user-callchains`
+before treating sampling as unavailable; no NixOS or sysctl change is needed
+when that succeeds. See [`perf record`](https://man7.org/linux/man-pages/man1/perf-record.1.html).
 
 Adapt the benchmark, features, filter, and duration. Verify the filter executes
 the intended case. Criterion's `--profile-time` repeats work without statistical
@@ -67,7 +76,9 @@ up stale binaries or `.d` files. Check local tool help when adapting options.
 
 Inspect stack depth and symbol resolution before trusting percentages. Missing
 callchains are a recording problem, not evidence that all cost is in leaf
-functions. Try another supported unwinder or sampler if needed. If permissions
+functions. Thin LTO can inline solver and matrix work into `step_once`; inspect
+the `--inline` report before attributing that cost to executor bookkeeping.
+Try another supported unwinder or sampler if needed. If permissions
 prevent sampling, report the limitation and use scoped counters or phase
 timings. Do not automatically change host-wide perf permissions. Keep diagnostic
 builds and allocation instrumentation out of final timing comparisons.
