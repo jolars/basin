@@ -82,8 +82,8 @@ numerical work against analytic cases and reference implementations.
 ### Follow-up candidates
 
 - [x] **Investigate central-difference Jacobian overhead.** Compared matched
-  stencils against Navette's Jacobian builder, following the
-  [integration review](https://github.com/opticsWolf/Navette/pull/3#issuecomment-6431966233).
+  stencils against Navette's Jacobian builder, following the [integration
+  review](https://github.com/opticsWolf/Navette/pull/3#issuecomment-6431966233).
   Unbounded central Jacobians now avoid the base-residual evaluation, and
   fused finite-difference Jacobians reuse the base residual for forward and
   bounded stencils. Regression tests verify callback counts and numerical
@@ -284,40 +284,6 @@ compatibility and numerical behavior still need verification.
   - [ ] **Add the `slsqp` crate as another Rust reference.** Record its shared
     NLopt lineage.
 
-- [ ] **Benchmark actual L-BFGS-B with active bounds.** The [`lbfgsb`
-  crate](https://github.com/ybyygu/rust-lbfgsb) wraps Stephen Becker's C
-  translation of L-BFGS-B and is the preferred C-backed candidate. Its build
-  uses a C compiler and bindgen/libclang. Also assess the native
-  [`lbfgsb-rs-pure` crate](https://docs.rs/crate/lbfgsb-rs-pure/0.1.2),
-  which advertises a v3.0 port; verify its numerical behavior before using
-  it as a reference. Reuse existing parity inputs and certified solutions,
-  including optima on box faces, fixed coordinates, and larger dimensions.
-  Match memory size, line-search settings, and projected-gradient checks.
-  The existing unconstrained L-BFGS chart and NLopt's L-BFGS are not
-  coverage of Basin's L-BFGS-B algorithm.
-
-  - [x] Publish one larger bounded example against the C-backed `lbfgsb`
-    reference on the competitor benchmark page. The 20,000-variable extended
-    Rosenbrock driver takes at least 20 ms per solve for both
-    implementations on the measurement machine. Broader fixture coverage and
-    assessment of `lbfgsb-rs-pure` remain open.
-
-- [ ] **Add active CMA-ES against the Rust `cmaes` crate.** [`cmaes`
-  0.2.2](https://docs.rs/cmaes/0.2.2/cmaes/) supplies active covariance
-  adaptation and automatic restart strategies. Explicitly select negative
-  recombination weights to match Basin's active update. Match population
-  size, initial mean, sigma, and stopping policy, recording the differing
-  nalgebra versions. Test ill-conditioned and nonseparable problems as well
-  as multimodal problems over multiple seeds. Compare standalone CMA-ES
-  first; report IPOP/BIPOP restarts and local injections separately. Do not
-  infer bounded-CMA equivalence from unconstrained CMA-ES results.
-
-  - [x] Publish standalone active CMA-ES against `cmaes` 0.2.2 on a
-    40-variable rotated ellipsoid and Ackley, each with five fixed seeds.
-    Match population, mean, sigma, target, and evaluation budget; report
-    per-seed traces, success counts, actual objective calls, and backend
-    differences. Broader workloads and restart comparisons remain open.
-
 - [ ] **Add bounded least squares against `rmpfit`.** [`rmpfit`
   2.0.0](https://docs.rs/rmpfit/2.0.0/rmpfit/) is a pure-Rust CMPFIT port
   with analytic or numerical derivatives, parameter bounds, and fixed
@@ -386,59 +352,60 @@ production solvers.
 
 ### Finite-difference performance
 
-Source review of `core/numdiff.rs` and its child modules on 2026-10-27.
-These are optimization candidates; speedups have not been measured. Preserve
-stencils, step rules, feasible probes, error propagation, and request-count
-semantics. Keep each entry's arithmetic order unchanged to preserve bitwise
-results for deterministic callbacks. Verify changed kernels across supported
-backends and scalar types.
+Source review of `core/numdiff.rs` and its child modules on 2026-10-27. These
+are optimization candidates; speedups have not been measured. Preserve stencils,
+step rules, feasible probes, error propagation, and request-count semantics.
+Keep each entry's arithmetic order unchanged to preserve bitwise results for
+deterministic callbacks. Verify changed kernels across supported backends and
+scalar types.
 
 - [x] **Establish finite-difference benchmarks.** Add focused cases for
   gradients, rectangular Jacobians, Hessians, and Hessian-vector products,
-  covering owned and `*_into` calls, cheap and expensive callbacks, and small
-  and large dimensions. Compare sequential builds with `parallel` at one and
-  multiple threads. Measure raw callback counts and allocations separately
-  from uninstrumented timings, including repeated calls with reused outputs.
-  See the [benchmark protocol](crates/competitor-bench/NUMDIFF.md).
+  covering owned and `*_into` calls, cheap and expensive callbacks, and
+  small and large dimensions. Compare sequential builds with `parallel` at
+  one and multiple threads. Measure raw callback counts and allocations
+  separately from uninstrumented timings, including repeated calls with
+  reused outputs. See the [benchmark
+  protocol](crates/competitor-bench/NUMDIFF.md).
 - [x] **Reuse base costs in fused derivative calls.** Pass the cost already
   computed by `cost_and_gradient_into` into forward-gradient and bounded
-  probe kernels. Share it with the Hessian in the three-output callback,
-  and route owned fused methods through the same implementation. An
-  unbounded forward cost-and-gradient request should use `n + 1` underlying
-  cost calls instead of `n + 2`. Add callback-count and numerical regression
-  tests for both wrappers, stencil choices, and empty parameter vectors.
+  probe kernels. Share it with the Hessian in the three-output callback, and
+  route owned fused methods through the same implementation. An unbounded
+  forward cost-and-gradient request should use `n + 1` underlying cost calls
+  instead of `n + 2`. Add callback-count and numerical regression tests for
+  both wrappers, stencil choices, and empty parameter vectors.
 - [x] **Remove redundant Hessian assembly storage.** Both Hessian kernels
   allocate explicit upper-triangle index pairs, packed values, and a full
-  temporary matrix before filling the output. Generate indices implicitly
-  or in row blocks, and fill the backend matrix from packed values directly.
+  temporary matrix before filling the output. Generate indices implicitly or
+  in row blocks, and fill the backend matrix from packed values directly.
   Compare allocation counts, requested bytes, and timings at larger `n`;
   preserve exact symmetry and each entry's arithmetic order.
-- [x] **Use scalar probe results for bounded gradients.** Replace the
-  `vec![f]` callback adapter and one-element column vectors with a scalar
-  kernel that shares the bound-aware stencil rules. Cover `f32` and `f64`,
-  fixed coordinates, adjacent-float bounds, and one-sided central stencils.
+- [x] **Use scalar probe results for bounded gradients.** Replace the `vec![f]`
+  callback adapter and one-element column vectors with a scalar kernel that
+  shares the bound-aware stencil rules. Cover `f32` and `f64`, fixed
+  coordinates, adjacent-float bounds, and one-sided central stencils.
   Measure allocations with a cheap objective to expose the adapter overhead.
-- [x] **Reduce gradient result staging.** Stage up to 32 scalar results on
-  the stack and allocate larger buffers at their final size. Fill parallel
-  staging slots directly instead of collecting per-task result vectors.
-  Keep output publication after successful probes to preserve shape
-  replacement and unchanged outputs on errors. Benchmarked repeated calls
-  with sized outputs on all four backends, sequentially and with Rayon.
-- [ ] **Reduce Jacobian column allocation and copying.** Both unbounded
-  Jacobian kernels clone residual vectors into separately allocated columns,
-  then copy those columns into the backend matrix. Compare flat or chunked
+- [x] **Reduce gradient result staging.** Stage up to 32 scalar results on the
+  stack and allocate larger buffers at their final size. Fill parallel
+  staging slots directly instead of collecting per-task result vectors. Keep
+  output publication after successful probes to preserve shape replacement
+  and unchanged outputs on errors. Benchmarked repeated calls with sized
+  outputs on all four backends, sequentially and with Rayon.
+- [ ] **Reduce Jacobian column allocation and copying.** Both unbounded Jacobian
+  kernels clone residual vectors into separately allocated columns, then
+  copy those columns into the backend matrix. Compare flat or chunked
   staging, reusable column storage, and direct sequential matrix fills.
   Include tall and wide Jacobians, storage orders across backends, and
   callbacks that override `residual_into` to reuse their output buffers.
-- [x] **Reuse HVP probe and gradient scratch.** The HVP helpers clone `x`
-  to construct directional probes and temporary gradients on every call.
+- [x] **Reuse HVP probe and gradient scratch.** The HVP helpers clone `x` to
+  construct directional probes and temporary gradients on every call.
   Measure repeated products at one point and assess reusing those buffers
   through caller-owned scratch where justified. Preserve zero-direction
   behavior, output resizing, thread safety, and the wrappers' existing
   `Clone` and `Copy` contracts.
-- [ ] **Tune Rayon task and scratch granularity.** The parallel map helpers
-  use `map_init`, which initializes scratch per job rather than guaranteeing
-  one buffer per worker. Count probe-buffer clones and compare minimum job
+- [ ] **Tune Rayon task and scratch granularity.** The parallel map helpers use
+  `map_init`, which initializes scratch per job rather than guaranteeing one
+  buffer per worker. Count probe-buffer clones and compare minimum job
   lengths or chunked tasks for gradients, Jacobians, and Hessians. Measure
   small cheap cases as well as expensive callbacks before choosing a serial
   fallback or exposing a granularity control. Correct the per-thread wording
@@ -447,41 +414,32 @@ backends and scalar types.
   single-coordinate, and two-coordinate evaluations together, then combine
   their results. The probe evaluations do not depend on each other; their
   final arithmetic needs the shared results. Compare low-dimensional cases
-  and uneven callback costs across thread counts, keeping probe counts fixed.
-- [ ] **Overlap base evaluations with derivative probes.** Evaluate `f(x)`
-  or `r(x)` concurrently with the independent probes for forward gradients
-  and Jacobians, then form differences once the base is available. Apply the
-  same assessment to the central Hessian's base cost. Preserve residual shape
-  checks, empty-input behavior, base reuse, and hard-error propagation.
-- [ ] **Overlap independent work in fused derivative calls.** Compare
-  concurrent cost and central-gradient evaluations, overlapping gradient and
-  Hessian probe sets, and concurrent base-residual and central-Jacobian
-  evaluations. Reuse shared base values in forward stencils first. Measure
-  the benefit when inner derivative loops already use the Rayon pool, and
-  account for any additional vector or matrix thread-safety bounds.
+  and uneven callback costs across thread counts, keeping probe counts
+  fixed.
+- [ ] **Overlap base evaluations with derivative probes.** Evaluate `f(x)` or
+  `r(x)` concurrently with the independent probes for forward gradients and
+  Jacobians, then form differences once the base is available. Apply the
+  same assessment to the central Hessian's base cost. Preserve residual
+  shape checks, empty-input behavior, base reuse, and hard-error
+  propagation.
+- [ ] **Overlap independent work in fused derivative calls.** Compare concurrent
+  cost and central-gradient evaluations, overlapping gradient and Hessian
+  probe sets, and concurrent base-residual and central-Jacobian evaluations.
+  Reuse shared base values in forward stencils first. Measure the benefit
+  when inner derivative loops already use the Rayon pool, and account for
+  any additional vector or matrix thread-safety bounds.
 - [ ] **Parallelize independent HVP gradient evaluations.** Compare a
   feature-gated `rayon::join` for the two gradient calls in both forward and
   central HVPs. Include expensive analytic gradients and synthesized
   gradients to expose nested overhead. Explicitly address compatibility
   before adding `Send` or `Sync` bounds to the currently unrestricted HVP
   free functions, and retain the zero-direction shortcut.
-- [ ] **Evaluate parallelism within central stencils.** Expose the positive
-  and negative gradient and Jacobian probes, and the four off-diagonal
-  Hessian probes, as separate tasks when the existing column or entry tasks
-  cannot occupy the pool. Compare flattened probe batches with selective
-  joins, including extra scratch memory, cloning, and scheduling costs.
-  Keep all new threading behind `parallel` and preserve the sequential WASM
-  path.
-
-### In-place problem evaluation
-
-- [ ] **Make evaluation buffer reuse automatic in Basin 4.0.** Replace the
-  compatible opt-in evaluation storage on solvers and the robust
-  least-squares adapter with typed storage by default. Basin 4.0 may change
-  public type parameters and their `Send`, `Sync`, `Clone`, and `Copy`
-  implementations as needed. Document the migration from the opt-in builders
-  and preserve callback dispatch, evaluation counts, fresh initialization,
-  and exact continuation.
+- [ ] **Evaluate parallelism within central stencils.** Expose the positive and
+  negative gradient and Jacobian probes, and the four off-diagonal Hessian
+  probes, as separate tasks when the existing column or entry tasks cannot
+  occupy the pool. Compare flattened probe batches with selective joins,
+  including extra scratch memory, cloning, and scheduling costs. Keep all
+  new threading behind `parallel` and preserve the sequential WASM path.
 
 ### Iterative-TRF API prototype
 
@@ -774,9 +732,30 @@ without reannealing; serialization and performance remain migration work. Run
 the prototype with `cargo test -p basin --test state_api_prototype` and the
 desired backend features.
 
-## Basin 3.0
+## Basin 4.0
 
-Upcoming breaking changes for Basin 3.0.
+Planned breaking changes. Preserve Basin 3.x APIs and defaults until the major
+release, and document the migration for each change.
+
+- [ ] **Make evaluation buffer reuse automatic.** Replace the compatible opt-in
+  evaluation storage on solvers and the robust least-squares adapter with
+  typed storage by default. Public type parameters and their `Send`, `Sync`,
+  `Clone`, and `Copy` implementations may change as needed. Document the
+  migration from the opt-in builders and preserve callback dispatch,
+  evaluation counts, fresh initialization, and exact continuation.
+- [ ] **Make CMA-ES eigen refresh automatic.** Derive a deterministic default
+  refresh period from dimension, population size, and covariance learning
+  rates. Apply the policy consistently to `CmaEs`, `BoundedCmaEs`, and their
+  wrappers, retaining `.with_eigen_update_period(1)` as an explicit
+  override. Select the policy using time and evaluations to common objective
+  and feasibility targets across more problems, dimensions, populations,
+  seeds, and conditioning levels, including bounded and injected runs. Cover
+  `f32` and `f64` on all four dense backends. Document changed seeded
+  trajectories and the lag between covariance updates and sampling axes,
+  including its effects on TolX and diagnostics. Preserve evaluation
+  accounting, fresh initialization, and exact continuation of the refresh
+  schedule. Reuse the [CMA-ES comparison
+  harness](crates/competitor-bench/src/bin/verify_cmaes.rs).
 
 ## Deferred design
 
