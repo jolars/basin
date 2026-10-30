@@ -1,5 +1,28 @@
 # Changelog
 
+## [3.2.0](https://github.com/jolars/basin/compare/v3.1.0...v3.2.0) (2026-10-30)
+
+### Features
+
+- add periodic CMA-ES eigen refresh ([`c89cdc0`](https://github.com/jolars/basin/commit/c89cdc0bfc7f4d6b5a7430b728e37f94ef2ba93e))
+- reuse in-place evaluation buffers ([`9041b90`](https://github.com/jolars/basin/commit/9041b900d7e6b6f79f996d3b63e355c4834d49a5))
+- add in-place fused evaluations ([`ca87838`](https://github.com/jolars/basin/commit/ca8783820c9413a4101178271d192dab3aecc529))
+- add in-place derivative evaluation ([`70b400a`](https://github.com/jolars/basin/commit/70b400ab9151e212a6ba73e8e2138cccf3822d2c))
+- add in-place residual evaluation ([`bdf5c24`](https://github.com/jolars/basin/commit/bdf5c245914c77da577280b207515bb6d5d45506))
+
+### Bug Fixes
+
+- **ci:** skip unavailable GSL manual link ([`54ea946`](https://github.com/jolars/basin/commit/54ea946defa10dc70529d245d689cc8474c4c0d0))
+
+### Performance Improvements
+
+- reuse HVP probe and gradient buffers ([`f0867a9`](https://github.com/jolars/basin/commit/f0867a950a1e3b090401527c9e9d8e232cc6f7e3))
+- reduce finite-difference gradient staging ([`6f2ebe3`](https://github.com/jolars/basin/commit/6f2ebe32f92e6d0d8534f39551e80dbbd1b15878))
+- use scalar probes for bounded gradients ([`1d5c7f6`](https://github.com/jolars/basin/commit/1d5c7f6281c9297d21c57c6fca3f781dd0e1ec63))
+- remove redundant Hessian assembly storage ([`9d5085b`](https://github.com/jolars/basin/commit/9d5085b8046d281662fbb88415cf9ada282f3c85))
+- reuse base costs in fused finite differences ([`7b59808`](https://github.com/jolars/basin/commit/7b5980840a3b896cd787bf28a3565816eeca1572))
+- avoid redundant Jacobian residual evaluations ([`b44bed3`](https://github.com/jolars/basin/commit/b44bed318c3468f3bcac9e7b592e3255aad8d5a2))
+
 ## [3.1.0](https://github.com/jolars/basin/compare/v3.0.0...v3.1.0) (2026-10-26)
 
 ### Features
