@@ -40,7 +40,7 @@ Run focused tests while developing, then the checks matching the changed scope:
   [`.github/workflows/ci.yml`](.github/workflows/ci.yml). In addition to
   `cargo fmt --all -- --check`, it checks shared sources expanded with
   `include!` and the separate backend fixture workspace, which Cargo's root
-  formatting command skips.
+  formatting command skips. The devenv hooks cover the same three scopes.
 - Routine pure-Rust tests:
   `cargo test -p basin --features nalgebra,ndarray,faer,problems,parallel`.
 - Workspace lint: `cargo clippy --workspace --all-targets --all-features -- -D warnings`.

@@ -1,4 +1,5 @@
 {
+  config,
   pkgs,
   ...
 }:
@@ -96,6 +97,25 @@
 
       rustfmt = {
         enable = true;
+      };
+
+      # Cargo fmt does not follow include! into the shared backend sources.
+      rustfmt-shared = {
+        enable = true;
+        name = "rustfmt (shared sources)";
+        entry = "${config.languages.rust.toolchainPackage}/bin/rustfmt --edition 2024";
+        files = "^crates/basin/(src/core/math/(nalgebra|nalgebra_sparse|ndarray|faer|faer_sparse)_backend|tests/support/nalgebra_factorizations|tests/fixtures/backend_unification/check)\\.rs$";
+        language = "system";
+      };
+
+      # The downstream fixture has its own workspace outside the root workspace.
+      rustfmt-fixtures = {
+        enable = true;
+        name = "rustfmt (backend fixtures)";
+        entry = "${config.git-hooks.hooks.rustfmt.package}/bin/cargo-fmt fmt --manifest-path crates/basin/tests/fixtures/backend_unification/Cargo.toml --all";
+        files = "^crates/basin/tests/fixtures/backend_unification/.*\\.rs$";
+        language = "system";
+        pass_filenames = false;
       };
     };
   };

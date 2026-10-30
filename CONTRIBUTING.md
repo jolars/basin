@@ -45,7 +45,9 @@ fit optimization state.
   ambiguous intra-doc link (e.g. `[`Foo`](super::foo)` where `foo` is both a
   module and a function; link the struct `super::Foo` instead) fails the build.
   Run this before committing any rustdoc changes.
-- `cargo fmt`: format (also enforced by pre-commit).
+- `cargo fmt --all`: format the root workspace. Pre-commit also formats shared
+  `include!` sources and the separate backend fixture workspace, which Cargo's
+  root formatting command skips. CI checks all three scopes in its `fmt` job.
 
 ### Code coverage
 
