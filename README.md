@@ -130,24 +130,10 @@ alias that tracks the newest supported release:
   | [ndarray]  | `ndarray_v0_15` through `ndarray_v0_17`   | `ndarray`    |
   | [faer]     | `faer_v0_22` through `faer_v0_24`         | `faer`       |
 
-If dependency feature unification enables several releases of the same backend,
-Basin provides implementations for every enabled release. First-order and
-derivative-free solvers run on any backend; linear-algebra-heavy solvers may
-require a specific one and say so in their docs.
-
-BFGS uses `FirstOrderState` and owns its inverse-Hessian model. The
-`DenseBackend` association selects the matrix belonging to the starting point's
-backend version, including when Cargo enables several versions.
-
 Every nalgebra feature includes its matching `nalgebra-sparse` release:
 0.32/0.9, 0.33/0.10, 0.34/0.11, and 0.35/0.12. Exact acceleration features
 follow the same naming scheme—`nalgebra_v0_34-lapack` and `ndarray_v0_16-blas`,
 for example. The moving aliases are `nalgebra-lapack` and `ndarray-blas`.
-
-BLAS/LAPACK acceleration is off by default and is not wasm-compatible. These
-features expect you to supply the BLAS/LAPACK symbols at link time. The default
-build remains wasm-friendly and single-threaded; parallelism is behind the
-opt-in `parallel` feature.
 
 ## Citation
 
