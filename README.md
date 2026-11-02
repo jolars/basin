@@ -3,18 +3,17 @@
 [![CI](https://github.com/jolars/basin/actions/workflows/ci.yml/badge.svg)](https://github.com/jolars/basin/actions/workflows/ci.yml)
 [![Coverage](https://codecov.io/gh/jolars/basin/branch/main/graph/badge.svg)](https://app.codecov.io/gh/jolars/basin/tree/main)
 [![crates.io](https://img.shields.io/crates/v/basin.svg)](https://crates.io/crates/basin)
-[![docs.rs](https://img.shields.io/docsrs/basin)](https://docs.rs/basin)
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20610944-blue)](https://doi.org/10.5281/zenodo.20610944)
 
 Basin is a numerical optimization library for Rust. Solve problems with or
-without derivatives, fit models with nonlinear least squares, and handle
-bounds and other constraints with algorithms suited to your problem. Basin
-also provides a solver for bracketed scalar equations.
+without derivatives, fit models with nonlinear least squares, and handle bounds
+and other constraints with algorithms suited to your problem. Basin also
+provides a solver for bracketed scalar equations.
 
-Define the function you want to minimize, choose a solver, and supply a
-starting point. Use plain Rust vectors or your choice of nalgebra, ndarray, or
-faer. Basin runs natively and in the browser, with no BLAS/LAPACK or threads
-required by the default build. Its design is inspired by [argmin].
+Define the function you want to minimize, choose a solver, and supply a starting
+point. Use plain Rust vectors or your choice of nalgebra, ndarray, or faer.
+Basin runs natively and in the browser, with no BLAS/LAPACK or threads required
+by the default build. Its design is inspired by [argmin].
 
 Narrative documentation lives at [basin.rs/guide]; the rustdoc reference is at
 [docs.rs/basin]. There is also an in-browser [solver visualizer] and a
