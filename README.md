@@ -3,6 +3,7 @@
 [![CI](https://github.com/jolars/basin/actions/workflows/ci.yml/badge.svg)](https://github.com/jolars/basin/actions/workflows/ci.yml)
 [![Coverage](https://codecov.io/gh/jolars/basin/branch/main/graph/badge.svg)](https://app.codecov.io/gh/jolars/basin/tree/main)
 [![crates.io](https://img.shields.io/crates/v/basin.svg)](https://crates.io/crates/basin)
+[![arXiv](https://img.shields.io/badge/arXiv-2608.11279-b31b1b.svg)](https://arxiv.org/abs/2608.11279)
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20610944-blue)](https://doi.org/10.5281/zenodo.20610944)
 
 Basin is a numerical optimization library for Rust. Solve problems with or
