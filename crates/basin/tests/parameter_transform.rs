@@ -101,6 +101,117 @@ where
         assert_eq!(g.get_scalar(i), separate.get_scalar(i));
     }
     assert!(p.cost(&make(&[f(-0.1), f(0.5)])).is_err());
+    exercise_extreme_mappings(make);
+}
+
+struct LinearSlope<V, F> {
+    origin: F,
+    slope: F,
+    marker: std::marker::PhantomData<V>,
+}
+impl<V: VectorIndex<F>, F: Scalar> CostFunction for LinearSlope<V, F> {
+    type Param = V;
+    type Output = F;
+    type Error = std::convert::Infallible;
+    fn cost(&self, x: &V) -> Result<F, Self::Error> {
+        Ok(self.slope * (x.get_scalar(0) - self.origin))
+    }
+}
+impl<V: Clone + VectorIndex<F>, F: Scalar> Gradient for LinearSlope<V, F> {
+    type Gradient = V;
+    fn gradient(&self, x: &V) -> Result<V, Self::Error> {
+        let mut g = x.clone();
+        g.set_scalar(0, self.slope);
+        Ok(g)
+    }
+}
+impl<V: Clone + VectorIndex<F>, F: Scalar> HessianProduct
+    for LinearSlope<V, F>
+{
+    fn hessian_product(&self, _: &V, v: &V) -> Result<V, Self::Error> {
+        let mut out = v.clone();
+        out.set_scalar(0, F::zero());
+        Ok(out)
+    }
+}
+
+fn exercise_extreme_mappings<V, F>(make: fn(&[F]) -> V)
+where
+    F: Scalar,
+    V: Clone + VectorLen + VectorIndex<F>,
+{
+    let f = |v: f64| F::from_f64(v).unwrap();
+    let lower = F::max_value() / f(4.0);
+    let upper = lower + lower * (f(32.0) * F::epsilon());
+    let transform = ParameterTransform::new(
+        basin::Constrained::new(
+            LinearSlope {
+                origin: lower,
+                slope: f(10.0),
+                marker: std::marker::PhantomData,
+            },
+            ConstraintSet::new().with_bounds(BoxBounds::new(
+                Some(make(&[lower])),
+                Some(make(&[upper])),
+            )),
+        ),
+        vec![ParameterScale::Logarithmic],
+    )
+    .unwrap();
+    let point = make(&[f(0.5)]);
+    let physical = transform.decode(&point).unwrap().get_scalar(0);
+    let width = ((upper - lower) / lower).ln_1p();
+    let expected_gradient = f(10.0) * (physical * width);
+    let gradient = transform.gradient(&point).unwrap().get_scalar(0);
+    let tolerance = f(100.0) * F::epsilon();
+    assert!(gradient.is_finite());
+    assert!(
+        (gradient - expected_gradient).abs()
+            <= tolerance * expected_gradient.abs()
+    );
+    let product = transform
+        .hessian_product(&point, &make(&[f(0.25)]))
+        .unwrap()
+        .get_scalar(0);
+    let expected_product = (expected_gradient * width) * f(0.25);
+    assert!(product.is_finite());
+    assert!(
+        (product - expected_product).abs()
+            <= tolerance * expected_product.abs()
+    );
+
+    let lower = F::min_positive_value() * F::epsilon();
+    let upper = F::max_value();
+    let transform = ParameterTransform::new(
+        basin::Constrained::new(
+            LinearSlope {
+                origin: lower,
+                slope: F::one(),
+                marker: std::marker::PhantomData,
+            },
+            ConstraintSet::new().with_bounds(BoxBounds::new(
+                Some(make(&[lower])),
+                Some(make(&[upper])),
+            )),
+        ),
+        vec![ParameterScale::Logarithmic],
+    )
+    .unwrap();
+    for unit in [0.0, 0.25, 0.5, 0.75, 1.0] {
+        let physical = transform.decode(&make(&[f(unit)])).unwrap();
+        assert!(physical.get_scalar(0).is_finite());
+        assert!(
+            physical.get_scalar(0) >= lower && physical.get_scalar(0) <= upper
+        );
+        let encoded = transform.encode(&physical).unwrap().get_scalar(0);
+        assert!((encoded - f(unit)).abs() <= f(16.0) * F::epsilon());
+        if unit == 0.0 {
+            assert_eq!(physical.get_scalar(0), lower);
+        }
+        if unit == 1.0 {
+            assert_eq!(physical.get_scalar(0), upper);
+        }
+    }
 }
 #[test]
 fn transforms_vec_f64() {

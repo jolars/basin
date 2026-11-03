@@ -1,4 +1,6 @@
 //! Limited-memory inverse BFGS preconditioning, with no dense Hessian.
+// Adapted from sisyfuzz 0.1.0, Copyright 2026 Frans Henskens (Apache-2.0).
+// Contributed to Basin under MIT OR Apache-2.0; see COPYRIGHT for provenance.
 use super::{Scalar, dot};
 
 #[derive(Default)]

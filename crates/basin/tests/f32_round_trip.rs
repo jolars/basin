@@ -60,6 +60,103 @@ fn tnc_with_parameter_transform_f32() {
 }
 
 #[test]
+fn tnc_logarithmic_f32_preserves_narrow_physical_intervals() {
+    use basin::{
+        BoxBounds, Constrained, ConstraintSet, ParameterScale,
+        ParameterTransform, Tnc,
+    };
+    let target = 100_000_496.0_f32;
+    let make_transform = || {
+        ParameterTransform::new(
+            Constrained::new(
+                ShiftedQuadF32 { c: vec![target] },
+                ConstraintSet::new().with_bounds(BoxBounds::new(
+                    Some(vec![100_000_000.0_f32]),
+                    Some(vec![100_001_000.0]),
+                )),
+            ),
+            vec![ParameterScale::Logarithmic],
+        )
+        .unwrap()
+    };
+    let transform = make_transform();
+    let encoded = transform.encode(&vec![target]).unwrap();
+    assert_eq!(transform.decode(&encoded).unwrap(), vec![target]);
+    assert!((encoded[0] - 0.496).abs() < 2e-6);
+    let result =
+        Executor::from_start(make_transform(), Tnc::new(), vec![0.5_f32])
+            .max_iter(100)
+            .run()
+            .unwrap();
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
+    assert_eq!(result.cost(), 0.0);
+    assert_eq!(transform.decode(result.param()).unwrap(), vec![target]);
+}
+
+#[test]
+fn tnc_logarithmic_f32_keeps_high_range_derivatives_finite() {
+    use basin::{
+        BoxBounds, Constrained, ConstraintSet, ParameterScale,
+        ParameterTransform, Tnc,
+    };
+    struct NegativeLog;
+    impl CostFunction for NegativeLog {
+        type Param = Vec<f32>;
+        type Output = f32;
+        type Error = std::convert::Infallible;
+        fn cost(&self, x: &Vec<f32>) -> Result<f32, Self::Error> {
+            Ok(-x[0].ln())
+        }
+    }
+    impl Gradient for NegativeLog {
+        type Gradient = Vec<f32>;
+        fn gradient(&self, x: &Vec<f32>) -> Result<Vec<f32>, Self::Error> {
+            Ok(vec![-1.0 / x[0]])
+        }
+    }
+    impl HessianProduct for NegativeLog {
+        fn hessian_product(
+            &self,
+            x: &Vec<f32>,
+            v: &Vec<f32>,
+        ) -> Result<Vec<f32>, Self::Error> {
+            Ok(vec![(v[0] / x[0]) / x[0]])
+        }
+    }
+    let make_transform = || {
+        ParameterTransform::new(
+            Constrained::new(
+                NegativeLog,
+                ConstraintSet::new().with_bounds(BoxBounds::new(
+                    Some(vec![1e30_f32]),
+                    Some(vec![1e38_f32]),
+                )),
+            ),
+            vec![ParameterScale::Logarithmic],
+        )
+        .unwrap()
+    };
+    let transform = make_transform();
+    let point = vec![0.99_f32];
+    let expected = -(1e38_f32 / 1e30_f32).ln();
+    let gradient = transform.gradient(&point).unwrap()[0];
+    assert!((gradient - expected).abs() < 1e-4);
+    let (_, fused) = transform.cost_and_gradient(&point).unwrap();
+    assert_eq!(fused[0], gradient);
+    let product = transform.hessian_product(&point, &vec![0.001]).unwrap()[0];
+    assert!(
+        product.is_finite() && product.abs() < 1e-4,
+        "product={product}"
+    );
+    let result = Executor::from_start(make_transform(), Tnc::new(), point)
+        .max_iter(100)
+        .run()
+        .unwrap();
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
+    assert_eq!(result.param(), &vec![1.0]);
+}
+
+#[test]
 fn direct_f32() {
     direct_backend::check::<_, f32>(|x| x.to_vec());
 }

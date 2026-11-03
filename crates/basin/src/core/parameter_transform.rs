@@ -1,4 +1,6 @@
 //! Explicit finite-box coordinate transformations for objective problems.
+// Adapted from sisyfuzz 0.1.0, Copyright 2026 Frans Henskens (Apache-2.0).
+// Contributed to Basin under MIT OR Apache-2.0; see COPYRIGHT for provenance.
 use crate::{
     BoxBounds, ConstraintSet, Constraints, CostFunction, Gradient,
     HessianProduct, Scalar, VectorIndex, VectorLen,
@@ -162,7 +164,7 @@ where
             }
             let width = match scale {
                 ParameterScale::Linear => b - a,
-                ParameterScale::Logarithmic => b.ln() - a.ln(),
+                ParameterScale::Logarithmic => log_ratio(b, a),
             };
             if !width.is_finite() || width <= F::zero() {
                 return Err(E::Bounds);
@@ -211,7 +213,7 @@ where
                 match self.scales[i] {
                     ParameterScale::Linear => (value - a) / self.widths[i],
                     ParameterScale::Logarithmic => {
-                        (value.ln() - a.ln()) / self.widths[i]
+                        log_ratio(value, a) / self.widths[i]
                     }
                 }
             };
@@ -235,7 +237,7 @@ where
                 match self.scales[i] {
                     ParameterScale::Linear => a + unit * self.widths[i],
                     ParameterScale::Logarithmic => {
-                        (a.ln() + unit * self.widths[i]).exp()
+                        decode_log(a, b, self.widths[i], unit)
                     }
                 }
             };
@@ -261,11 +263,11 @@ where
         }
         Ok(())
     }
-    fn jacobian(&self, physical: &V, i: usize) -> F {
+    fn scale_derivative(&self, value: F, physical: &V, i: usize) -> F {
         match self.scales[i] {
-            ParameterScale::Linear => self.widths[i],
+            ParameterScale::Linear => value * self.widths[i],
             ParameterScale::Logarithmic => {
-                physical.get_scalar(i) * self.widths[i]
+                scaled_product([value, physical.get_scalar(i), self.widths[i]])
             }
         }
     }
@@ -278,7 +280,10 @@ where
             return Err(ParameterTransformError::Dimension);
         }
         for i in 0..g.vec_len() {
-            g.set_scalar(i, g.get_scalar(i) * self.jacobian(physical, i));
+            g.set_scalar(
+                i,
+                self.scale_derivative(g.get_scalar(i), physical, i),
+            );
         }
         Ok(())
     }
@@ -382,8 +387,10 @@ where
         }
         let mut direction = v.clone();
         for i in 0..v.vec_len() {
-            direction
-                .set_scalar(i, v.get_scalar(i) * self.jacobian(&physical, i));
+            direction.set_scalar(
+                i,
+                self.scale_derivative(v.get_scalar(i), &physical, i),
+            );
         }
         self.problem
             .hessian_product_into(&physical, &direction, out)
@@ -399,15 +406,118 @@ where
                     out.set_scalar(
                         i,
                         out.get_scalar(i)
-                            + g.get_scalar(i)
-                                * physical.get_scalar(i)
-                                * self.widths[i]
-                                * self.widths[i]
-                                * v.get_scalar(i),
+                            + scaled_product([
+                                g.get_scalar(i),
+                                physical.get_scalar(i),
+                                self.widths[i],
+                                self.widths[i],
+                                v.get_scalar(i),
+                            ]),
                     );
                 }
             }
         }
         Ok(())
+    }
+}
+
+fn log_ratio<F: Scalar>(upper: F, lower: F) -> F {
+    let relative = (upper - lower) / lower;
+    if relative.is_finite() {
+        relative.ln_1p()
+    } else {
+        // Widely separated positive bounds can overflow their ratio. Their
+        // logarithms are sufficiently separated to avoid cancellation here.
+        upper.ln() - lower.ln()
+    }
+}
+
+fn decode_log<F: Scalar>(lower: F, upper: F, width: F, unit: F) -> F {
+    if width <= F::one() {
+        lower.mul_add((unit * width).exp_m1(), lower)
+    } else {
+        // Anchor at the closer endpoint and split the exponential so its
+        // factors remain representable even across the full scalar range.
+        let half = F::from_f64(0.5).unwrap();
+        if unit <= half {
+            let factor = (unit * width * half).exp();
+            (lower * factor) * factor
+        } else {
+            let factor = (-(F::one() - unit) * width * half).exp();
+            (upper * factor) * factor
+        }
+    }
+}
+
+fn scaled_product<F: Scalar, const N: usize>(factors: [F; N]) -> F {
+    let mut product = F::one();
+    let mut normal = true;
+    for factor in factors {
+        product = product * factor;
+        normal &= product.is_normal();
+    }
+    if normal || factors.iter().any(|f| !f.is_finite()) {
+        return product;
+    }
+    if factors.contains(&F::zero()) {
+        return if factors.iter().filter(|f| f.is_sign_negative()).count() % 2
+            == 0
+        {
+            F::zero()
+        } else {
+            -F::zero()
+        };
+    }
+    // A finite product can have an overflowing or underflowing partial
+    // product. Combine significands and exponents before restoring the scale.
+    let two = F::one() + F::one();
+    let mut significand = F::one();
+    let mut exponent = 0;
+    for factor in factors {
+        let (mantissa, power, sign) = factor.integer_decode();
+        let bits = mantissa.ilog2() as i32;
+        let normalized = F::from_u64(mantissa).unwrap() / two.powi(bits);
+        significand =
+            significand * if sign < 0 { -normalized } else { normalized };
+        exponent += i32::from(power) + bits;
+        if significand.abs() >= two {
+            significand = significand / two;
+            exponent += 1;
+        }
+    }
+    let half = exponent / 2;
+    (significand * two.powi(half)) * two.powi(exponent - half)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn check_products<F: Scalar>(power: i32) {
+        let two = F::one() + F::one();
+        let large = two.powi(power);
+        let small = two.powi(-power);
+        assert_eq!(scaled_product([large, large, small]), large);
+        assert_eq!(scaled_product([small, small, large]), small);
+        assert_eq!(scaled_product([-large, large, small]), -large);
+        assert_eq!(scaled_product([large, large, F::zero()]), F::zero());
+        assert!(scaled_product([F::infinity(), F::zero()]).is_nan());
+        assert!(scaled_product([F::max_value(), two]).is_infinite());
+        let minimum = F::min_positive_value() * F::epsilon();
+        assert_eq!(
+            scaled_product([
+                F::min_positive_value(),
+                F::from_f64(1.5).unwrap() * F::epsilon(),
+                F::from_f64(8.0).unwrap()
+            ]),
+            F::from_f64(12.0).unwrap() * minimum
+        );
+        assert_eq!(scaled_product([minimum, F::one() / two]), F::zero());
+    }
+
+    #[test]
+    fn chain_rule_products_preserve_representable_results() {
+        check_products::<f32>(80);
+        check_products::<f64>(600);
     }
 }

@@ -1,4 +1,6 @@
 //! Box-constrained, preconditioned truncated Newton.
+// Adapted from sisyfuzz 0.1.0, Copyright 2026 Frans Henskens (Apache-2.0).
+// Contributed to Basin under MIT OR Apache-2.0; see COPYRIGHT for provenance.
 use std::marker::PhantomData;
 
 use crate::core::constraint::evaluation::{
