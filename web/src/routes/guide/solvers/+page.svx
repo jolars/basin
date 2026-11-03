@@ -55,6 +55,24 @@ finding uses a direct callback API and a separate result type.
 
 ## First-order
 
+- **[`Tnc`](https://docs.rs/basin/latest/basin/solver/tnc/struct.Tnc.html)**:
+  truncated Newton for finite box bounds, with limited-memory preconditioned CG,
+  feasible gradient-difference or exact Hessian-vector products, and a bounded
+  Wolfe line search. Strong-Wolfe conditions are not guaranteed at every
+  accepted step. Supports all four dense backends with `f32` and
+  `f64`; reports projected-gradient stationarity in the supplied coordinates.
+  Custom line searches must implement the bounded search method.
+  `ParameterTransform` explicitly supplies unit coordinates for linear or
+  logarithmic physical parameters. Adapts the independent Rust implementation in
+  [`sisyfuzz` 0.1.0](https://docs.rs/crate/sisyfuzz/0.1.0/source/src/tnc.rs)
+  to Basin's solver lifecycle and shared line searches.
+  References: Stephen G. Nash, "A survey of
+  truncated-Newton methods," _Journal of Computational and Applied Mathematics_
+  124 (2000), 45-59,
+  [doi:10.1016/S0377-0427(00)00426-X](https://doi.org/10.1016/S0377-0427(00)00426-X).
+  Nash describes the algorithm family. [SciPy 1.17.0 TNC](https://docs.scipy.org/doc/scipy-1.17.0/reference/optimize.minimize-tnc.html)
+  provided practical context and a benchmark reference for the original method;
+  this port does not translate SciPy's C code or promise matching trajectories.
 - **<span id="nonlinear-cg"></span>[`NonlinearCg`](https://docs.rs/basin/latest/basin/solver/nonlinear_cg/struct.NonlinearCg.html)**:
   nonlinear conjugate gradient with selectable Hager–Zhang (default) and
   Polak–Ribière+ updates, O(n) storage, a pluggable line search, and optional

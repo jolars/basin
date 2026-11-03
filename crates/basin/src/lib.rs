@@ -385,6 +385,10 @@ pub use crate::core::observer::{CheckpointWriter, read_checkpoint};
 pub use crate::core::observer::{
     History, ObservationEvent, Observe, ObserveSolver, ObserverMode, Report,
 };
+pub use crate::core::parameter_transform::{
+    ParameterEvaluationError, ParameterScale, ParameterTransform,
+    ParameterTransformError,
+};
 pub use crate::core::problem::{
     CostFunction, EvalCounts, EvaluationBuffers, EvaluationKind, Gradient,
     Hessian, HessianProduct, Jacobian, MiniBatchGradient, Problem, Residual,
@@ -419,6 +423,9 @@ pub use crate::root::{
 };
 pub use crate::solver::Bfgs;
 pub use crate::solver::lbfgs::{Lbfgs, Lbfgsb};
+pub use crate::solver::tnc::{
+    ExactProducts, GradientDifferences, Tnc, TncCgTermination,
+};
 pub use crate::solver::trust_region::{
     CauchyPoint, Dogleg, ExactHessian, MatrixFree, MoreSorensen, Steihaug,
     TrustRegion,

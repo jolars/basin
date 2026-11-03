@@ -13,6 +13,53 @@ mod nonlinear_cg_backend;
 mod direct_backend;
 
 #[test]
+fn tnc_with_parameter_transform_f32() {
+    use basin::{
+        BoxBounds, Constrained, ConstraintSet, ParameterScale,
+        ParameterTransform, Termination, Tnc,
+    };
+
+    let make_transform = || {
+        ParameterTransform::new(
+            Constrained::new(
+                ShiftedQuadF32 { c: vec![2.0, -0.5] },
+                ConstraintSet::new().with_bounds(BoxBounds::new(
+                    Some(vec![1.0_f32, -2.0]),
+                    Some(vec![4.0, 3.0]),
+                )),
+            ),
+            vec![ParameterScale::Logarithmic, ParameterScale::Linear],
+        )
+        .unwrap()
+    };
+    // Retain the same coordinate map for encoding and decoding while the
+    // executor owns a separate problem with identical geometry.
+    let transform = make_transform();
+    let start = transform.encode(&vec![3.0, 2.0]).unwrap();
+    let result = Executor::from_start(
+        make_transform(),
+        Tnc::new().with_absolute_projected_gradient_tolerance(1e-3_f32),
+        start,
+    )
+    .max_iter(200)
+    .run()
+    .unwrap();
+    let cost: f32 = result.cost();
+    let physical: Vec<f32> = transform.decode(result.param()).unwrap();
+    let expected = transform.get_ref().inner().cost(&physical).unwrap();
+    assert!(matches!(
+        result.report.termination,
+        Termination::Converged(_)
+    ));
+    assert!(cost < 1e-5);
+    assert!((physical[0] - 2.0).abs() < 2e-3);
+    assert!((physical[1] + 0.5).abs() < 2e-3);
+    assert_eq!(cost, expected);
+    assert!(result.counts.cost_evals > 1);
+    assert!(result.counts.gradient_evals > 1);
+}
+
+#[test]
 fn direct_f32() {
     direct_backend::check::<_, f32>(|x| x.to_vec());
 }

@@ -647,3 +647,25 @@ On NixOS, the wheel environment may need the zlib and C++ runtime library
 directories in `LD_LIBRARY_PATH`. Rust tests read the committed files and need
 neither Python nor SciPy. Candidate-selection code retains SciPy's BSD notice
 in `src/solver/trust_region_reflective/step.rs`.
+
+# TNC analytic validation
+
+TNC has no external trajectory fixture. Its bounded line search, coordinate
+handling and stopping tests differ from SciPy TNC, so matching iteration or
+callback counts is not a test requirement. Nash's survey, cited in the solver
+rustdoc, describes the truncated-Newton method family rather than this exact
+combination of defaults and safeguards.
+
+The [implementation note](../../../../docs/tnc-implementation.md) records the
+original design, historical comparisons and changes made for Basin. The
+committed tests below do not require SciPy.
+
+`tests/tnc.rs` checks known box-quadratic solutions, nonpositive-curvature
+descent, nonlinear Rosenbrock convergence and exact checkpoint continuation.
+The solver's unit test checks feasible roundoff endpoints.
+`tests/parameter_transform.rs` checks the chain rule against central differences,
+including the logarithmic map's second derivative, and verifies callback
+dispatch and adapter-level evaluation counting. Both suites exercise `f32` and
+`f64` on every dense backend; CI selects supported backend versions separately.
+These tests establish numerical invariants, not trajectory parity or a
+performance claim.
