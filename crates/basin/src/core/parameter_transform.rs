@@ -433,6 +433,15 @@ fn log_ratio<F: Scalar>(upper: F, lower: F) -> F {
 }
 
 fn decode_log<F: Scalar>(lower: F, upper: F, width: F, unit: F) -> F {
+    if lower < F::min_positive_value() {
+        let factor = (unit * width).exp();
+        if factor.is_finite() {
+            // Keep the product normal until the final rounding into the
+            // subnormal range. Splitting it can round twice and reverse steps.
+            return ((lower / F::min_positive_value()) * factor)
+                * F::min_positive_value();
+        }
+    }
     if width <= F::one() {
         lower.mul_add((unit * width).exp_m1(), lower)
     } else {

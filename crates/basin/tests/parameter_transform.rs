@@ -141,6 +141,48 @@ where
     V: Clone + VectorLen + VectorIndex<F>,
 {
     let f = |v: f64| F::from_f64(v).unwrap();
+    let minimum = F::min_positive_value() * F::epsilon();
+    let subnormal = ParameterTransform::new(
+        basin::Constrained::new(
+            LinearSlope {
+                origin: minimum,
+                slope: F::one(),
+                marker: std::marker::PhantomData,
+            },
+            ConstraintSet::new().with_bounds(BoxBounds::new(
+                Some(make(&[minimum])),
+                Some(make(&[f(10.0) * minimum])),
+            )),
+        ),
+        vec![ParameterScale::Logarithmic],
+    )
+    .unwrap();
+    for bits in 1..=10 {
+        let physical = f(bits as f64) * minimum;
+        let unit = subnormal.encode(&make(&[physical])).unwrap();
+        assert_eq!(subnormal.decode(&unit).unwrap().get_scalar(0), physical);
+        // The objective must receive the same physical value, including when
+        // the seed is only two representable values above zero.
+        assert_eq!(subnormal.cost(&unit).unwrap(), physical - minimum);
+    }
+    let midpoint = f(0.5);
+    let next = midpoint + F::epsilon() * f(0.5);
+    let at_midpoint =
+        subnormal.decode(&make(&[midpoint])).unwrap().get_scalar(0);
+    assert_eq!(at_midpoint, f(3.0) * minimum);
+    assert!(
+        subnormal.decode(&make(&[next])).unwrap().get_scalar(0) >= at_midpoint
+    );
+    let mut previous = minimum;
+    for i in 0..=1024 {
+        let physical = subnormal
+            .decode(&make(&[f(i as f64 / 1024.0)]))
+            .unwrap()
+            .get_scalar(0);
+        assert!(physical >= previous);
+        previous = physical;
+    }
+
     let lower = F::max_value() / f(4.0);
     let upper = lower + lower * (f(32.0) * F::epsilon());
     let transform = ParameterTransform::new(
