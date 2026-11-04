@@ -102,6 +102,99 @@ where
     }
     assert!(p.cost(&make(&[f(-0.1), f(0.5)])).is_err());
     exercise_extreme_mappings(make);
+    exercise_large_logarithmic_products(make);
+}
+
+struct LogCoupling<V, F>(std::marker::PhantomData<(V, F)>);
+
+impl<V: VectorIndex<F>, F: Scalar> CostFunction for LogCoupling<V, F> {
+    type Param = V;
+    type Output = F;
+    type Error = &'static str;
+
+    fn cost(&self, x: &V) -> Result<F, Self::Error> {
+        Ok(-x.get_scalar(0).ln() * x.get_scalar(1))
+    }
+}
+
+impl<V: Clone + VectorIndex<F>, F: Scalar> Gradient for LogCoupling<V, F> {
+    type Gradient = V;
+
+    fn gradient(&self, x: &V) -> Result<V, Self::Error> {
+        let mut out = x.clone();
+        out.set_scalar(0, -x.get_scalar(1) / x.get_scalar(0));
+        out.set_scalar(1, -x.get_scalar(0).ln());
+        Ok(out)
+    }
+}
+
+impl<V: Clone + VectorLen + VectorIndex<F>, F: Scalar> HessianProduct
+    for LogCoupling<V, F>
+{
+    fn hessian_product(&self, x: &V, v: &V) -> Result<V, Self::Error> {
+        if (0..v.vec_len()).any(|i| !v.get_scalar(i).is_finite()) {
+            return Err("non-finite physical direction");
+        }
+        let mut out = v.clone();
+        let ratio = v.get_scalar(0) / x.get_scalar(0);
+        out.set_scalar(
+            0,
+            (x.get_scalar(1) * ratio - v.get_scalar(1)) / x.get_scalar(0),
+        );
+        out.set_scalar(1, -ratio);
+        Ok(out)
+    }
+}
+
+fn exercise_large_logarithmic_products<V, F>(make: fn(&[F]) -> V)
+where
+    F: Scalar,
+    V: Clone + VectorLen + VectorIndex<F>,
+{
+    let f = |v: f64| F::from_f64(v).unwrap();
+    let upper = F::max_value() / f(4.0);
+    let lower = upper * f(1e-8);
+    let transform = ParameterTransform::new(
+        basin::Constrained::new(
+            LogCoupling(std::marker::PhantomData),
+            ConstraintSet::new().with_bounds(BoxBounds::new(
+                Some(make(&[lower, F::zero()])),
+                Some(make(&[upper, f(2.0)])),
+            )),
+        ),
+        vec![ParameterScale::Logarithmic, ParameterScale::Linear],
+    )
+    .unwrap();
+    let point = make(&[f(0.99), f(0.5)]);
+    let width = (upper / lower).ln();
+    let tolerance = f(64.0) * F::epsilon() * width * width;
+    assert!(
+        (transform.decode(&point).unwrap().get_scalar(0) * width).is_infinite()
+    );
+    // In unit coordinates the objective is bilinear, with both mixed
+    // derivatives equal to -2 * width and both diagonal derivatives zero.
+    for values in [[0.0, 0.0], [1.0, 0.0], [-1.0, 0.0], [0.0, 1.0], [1.0, -1.0]]
+    {
+        let v = make(&[f(values[0]), f(values[1])]);
+        let expected = [
+            -f(2.0) * width * f(values[1]),
+            -f(2.0) * width * f(values[0]),
+        ];
+        let owned = transform.hessian_product(&point, &v).unwrap();
+        let mut out = make(&[]);
+        transform
+            .hessian_product_into(&point, &v, &mut out)
+            .unwrap();
+        for (i, expected) in expected.into_iter().enumerate() {
+            assert!(owned.get_scalar(i).is_finite());
+            assert!(
+                (owned.get_scalar(i) - expected).abs() <= tolerance,
+                "product={:?}, expected={expected:?}",
+                owned.get_scalar(i)
+            );
+            assert_eq!(out.get_scalar(i), owned.get_scalar(i));
+        }
+    }
 }
 
 struct LinearSlope<V, F> {

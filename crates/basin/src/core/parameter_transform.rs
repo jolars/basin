@@ -263,12 +263,21 @@ where
         }
         Ok(())
     }
-    fn scale_derivative(&self, value: F, physical: &V, i: usize) -> F {
+    fn scale_derivative(
+        &self,
+        value: F,
+        physical: &V,
+        i: usize,
+        exponent: i32,
+    ) -> F {
         match self.scales[i] {
-            ParameterScale::Linear => value * self.widths[i],
-            ParameterScale::Logarithmic => {
-                scaled_product([value, physical.get_scalar(i), self.widths[i]])
+            ParameterScale::Linear => {
+                scaled_product([value, self.widths[i]], exponent)
             }
+            ParameterScale::Logarithmic => scaled_product(
+                [value, physical.get_scalar(i), self.widths[i]],
+                exponent,
+            ),
         }
     }
     fn gradient_chain(
@@ -282,7 +291,7 @@ where
         for i in 0..g.vec_len() {
             g.set_scalar(
                 i,
-                self.scale_derivative(g.get_scalar(i), physical, i),
+                self.scale_derivative(g.get_scalar(i), physical, i, 0),
             );
         }
         Ok(())
@@ -386,11 +395,38 @@ where
             return Err(Invalid(ParameterTransformError::Dimension));
         }
         let mut direction = v.clone();
+        let mut direction_exponent = 0;
         for i in 0..v.vec_len() {
-            direction.set_scalar(
-                i,
-                self.scale_derivative(v.get_scalar(i), &physical, i),
-            );
+            let value = self.scale_derivative(v.get_scalar(i), &physical, i, 0);
+            direction.set_scalar(i, value);
+            if value.is_infinite() {
+                let physical_factor = match self.scales[i] {
+                    ParameterScale::Linear => F::one(),
+                    ParameterScale::Logarithmic => physical.get_scalar(i),
+                };
+                let upper_exponent =
+                    [v.get_scalar(i), physical_factor, self.widths[i]]
+                        .into_iter()
+                        .map(|factor| binary_exponent(factor) + 1)
+                        .sum::<i32>();
+                direction_exponent = direction_exponent
+                    .max(upper_exponent - binary_exponent(F::max_value()));
+            }
+        }
+        if direction_exponent > 0 {
+            // Keep the direction near the finite range limit. Normalizing it
+            // to unit length can underflow an otherwise representable HVP.
+            for i in 0..v.vec_len() {
+                direction.set_scalar(
+                    i,
+                    self.scale_derivative(
+                        v.get_scalar(i),
+                        &physical,
+                        i,
+                        -direction_exponent,
+                    ),
+                );
+            }
         }
         self.problem
             .hessian_product_into(&physical, &direction, out)
@@ -406,15 +442,28 @@ where
                     out.set_scalar(
                         i,
                         out.get_scalar(i)
-                            + scaled_product([
-                                g.get_scalar(i),
-                                physical.get_scalar(i),
-                                self.widths[i],
-                                self.widths[i],
-                                v.get_scalar(i),
-                            ]),
+                            + scaled_product(
+                                [
+                                    g.get_scalar(i),
+                                    physical.get_scalar(i),
+                                    self.widths[i],
+                                    self.widths[i],
+                                    v.get_scalar(i),
+                                ],
+                                -direction_exponent,
+                            ),
                     );
                 }
+            }
+        }
+        if direction_exponent > 0 {
+            // Combine both chain-rule terms before restoring their scale so
+            // cancellation can occur without overflowing either term.
+            for i in 0..out.vec_len() {
+                out.set_scalar(
+                    i,
+                    scaled_product([out.get_scalar(i)], direction_exponent),
+                );
             }
         }
         Ok(())
@@ -458,14 +507,22 @@ fn decode_log<F: Scalar>(lower: F, upper: F, width: F, unit: F) -> F {
     }
 }
 
-fn scaled_product<F: Scalar, const N: usize>(factors: [F; N]) -> F {
+fn binary_exponent<F: Scalar>(value: F) -> i32 {
+    let (mantissa, power, _) = value.integer_decode();
+    i32::from(power) + mantissa.ilog2() as i32
+}
+
+fn scaled_product<F: Scalar, const N: usize>(
+    factors: [F; N],
+    mut exponent: i32,
+) -> F {
     let mut product = F::one();
     let mut normal = true;
     for factor in factors {
         product = product * factor;
         normal &= product.is_normal();
     }
-    if normal || factors.iter().any(|f| !f.is_finite()) {
+    if (normal && exponent == 0) || factors.iter().any(|f| !f.is_finite()) {
         return product;
     }
     if factors.contains(&F::zero()) {
@@ -481,7 +538,6 @@ fn scaled_product<F: Scalar, const N: usize>(factors: [F; N]) -> F {
     // product. Combine significands and exponents before restoring the scale.
     let two = F::one() + F::one();
     let mut significand = F::one();
-    let mut exponent = 0;
     for factor in factors {
         let (mantissa, power, sign) = factor.integer_decode();
         let bits = mantissa.ilog2() as i32;
@@ -506,22 +562,28 @@ mod tests {
         let two = F::one() + F::one();
         let large = two.powi(power);
         let small = two.powi(-power);
-        assert_eq!(scaled_product([large, large, small]), large);
-        assert_eq!(scaled_product([small, small, large]), small);
-        assert_eq!(scaled_product([-large, large, small]), -large);
-        assert_eq!(scaled_product([large, large, F::zero()]), F::zero());
-        assert!(scaled_product([F::infinity(), F::zero()]).is_nan());
-        assert!(scaled_product([F::max_value(), two]).is_infinite());
+        assert_eq!(scaled_product([large, large, small], 0), large);
+        assert_eq!(scaled_product([small, small, large], 0), small);
+        assert_eq!(scaled_product([-large, large, small], 0), -large);
+        assert_eq!(scaled_product([large, large, F::zero()], 0), F::zero());
+        assert!(scaled_product([F::infinity(), F::zero()], 0).is_nan());
+        assert!(scaled_product([F::max_value(), two], 0).is_infinite());
+        assert_eq!(scaled_product([large, large], -power), large);
+        assert_eq!(scaled_product([large], -2 * power), small);
+        assert_eq!(scaled_product([small, small], 2 * power), F::one());
         let minimum = F::min_positive_value() * F::epsilon();
         assert_eq!(
-            scaled_product([
-                F::min_positive_value(),
-                F::from_f64(1.5).unwrap() * F::epsilon(),
-                F::from_f64(8.0).unwrap()
-            ]),
+            scaled_product(
+                [
+                    F::min_positive_value(),
+                    F::from_f64(1.5).unwrap() * F::epsilon(),
+                    F::from_f64(8.0).unwrap()
+                ],
+                0,
+            ),
             F::from_f64(12.0).unwrap() * minimum
         );
-        assert_eq!(scaled_product([minimum, F::one() / two]), F::zero());
+        assert_eq!(scaled_product([minimum, F::one() / two], 0), F::zero());
     }
 
     #[test]

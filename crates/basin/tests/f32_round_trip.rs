@@ -143,11 +143,14 @@ fn tnc_logarithmic_f32_keeps_high_range_derivatives_finite() {
     assert!((gradient - expected).abs() < 1e-4);
     let (_, fused) = transform.cost_and_gradient(&point).unwrap();
     assert_eq!(fused[0], gradient);
-    let product = transform.hessian_product(&point, &vec![0.001]).unwrap()[0];
-    assert!(
-        product.is_finite() && product.abs() < 1e-4,
-        "product={product}"
-    );
+    for direction in [0.0, 0.001, 1.0, -1.0] {
+        let product =
+            transform.hessian_product(&point, &vec![direction]).unwrap()[0];
+        assert!(
+            product.is_finite() && product.abs() < 1e-4,
+            "direction={direction}, product={product}"
+        );
+    }
     let result = Executor::from_start(make_transform(), Tnc::new(), point)
         .max_iter(100)
         .run()
