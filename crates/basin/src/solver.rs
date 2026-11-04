@@ -172,3 +172,5 @@ pub use trust_region_reflective::TrustRegionReflective;
 /// Sequential least-squares programming.
 pub mod slsqp;
 pub use slsqp::{Slsqp, SlsqpFailure};
+pub mod tnc;
+pub use tnc::{ExactProducts, GradientDifferences, Tnc, TncCgTermination};

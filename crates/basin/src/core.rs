@@ -69,6 +69,7 @@ pub mod numdiff;
 pub mod observer;
 #[doc(hidden)]
 pub mod parallel;
+pub mod parameter_transform;
 pub mod problem;
 pub mod rng;
 pub mod run_control;

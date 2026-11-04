@@ -183,7 +183,7 @@ numerical work against analytic cases and reference implementations.
   factorizations, and feasibility and stationarity diagnostics. This is a
   larger project than the current barrier and augmented-Lagrangian adapters.
 - [ ] **Assess remaining local methods.** Consider Powell's direction-set
-  method, line-search Newton-CG, TNC, GLTR/`trust-krylov`, and SR1 Hessian
+  method, line-search Newton-CG, GLTR/`trust-krylov`, and SR1 Hessian
   updates when a workload demonstrates value. Powell's direction-set method
   is distinct from NEWUOA and BOBYQA; GLTR is distinct from Steihaug CG.
   Compare against [SciPy's local
