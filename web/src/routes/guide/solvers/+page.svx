@@ -509,6 +509,9 @@ The pluggable line searches are documented alongside the first-order solvers:
 (Armijo; Nocedal & Wright §3.1),
 [`Wolfe`](https://docs.rs/basin/latest/basin/line_search/wolfe/struct.Wolfe.html)
 (strong Wolfe; Nocedal & Wright Alg. 3.5/3.6),
+[`FusedWolfe`](https://docs.rs/basin/latest/basin/line_search/wolfe/struct.FusedWolfe.html)
+(the same algorithms with fused cost-and-gradient callbacks at every trial,
+including rejected trials; Nocedal & Wright Alg. 3.5/3.6),
 [`MoreThuente`](https://docs.rs/basin/latest/basin/line_search/more_thuente/struct.MoreThuente.html)
 (Moré & Thuente, 1994; a port of MINPACK-2's `dcsrch`), and
 [`HagerZhang`](https://docs.rs/basin/latest/basin/line_search/hager_zhang/struct.HagerZhang.html)

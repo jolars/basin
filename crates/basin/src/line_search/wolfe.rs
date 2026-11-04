@@ -4,6 +4,98 @@ use crate::line_search::{
     LineSearch, LineSearchBounds, LineSearchOutcome, LineSearchResult,
 };
 
+/// Strong Wolfe with fused cost-and-gradient evaluation at every trial.
+///
+/// Construct by configuring [`Wolfe`] and calling
+/// [`Wolfe::with_fused_evaluations`]. This uses the same Nocedal & Wright
+/// Algorithms 3.5/3.6 (bracketing and bisection zoom) and accepted-point reuse.
+/// Unlike ordinary [`Wolfe`], Armijo-rejected trials also request gradients.
+/// Choose this strategy when a fused callback shares expensive intermediate
+/// work; separate inexpensive costs and expensive gradients can favor `Wolfe`.
+/// Hard evaluation errors propagate without retrying a separate callback.
+///
+/// # Backends
+///
+/// Supports the same `ScaledAdd<F> + Dot<F> + Clone` parameter types as
+/// [`Wolfe`]: `Vec<F>`, nalgebra `DVector<F>`, ndarray `Array1<F>`, and faer
+/// `Col<F>`, with both `f32` and `f64`.
+///
+/// # Examples
+///
+/// ```
+/// use basin::{Tnc, Wolfe};
+/// let search = Wolfe::<f64>::new().max_iter(60).with_fused_evaluations();
+/// let solver = Tnc::<_, Vec<f64>>::with_line_search(search);
+/// ```
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct FusedWolfe<F: Scalar = f64> {
+    search: Wolfe<F>,
+}
+
+impl<F: Scalar> Default for FusedWolfe<F> {
+    fn default() -> Self {
+        Wolfe::new().with_fused_evaluations()
+    }
+}
+
+impl<P, V, F> LineSearch<P, V, F> for FusedWolfe<F>
+where
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
+    V: ScaledAdd<F> + Dot<F> + Clone,
+{
+    type Error = P::Error;
+
+    fn next(
+        &mut self,
+        problem: &mut Problem<P>,
+        param: &V,
+        cost: F,
+        gradient: &V,
+        direction: &V,
+    ) -> Result<F, Self::Error> {
+        let result = self
+            .next_with_evaluation(problem, param, cost, gradient, direction)?;
+        Ok(match result.outcome {
+            LineSearchOutcome::Step(alpha) => alpha,
+            LineSearchOutcome::Failed => F::zero(),
+        })
+    }
+
+    fn next_with_evaluation(
+        &mut self,
+        problem: &mut Problem<P>,
+        param: &V,
+        cost: F,
+        gradient: &V,
+        direction: &V,
+    ) -> Result<LineSearchResult<V, F>, Self::Error> {
+        self.search
+            .search(problem, param, cost, gradient, direction, true)
+    }
+
+    fn next_with_bounds(
+        &mut self,
+        problem: &mut Problem<P>,
+        param: &V,
+        cost: F,
+        gradient: &V,
+        direction: &V,
+        bounds: LineSearchBounds<F>,
+    ) -> Result<LineSearchResult<V, F>, Self::Error> {
+        let max = self.search.alpha_max.min(bounds.max);
+        if !(max.is_finite() && max > F::zero()) {
+            return Ok(LineSearchResult::new(LineSearchOutcome::Failed));
+        }
+        let search = Wolfe {
+            alpha_init: bounds.initial.min(max),
+            alpha_max: max,
+            ..self.search
+        };
+        search.search(problem, param, cost, gradient, direction, true)
+    }
+}
+
 /// Strong Wolfe line search via bracketing + bisection-based zoom.
 ///
 /// Returns an `α > 0` along the caller-supplied descent direction `d`
@@ -19,6 +111,12 @@ use crate::line_search::{
 /// Algorithms 3.5 (bracketing) and 3.6 (zoom) from Nocedal & Wright. The
 /// zoom phase uses bisection (always-progress, no interpolation pitfalls);
 /// cubic-interpolation in zoom is a possible future perf improvement.
+///
+/// The evaluation-returning methods retain the objective and gradient when
+/// accepting an evaluated trial, so callers can reuse them. By default, rejected
+/// Armijo trials request only the objective. [`Self::with_fused_evaluations`]
+/// instead evaluates cost and gradient together at every trial. Exhaustion may return a step without
+/// an evaluation; callers must evaluate that point themselves.
 ///
 /// # Configuration
 ///
@@ -36,6 +134,7 @@ use crate::line_search::{
 ///     ..Wolfe::new()
 /// };
 /// ```
+///
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct Wolfe<F = f64> {
@@ -107,6 +206,15 @@ impl<F: Scalar> Wolfe<F> {
         self.max_iter = max_iter;
         self
     }
+
+    /// Evaluate cost and gradient together at every trial, including rejected
+    /// trials. Configure the search before selecting this strategy.
+    ///
+    /// Returns a separate strategy so the original Wolfe configuration and
+    /// serialized checkpoint layout remain unchanged.
+    pub fn with_fused_evaluations(self) -> FusedWolfe<F> {
+        FusedWolfe { search: self }
+    }
 }
 
 impl<P, V, F> LineSearch<P, V, F> for Wolfe<F>
@@ -125,90 +233,23 @@ where
         gradient: &V,
         direction: &V,
     ) -> Result<F, Self::Error> {
-        let phi0 = cost;
-        let phi0_prime = gradient.dot(direction);
+        let result = self
+            .next_with_evaluation(problem, param, cost, gradient, direction)?;
+        Ok(match result.outcome {
+            LineSearchOutcome::Step(alpha) => alpha,
+            LineSearchOutcome::Failed => F::zero(),
+        })
+    }
 
-        // If `direction` is not a descent direction (or `phi0_prime` is
-        // NaN), bail with α = 0 rather than looping forever. Written
-        // positively so NaN routes here too: `NaN < 0.0` is false.
-        if phi0_prime >= F::zero() || phi0_prime.is_nan() {
-            return Ok(F::zero());
-        }
-
-        let two = F::from_f64(2.0).unwrap();
-        let mut alpha_prev = F::zero();
-        let mut phi_prev = phi0;
-        let mut alpha = self.alpha_init.min(self.alpha_max);
-
-        let mut gradient_buffer = None;
-        for i in 0..self.max_iter {
-            let mut trial = param.clone();
-            trial.scaled_add(alpha, direction);
-            let phi = problem.cost(&trial)?;
-
-            // Armijo failed OR φ stopped decreasing → minimum is in
-            // (alpha_prev, alpha). Hand to zoom.
-            if phi > phi0 + self.c1 * alpha * phi0_prime
-                || (i > 0 && phi >= phi_prev)
-            {
-                return self.zoom(
-                    problem,
-                    param,
-                    direction,
-                    phi0,
-                    phi0_prime,
-                    alpha_prev,
-                    phi_prev,
-                    alpha,
-                    &mut gradient_buffer,
-                );
-            }
-
-            let g_trial =
-                problem.gradient_reusing(&trial, gradient_buffer.take())?;
-            let phi_prime = g_trial.dot(direction);
-            gradient_buffer = Some(g_trial);
-
-            // Strong curvature satisfied → accept.
-            if phi_prime.abs() <= -self.c2 * phi0_prime {
-                return Ok(alpha);
-            }
-
-            // Slope flipped sign → minimum is in (alpha, alpha_prev). Note
-            // the swapped argument order so `alpha_lo < alpha_hi` is *not*
-            // assumed inside zoom (matches N&W).
-            if phi_prime >= F::zero() {
-                return self.zoom(
-                    problem,
-                    param,
-                    direction,
-                    phi0,
-                    phi0_prime,
-                    alpha,
-                    phi,
-                    alpha_prev,
-                    &mut gradient_buffer,
-                );
-            }
-
-            alpha_prev = alpha;
-            phi_prev = phi;
-            // Expansion: double, capped at alpha_max. Once we're at the
-            // cap, the next iteration's φ check will end up in zoom anyway.
-            let next_alpha = (alpha * two).min(self.alpha_max);
-            if next_alpha == alpha {
-                // Cannot expand further. Best we can do is return the current
-                // α: Armijo is satisfied here even if curvature isn't.
-                return Ok(alpha);
-            }
-            alpha = next_alpha;
-        }
-
-        // Bracketing exhausted without locating a Wolfe step; return the
-        // last α (Armijo held there). Caller (BFGS) treats this like any
-        // other α: the curvature condition guard will detect the failure
-        // and skip the H update if needed.
-        Ok(alpha)
+    fn next_with_evaluation(
+        &mut self,
+        problem: &mut Problem<P>,
+        param: &V,
+        cost: F,
+        gradient: &V,
+        direction: &V,
+    ) -> Result<LineSearchResult<V, F>, Self::Error> {
+        self.search(problem, param, cost, gradient, direction, false)
     }
 
     fn next_with_bounds(
@@ -234,6 +275,135 @@ where
 }
 
 impl<F: Scalar> Wolfe<F> {
+    fn search<P, V>(
+        &self,
+        problem: &mut Problem<P>,
+        param: &V,
+        cost: F,
+        gradient: &V,
+        direction: &V,
+        fused: bool,
+    ) -> Result<LineSearchResult<V, F>, P::Error>
+    where
+        P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
+        V: ScaledAdd<F> + Dot<F> + Clone,
+    {
+        let phi0 = cost;
+        let phi0_prime = gradient.dot(direction);
+
+        // If `direction` is not a descent direction (or `phi0_prime` is
+        // NaN), bail with α = 0 rather than looping forever. Written
+        // positively so NaN routes here too: `NaN < 0.0` is false.
+        if phi0_prime >= F::zero() || phi0_prime.is_nan() {
+            return Ok(LineSearchResult::new(LineSearchOutcome::Step(
+                F::zero(),
+            )));
+        }
+
+        let two = F::from_f64(2.0).unwrap();
+        let mut alpha_prev = F::zero();
+        let mut phi_prev = phi0;
+        let mut alpha = self.alpha_init.min(self.alpha_max);
+
+        let mut gradient_buffer = None;
+        let mut trial = param.clone();
+        for i in 0..self.max_iter {
+            if i > 0 {
+                trial.clone_from(param);
+            }
+            trial.scaled_add(alpha, direction);
+            let (phi, fused_gradient) = if fused {
+                let (phi, g) = problem.cost_and_gradient_reusing(
+                    &trial,
+                    gradient_buffer.take(),
+                )?;
+                (phi, Some(g))
+            } else {
+                (problem.cost(&trial)?, None)
+            };
+
+            // Armijo failed OR φ stopped decreasing → minimum is in
+            // (alpha_prev, alpha). Hand to zoom.
+            if phi > phi0 + self.c1 * alpha * phi0_prime
+                || (i > 0 && phi >= phi_prev)
+            {
+                if fused_gradient.is_some() {
+                    gradient_buffer = fused_gradient;
+                }
+                return self.zoom(
+                    problem,
+                    param,
+                    direction,
+                    phi0,
+                    phi0_prime,
+                    alpha_prev,
+                    phi_prev,
+                    alpha,
+                    &mut gradient_buffer,
+                    trial,
+                    fused,
+                );
+            }
+
+            let g_trial = if let Some(g) = fused_gradient {
+                g
+            } else {
+                problem.gradient_reusing(&trial, gradient_buffer.take())?
+            };
+            let phi_prime = g_trial.dot(direction);
+
+            // Strong curvature satisfied → accept.
+            if phi_prime.abs() <= -self.c2 * phi0_prime {
+                return Ok(LineSearchResult::with_evaluation(
+                    alpha, trial, phi, g_trial,
+                ));
+            }
+
+            // Slope flipped sign → minimum is in (alpha, alpha_prev). Note
+            // the swapped argument order so `alpha_lo < alpha_hi` is *not*
+            // assumed inside zoom (matches N&W).
+            if phi_prime >= F::zero() {
+                gradient_buffer = Some(g_trial);
+                return self.zoom(
+                    problem,
+                    param,
+                    direction,
+                    phi0,
+                    phi0_prime,
+                    alpha,
+                    phi,
+                    alpha_prev,
+                    &mut gradient_buffer,
+                    trial,
+                    fused,
+                );
+            }
+
+            alpha_prev = alpha;
+            phi_prev = phi;
+            // Expansion: double, capped at alpha_max. Once we're at the
+            // cap, the next iteration's φ check will end up in zoom anyway.
+            let next_alpha = (alpha * two).min(self.alpha_max);
+            if next_alpha == alpha {
+                // Cannot expand further. Best we can do is return the current
+                // α: Armijo is satisfied here even if curvature isn't.
+                return Ok(LineSearchResult::with_evaluation(
+                    alpha, trial, phi, g_trial,
+                ));
+            }
+            gradient_buffer = Some(g_trial);
+            alpha = next_alpha;
+        }
+
+        // Bracketing exhausted without locating a Wolfe step; return the
+        // last α (Armijo held there). Caller (BFGS) treats this like any
+        // other α: the curvature condition guard will detect the failure
+        // and skip the H update if needed.
+        // Expansion may have advanced alpha past the last evaluated trial.
+        // Do not attach that trial's values to the returned step.
+        Ok(LineSearchResult::new(LineSearchOutcome::Step(alpha)))
+    }
+
     /// Zoom on bracket `(alpha_lo, alpha_hi)` with `φ(alpha_lo) = phi_lo`.
     /// `alpha_hi` may be either side of `alpha_lo`; the algorithm only
     /// requires that the bracket contains a Wolfe-satisfying step.
@@ -249,7 +419,9 @@ impl<F: Scalar> Wolfe<F> {
         mut phi_lo: F,
         mut alpha_hi: F,
         gradient_buffer: &mut Option<V>,
-    ) -> Result<F, P::Error>
+        mut trial: V,
+        fused: bool,
+    ) -> Result<LineSearchResult<V, F>, P::Error>
     where
         P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
         V: ScaledAdd<F> + Dot<F> + Clone,
@@ -260,22 +432,38 @@ impl<F: Scalar> Wolfe<F> {
             // faster but is brittle; bisection always halves the bracket.
             let alpha_j = half * (alpha_lo + alpha_hi);
 
-            let mut trial = param.clone();
+            trial.clone_from(param);
             trial.scaled_add(alpha_j, direction);
-            let phi_j = problem.cost(&trial)?;
+            let (phi_j, fused_gradient) = if fused {
+                let (phi, g) = problem.cost_and_gradient_reusing(
+                    &trial,
+                    gradient_buffer.take(),
+                )?;
+                (phi, Some(g))
+            } else {
+                (problem.cost(&trial)?, None)
+            };
 
             if phi_j > phi0 + self.c1 * alpha_j * phi0_prime || phi_j >= phi_lo
             {
                 alpha_hi = alpha_j;
+                if fused_gradient.is_some() {
+                    *gradient_buffer = fused_gradient;
+                }
             } else {
-                let g_j =
-                    problem.gradient_reusing(&trial, gradient_buffer.take())?;
+                let g_j = if let Some(g) = fused_gradient {
+                    g
+                } else {
+                    problem.gradient_reusing(&trial, gradient_buffer.take())?
+                };
                 let phi_j_prime = g_j.dot(direction);
-                *gradient_buffer = Some(g_j);
 
                 if phi_j_prime.abs() <= -self.c2 * phi0_prime {
-                    return Ok(alpha_j);
+                    return Ok(LineSearchResult::with_evaluation(
+                        alpha_j, trial, phi_j, g_j,
+                    ));
                 }
+                *gradient_buffer = Some(g_j);
 
                 if phi_j_prime * (alpha_hi - alpha_lo) >= F::zero() {
                     alpha_hi = alpha_lo;
@@ -292,7 +480,9 @@ impl<F: Scalar> Wolfe<F> {
             }
         }
 
-        Ok(alpha_lo)
+        // alpha_lo may be an earlier trial whose gradient buffer was reused,
+        // or the unevaluated starting point. Preserve the step-only fallback.
+        Ok(LineSearchResult::new(LineSearchOutcome::Step(alpha_lo)))
     }
 }
 

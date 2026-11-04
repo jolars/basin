@@ -245,6 +245,68 @@ fn failed_search_keeps_current_progress() {
     ));
 }
 
+// Reproduce the old step-only handoff using the same production trial policy.
+struct StepOnly(basin::Wolfe);
+impl<P, V> basin::LineSearch<P, V> for StepOnly
+where
+    P: CostFunction<Param = V, Output = f64> + Gradient<Gradient = V>,
+    V: Clone + Dot<f64> + ScaledAdd<f64>,
+{
+    type Error = P::Error;
+    fn next(
+        &mut self,
+        p: &mut basin::Problem<P>,
+        x: &V,
+        f: f64,
+        g: &V,
+        d: &V,
+    ) -> Result<f64, Self::Error> {
+        self.0.next(p, x, f, g, d)
+    }
+    fn next_with_bounds(
+        &mut self,
+        p: &mut basin::Problem<P>,
+        x: &V,
+        f: f64,
+        g: &V,
+        d: &V,
+        bounds: basin::LineSearchBounds,
+    ) -> Result<basin::LineSearchResult<V, f64>, Self::Error> {
+        let result = self.0.next_with_bounds(p, x, f, g, d, bounds)?;
+        Ok(basin::LineSearchResult::new(result.outcome))
+    }
+}
+
+#[test]
+fn wolfe_reuse_preserves_tnc_result_and_removes_duplicate_evaluations() {
+    let p = || problem::<Vec<f64>, f64>(|s| s.to_vec());
+    // Include starts at and away from bounds; endpoint snapping may correctly
+    // require a fresh evaluation even when the search retained its own trial.
+    for start in [vec![0.5; 3], vec![0.0, 1.0, 1.0]] {
+        let retained = Executor::from_start(p(), Tnc::new(), start.clone())
+            .max_iter(500)
+            .run()
+            .unwrap();
+        let wolfe = basin::Wolfe::new().max_iter(60);
+        let legacy = Executor::from_start(
+            p(),
+            Tnc::with_line_search(StepOnly(wolfe)),
+            start,
+        )
+        .max_iter(500)
+        .run()
+        .unwrap();
+        assert_eq!(retained.param(), legacy.param());
+        assert_eq!(retained.cost(), legacy.cost());
+        assert_eq!(retained.report, legacy.report);
+        assert!(retained.counts.cost_evals < legacy.counts.cost_evals);
+        assert_eq!(
+            legacy.counts.cost_evals - retained.counts.cost_evals,
+            legacy.counts.gradient_evals - retained.counts.gradient_evals,
+        );
+    }
+}
+
 #[test]
 fn exact_continuation_preserves_curvature_and_accounting() {
     let p = || problem::<Vec<f64>, f64>(|s| s.to_vec());
@@ -270,6 +332,73 @@ fn exact_continuation_preserves_curvature_and_accounting() {
     assert_eq!(resumed.param(), whole.param());
     assert_eq!(resumed.cost(), whole.cost());
     assert_eq!(resumed.counts, whole.counts);
+}
+
+#[test]
+fn fresh_initialization_rebuilds_scratch_when_dimension_changes() {
+    let initialized = Executor::from_start(
+        problem::<Vec<f64>, f64>(|s| s.to_vec()),
+        Tnc::new(),
+        vec![0.5; 3],
+    )
+    .max_iter(3)
+    .run_with_solver()
+    .unwrap();
+    let p = || {
+        let mut p = problem::<Vec<f64>, f64>(|s| s.to_vec());
+        p.lo = vec![0.0; 8];
+        p.hi = vec![1.0; 8];
+        p
+    };
+    let fresh = Executor::from_start(p(), Tnc::new(), vec![0.5; 8])
+        .max_iter(500)
+        .run()
+        .unwrap();
+    let reused = Executor::from_start(p(), initialized.solver, vec![0.5; 8])
+        .max_iter(500)
+        .run()
+        .unwrap();
+    assert_eq!(reused.state, fresh.state);
+    assert_eq!(reused.counts, fresh.counts);
+    assert_eq!(reused.report, fresh.report);
+}
+
+#[test]
+fn fused_search_preserves_tnc_trajectory_and_exact_continuation() {
+    let p = || problem::<Vec<f64>, f64>(|s| s.to_vec());
+    let solver = || {
+        Tnc::with_line_search(
+            basin::Wolfe::new().max_iter(60).with_fused_evaluations(),
+        )
+    };
+    let complete = Executor::from_start(p(), solver(), vec![0.5; 3])
+        .max_iter(500)
+        .run()
+        .unwrap();
+    let separate = Executor::from_start(p(), Tnc::new(), vec![0.5; 3])
+        .max_iter(500)
+        .run()
+        .unwrap();
+    assert_eq!(complete.param(), separate.param());
+    assert_eq!(complete.cost(), separate.cost());
+    assert_eq!(complete.report, separate.report);
+    let split = Executor::from_start(p(), solver(), vec![0.5; 3])
+        .max_iter(2)
+        .run_with_solver()
+        .unwrap()
+        .into_checkpoint();
+    #[cfg(feature = "serde")]
+    let split: basin::ExactCheckpoint<
+        Tnc<basin::FusedWolfe, Vec<f64>>,
+        FirstOrderState<Vec<f64>>,
+    > = serde_json::from_str(&serde_json::to_string(&split).unwrap()).unwrap();
+    let resumed = Executor::resume_from_checkpoint(p(), split)
+        .max_iter(500)
+        .run()
+        .unwrap();
+    assert_eq!(resumed.state, complete.state);
+    assert_eq!(resumed.counts, complete.counts);
+    assert_eq!(resumed.report, complete.report);
 }
 
 #[test]

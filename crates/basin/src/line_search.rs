@@ -34,7 +34,7 @@ pub mod wolfe;
 pub use backtracking::Backtracking;
 pub use hager_zhang::HagerZhang;
 pub use more_thuente::MoreThuente;
-pub use wolfe::Wolfe;
+pub use wolfe::{FusedWolfe, Wolfe};
 
 use crate::core::math::Scalar;
 use crate::core::problem::Problem;

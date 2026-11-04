@@ -903,7 +903,10 @@ where
                 F::from_f64(1.0e10).unwrap()
             };
 
-            let mut d_v = state.param().clone();
+            let mut d_v = history
+                .direction_buffer
+                .take()
+                .unwrap_or_else(|| state.param().clone());
             d_v.as_float_slice_mut().copy_from_slice(&work.d);
             let stpmx = safeguard_step_cap(
                 state.param(),
@@ -1204,7 +1207,10 @@ where
         // d = −H_k · g into `d_v` via an in-place accumulator that
         // starts at `g`, has the BFGS history applied, scales by
         // `H₀ = (1/θ)·I`, then negates.
-        let mut d_v = state.param().clone();
+        let mut d_v = history
+            .direction_buffer
+            .take()
+            .unwrap_or_else(|| state.param().clone());
         {
             let d_slice = d_v.as_float_slice_mut();
             let g_slice = g_v.as_float_slice();
@@ -1212,7 +1218,8 @@ where
             d_slice.copy_from_slice(g_slice);
 
             if col > 0 {
-                let mut alpha = vec![F::zero(); col];
+                history.alpha.resize(col, F::zero());
+                let alpha = &mut history.alpha;
 
                 // Backward pass: q ← q − αᵢ yᵢ for i = col-1 .. 0.
                 for i in (0..col).rev() {
@@ -1338,24 +1345,25 @@ where
             // Build s = stp · d and y = g_new − g_old as V-typed
             // vectors, then push. `append_pair` re-runs the s·y > 0
             // check as a final safeguard and refreshes `theta`.
-            let mut s_v = param_new.clone();
+            let mut s_v = d_v;
             {
                 let s_slice = s_v.as_float_slice_mut();
                 for i in 0..n {
-                    s_slice[i] = stp * d_slice[i];
+                    s_slice[i] = stp * s_slice[i];
                 }
             }
-            let mut y_v = g_new.clone();
+            let mut y_v = g_v;
             {
                 let y_slice = y_v.as_float_slice_mut();
                 for i in 0..n {
-                    y_slice[i] = g_new_slice[i] - g_old_slice[i];
+                    y_slice[i] = g_new_slice[i] - y_slice[i];
                 }
             }
             history.append_pair(s_v, y_v);
+        } else {
+            history.direction_buffer = Some(d_v);
+            history.gradient_buffer = Some(g_v);
         }
-
-        history.gradient_buffer = Some(g_v);
         state
             .replace(param_new, f_new, g_new)
             .expect("gradient dimension differs from parameter");

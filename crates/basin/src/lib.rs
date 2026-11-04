@@ -413,9 +413,9 @@ pub use crate::core::termination::{
     TerminationReport, TerminationStage, Threshold,
 };
 pub use crate::line_search::{
-    Backtracking, Constant, HagerZhang, LineSearch, LineSearchBounds,
-    LineSearchEvaluation, LineSearchOutcome, LineSearchResult, MoreThuente,
-    Wolfe,
+    Backtracking, Constant, FusedWolfe, HagerZhang, LineSearch,
+    LineSearchBounds, LineSearchEvaluation, LineSearchOutcome,
+    LineSearchResult, MoreThuente, Wolfe,
 };
 pub use crate::root::{
     BisectionRoot, BrentRoot, BrentRootError, HalleyRoot, NewtonRoot,
