@@ -56,15 +56,15 @@ For unbounded Jacobian staging, use the Criterion regex
 (the latter also includes bounded Jacobians as an unchanged control). Compare
 tall and wide shapes across every backend: Vec and ndarray publish in row-major
 order, while nalgebra and faer publish in column-major order. With `parallel`
-disabled, unbounded kernels reuse the residual probe buffer and stage scalar
-columns in one buffer.
+disabled or a one-worker pool, unbounded kernels reuse the residual probe
+buffer and stage scalar columns in one buffer.
 Each column has one padding scalar to avoid power-of-two strides when publishing
 to a row-major matrix. Central Jacobians discover the residual length from the
 probes, preserving the `2n` callback count. All probes complete before the output is published;
 direct sequential output fills would change that error behavior. Measure
 allocation requests separately from timings: an earlier unpadded buffer reduced
 allocations but regressed tall, cheap-callback cases. Parallel block staging
-also regressed several workloads, so the existing parallel path is retained.
+also regressed several workloads, so the existing multi-worker path is retained.
 
 The `hessian_product` cases use `FiniteDiff`'s fallback that differences its own
 numerical gradients, with the selected stencil at both levels. A fixed step of
@@ -142,10 +142,24 @@ change parallel allocation totals between runs, so retain repeated measurements
 and avoid exact parallel allocation assertions. CSV formatting, analytic
 validation, fixture setup, and callback counter storage are excluded.
 
+`vector_clones` comes from a third pass using a wrapper around each backend
+vector. It counts `clone` and `clone_from` requests, including probe scratch,
+owned results, and residual columns retained by multi-worker Jacobian kernels. It
+does not count copies internal to a backend's `Clone` implementation. For reused
+gradients and Hessians, these are probe-vector clones; multi-worker Jacobian
+counts also include one residual-column clone per parameter. As with
+allocations, divide by `repeats` and retain multiple runs when comparing scheduling.
+The clone wrapper and its atomic counter are absent from timing and allocation
+passes. Every pass independently validates the numerical output.
+
 ## Time sequential and parallel builds
 
-Use separate processes and named baselines. A one-worker parallel build still
-runs Rayon code, so measure the build without `parallel` as well. `RAYON_NUM_THREADS`
+Use separate processes and named baselines. A one-worker parallel build retains
+feature-specific dispatch and thread-safety bounds, so measure the build without
+`parallel` as well. Jacobian and Hessian kernels avoid Rayon iteration and
+repeated job-local probe clones when the current pool has one worker. Gradient
+staging retains its existing Rayon path: a direct one-worker loop slowed a large
+expensive-callback workload despite improving small cheap cases. `RAYON_NUM_THREADS`
 controls the global pool. The executables print the actual execution mode and
 pool size to stderr before measurement. Benchmark names deliberately omit the
 mode so Criterion can compare identical inputs across builds.

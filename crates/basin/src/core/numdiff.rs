@@ -868,14 +868,12 @@ where
 // Stage sequential Jacobians in padded scalar storage instead of cloning a
 // backend vector per column. Parallel block staging regressed measured cases;
 // retain the existing parallel kernels until their scheduling is improved.
-#[cfg(not(feature = "parallel"))]
 struct JacobianBlock {
     rows: Option<usize>,
     columns: usize,
     values: Vec<f64>,
 }
 
-#[cfg(not(feature = "parallel"))]
 impl JacobianBlock {
     fn push_column(
         &mut self,
@@ -925,7 +923,6 @@ impl JacobianBlock {
     }
 }
 
-#[cfg(not(feature = "parallel"))]
 fn jacobian_block<S, E>(
     n: usize,
     init: impl FnOnce() -> S,
@@ -962,7 +959,7 @@ where
     P::Error: MaybeSend,
 {
     #[cfg(feature = "parallel")]
-    {
+    if rayon::current_num_threads() > 1 {
         let n = x.vec_len();
         let m = r0.vec_len();
         let eps = function_precision.max(f64::EPSILON).sqrt();
@@ -992,9 +989,8 @@ where
             },
         )?;
         V::dense_from_fn_into(m, n, |i, j| columns[j].get_scalar(i), out);
-        Ok(())
+        return Ok(());
     }
-    #[cfg(not(feature = "parallel"))]
     {
         let n = x.vec_len();
         let m = r0.vec_len();
@@ -1082,7 +1078,7 @@ where
     P::Error: MaybeSend,
 {
     #[cfg(feature = "parallel")]
-    {
+    if rayon::current_num_threads() > 1 {
         let n = x.vec_len();
         if n == 0 {
             // With no probes, only a base evaluation can reveal the output shape.
@@ -1131,9 +1127,8 @@ where
             "finite-difference output length changed"
         );
         V::dense_from_fn_into(m, n, |i, j| columns[j].get_scalar(i), out);
-        Ok(())
+        return Ok(());
     }
-    #[cfg(not(feature = "parallel"))]
     {
         let n = x.vec_len();
         if n == 0 {
