@@ -865,6 +865,84 @@ where
     )
 }
 
+// Stage sequential Jacobians in padded scalar storage instead of cloning a
+// backend vector per column. Parallel block staging regressed measured cases;
+// retain the existing parallel kernels until their scheduling is improved.
+#[cfg(not(feature = "parallel"))]
+struct JacobianBlock {
+    rows: Option<usize>,
+    columns: usize,
+    values: Vec<f64>,
+}
+
+#[cfg(not(feature = "parallel"))]
+impl JacobianBlock {
+    fn push_column(
+        &mut self,
+        rows: usize,
+        value: impl FnMut(usize) -> f64,
+    ) -> &mut [f64] {
+        if let Some(expected) = self.rows {
+            assert_eq!(
+                rows, expected,
+                "finite-difference output length changed"
+            );
+        } else {
+            self.rows = Some(rows);
+            if rows != 0 {
+                self.values.reserve_exact(
+                    rows.checked_add(1)
+                        .and_then(|stride| stride.checked_mul(self.columns))
+                        .expect("Jacobian size overflow"),
+                );
+            }
+        }
+        let start = self.values.len();
+        self.values.extend((0..rows).map(value));
+        // Break power-of-two strides when row-major backends read across columns.
+        if rows != 0 {
+            self.values.push(0.0);
+        }
+        &mut self.values[start..start + rows]
+    }
+
+    fn write_into<V: DenseMatrixFromFn>(
+        self,
+        rows: usize,
+        columns: usize,
+        out: &mut V::Matrix,
+    ) {
+        assert!(
+            self.rows.is_none() || self.rows == Some(rows),
+            "finite-difference output length changed"
+        );
+        V::dense_from_fn_into(
+            rows,
+            columns,
+            |i, j| self.values[j * (rows + 1) + i],
+            out,
+        );
+    }
+}
+
+#[cfg(not(feature = "parallel"))]
+fn jacobian_block<S, E>(
+    n: usize,
+    init: impl FnOnce() -> S,
+    evaluate: impl Fn(&mut S, usize, &mut JacobianBlock) -> Result<(), E>,
+) -> Result<JacobianBlock, E> {
+    let mut scratch = init();
+    let mut result = JacobianBlock {
+        rows: None,
+        columns: n,
+        values: Vec::new(),
+    };
+    for j in 0..n {
+        evaluate(&mut scratch, j, &mut result)?;
+    }
+    Ok(result)
+}
+
 fn forward_difference_jacobian_with_base_into<P, V>(
     problem: &P,
     x: &V,
@@ -883,33 +961,73 @@ where
         + MaybeSend,
     P::Error: MaybeSend,
 {
-    let n = x.vec_len();
-    let m = r0.vec_len();
-    let eps = function_precision.max(f64::EPSILON).sqrt();
-    let columns = try_map_range_with(
-        n,
-        || (x.clone(), r0.clone()),
-        |(probe, residual), j| {
-            let xj = x.get_scalar(j);
-            let h = match fixed_step {
-                Some(h) => h,
-                None => {
-                    let h = eps * xj.abs();
-                    if h == 0.0 { eps } else { h }
+    #[cfg(feature = "parallel")]
+    {
+        let n = x.vec_len();
+        let m = r0.vec_len();
+        let eps = function_precision.max(f64::EPSILON).sqrt();
+        let columns = try_map_range_with(
+            n,
+            || (x.clone(), r0.clone()),
+            |(probe, residual), j| {
+                let xj = x.get_scalar(j);
+                let h = match fixed_step {
+                    Some(h) => h,
+                    None => {
+                        let h = eps * xj.abs();
+                        if h == 0.0 { eps } else { h }
+                    }
+                };
+                probe.set_scalar(j, xj + h);
+                problem.residual_into(probe, residual)?;
+                let mut col = residual.clone();
+                probe.set_scalar(j, xj);
+                for i in 0..m {
+                    col.set_scalar(
+                        i,
+                        (col.get_scalar(i) - r0.get_scalar(i)) / h,
+                    );
                 }
-            };
-            probe.set_scalar(j, xj + h);
-            problem.residual_into(probe, residual)?;
-            let mut col = residual.clone();
-            probe.set_scalar(j, xj);
-            for i in 0..m {
-                col.set_scalar(i, (col.get_scalar(i) - r0.get_scalar(i)) / h);
-            }
-            Ok(col)
-        },
-    )?;
-    V::dense_from_fn_into(m, n, |i, j| columns[j].get_scalar(i), out);
-    Ok(())
+                Ok(col)
+            },
+        )?;
+        V::dense_from_fn_into(m, n, |i, j| columns[j].get_scalar(i), out);
+        Ok(())
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let n = x.vec_len();
+        let m = r0.vec_len();
+        let eps = function_precision.max(f64::EPSILON).sqrt();
+        let columns = jacobian_block(
+            n,
+            || (x.clone(), r0.clone()),
+            |(probe, residual), j, block| {
+                let xj = x.get_scalar(j);
+                let h = match fixed_step {
+                    Some(h) => h,
+                    None => {
+                        let h = eps * xj.abs();
+                        if h == 0.0 { eps } else { h }
+                    }
+                };
+                probe.set_scalar(j, xj + h);
+                problem.residual_into(probe, residual)?;
+                assert_eq!(
+                    residual.vec_len(),
+                    m,
+                    "finite-difference output length changed"
+                );
+                probe.set_scalar(j, xj);
+                block.push_column(m, |i| {
+                    (residual.get_scalar(i) - r0.get_scalar(i)) / h
+                });
+                Ok(())
+            },
+        )?;
+        columns.write_into::<V>(m, n, out);
+        Ok(())
+    }
 }
 
 /// Central-difference Jacobian, column `j ≈ (r(x+hⱼeⱼ) − r(x−hⱼeⱼ)) / 2hⱼ`.
@@ -963,54 +1081,102 @@ where
         + MaybeSend,
     P::Error: MaybeSend,
 {
-    let n = x.vec_len();
-    if n == 0 {
-        // With no probes, only a base evaluation can reveal the output shape.
-        let mut residual = x.clone();
-        let m = if let Some(base) = base {
-            base.vec_len()
-        } else {
-            problem.residual_into(x, &mut residual)?;
-            residual.vec_len()
-        };
-        V::dense_from_fn_into(m, 0, |_, _| unreachable!(), out);
-        return Ok(());
-    }
-    let scale = function_precision.max(f64::EPSILON).cbrt();
-    let columns = try_map_range_with(
-        n,
-        || (x.clone(), base.unwrap_or(x).clone()),
-        |(probe, residual), j| {
-            let xj = x.get_scalar(j);
-            let h = nr_step(xj, scale, fixed_step);
-            probe.set_scalar(j, xj + h);
-            problem.residual_into(probe, residual)?;
-            let mut col = residual.clone();
-            probe.set_scalar(j, xj - h);
-            problem.residual_into(probe, residual)?;
-            probe.set_scalar(j, xj);
-            let m = col.vec_len();
-            assert_eq!(
-                residual.vec_len(),
-                m,
-                "finite-difference output length changed"
-            );
-            for i in 0..m {
-                col.set_scalar(
-                    i,
-                    (col.get_scalar(i) - residual.get_scalar(i)) / (2.0 * h),
+    #[cfg(feature = "parallel")]
+    {
+        let n = x.vec_len();
+        if n == 0 {
+            // With no probes, only a base evaluation can reveal the output shape.
+            let mut residual = x.clone();
+            let m = if let Some(base) = base {
+                base.vec_len()
+            } else {
+                problem.residual_into(x, &mut residual)?;
+                residual.vec_len()
+            };
+            V::dense_from_fn_into(m, 0, |_, _| unreachable!(), out);
+            return Ok(());
+        }
+        let scale = function_precision.max(f64::EPSILON).cbrt();
+        let columns = try_map_range_with(
+            n,
+            || (x.clone(), base.unwrap_or(x).clone()),
+            |(probe, residual), j| {
+                let xj = x.get_scalar(j);
+                let h = nr_step(xj, scale, fixed_step);
+                probe.set_scalar(j, xj + h);
+                problem.residual_into(probe, residual)?;
+                let mut col = residual.clone();
+                probe.set_scalar(j, xj - h);
+                problem.residual_into(probe, residual)?;
+                probe.set_scalar(j, xj);
+                let m = col.vec_len();
+                assert_eq!(
+                    residual.vec_len(),
+                    m,
+                    "finite-difference output length changed"
                 );
-            }
-            Ok(col)
-        },
-    )?;
-    let m = base.map_or_else(|| columns[0].vec_len(), VectorLen::vec_len);
-    assert!(
-        columns.iter().all(|col| col.vec_len() == m),
-        "finite-difference output length changed"
-    );
-    V::dense_from_fn_into(m, n, |i, j| columns[j].get_scalar(i), out);
-    Ok(())
+                for i in 0..m {
+                    col.set_scalar(
+                        i,
+                        (col.get_scalar(i) - residual.get_scalar(i))
+                            / (2.0 * h),
+                    );
+                }
+                Ok(col)
+            },
+        )?;
+        let m = base.map_or_else(|| columns[0].vec_len(), VectorLen::vec_len);
+        assert!(
+            columns.iter().all(|col| col.vec_len() == m),
+            "finite-difference output length changed"
+        );
+        V::dense_from_fn_into(m, n, |i, j| columns[j].get_scalar(i), out);
+        Ok(())
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let n = x.vec_len();
+        if n == 0 {
+            // With no probes, only a base evaluation can reveal the output shape.
+            let mut residual = x.clone();
+            let m = if let Some(base) = base {
+                base.vec_len()
+            } else {
+                problem.residual_into(x, &mut residual)?;
+                residual.vec_len()
+            };
+            V::dense_from_fn_into(m, 0, |_, _| unreachable!(), out);
+            return Ok(());
+        }
+        let scale = function_precision.max(f64::EPSILON).cbrt();
+        let columns = jacobian_block(
+            n,
+            || (x.clone(), base.unwrap_or(x).clone()),
+            |(probe, residual), j, block| {
+                let xj = x.get_scalar(j);
+                let h = nr_step(xj, scale, fixed_step);
+                probe.set_scalar(j, xj + h);
+                problem.residual_into(probe, residual)?;
+                let m = residual.vec_len();
+                let col = block.push_column(m, |i| residual.get_scalar(i));
+                probe.set_scalar(j, xj - h);
+                problem.residual_into(probe, residual)?;
+                probe.set_scalar(j, xj);
+                assert_eq!(
+                    residual.vec_len(),
+                    m,
+                    "finite-difference output length changed"
+                );
+                for (i, value) in col.iter_mut().enumerate() {
+                    *value = (*value - residual.get_scalar(i)) / (2.0 * h);
+                }
+                Ok(())
+            },
+        )?;
+        let m = base.map_or_else(|| columns.rows.unwrap(), VectorLen::vec_len);
+        columns.write_into::<V>(m, n, out);
+        Ok(())
+    }
 }
 
 struct HessianTriangle {

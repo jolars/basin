@@ -51,6 +51,21 @@ coordinates and a single preallocated scalar buffer above that size. Both
 paths publish the output only after all probes succeed. Allocation totals
 also include probe-vector clones, including those created by Rayon tasks.
 
+For unbounded Jacobian staging, use the Criterion regex
+`numdiff/.*/(jacobian|residual_jacobian)/` and accounting filter `jacobian/`
+(the latter also includes bounded Jacobians as an unchanged control). Compare
+tall and wide shapes across every backend: Vec and ndarray publish in row-major
+order, while nalgebra and faer publish in column-major order. With `parallel`
+disabled, unbounded kernels reuse the residual probe buffer and stage scalar
+columns in one buffer.
+Each column has one padding scalar to avoid power-of-two strides when publishing
+to a row-major matrix. Central Jacobians discover the residual length from the
+probes, preserving the `2n` callback count. All probes complete before the output is published;
+direct sequential output fills would change that error behavior. Measure
+allocation requests separately from timings: an earlier unpadded buffer reduced
+allocations but regressed tall, cheap-callback cases. Parallel block staging
+also regressed several workloads, so the existing parallel path is retained.
+
 The `hessian_product` cases use `FiniteDiff`'s fallback that differences its own
 numerical gradients, with the selected stencil at both levels. A fixed step of
 `1e-3` avoids amplifying roundoff through two nested differences. The other
