@@ -167,19 +167,42 @@ The model wrapper also accepts an explicit
   endpoint are strictly inside the box. Otherwise it uses the bounded direction.
   A soft line-search failure retries the bounded direction with history intact;
   failed probes remain counted, and callback errors propagate normally.
-- **`Projected`** applies retained curvature on the current free coordinates,
+- **`ProjectedChord`** applies retained curvature on the current free coordinates,
   projects the endpoint into the box, and searches along the feasible chord.
   This selects projected L-BFGS rather than the L-BFGS-B Cauchy algorithm.
   Basin inherits the base solver's stopping controls. Sisyfuzz's default
   projected Armijo search projects each trial; its More–Thuente and Wolfe
   searches instead cap the original direction at the first bound. The chord
   policy differs from both choices.
+  `Projected` retains its existing meaning as an alias for this chord policy.
 
-For example, select projected L-BFGS after configuring its base solver:
+For projected L-BFGS, select the search geometry independently with
+[`with_projected_search()`](https://docs.rs/basin/latest/basin/solver/lbfgs/model_strategy/struct.ModelLbfgsb.html#method.with_projected_search).
+All choices retain the same free-coordinate curvature mechanism:
+
+| `ProjectedSearch` | Trial points and acceptance |
+| --- | --- |
+| `FeasibleRay` | Use the free-coordinate inverse direction, remove outward components at active bounds, and cap steps at the first bound reached along the ray. Use the base solver's configured bounded search, such as More–Thuente or Wolfe. |
+| `Armijo(search)` | Project each trial `x + alpha * d` into the box, using the actual displacement for sufficient decrease. Use the supplied `ProjectedArmijo` configuration. |
+| `Chord` | Project the full endpoint, then use the base solver's bounded search along the chord. |
+
+The ray and Armijo choices correspond to sisyfuzz's respective search paths.
+They remain subject to Basin's numerical safeguards and restart behavior.
+`with_projected_search()` replaces any previously selected `ModelDirection`.
+Its `Chord` option shares the legacy `ProjectedChord` geometry but uses the
+new wrapper's global curvature safeguard and actual-displacement pair updates.
+Projected Armijo returns the actual accepted point and its evaluation; it does
+not implement the straight-ray `LineSearch` contract and cannot be passed to
+`Lbfgs::with_line_search` directly. Its default configuration starts at `alpha = 1`,
+halves the step, uses `c1 = 1e-4`, and allows up to 40 trials. Its configuration
+replaces the base solver's line search for this mode.
+
+For example, select per-trial projection with combined cost/gradient evaluations:
 
 <!-- compile: solver-lbfgsb-projected-policy -->
 ```rust
-use basin::{Lbfgsb, solver::lbfgs::model_strategy::ModelDirection};
+use basin::{Lbfgsb, line_search::projected_armijo::ProjectedArmijo};
+use basin::solver::lbfgs::model_strategy::ProjectedSearch;
 
 fn main() {
     let solver = Lbfgsb::<Vec<f64>>::new()
@@ -187,13 +210,23 @@ fn main() {
         .with_absolute_projected_gradient_tolerance(1e-8)
         .with_relative_cost_reduction_tolerance(None)
         .with_compact_model()
-        .with_direction_policy(ModelDirection::Projected);
+        .with_projected_search(ProjectedSearch::Armijo(
+            ProjectedArmijo::new().with_fused_evaluations(),
+        ));
 
-    assert_eq!(solver.direction_policy(), ModelDirection::Projected);
+    assert!(solver.curvature_retention());
 }
 ```
 
 Pass this solver to `Executor` with a bounded problem as in the example above.
+Without `.with_fused_evaluations()`, rejected Armijo trials request only costs;
+the gradient is requested on acceptance. Fused mode shares combined work at
+every trial, including rejections, and reuses the accepted evaluation.
+Override `Gradient::cost_and_gradient` to share intermediate work and
+`Gradient::cost_and_gradient_into` to reuse gradient storage; the default
+combined callback calls the separate methods, and the default buffer-writing
+callback delegates to that combined callback. Fused mode can be
+more expensive when gradients cost much more than objective evaluations.
 The inverse policies build derived model factors only when a bounded fallback
 needs them. They are explicit alternatives, with no general guarantee of faster
 convergence or better accuracy than the reference path.
@@ -201,11 +234,27 @@ convergence or better accuracy than the reference path.
 ### Preserve curvature across changes at bounds
 
 Default L-BFGS-B already retains accepted full curvature pairs when the free set
-changes. Projected mode additionally restricts the inverse BFGS updates to the
+changes. The projected modes additionally restrict the inverse BFGS updates to the
 coordinates currently free to move. A pair whose restricted curvature is unsafe
 is skipped for that direction, while the original pair remains available if
 coordinates become free again. History capacity still limits retention, and
 normal numerical restarts can clear the history.
+
+`with_projected_search()` forms pairs from the actual accepted parameter and
+gradient changes. Its global curvature safeguard defaults to `1e-10` times
+the product of the step and gradient-change norms, configured on the returned
+solver with `with_relative_curvature_tolerance`. Unsafe global curvature clears
+the model; skipping an unsafe restriction leaves its raw pair intact.
+This global threshold replaces the base solver's curvature threshold. The
+free-coordinate restriction test has a separate, fixed relative threshold of
+`1e-10`; changing the global threshold does not change the restriction test.
+
+For a controlled comparison, `.with_curvature_retention(false)` clears pairs
+when the free mask changes while keeping the selected search and safeguards.
+Pairs still accumulate while the mask stays unchanged. Retention is enabled by
+default. Compare it enabled and disabled under the same
+search, tolerances and budgets to isolate its effect; faster results alone do
+not establish better accuracy.
 
 Fresh runs clear evolving history. Exact solver-and-state checkpoints preserve
 history and the selected policy; serialized checkpoints rebuild only derived
@@ -214,6 +263,8 @@ model scratch. The wrappers differ when recovering the base solver:
 `ModelLbfgsb::into_inner()` discards curvature and requires a fresh run.
 Native compact-phase diagnostics are available on the reference-based paths;
 the model wrapper provides selected-point diagnostics instead.
+The projected-search wrapper also preserves its previous free mask in an exact
+checkpoint, including when reset-on-change retention is selected.
 
 ## Practical considerations
 

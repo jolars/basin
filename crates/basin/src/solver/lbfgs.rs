@@ -623,9 +623,30 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
     fn next_iter_bounded_model<P>(
         &mut self,
         problem: &mut Problem<P>,
+        state: FirstOrderState<V, F>,
+        subspace: Option<&mut subspace_direction::Workspace<F>>,
+        model: Option<&mut model_strategy::RunWorkspace<F>>,
+    ) -> Result<
+        crate::SolverStep<FirstOrderState<V, F>>,
+        crate::ConstraintSolveError<P::Error>,
+    >
+    where
+        P: CostFunction<Param = V, Output = F>
+            + Gradient<Gradient = V>
+            + BoxProblem<Param = V>,
+        V: AsFloatSliceMut<F> + Clone + Dot<F> + ScaledAdd<F> + VectorLen,
+        S: LineSearch<P, V, F, Error = P::Error>,
+    {
+        self.next_iter_bounded_search(problem, state, subspace, model, None)
+    }
+
+    fn next_iter_bounded_search<P>(
+        &mut self,
+        problem: &mut Problem<P>,
         mut state: FirstOrderState<V, F>,
         mut subspace: Option<&mut subspace_direction::Workspace<F>>,
         mut model: Option<&mut model_strategy::RunWorkspace<F>>,
+        mut projected: Option<&mut model_strategy::ProjectedSettings<F>>,
     ) -> Result<
         crate::SolverStep<FirstOrderState<V, F>>,
         crate::ConstraintSolveError<P::Error>,
@@ -1045,9 +1066,15 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
                 }
             }
 
-            // Line search along d = z − x.
+            // Original-ray policies retain the unprojected inverse direction.
+            let original_ray =
+                model.as_deref().is_some_and(|m| m.raw_direction);
             for i in 0..n {
-                work.d[i] = work.z[i] - state.param().as_float_slice()[i];
+                work.d[i] = if original_ray {
+                    work.z[i]
+                } else {
+                    work.z[i] - state.param().as_float_slice()[i]
+                };
             }
             let dtd: F =
                 work.d.iter().fold(F::zero(), |acc, x| acc + (*x) * (*x));
@@ -1056,7 +1083,7 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
 
             // Maximum feasible step (Fortran lnsrlb `stpmx`).
             let stpmx = if cnstnd {
-                if state.iter() == 0 {
+                if state.iter() == 0 && !original_ray {
                     F::one()
                 } else {
                     feasible_step_cap(
@@ -1082,7 +1109,7 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
                 &d_v,
                 stpmx,
             );
-            let alpha_init = if state.iter() == 0 && !boxed {
+            let alpha_init = if state.iter() == 0 && !boxed && !original_ray {
                 (F::one() / dnorm).min(stpmx)
             } else {
                 F::one().min(stpmx)
@@ -1097,64 +1124,99 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
                 .zip(g_v.as_float_slice())
                 .fold(F::zero(), |acc, (a, b)| acc + (*a) * (*b));
 
-            let line_search_result = if alpha_init.is_finite()
-                && alpha_init > F::zero()
-                && stpmx.is_finite()
-            {
-                self.line_search.next_with_bounds(
-                    problem,
-                    state.param(),
-                    f_old,
-                    &g_v,
-                    &d_v,
-                    LineSearchBounds::new(alpha_init, stpmx),
-                )?
-            } else {
-                LineSearchResult::new(LineSearchOutcome::Failed)
-            };
-            let stp = match line_search_result.outcome {
-                LineSearchOutcome::Step(stp) => stp,
-                LineSearchOutcome::Failed => F::zero(),
-            };
-
-            let accepted = if stp.is_finite() && stp > F::zero() && stp <= stpmx
-            {
-                let (param, evaluation) =
-                    if let Some(evaluation) = line_search_result.evaluation {
-                        (
-                            evaluation.param,
-                            Some((evaluation.cost, evaluation.gradient)),
-                        )
-                    } else {
-                        let mut param = state.param().clone();
-                        param.scaled_add(stp, &d_v);
-                        (param, None)
-                    };
-                if inside_box(
-                    param.as_float_slice(),
-                    problem.inner().lower().as_float_slice(),
-                    problem.inner().upper().as_float_slice(),
-                ) {
-                    let (cost, gradient) = if let Some(evaluation) = evaluation
-                    {
-                        evaluation
-                    } else {
-                        problem.cost_and_gradient_reusing(
-                            &param,
-                            history.gradient_buffer.take(),
-                        )?
-                    };
-                    // A line-search warning can select an invalid callback
-                    // result. Keep the last finite iterate and use the normal
-                    // restart path instead of publishing it as progress.
-                    finite_evaluation(&param, cost, &gradient)
-                        .then_some((param, cost, gradient))
+            let (stp, accepted) =
+                if let Some(model_strategy::ProjectedSettings {
+                    search: model_strategy::ProjectedSearch::Armijo(search),
+                    ..
+                }) = projected.as_deref_mut()
+                {
+                    let bounds =
+                        model.as_deref().expect("projected model workspace");
+                    match search.search(
+                        problem,
+                        state.param(),
+                        f_old,
+                        &g_v,
+                        &d_v,
+                        &bounds.lower,
+                        &bounds.upper,
+                        &mut history.gradient_buffer,
+                    )? {
+                        Some((alpha, evaluation)) => (
+                            alpha,
+                            Some((
+                                evaluation.param,
+                                evaluation.cost,
+                                evaluation.gradient,
+                            )),
+                        ),
+                        None => (F::zero(), None),
+                    }
                 } else {
-                    None
-                }
-            } else {
-                None
-            };
+                    let line_search_result = if alpha_init.is_finite()
+                        && alpha_init > F::zero()
+                        && stpmx.is_finite()
+                    {
+                        self.line_search.next_with_bounds(
+                            problem,
+                            state.param(),
+                            f_old,
+                            &g_v,
+                            &d_v,
+                            LineSearchBounds::new(alpha_init, stpmx),
+                        )?
+                    } else {
+                        LineSearchResult::new(LineSearchOutcome::Failed)
+                    };
+                    let stp = match line_search_result.outcome {
+                        LineSearchOutcome::Step(stp) => stp,
+                        LineSearchOutcome::Failed => F::zero(),
+                    };
+
+                    let accepted = if stp.is_finite()
+                        && stp > F::zero()
+                        && stp <= stpmx
+                    {
+                        let (param, evaluation) = if let Some(evaluation) =
+                            line_search_result.evaluation
+                        {
+                            (
+                                evaluation.param,
+                                Some((evaluation.cost, evaluation.gradient)),
+                            )
+                        } else {
+                            let mut param = state.param().clone();
+                            param.scaled_add(stp, &d_v);
+                            (param, None)
+                        };
+                        if inside_box(
+                            param.as_float_slice(),
+                            problem.inner().lower().as_float_slice(),
+                            problem.inner().upper().as_float_slice(),
+                        ) {
+                            let (cost, gradient) =
+                                if let Some(evaluation) = evaluation {
+                                    evaluation
+                                } else {
+                                    problem.cost_and_gradient_reusing(
+                                        &param,
+                                        history.gradient_buffer.take(),
+                                    )?
+                                };
+                            // A line-search warning can select an invalid callback
+                            // result. Keep the last finite iterate and use the normal
+                            // restart path instead of publishing it as progress.
+                            (finite_evaluation(&param, cost, &gradient)
+                                && (projected.is_none() || cost <= f_old))
+                                .then_some((param, cost, gradient))
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+                    (stp, accepted)
+                };
 
             self.trace.record(
                 ModelPhase::SelectedPoint,
@@ -1207,7 +1269,9 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
                 }
             };
 
-            // Limited-memory update with the Fortran curvature check.
+            // Reference updates retain the Fortran curvature check. Explicit
+            // projected searches use accepted displacements and a norm-based
+            // global curvature safeguard.
             // s = stp · d  (in slice form, d holds the unscaled
             // direction; the s vector lives in `d` scaled by stp).
             // y = g_new − g_old.
@@ -1216,21 +1280,54 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
             let g_new_slice = g_new.as_float_slice();
             let g_old_slice = work.r.as_slice(); // saved earlier
 
+            let actual_displacement = projected.is_some();
             let mut dr = F::zero();
+            let mut ss = F::zero();
+            let mut yy = F::zero();
+            let mut predicted = F::zero();
             for i in 0..n {
                 let yi = g_new_slice[i] - g_old_slice[i];
-                let si = stp * work.d[i];
+                let si = if actual_displacement {
+                    param_new.as_float_slice()[i] - work.t_buf[i]
+                } else {
+                    stp * work.d[i]
+                };
                 dr = dr + yi * si;
+                if actual_displacement {
+                    ss = ss + si * si;
+                    yy = yy + yi * yi;
+                    predicted = predicted - g_old_slice[i] * si;
+                }
             }
-            let ddum = -work.gdold * stp;
-
-            if dr > self.epsilon * ddum.abs() {
+            let ddum = if actual_displacement {
+                predicted
+            } else {
+                -work.gdold * stp
+            };
+            let curvature_accepted = if let Some(settings) =
+                projected.as_deref()
+            {
+                dr.is_finite()
+                    && ss.is_finite()
+                    && yy.is_finite()
+                    && dr > settings.curvature_tolerance * ss.sqrt() * yy.sqrt()
+                    && (F::one() / dr).is_finite()
+                    && (dr / yy).is_finite()
+                    && dr / yy > F::zero()
+            } else {
+                dr > self.epsilon * ddum.abs()
+            };
+            if curvature_accepted {
                 // The line search has finished with the direction and old
                 // gradient, so their storage can become the new history pair.
                 let mut s_v = d_v;
                 let s_slice = s_v.as_float_slice_mut();
                 for i in 0..n {
-                    s_slice[i] = stp * work.d[i];
+                    s_slice[i] = if actual_displacement {
+                        param_new.as_float_slice()[i] - work.t_buf[i]
+                    } else {
+                        stp * work.d[i]
+                    };
                 }
                 let mut y_v = g_v;
                 let y_slice = y_v.as_float_slice_mut();
@@ -1291,13 +1388,19 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
                         work.reset_history();
                     }
                 } else {
-                    // append_pair refused (s·y ≤ 0 numerically), so
-                    // treat as a skipped update.
+                    // A rejected global projected pair resets the inverse model.
+                    if actual_displacement {
+                        model_strategy::clear_history(history);
+                    }
                     let work = history.work.as_mut().unwrap();
                     work.updatd = false;
                 }
             } else {
-                // Skip the update; matches Fortran's `nskip += 1` path.
+                // Preserve the reference skip policy; explicit projected searches
+                // clear unsafe global curvature, independently of mask retention.
+                if actual_displacement {
+                    model_strategy::clear_history(history);
+                }
                 let work = history.work.as_mut().unwrap();
                 work.updatd = false;
                 history.gradient_buffer = Some(g_v);

@@ -385,7 +385,11 @@ production solvers.
   `ModelDirection::InteriorFirst` retries bounded directions without dropping
   history after a soft line-search failure, charging every probe. `Projected`
   retains free-coordinate curvature and searches a feasible chord to the
-  projected endpoint; sisyfuzz projects each trial instead. Defaults remain
+  projected endpoint. `with_projected_search()` now independently selects the
+  original feasible ray (matching sisyfuzz's More-Thuente/Wolfe geometry),
+  per-trial projected Armijo, or the chord. A reset-on-mask-change option isolates
+  curvature retention under the same search; accepted pairs use actual steps
+  and exact checkpoints retain the preceding mask. Defaults remain
   unchanged. Benchmark numerical policies separately, including target misses,
   against fixed main/sisyfuzz revisions and frozen additional validation cases.
 

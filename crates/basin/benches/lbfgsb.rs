@@ -94,6 +94,47 @@ fn benchmark(c: &mut Criterion) {
     }
     models.finish();
 
+    let mut projected = c.benchmark_group("lbfgsb_projected");
+    for case in dimension::Case::ALL {
+        use basin::line_search::projected_armijo::ProjectedArmijo;
+        use basin::solver::lbfgs::model_strategy::ProjectedSearch;
+        let problem =
+            dimension::Quadratic::<Vec<f64>>::new(case, |x| x.to_vec());
+        for (name, search) in [
+            ("ray", ProjectedSearch::FeasibleRay),
+            (
+                "armijo",
+                ProjectedSearch::Armijo(
+                    ProjectedArmijo::new().with_fused_evaluations(),
+                ),
+            ),
+            ("chord", ProjectedSearch::Chord),
+        ] {
+            for retain in [true, false] {
+                let solve = || {
+                    basin::Executor::from_start(
+                        &problem,
+                        problem
+                            .solver()
+                            .with_compact_model()
+                            .with_projected_search(search.clone())
+                            .with_curvature_retention(retain),
+                        problem.start(),
+                    )
+                    .max_iter(1000)
+                    .run()
+                    .unwrap()
+                };
+                problem.verify(&solve());
+                projected.bench_function(
+                    format!("{}/{name}/retain{retain}", case.name()),
+                    |b| b.iter(|| black_box(solve())),
+                );
+            }
+        }
+    }
+    projected.finish();
+
     let mut directions = c.benchmark_group("lbfgsb_subspace");
     for (n, nf) in [(2, 2), (8, 8), (50, 50), (50, 1)] {
         for m in [3, 10] {

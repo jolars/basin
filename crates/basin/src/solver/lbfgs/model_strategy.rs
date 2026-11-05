@@ -1,6 +1,9 @@
 //! Alternative bounded quasi-Newton model and direction policies.
 use super::integrated_model::{Model, Workspace};
 use super::*;
+/// Projected searches with independent path and curvature-retention controls.
+pub mod projected;
+pub use projected::{ProjectedLbfgs, ProjectedSearch};
 
 /// Direction selection for [`ModelLbfgsb`]. These policies can change trajectories.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -20,6 +23,9 @@ pub enum ModelDirection {
     /// Capacity eviction and numerical restarts still limit their lifetime.
     /// This is projected L-BFGS, rather than the L-BFGS-B Cauchy algorithm.
     Projected,
+    /// Explicit name for the projected-endpoint chord policy. Equivalent to
+    /// [`Self::Projected`], whose existing meaning and serialized tag are retained.
+    ProjectedChord,
 }
 
 /// Opt-in L-BFGS-B model with small-dimensional signed columns.
@@ -46,6 +52,9 @@ pub enum ModelDirection {
 /// deleting them. Subsequent directions can reuse them after coordinates become
 /// free again. Normal eviction and numerical restarts can still remove pairs.
 /// The base solver's curvature acceptance and stopping settings remain in effect.
+/// [`Self::with_projected_search`] selects a separate wrapper with explicit ray,
+/// projected Armijo or chord geometry and its own global curvature safeguard;
+/// see [`ProjectedLbfgs`].
 ///
 /// Inverse policies defer derived model construction until a bounded fallback
 /// needs it. A failed InteriorFirst line search retries the bounded direction
@@ -106,6 +115,16 @@ impl<V, F: Scalar, S> ModelLbfgsb<V, F, S> {
     pub fn direction_policy(&self) -> ModelDirection {
         self.direction
     }
+    /// Select a projected search separately from the retained inverse model.
+    /// See [`ProjectedLbfgs`] for stopping, curvature and checkpoint settings.
+    /// This selects free-coordinate inverse updates regardless of the preceding
+    /// [`ModelDirection`]. Existing model-direction calls keep their behavior.
+    pub fn with_projected_search(
+        self,
+        search: ProjectedSearch<F>,
+    ) -> ProjectedLbfgs<V, F, S> {
+        ProjectedLbfgs::new(self, search)
+    }
     /// Recover the base solver configuration, discarding curvature and derived
     /// model caches. A fresh executor run initializes the reference model.
     pub fn into_inner(mut self) -> Lbfgsb<V, F, S> {
@@ -120,6 +139,10 @@ pub(super) struct RunWorkspace<F: Scalar> {
     shape: (usize, usize),
     policy: ModelDirection,
     free: Vec<bool>,
+    pub(super) raw_direction: bool,
+    pub(super) projected_trials: bool,
+    pub(super) lower: Vec<F>,
+    pub(super) upper: Vec<F>,
 }
 impl<F: Scalar> Default for RunWorkspace<F> {
     fn default() -> Self {
@@ -129,6 +152,10 @@ impl<F: Scalar> Default for RunWorkspace<F> {
             shape: (0, 0),
             policy: ModelDirection::Bounded,
             free: Vec::new(),
+            raw_direction: false,
+            projected_trials: false,
+            lower: Vec::new(),
+            upper: Vec::new(),
         }
     }
 }
@@ -150,6 +177,12 @@ impl<F: Scalar> RunWorkspace<F> {
         z: &mut [F],
     ) -> Result<bool, ()> {
         let n = x.len();
+        if self.projected_trials {
+            self.lower.resize(n, F::zero());
+            self.lower.copy_from_slice(lower);
+            self.upper.resize(n, F::zero());
+            self.upper.copy_from_slice(upper);
+        }
         if self.model.is_none() || self.shape != (n, m) {
             self.model = Some(Model::new(n, m));
             self.work = Some(Workspace::new(n, m));
@@ -177,7 +210,10 @@ impl<F: Scalar> RunWorkspace<F> {
                 return Ok(true);
             }
         }
-        if self.policy == ModelDirection::Projected {
+        if matches!(
+            self.policy,
+            ModelDirection::Projected | ModelDirection::ProjectedChord
+        ) {
             if !model.prepare_inverse(ws, wy, theta) {
                 return Err(());
             }
@@ -188,6 +224,27 @@ impl<F: Scalar> RunWorkspace<F> {
                         || (x[i] >= upper[i] && g[i] < F::zero()));
             }
             model.inverse(g, Some(&self.free), z);
+            if self.raw_direction {
+                let mut slope = F::zero();
+                for i in 0..n {
+                    z[i] = -z[i];
+                    if (x[i] <= lower[i] && z[i] < F::zero())
+                        || (x[i] >= upper[i] && z[i] > F::zero())
+                        || lower[i] == upper[i]
+                    {
+                        z[i] = F::zero();
+                    }
+                    slope = slope + g[i] * z[i];
+                }
+                return if z.iter().all(|v| v.is_finite())
+                    && slope.is_finite()
+                    && slope < F::zero()
+                {
+                    Ok(false)
+                } else {
+                    Err(())
+                };
+            }
             for i in 0..n {
                 z[i] = (x[i] - z[i]).max(lower[i]).min(upper[i]);
             }
@@ -204,6 +261,25 @@ impl<F: Scalar> RunWorkspace<F> {
         } else {
             Err(())
         }
+    }
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub(super) struct ProjectedSettings<F: Scalar> {
+    pub search: ProjectedSearch<F>,
+    pub curvature_tolerance: F,
+}
+
+pub(super) fn clear_history<V, F: Scalar>(
+    history: &mut super::workspace::History<V, F>,
+) {
+    history.ws.clear();
+    history.wy.clear();
+    history.sy.fill(F::zero());
+    history.ss.fill(F::zero());
+    history.theta = F::one();
+    if let Some(work) = history.work.as_mut() {
+        work.reset_history();
     }
 }
 fn descending<F: Scalar>(x: &[F], g: &[F], z: &[F]) -> bool {

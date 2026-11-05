@@ -51,6 +51,13 @@ sisyfuzz commit 39f6d4d0062607eb48b07d5cd5f847fb7da13828. The adaptation support
 Basin's scalar/backend types, arbitrary bounds, lifecycle and line-search
 contracts. Projected mode searches a chord to the projected endpoint.
 
+The per-trial projected Armijo search in src/line_search/projected_armijo.rs
+and explicit projected ray/Armijo/chord integration in
+src/solver/lbfgs/model_strategy/projected.rs additionally adapt
+src/line_search.rs, src/more_thuente.rs and src/lbfgs.rs at that revision.
+The legacy chord policy remains available separately from the projected trial
+and original-direction feasible-ray policies.
+
 Copyright 2026 Frans Henskens
 
 The upstream implementation is licensed under Apache-2.0. The upstream

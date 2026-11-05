@@ -1,9 +1,12 @@
 //! Line searches: produce a step size `α` along a caller-supplied descent
 //! direction. Used by first-order solvers (gradient descent, BFGS).
+//! [`projected_armijo::ProjectedArmijo`] instead searches a projected path and
+//! returns the actual accepted point through the projected L-BFGS wrapper.
+//! It does not implement the straight-ray [`LineSearch`] contract.
 //!
 //! # Configuration
 //!
-//! Built-in line searches have non-exhaustive configurations. Construct them
+//! Built-in straight-ray searches have non-exhaustive configurations. Construct them
 //! with `new()` or `Default`, then use their builders or assign public fields:
 //!
 //! ```
@@ -28,6 +31,8 @@ pub mod backtracking;
 pub mod hager_zhang;
 /// Moré–Thuente line search (MINPACK-2 `dcsrch` + `dcstep`).
 pub mod more_thuente;
+/// Armijo search on a box-projected path, returning the actual accepted point.
+pub mod projected_armijo;
 /// Strong-Wolfe line search (Nocedal & Wright algorithms 3.5/3.6).
 pub mod wolfe;
 

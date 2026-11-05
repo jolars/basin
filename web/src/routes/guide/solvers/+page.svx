@@ -148,11 +148,21 @@ finding uses a direct callback API and a separate result type.
   dimension-dependent reduced solves adapted from sisyfuzz 0.1.2
   (`lbfgsb/model.rs`, `lbfgsb.rs`, `quasi_newton.rs`; BFGS references above).
   It supports the same backends and precisions, with explicit InteriorFirst and
-  projected L-BFGS policies. Projected mode retains curvature on free coordinates
+  projected L-BFGS policies. `ModelDirection::ProjectedChord` (also available as
+  `Projected`) retains curvature on free coordinates
   and searches a feasible chord to the projected endpoint. Sisyfuzz's default
   Armijo search projects each trial; its More–Thuente and Wolfe searches cap the
   original direction at the first bound. These policies can change convergence
   outcomes.
+  [`with_projected_search()`](https://docs.rs/basin/latest/basin/solver/lbfgs/model_strategy/struct.ModelLbfgsb.html#method.with_projected_search)
+  separates retained free-coordinate curvature from the search path: an original
+  feasible ray with the configured More–Thuente/Wolfe search, per-trial projection
+  with [`ProjectedArmijo`](https://docs.rs/basin/latest/basin/line_search/projected_armijo/struct.ProjectedArmijo.html),
+  or a projected-endpoint chord. This wrapper uses its own global curvature
+  safeguard and forms pairs from actual accepted displacements.
+  Retention defaults to enabled; a reset-on-free-set-change option supports
+  comparisons under the same search. The projected policies adapt sisyfuzz
+  0.1.2 `lbfgs.rs`, `quasi_newton.rs`, `line_search.rs` and `more_thuente.rs`.
   [Read the L-BFGS-B guide](quasi-newton/l-bfgs-b/).
 
 ## Derivative-free
