@@ -133,6 +133,11 @@ finding uses a direct callback API and a separate result type.
   TOMS Alg. 778; Nocedal & Morales, 2011). Supports all four dense backends
   with `f32` or `f64` and contiguous parameter storage. A custom line search
   must implement bounded steps.
+  The opt-in [`with_dimension_aware_subspace()` strategy](https://docs.rs/basin/latest/basin/solver/lbfgs/dimension_aware/struct.DimensionAwareLbfgsb.html)
+  uses inverse two-loop recursion for small fully free models and a direct solve
+  for a single free coordinate with sufficient history. It supports the same
+  backends and precisions, retains the reference projection and recovery checks,
+  and can change rounding and trajectories. The default retains Fortran parity.
   [Read the L-BFGS-B guide](quasi-newton/l-bfgs-b/).
 
 ## Derivative-free

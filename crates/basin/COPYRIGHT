@@ -35,6 +35,20 @@ Upstream Apache-2.0 notice:
     limitations under the License.
 
 ================================================================================
+sisyfuzz local 0.1.2 L-BFGS-B model (https://github.com/fhenskens/sisyfuzz)
+================================================================================
+
+The dimension-dependent inverse and free-coordinate solve selection in
+src/solver/lbfgs/subspace_direction.rs follows src/lbfgsb/model.rs in the local
+sisyfuzz 0.1.2 source, rewritten for Basin's scalar/backend capabilities and
+L-BFGS-B 3.0 projected-step safeguard.
+
+Copyright 2026 Frans Henskens
+
+The upstream implementation is licensed under Apache-2.0. The upstream
+Apache-2.0 notice above applies; see LICENSE-APACHE for the full license text.
+
+================================================================================
 PRIMA (https://github.com/libprima/prima)
 ================================================================================
 

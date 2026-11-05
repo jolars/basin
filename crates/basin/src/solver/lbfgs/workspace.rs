@@ -10,8 +10,8 @@
 //! in oldest-to-newest order" and never depend on the ring-buffer
 //! index modulo `m_capacity`.
 
+use super::{backend::AsFloatSlice, history::newest_products};
 use crate::core::math::{Dot, Scalar};
-use crate::solver::lbfgs::{backend::AsFloatSlice, history::newest_products};
 
 /// Limited-memory model shared by the bounded and unbounded solvers.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

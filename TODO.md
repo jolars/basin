@@ -350,6 +350,38 @@ production solvers.
 
 ## General design
 
+### L-BFGS-B work from sisyfuzz
+
+- [x] **Add opt-in inverse and single-coordinate subspace solves.**
+  `with_dimension_aware_subspace()` returns a separate strategy, preserving the
+  default solver and checkpoint layout. Small fully free models can use inverse
+  two-loop recursion; a single free coordinate can use a direct model solve
+  after sufficient history. Keep the Cauchy displacement in the reduced RHS,
+  reference factor validation, projection/backtracking, and numerical fallback.
+  Verify dense BFGS models, both precisions on every dense backend version,
+  callback paths, fresh reuse, exact continuation, and unchanged default parity.
+- [ ] **Extend dimension-aware subspace selection where measurements justify it.**
+  Two-coordinate direct solves were slower in the initial matched kernels and
+  are not selected. Evaluate larger direct systems and sisyfuzz's smaller
+  symmetric middle-system solve separately, retaining the reference fallback.
+- [ ] **Avoid redundant compact factors on alternate paths.** The first opt-in
+  strategy still constructs the reference K factor and reduced RHS to preserve
+  cache updates and failure/restart behavior. Split Gram maintenance from
+  factorization only with coverage for changing free sets, skipped updates,
+  rollover, recovery, and exact continuation. Retain reliable model validation.
+- [ ] **Add a small-dimensional model representation.** Evaluate sisyfuzz's
+  signed columns when the parameter dimension is small relative to history.
+  Keep capacity, curvature acceptance, scaling, and stopping settings fixed;
+  verify dense model products, Cauchy steps, and reduced solves through resets.
+- [ ] **Profile and improve the remaining compact kernels.** Reprofile after
+  model/subspace changes, then retain only measured improvements to `formk`,
+  `formt`, `bmv`, `cmprlb`, or `subsm`, with whole-solve evidence and numerical
+  reference checks.
+- [ ] **Evaluate alternative numerical policies as explicit options.** Adapt
+  `InteriorFirst` and projected L-BFGS with retained free-coordinate curvature
+  separately from equivalent model representations. Preserve current defaults,
+  account for fallback evaluations, and freeze validation cases before tuning.
+
 ### Finite-difference performance
 
 Source review of `core/numdiff.rs` and its child modules on 2026-10-27. These
