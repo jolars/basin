@@ -11,10 +11,7 @@ where
     F: Scalar,
     V: AsFloatSliceMut<F> + Clone + Dot<F> + ScaledAdd<F> + VectorLen,
 {
-    use basin::{
-        Executor, FirstOrderState,
-        solver::lbfgs::model_strategy::ModelDirection,
-    };
+    use basin::{Executor, solver::lbfgs::model_strategy::ModelDirection};
     for case in Case::ALL {
         for policy in [
             ModelDirection::Bounded,
@@ -22,12 +19,12 @@ where
             ModelDirection::ProjectedChord,
         ] {
             let p = Quadratic::new(case, make);
-            let result = Executor::new(
+            let result = Executor::from_start(
                 &p,
                 p.solver()
                     .with_compact_model()
                     .with_direction_policy(policy),
-                FirstOrderState::new(p.start()),
+                p.start(),
             )
             .max_iter(500)
             .run()

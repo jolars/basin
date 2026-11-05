@@ -311,7 +311,7 @@ default line search preserves iteration-wise parity with the Fortran reference.
 
 The optional model and direction strategies adapt the signed-column model,
 reduced solves, InteriorFirst policy, and free-coordinate curvature handling
-from [sisyfuzz 0.1.2](https://github.com/fhenskens/sisyfuzz/tree/39f6d4d0062607eb48b07d5cd5f847fb7da13828/src).
+from sisyfuzz 0.1.2.
 They retain Basin's lifecycle and bounded line-search contracts. These paths
 can differ from both the Fortran trajectory and sisyfuzz's numerical policies.
 

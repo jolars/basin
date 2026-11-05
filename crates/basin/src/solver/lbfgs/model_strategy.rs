@@ -130,6 +130,14 @@ impl<V, F: Scalar, S> ModelLbfgsb<V, F, S> {
     }
 }
 
+impl<V: Clone, F: Scalar, S> crate::InitialState<V> for ModelLbfgsb<V, F, S> {
+    type State = FirstOrderState<V, F>;
+
+    fn seed(&self, x: &V) -> Self::State {
+        FirstOrderState::new(x.clone())
+    }
+}
+
 pub(super) struct RunWorkspace<F: Scalar> {
     model: Option<Model<F>>,
     work: Option<Workspace<F>>,
