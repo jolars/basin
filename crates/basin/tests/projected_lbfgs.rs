@@ -1,4 +1,4 @@
-#[path = "../benches/support/lbfgsb_dimension.rs"]
+#[path = "../benches/support/lbfgsb_models.rs"]
 mod support;
 
 use basin::{

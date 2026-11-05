@@ -22,9 +22,6 @@ pub enum ModelDirection {
     /// Pairs can become usable again when coordinates are released from bounds.
     /// Capacity eviction and numerical restarts still limit their lifetime.
     /// This is projected L-BFGS, rather than the L-BFGS-B Cauchy algorithm.
-    Projected,
-    /// Explicit name for the projected-endpoint chord policy. Equivalent to
-    /// [`Self::Projected`], whose existing meaning and serialized tag are retained.
     ProjectedChord,
 }
 
@@ -47,7 +44,7 @@ pub enum ModelDirection {
 /// # Curvature retention
 ///
 /// Reference L-BFGS-B already retains accepted full pairs across free-set changes.
-/// [`ModelDirection::Projected`] additionally applies inverse BFGS updates on
+/// [`ModelDirection::ProjectedChord`] additionally applies inverse BFGS updates on
 /// the current free coordinates, skipping unsafe restricted pairs without
 /// deleting them. Subsequent directions can reuse them after coordinates become
 /// free again. Normal eviction and numerical restarts can still remove pairs.
@@ -210,10 +207,7 @@ impl<F: Scalar> RunWorkspace<F> {
                 return Ok(true);
             }
         }
-        if matches!(
-            self.policy,
-            ModelDirection::Projected | ModelDirection::ProjectedChord
-        ) {
+        if self.policy == ModelDirection::ProjectedChord {
             if !model.prepare_inverse(ws, wy, theta) {
                 return Err(());
             }
@@ -316,7 +310,7 @@ where
     ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
         self.work.policy = self.direction;
         self.solver
-            .next_iter_bounded_model(p, s, None, Some(&mut self.work))
+            .next_iter_bounded_search(p, s, Some(&mut self.work), None)
     }
     fn reset_convergence(&mut self) {
         <Lbfgsb<V,F,S> as Solver<P,FirstOrderState<V,F>>>::reset_convergence(&mut self.solver);

@@ -204,7 +204,7 @@ mod tests {
         }
     }
 
-    fn failed_subspace<F: Scalar>(alternate: bool) {
+    fn failed_subspace<F: Scalar>() {
         let f = |v| F::from_f64(v).unwrap();
         let mut p = Problem::new(Quadratic {
             lower: vec![f(-8.); 2],
@@ -229,15 +229,7 @@ mod tests {
         work.updatd = false;
         work.wn.fill(F::zero());
         let counts = *p.counts();
-        let result = if alternate {
-            let mut scratch =
-                super::super::subspace_direction::Workspace::default();
-            solver
-                .next_iter_bounded(&mut p, s, Some(&mut scratch))
-                .unwrap()
-        } else {
-            solver.next_iter(&mut p, s).unwrap()
-        };
+        let result = solver.next_iter(&mut p, s).unwrap();
         let failed = solver
             .model_observations()
             .iter()
@@ -259,19 +251,10 @@ mod tests {
     }
     #[test]
     fn failed_subspace_f32() {
-        failed_subspace::<f32>(false);
+        failed_subspace::<f32>();
     }
     #[test]
     fn failed_subspace_f64() {
-        failed_subspace::<f64>(false);
-    }
-
-    #[test]
-    fn alternate_preserves_failed_subspace_f32() {
-        failed_subspace::<f32>(true);
-    }
-    #[test]
-    fn alternate_preserves_failed_subspace_f64() {
-        failed_subspace::<f64>(true);
+        failed_subspace::<f64>();
     }
 }

@@ -138,19 +138,14 @@ finding uses a direct callback API and a separate result type.
   TOMS Alg. 778; Nocedal & Morales, 2011). Supports all four dense backends
   with `f32` or `f64` and contiguous parameter storage. A custom line search
   must implement bounded steps.
-  The opt-in [`with_dimension_aware_subspace()` strategy](https://docs.rs/basin/latest/basin/solver/lbfgs/dimension_aware/struct.DimensionAwareLbfgsb.html)
-  uses inverse two-loop recursion for small fully free models and a direct solve
-  for a single free coordinate with sufficient history. It supports the same
-  backends and precisions, retains the reference projection and recovery checks,
-  and can change rounding and trajectories. The default retains Fortran parity.
   [`with_compact_model()`](https://docs.rs/basin/latest/basin/solver/lbfgs/model_strategy/struct.ModelLbfgsb.html)
   adds signed columns for small dimensions, a scaled Schur factorization, and
   dimension-dependent reduced solves adapted from sisyfuzz 0.1.2
   (`lbfgsb/model.rs`, `lbfgsb.rs`, `quasi_newton.rs`; BFGS references above).
   It supports the same backends and precisions, with explicit InteriorFirst and
-  projected L-BFGS policies. `ModelDirection::ProjectedChord` (also available as
-  `Projected`) retains curvature on free coordinates
-  and searches a feasible chord to the projected endpoint. Sisyfuzz's default
+  projected L-BFGS policies. `ModelDirection::ProjectedChord` retains curvature
+  on free coordinates and searches a feasible chord to the projected endpoint.
+  Sisyfuzz's default
   Armijo search projects each trial; its More–Thuente and Wolfe searches cap the
   original direction at the first bound. These policies can change convergence
   outcomes.

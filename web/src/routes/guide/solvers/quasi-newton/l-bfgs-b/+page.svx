@@ -140,23 +140,22 @@ the first objective or gradient evaluation.
 ## Choose a model and direction policy
 
 Start with the default when you want the reference algorithm. Configure history,
-tolerances, and the line search on `Lbfgsb` before selecting either wrapper.
-Both wrappers support the same contiguous dense backends and scalar precisions.
-They keep bounds on the problem and execution budgets on the executor.
+tolerances, and the line search on `Lbfgsb` before selecting the compact-model
+wrapper. The model and projected-search wrappers support the same contiguous
+dense backends and scalar precisions. They keep bounds on the problem and
+execution budgets on the executor.
 
 | Selection | Behavior |
 | --- | --- |
 | `Lbfgsb::new()` | Reference L-BFGS-B 3.0 model and subspace arithmetic. |
-| `.with_dimension_aware_subspace()` | Alternate inverse or single-coordinate solves for selected shapes, retaining native factor validation and fallback. |
 | `.with_compact_model()` | Signed columns for small dimensions and a scaled compact model otherwise, with dimension-dependent reduced solves. Selects `ModelDirection::Bounded` by default. |
 
-The [dimension-aware subspace wrapper](https://docs.rs/basin/latest/basin/solver/lbfgs/dimension_aware/struct.DimensionAwareLbfgsb.html)
-retains the reference model machinery. The
+The
 [model wrapper](https://docs.rs/basin/latest/basin/solver/lbfgs/model_strategy/struct.ModelLbfgsb.html)
 validates its own representation and avoids constructing the reference K/T
-factors. Their equivalent model calculations can still change rounding,
+factors. Its equivalent model calculations can still change rounding,
 trajectories, callback counts, and stopping outcomes. Compare solution quality
-and evaluation work on your problem before choosing one for speed.
+and evaluation work on your problem before choosing it for speed.
 
 The model wrapper also accepts an explicit
 [`ModelDirection`](https://docs.rs/basin/latest/basin/solver/lbfgs/model_strategy/enum.ModelDirection.html):
@@ -174,7 +173,6 @@ The model wrapper also accepts an explicit
   projected Armijo search projects each trial; its More–Thuente and Wolfe
   searches instead cap the original direction at the first bound. The chord
   policy differs from both choices.
-  `Projected` retains its existing meaning as an alias for this chord policy.
 
 For projected L-BFGS, select the search geometry independently with
 [`with_projected_search()`](https://docs.rs/basin/latest/basin/solver/lbfgs/model_strategy/struct.ModelLbfgsb.html#method.with_projected_search).
@@ -189,8 +187,8 @@ All choices retain the same free-coordinate curvature mechanism:
 The ray and Armijo choices correspond to sisyfuzz's respective search paths.
 They remain subject to Basin's numerical safeguards and restart behavior.
 `with_projected_search()` replaces any previously selected `ModelDirection`.
-Its `Chord` option shares the legacy `ProjectedChord` geometry but uses the
-new wrapper's global curvature safeguard and actual-displacement pair updates.
+Its `Chord` option shares the `ModelDirection::ProjectedChord` geometry but uses
+the new wrapper's global curvature safeguard and actual-displacement pair updates.
 Projected Armijo returns the actual accepted point and its evaluation; it does
 not implement the straight-ray `LineSearch` contract and cannot be passed to
 `Lbfgs::with_line_search` directly. Its default configuration starts at `alpha = 1`,
@@ -258,10 +256,9 @@ not establish better accuracy.
 
 Fresh runs clear evolving history. Exact solver-and-state checkpoints preserve
 history and the selected policy; serialized checkpoints rebuild only derived
-model scratch. The wrappers differ when recovering the base solver:
-`DimensionAwareLbfgsb::into_inner()` retains its history, whereas
-`ModelLbfgsb::into_inner()` discards curvature and requires a fresh run.
-Native compact-phase diagnostics are available on the reference-based paths;
+model scratch. `ModelLbfgsb::into_inner()` discards curvature and requires a
+fresh run.
+Native compact-phase diagnostics are available on the reference path;
 the model wrapper provides selected-point diagnostics instead.
 The projected-search wrapper also preserves its previous free mask in an exact
 checkpoint, including when reset-on-change retention is selected.

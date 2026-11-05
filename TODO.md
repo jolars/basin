@@ -352,25 +352,15 @@ production solvers.
 
 ### L-BFGS-B work from sisyfuzz
 
-- [x] **Add opt-in inverse and single-coordinate subspace solves.**
-  `with_dimension_aware_subspace()` returns a separate strategy, preserving the
-  default solver and checkpoint layout. Small fully free models can use inverse
-  two-loop recursion; a single free coordinate can use a direct model solve
-  after sufficient history. Keep the Cauchy displacement in the reduced RHS,
-  reference factor validation, projection/backtracking, and numerical fallback.
-  Verify dense BFGS models, both precisions on every dense backend version,
-  callback paths, fresh reuse, exact continuation, and unchanged default parity.
-- [x] **Extend dimension-aware subspace selection where measurements justify it.**
-  Two-coordinate direct solves were slower in the initial matched kernels and
-  are not selected by that strategy. The separate `with_compact_model()` wrapper
-  implements inverse recursion, general direct free-coordinate solves and the
-  smaller symmetric history-space system. Full-solve comparisons include the
-  costs and numerical differences of this separate model.
-- [x] **Avoid redundant compact factors on alternate paths.** The original
-  dimension-aware strategy preserves native factor checks and caches. The new
-  model owns and validates its signed/scaled representation instead, avoiding
-  reference K/T construction. Interior and projected policies defer derived
-  factor construction until a bounded fallback needs it. Cover delayed updates,
+- [x] **Use dimension-dependent solves in the compact model.**
+  `with_compact_model()` implements inverse recursion, direct free-coordinate
+  solves and the smaller symmetric history-space system. The separate
+  reference-model dimension-aware wrapper was removed before release because
+  its narrow measured gains did not justify another public strategy.
+- [x] **Avoid redundant compact factors on alternate paths.** The compact
+  model owns and validates its signed/scaled representation, avoiding reference
+  K/T construction. Interior and projected policies defer derived factor
+  construction until a bounded fallback needs it. Cover delayed updates,
   changing free sets, skipped updates, rollover, reset, recovery and continuation.
 - [x] **Add a small-dimensional model representation.** `with_compact_model()`
   uses signed columns for `n <= m` and a scaled Schur factor otherwise. Dense

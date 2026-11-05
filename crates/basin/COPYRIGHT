@@ -38,11 +38,6 @@ Upstream Apache-2.0 notice:
 sisyfuzz local 0.1.2 L-BFGS-B model (https://github.com/fhenskens/sisyfuzz)
 ================================================================================
 
-The dimension-dependent inverse and free-coordinate solve selection in
-src/solver/lbfgs/subspace_direction.rs follows src/lbfgsb/model.rs in the local
-sisyfuzz 0.1.2 source, rewritten for Basin's scalar/backend capabilities and
-L-BFGS-B 3.0 projected-step safeguard.
-
 The signed-column/scaled compact model, smaller reduced systems, interior-first
 policy and retained free-coordinate inverse updates in
 src/solver/lbfgs/integrated_model.rs and src/solver/lbfgs/model_strategy.rs are

@@ -54,7 +54,7 @@ pub enum ProjectedSearch<F: Scalar = f64> {
 /// errors propagate. No new line-search or solver defaults affect existing code.
 /// Choosing [`ProjectedSearch::Chord`] uses the same path geometry as
 /// [`ModelDirection::ProjectedChord`], with this wrapper's global pair safeguard
-/// and actual-displacement updates instead of the legacy pair policy.
+/// and actual-displacement updates instead of the model-direction pair policy.
 ///
 /// ```
 /// use basin::{Lbfgsb, line_search::projected_armijo::ProjectedArmijo};
@@ -193,7 +193,6 @@ where
         self.model.solver.next_iter_bounded_search(
             p,
             s,
-            None,
             Some(&mut self.model.work),
             Some(&mut self.settings),
         )

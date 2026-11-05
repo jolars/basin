@@ -8,70 +8,23 @@ mod support;
 // Compile the private production kernels directly, avoiding a separate copy
 // of their implementation or a public API solely for benchmarking.
 pub use basin::core;
-mod backend {
-    pub use basin::solver::lbfgs::AsFloatSlice;
-}
 #[allow(dead_code, unused_imports)]
 #[path = "../src/solver/lbfgs/compact.rs"]
 mod compact;
-#[path = "support/lbfgsb_dimension.rs"]
-mod dimension;
-#[allow(dead_code, unused_imports)]
-#[path = "../src/solver/lbfgs/formk.rs"]
-mod formk;
-#[allow(dead_code, unused_imports)]
-#[path = "../src/solver/lbfgs/history.rs"]
-mod history;
-#[allow(dead_code, unused_imports)]
-#[path = "../src/solver/lbfgs/subsm.rs"]
-mod subsm;
-#[allow(dead_code, unused_imports)]
-#[path = "../src/solver/lbfgs/subspace_direction.rs"]
-mod subspace_direction;
-#[allow(dead_code, unused_imports)]
-#[path = "../src/solver/lbfgs/workspace.rs"]
-mod workspace;
+#[path = "support/lbfgsb_models.rs"]
+mod models;
 
-use basin::State;
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 
 fn benchmark(c: &mut Criterion) {
-    let mut alternatives = c.benchmark_group("lbfgsb_dimension");
-    for case in dimension::Case::ALL {
-        let problem =
-            dimension::Quadratic::<Vec<f64>>::new(case, |x| x.to_vec());
-        for alternate in [false, true] {
-            let result = problem.solve(alternate);
-            problem.verify(&result);
-            eprintln!(
-                "{} alternate={alternate}: cost={} iterations={} counts={:?} termination={:?}",
-                case.name(),
-                result.cost(),
-                result.state.iter(),
-                result.state.counts(),
-                result.report.code()
-            );
-            alternatives.bench_function(
-                format!(
-                    "{}/{}",
-                    case.name(),
-                    if alternate { "adaptive" } else { "reference" }
-                ),
-                |b| b.iter(|| black_box(problem.solve(alternate))),
-            );
-        }
-    }
-    alternatives.finish();
-
     let mut models = c.benchmark_group("lbfgsb_models");
-    for case in dimension::Case::ALL {
-        let problem =
-            dimension::Quadratic::<Vec<f64>>::new(case, |x| x.to_vec());
+    for case in models::Case::ALL {
+        let problem = models::Quadratic::<Vec<f64>>::new(case, |x| x.to_vec());
         for policy in [
             basin::solver::lbfgs::model_strategy::ModelDirection::Bounded,
             basin::solver::lbfgs::model_strategy::ModelDirection::InteriorFirst,
-            basin::solver::lbfgs::model_strategy::ModelDirection::Projected,
+            basin::solver::lbfgs::model_strategy::ModelDirection::ProjectedChord,
         ] {
             let solve = || {
                 basin::Executor::new(
@@ -95,11 +48,10 @@ fn benchmark(c: &mut Criterion) {
     models.finish();
 
     let mut projected = c.benchmark_group("lbfgsb_projected");
-    for case in dimension::Case::ALL {
+    for case in models::Case::ALL {
         use basin::line_search::projected_armijo::ProjectedArmijo;
         use basin::solver::lbfgs::model_strategy::ProjectedSearch;
-        let problem =
-            dimension::Quadratic::<Vec<f64>>::new(case, |x| x.to_vec());
+        let problem = models::Quadratic::<Vec<f64>>::new(case, |x| x.to_vec());
         for (name, search) in [
             ("ray", ProjectedSearch::FeasibleRay),
             (
@@ -135,185 +87,6 @@ fn benchmark(c: &mut Criterion) {
     }
     projected.finish();
 
-    let mut directions = c.benchmark_group("lbfgsb_subspace");
-    for (n, nf) in [(2, 2), (8, 8), (50, 50), (50, 1)] {
-        for m in [3, 10] {
-            let ws: Vec<Vec<f64>> = (0..m)
-                .map(|a| {
-                    (0..n)
-                        .map(|j| ((a * 13 + j * 7) % 31) as f64 / 31.0 - 0.5)
-                        .collect()
-                })
-                .collect();
-            let wy: Vec<Vec<f64>> = ws
-                .iter()
-                .map(|s| {
-                    let sum = s.iter().sum::<f64>();
-                    s.iter()
-                        .enumerate()
-                        .map(|(j, &s)| (j + 1) as f64 * s + 0.125 * sum)
-                        .collect()
-                })
-                .collect();
-            let mut sy = vec![0.0; m * m];
-            let mut ss = vec![0.0; m * m];
-            for i in 0..m {
-                for j in 0..=i {
-                    sy[i * m + j] =
-                        ws[i].iter().zip(&wy[j]).map(|(a, b)| a * b).sum();
-                    ss[i * m + j] =
-                        ws[i].iter().zip(&ws[j]).map(|(a, b)| a * b).sum();
-                    ss[j * m + i] = ss[i * m + j];
-                }
-            }
-            let theta = wy[m - 1].iter().map(|v| v * v).sum::<f64>()
-                / sy[(m - 1) * m + m - 1];
-            let mut wt = vec![0.0; m * m];
-            compact::formt(theta, &sy, &ss, m, m, &mut wt).unwrap();
-            let index: Vec<_> = (0..n).rev().collect();
-            let mut wn = vec![0.0; 4 * m * m];
-            let mut wn1 = wn.clone();
-            for col in 1..=m {
-                formk::formk(
-                    &mut wn,
-                    &mut wn1,
-                    m,
-                    col,
-                    theta,
-                    &sy,
-                    &ws[..col],
-                    &wy[..col],
-                    nf,
-                    &index,
-                    0,
-                    n,
-                    &index,
-                    col as u32,
-                    true,
-                )
-                .unwrap();
-            }
-            let r: Vec<_> = (0..nf).map(|j| 0.02 * (j + 1) as f64).collect();
-            let lower = vec![-100.0; n];
-            let upper = vec![100.0; n];
-            let base = vec![0.5; n];
-            let gradient = vec![0.1; n];
-            let mut point = base.clone();
-            let mut d = r.clone();
-            let mut previous = point.clone();
-            let mut v = vec![0.0; 2 * m];
-            subsm::subsm(
-                &mut point,
-                &mut d,
-                &mut previous,
-                &base,
-                &gradient,
-                &index[..nf],
-                &lower,
-                &upper,
-                &ws,
-                &wy,
-                &wn,
-                &mut v,
-                m,
-                m,
-                theta,
-            )
-            .unwrap();
-            let expected = point.clone();
-            let mut scratch = subspace_direction::Workspace::default();
-            assert!(scratch.try_direction(
-                n,
-                &index[..nf],
-                &r,
-                &ws,
-                &wy,
-                &sy,
-                &wt,
-                m,
-                theta
-            ));
-            point.copy_from_slice(&base);
-            subsm::project(
-                &mut point,
-                &mut scratch.direction,
-                &mut previous,
-                &base,
-                &gradient,
-                &index[..nf],
-                &lower,
-                &upper,
-            );
-            assert!(
-                point
-                    .iter()
-                    .zip(&expected)
-                    .all(|(a, b)| (a - b).abs() < 1e-8 * (1.0 + b.abs())),
-                "n={n} nf={nf} m={m}: actual={point:?} expected={expected:?}"
-            );
-            directions.bench_function(
-                format!("n{n}_free{nf}_m{m}/reference"),
-                |b| {
-                    b.iter(|| {
-                        point.copy_from_slice(&base);
-                        d.copy_from_slice(&r);
-                        black_box(
-                            subsm::subsm(
-                                &mut point,
-                                &mut d,
-                                &mut previous,
-                                &base,
-                                &gradient,
-                                &index[..nf],
-                                &lower,
-                                &upper,
-                                &ws,
-                                &wy,
-                                &wn,
-                                &mut v,
-                                m,
-                                m,
-                                theta,
-                            )
-                            .unwrap(),
-                        );
-                        black_box(&point);
-                    })
-                },
-            );
-            directions.bench_function(
-                format!("n{n}_free{nf}_m{m}/adaptive"),
-                |b| {
-                    b.iter(|| {
-                        point.copy_from_slice(&base);
-                        assert!(scratch.try_direction(
-                            n,
-                            &index[..nf],
-                            &r,
-                            &ws,
-                            &wy,
-                            &sy,
-                            &wt,
-                            m,
-                            theta
-                        ));
-                        black_box(subsm::project(
-                            &mut point,
-                            &mut scratch.direction,
-                            &mut previous,
-                            &base,
-                            &gradient,
-                            &index[..nf],
-                            &lower,
-                            &upper,
-                        ));
-                        black_box(&point);
-                    })
-                },
-            );
-        }
-    }
-    directions.finish();
     let mut kernels = c.benchmark_group("lbfgsb_kernels");
     for n in [1, 2, 5, 10, 20, 40] {
         let stride = 2 * n + 4;

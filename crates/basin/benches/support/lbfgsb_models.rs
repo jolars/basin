@@ -1,10 +1,9 @@
-//! Matched reference/alternate cases with independently known box minima.
+//! Model and projected-search cases with independently known box minima.
 #![allow(dead_code)]
 
 use basin::{
-    BoxBounds, ConstraintSet, Constraints, CostFunction, Dot, Executor,
-    FirstOrderState, Gradient, Lbfgsb, OptimizationResult, Scalar, ScaledAdd,
-    VectorLen,
+    BoxBounds, ConstraintSet, Constraints, CostFunction, Dot, FirstOrderState,
+    Gradient, Lbfgsb, OptimizationResult, Scalar, ScaledAdd, VectorLen,
     solver::lbfgs::{AsFloatSlice, AsFloatSliceMut},
 };
 use std::convert::Infallible;
@@ -218,30 +217,6 @@ where
     F: Scalar,
     V: AsFloatSliceMut<F> + Clone + Dot<F> + ScaledAdd<F> + VectorLen,
 {
-    pub fn solve(
-        &self,
-        alternate: bool,
-    ) -> OptimizationResult<FirstOrderState<V, F>> {
-        if alternate {
-            Executor::new(
-                self,
-                self.solver().with_dimension_aware_subspace(),
-                FirstOrderState::new(self.start()),
-            )
-            .max_iter(500)
-            .run()
-            .unwrap()
-        } else {
-            Executor::new(
-                self,
-                self.solver(),
-                FirstOrderState::new(self.start()),
-            )
-            .max_iter(500)
-            .run()
-            .unwrap()
-        }
-    }
     pub fn verify(&self, result: &OptimizationResult<FirstOrderState<V, F>>) {
         let x = result.param().as_float_slice();
         for (j, &value) in x.iter().enumerate() {

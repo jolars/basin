@@ -39,8 +39,6 @@ pub(crate) mod cauchy;
 pub(crate) mod compact;
 /// Native bounded model and subproblem observations.
 pub mod diagnostics;
-/// Opt-in dimension-aware reduced solves.
-pub mod dimension_aware;
 pub(crate) mod formk;
 pub(crate) mod history;
 mod integrated_model;
@@ -49,9 +47,6 @@ mod integrated_model_tests;
 /// Opt-in compact model and alternative direction policies.
 pub mod model_strategy;
 pub(crate) mod subsm;
-mod subspace_direction;
-#[cfg(test)]
-mod subspace_direction_tests;
 mod workspace;
 use diagnostics::{ModelFailure, ModelObservation, ModelPhase, Trace};
 
@@ -335,17 +330,6 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
         model_strategy::ModelLbfgsb::new(self)
     }
 
-    /// Select dimension-aware subspace solves after configuring the solver.
-    ///
-    /// Returns a separate strategy, preserving the default solver's public
-    /// type and serialized layout. Equivalent model solves may change rounding,
-    /// iterates and callback counts. See the strategy's backend and fallback notes.
-    pub fn with_dimension_aware_subspace(
-        self,
-    ) -> dimension_aware::DimensionAwareLbfgsb<V, F, S> {
-        dimension_aware::DimensionAwareLbfgsb::new(self)
-    }
-
     /// Configure the projected-gradient infinity norm computed using the current problem bounds.
     ///
     /// `None` disables the test; zero requests an exact-zero threshold.
@@ -596,55 +580,15 @@ where
         problem: &mut Problem<P>,
         state: FirstOrderState<V, F>,
     ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
-        self.next_iter_bounded(problem, state, None)
+        self.next_iter_bounded_search(problem, state, None, None)
     }
 }
 
 impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
-    fn next_iter_bounded<P>(
-        &mut self,
-        problem: &mut Problem<P>,
-        state: FirstOrderState<V, F>,
-        subspace: Option<&mut subspace_direction::Workspace<F>>,
-    ) -> Result<
-        crate::SolverStep<FirstOrderState<V, F>>,
-        crate::ConstraintSolveError<P::Error>,
-    >
-    where
-        P: CostFunction<Param = V, Output = F>
-            + Gradient<Gradient = V>
-            + BoxProblem<Param = V>,
-        V: AsFloatSliceMut<F> + Clone + Dot<F> + ScaledAdd<F> + VectorLen,
-        S: LineSearch<P, V, F, Error = P::Error>,
-    {
-        self.next_iter_bounded_model(problem, state, subspace, None)
-    }
-
-    fn next_iter_bounded_model<P>(
-        &mut self,
-        problem: &mut Problem<P>,
-        state: FirstOrderState<V, F>,
-        subspace: Option<&mut subspace_direction::Workspace<F>>,
-        model: Option<&mut model_strategy::RunWorkspace<F>>,
-    ) -> Result<
-        crate::SolverStep<FirstOrderState<V, F>>,
-        crate::ConstraintSolveError<P::Error>,
-    >
-    where
-        P: CostFunction<Param = V, Output = F>
-            + Gradient<Gradient = V>
-            + BoxProblem<Param = V>,
-        V: AsFloatSliceMut<F> + Clone + Dot<F> + ScaledAdd<F> + VectorLen,
-        S: LineSearch<P, V, F, Error = P::Error>,
-    {
-        self.next_iter_bounded_search(problem, state, subspace, model, None)
-    }
-
     fn next_iter_bounded_search<P>(
         &mut self,
         problem: &mut Problem<P>,
         mut state: FirstOrderState<V, F>,
-        mut subspace: Option<&mut subspace_direction::Workspace<F>>,
         mut model: Option<&mut model_strategy::RunWorkspace<F>>,
         mut projected: Option<&mut model_strategy::ProjectedSettings<F>>,
     ) -> Result<
@@ -959,73 +903,23 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
                     }
 
                     // subsm: writes the subspace minimizer into `z`.
-                    // An alternate solve cannot bypass reference factor/reduced-gradient
-                    // validation. Failed candidates leave z/r untouched for the native fallback.
-                    let mut alternate = None;
-                    if let Some(scratch) = subspace.as_deref_mut() {
-                        let eligible = if nfree == n {
-                            n <= 2 * col
-                        } else {
-                            nfree == 1 && col >= 3
-                        };
-                        if eligible
-                            && (0..2 * col).all(|i| {
-                                let pivot = work.wn[i * (2 * m) + i];
-                                pivot != F::zero() && pivot.is_finite()
-                            })
-                            && scratch.try_direction(
-                                n,
-                                &work.index[..nfree],
-                                &work.r[..nfree],
-                                &history.ws,
-                                &history.wy,
-                                &history.sy,
-                                &work.wt,
-                                m,
-                                theta,
-                            )
-                        {
-                            let status = self::subsm::project(
-                                &mut work.z,
-                                &mut scratch.direction,
-                                &mut work.xp,
-                                state.param().as_float_slice(),
-                                g_v.as_float_slice(),
-                                &work.index[..nfree],
-                                problem.inner().lower().as_float_slice(),
-                                problem.inner().upper().as_float_slice(),
-                            );
-                            if work.z.iter().all(|v| v.is_finite()) {
-                                work.r[..nfree]
-                                    .copy_from_slice(&scratch.direction);
-                                alternate = Some(status);
-                            } else {
-                                // Projection saved the original Cauchy point in xp.
-                                work.z.copy_from_slice(&work.xp);
-                            }
-                        }
-                    }
-                    let subsm_res = if let Some(status) = alternate {
-                        Ok(status)
-                    } else {
-                        subsm(
-                            &mut work.z,
-                            &mut work.r,
-                            &mut work.xp,
-                            state.param().as_float_slice(),
-                            g_v.as_float_slice(),
-                            &work.index[0..nfree],
-                            problem.inner().lower().as_float_slice(),
-                            problem.inner().upper().as_float_slice(),
-                            &history.ws,
-                            &history.wy,
-                            &work.wn,
-                            &mut work.wa_v,
-                            m,
-                            col,
-                            theta,
-                        )
-                    };
+                    let subsm_res = subsm(
+                        &mut work.z,
+                        &mut work.r,
+                        &mut work.xp,
+                        state.param().as_float_slice(),
+                        g_v.as_float_slice(),
+                        &work.index[0..nfree],
+                        problem.inner().lower().as_float_slice(),
+                        problem.inner().upper().as_float_slice(),
+                        &history.ws,
+                        &history.wy,
+                        &work.wn,
+                        &mut work.wa_v,
+                        m,
+                        col,
+                        theta,
+                    );
                     self.trace.record(
                         ModelPhase::Subspace,
                         subsm_res.is_ok(),

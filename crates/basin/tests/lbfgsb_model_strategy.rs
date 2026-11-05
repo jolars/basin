@@ -1,4 +1,4 @@
-#[path = "../benches/support/lbfgsb_dimension.rs"]
+#[path = "../benches/support/lbfgsb_models.rs"]
 mod support;
 
 use basin::{
@@ -19,7 +19,7 @@ where
         for policy in [
             ModelDirection::Bounded,
             ModelDirection::InteriorFirst,
-            ModelDirection::Projected,
+            ModelDirection::ProjectedChord,
         ] {
             let p = Quadratic::new(case, make);
             let result = Executor::new(
@@ -108,7 +108,7 @@ fn exact_continuation_rebuilds_only_scratch() {
     for policy in [
         ModelDirection::Bounded,
         ModelDirection::InteriorFirst,
-        ModelDirection::Projected,
+        ModelDirection::ProjectedChord,
     ] {
         for split in [0, 1, 7, 15] {
             let mut stepper = Executor::new(
