@@ -62,6 +62,11 @@ finding uses a direct callback API and a separate result type.
   accepted step. Supports all four dense backends with `f32` and
   `f64`; reports projected-gradient stationarity in the supplied coordinates.
   Custom line searches must implement the bounded search method.
+  For a problem with shared cost/gradient work, select
+  [`Wolfe::with_fused_evaluations()`](https://docs.rs/basin/latest/basin/line_search/wolfe/struct.Wolfe.html#method.with_fused_evaluations)
+  through `Tnc::with_line_search`. Fused trials also request gradients after
+  Armijo rejection; separate cheap costs and expensive gradients can favor
+  ordinary Wolfe. The default line search remains ordinary Wolfe.
   `ParameterTransform` explicitly supplies unit coordinates for linear or
   logarithmic physical parameters. Adapts the independent Rust implementation in
   [`sisyfuzz` 0.1.0](https://docs.rs/crate/sisyfuzz/0.1.0/source/src/tnc.rs)
@@ -138,6 +143,16 @@ finding uses a direct callback API and a separate result type.
   for a single free coordinate with sufficient history. It supports the same
   backends and precisions, retains the reference projection and recovery checks,
   and can change rounding and trajectories. The default retains Fortran parity.
+  [`with_compact_model()`](https://docs.rs/basin/latest/basin/solver/lbfgs/model_strategy/struct.ModelLbfgsb.html)
+  adds signed columns for small dimensions, a scaled Schur factorization, and
+  dimension-dependent reduced solves adapted from sisyfuzz 0.1.2
+  (`lbfgsb/model.rs`, `lbfgsb.rs`, `quasi_newton.rs`; BFGS references above).
+  It supports the same backends and precisions, with explicit InteriorFirst and
+  projected L-BFGS policies. Projected mode retains curvature on free coordinates
+  and searches a feasible chord to the projected endpoint. Sisyfuzz's default
+  Armijo search projects each trial; its More–Thuente and Wolfe searches cap the
+  original direction at the first bound. These policies can change convergence
+  outcomes.
   [Read the L-BFGS-B guide](quasi-newton/l-bfgs-b/).
 
 ## Derivative-free

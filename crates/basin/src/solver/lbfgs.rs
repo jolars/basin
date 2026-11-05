@@ -43,6 +43,11 @@ pub mod diagnostics;
 pub mod dimension_aware;
 pub(crate) mod formk;
 pub(crate) mod history;
+mod integrated_model;
+#[cfg(test)]
+mod integrated_model_tests;
+/// Opt-in compact model and alternative direction policies.
+pub mod model_strategy;
 pub(crate) mod subsm;
 mod subspace_direction;
 #[cfg(test)]
@@ -318,6 +323,18 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
         }
     }
 
+    /// Select the signed-column/scaled-compact model after configuring the solver.
+    ///
+    /// Returns [`model_strategy::ModelLbfgsb`] with its bounded direction policy.
+    /// The wrapper also provides explicit InteriorFirst and projected L-BFGS
+    /// policies. Projected mode retains raw curvature across free-set changes
+    /// and skips unsafe restricted pairs without deleting them. These options
+    /// can change trajectories and convergence outcomes; the reference default
+    /// remains unchanged. See the returned type for lifecycle and backend notes.
+    pub fn with_compact_model(self) -> model_strategy::ModelLbfgsb<V, F, S> {
+        model_strategy::ModelLbfgsb::new(self)
+    }
+
     /// Select dimension-aware subspace solves after configuring the solver.
     ///
     /// Returns a separate strategy, preserving the default solver's public
@@ -587,8 +604,28 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
     fn next_iter_bounded<P>(
         &mut self,
         problem: &mut Problem<P>,
+        state: FirstOrderState<V, F>,
+        subspace: Option<&mut subspace_direction::Workspace<F>>,
+    ) -> Result<
+        crate::SolverStep<FirstOrderState<V, F>>,
+        crate::ConstraintSolveError<P::Error>,
+    >
+    where
+        P: CostFunction<Param = V, Output = F>
+            + Gradient<Gradient = V>
+            + BoxProblem<Param = V>,
+        V: AsFloatSliceMut<F> + Clone + Dot<F> + ScaledAdd<F> + VectorLen,
+        S: LineSearch<P, V, F, Error = P::Error>,
+    {
+        self.next_iter_bounded_model(problem, state, subspace, None)
+    }
+
+    fn next_iter_bounded_model<P>(
+        &mut self,
+        problem: &mut Problem<P>,
         mut state: FirstOrderState<V, F>,
         mut subspace: Option<&mut subspace_direction::Workspace<F>>,
+        mut model: Option<&mut model_strategy::RunWorkspace<F>>,
     ) -> Result<
         crate::SolverStep<FirstOrderState<V, F>>,
         crate::ConstraintSolveError<P::Error>,
@@ -636,6 +673,7 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
 
         // Match the Fortran `goto 222` recovery path, with one restart.
         let mut restart_budget = 1u8;
+        let mut interior_failed = false;
 
         loop {
             let work = history.work.as_mut().expect("work missing");
@@ -672,107 +710,141 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
             let boxed = work.boxed;
             let updatd = work.updatd;
 
-            // Generalized Cauchy point.
-            let mut wrk = updatd;
-            if !cnstnd && col > 0 {
-                work.z.copy_from_slice(state.param().as_float_slice());
-            } else {
-                let cauchy_res = cauchy(
-                    state.param().as_float_slice(),
-                    problem.inner().lower().as_float_slice(),
-                    problem.inner().upper().as_float_slice(),
-                    g_v.as_float_slice(),
-                    &history.ws,
-                    &history.wy,
-                    &history.sy,
-                    &work.wt,
-                    m,
-                    theta,
-                    sbgnrm,
-                    &mut work.z,
-                    &mut work.d,
-                    &mut work.t_buf,
-                    &mut work.iwhere,
-                    &mut work.indx2,
-                    &mut work.wa_p,
-                    &mut work.wa_c,
-                    &mut work.wa_wbp,
-                    &mut work.wa_v,
-                );
-                self.trace.record(
-                    ModelPhase::Cauchy,
-                    cauchy_res.is_ok(),
-                    cauchy_res
-                        .as_ref()
-                        .err()
-                        .map(|_| ModelFailure::SingularMiddleMatrix),
-                    restart_budget,
-                    *problem.counts(),
-                    m,
+            let mut interior_attempt = false;
+            if let Some(strategy) = model.as_deref_mut() {
+                match strategy.direction(
                     &history.ws,
                     &history.wy,
                     &history.sy,
                     &history.ss,
-                    history.theta,
-                    work,
-                    None,
-                );
-                if cauchy_res.is_err() {
-                    if try_restart(history, &mut restart_budget) {
-                        continue;
-                    } else {
+                    theta,
+                    m,
+                    work.iupdat,
+                    state.param().as_float_slice(),
+                    g_v.as_float_slice(),
+                    problem.inner().lower().as_float_slice(),
+                    problem.inner().upper().as_float_slice(),
+                    !interior_failed,
+                    &mut work.z,
+                ) {
+                    Ok(interior) => interior_attempt = interior,
+                    Err(()) => {
+                        if try_restart(history, &mut restart_budget) {
+                            continue;
+                        }
                         state.set_evaluation(f_old, g_v).expect(
                             "gradient dimension differs from parameter",
                         );
-                        return Ok(crate::SolverStep::from((
+                        return Ok(crate::SolverStep::stopped(
                             state,
-                            Some(Termination::numerical_failure(
-                                "L-BFGS-B Cauchy-point construction failed after exhausting restarts.",
-                            )),
-                        )));
+                            Termination::numerical_failure(
+                                "Alternative L-BFGS model failed after exhausting restarts.",
+                            ),
+                        ));
                     }
                 }
-            }
-
-            // Partition free and active variables (`freev`).
-            let (nfree, nenter, ileave) = freev(
-                n,
-                &work.iwhere,
-                &mut work.index,
-                &mut work.indx2,
-                work.nfree,
-                state.iter(),
-                cnstnd,
-            );
-            work.nfree = nfree;
-            let wrk_local = (ileave < n) || (nenter > 0) || wrk;
-            wrk = wrk_local;
-
-            // Minimize over the free-variable subspace.
-            if nfree > 0 && col > 0 {
-                let factor_result = if wrk {
-                    formk(
-                        &mut work.wn,
-                        &mut work.wn1,
-                        m,
-                        col,
-                        theta,
-                        &history.sy,
+            } else {
+                // Generalized Cauchy point.
+                let mut wrk = updatd;
+                if !cnstnd && col > 0 {
+                    work.z.copy_from_slice(state.param().as_float_slice());
+                } else {
+                    let cauchy_res = cauchy(
+                        state.param().as_float_slice(),
+                        problem.inner().lower().as_float_slice(),
+                        problem.inner().upper().as_float_slice(),
+                        g_v.as_float_slice(),
                         &history.ws,
                         &history.wy,
-                        nfree,
-                        &work.index,
-                        nenter,
-                        ileave,
-                        &work.indx2,
-                        work.iupdat,
-                        updatd,
-                    )
-                } else {
-                    Ok(())
-                };
-                if wrk {
+                        &history.sy,
+                        &work.wt,
+                        m,
+                        theta,
+                        sbgnrm,
+                        &mut work.z,
+                        &mut work.d,
+                        &mut work.t_buf,
+                        &mut work.iwhere,
+                        &mut work.indx2,
+                        &mut work.wa_p,
+                        &mut work.wa_c,
+                        &mut work.wa_wbp,
+                        &mut work.wa_v,
+                    );
                     self.trace.record(
+                        ModelPhase::Cauchy,
+                        cauchy_res.is_ok(),
+                        cauchy_res
+                            .as_ref()
+                            .err()
+                            .map(|_| ModelFailure::SingularMiddleMatrix),
+                        restart_budget,
+                        *problem.counts(),
+                        m,
+                        &history.ws,
+                        &history.wy,
+                        &history.sy,
+                        &history.ss,
+                        history.theta,
+                        work,
+                        None,
+                    );
+                    if cauchy_res.is_err() {
+                        if try_restart(history, &mut restart_budget) {
+                            continue;
+                        } else {
+                            state.set_evaluation(f_old, g_v).expect(
+                                "gradient dimension differs from parameter",
+                            );
+                            return Ok(crate::SolverStep::from((
+                                state,
+                                Some(Termination::numerical_failure(
+                                    "L-BFGS-B Cauchy-point construction failed after exhausting restarts.",
+                                )),
+                            )));
+                        }
+                    }
+                }
+
+                // Partition free and active variables (`freev`).
+                let (nfree, nenter, ileave) = freev(
+                    n,
+                    &work.iwhere,
+                    &mut work.index,
+                    &mut work.indx2,
+                    work.nfree,
+                    state.iter(),
+                    cnstnd,
+                );
+                work.nfree = nfree;
+                let wrk_local = (ileave < n) || (nenter > 0) || wrk;
+                wrk = wrk_local;
+
+                // Minimize over the free-variable subspace.
+                if nfree > 0 && col > 0 {
+                    let factor_result = if wrk {
+                        formk(
+                            &mut work.wn,
+                            &mut work.wn1,
+                            m,
+                            col,
+                            theta,
+                            &history.sy,
+                            &history.ws,
+                            &history.wy,
+                            nfree,
+                            &work.index,
+                            nenter,
+                            ileave,
+                            &work.indx2,
+                            work.iupdat,
+                            updatd,
+                        )
+                    } else {
+                        Ok(())
+                    };
+                    if wrk {
+                        self.trace.record(
                         ModelPhase::FactorK,
                         factor_result.is_ok(),
                         factor_result.as_ref().err().map(|e| match e {
@@ -794,178 +866,183 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
                         work,
                         None,
                     );
-                }
-                if factor_result.is_err() {
-                    if try_restart(history, &mut restart_budget) {
-                        continue;
-                    } else {
-                        state.set_evaluation(f_old, g_v).expect(
-                            "gradient dimension differs from parameter",
-                        );
-                        return Ok(crate::SolverStep::from((
-                            state,
-                            Some(Termination::numerical_failure(
-                                "L-BFGS-B compact subspace factorization failed after exhausting restarts.",
-                            )),
-                        )));
                     }
-                }
-
-                // cmprlb: r = −Z'B(z − x) − Z'g, indexed by the free
-                // subspace.
-                let reduced_result = cmprlb(
-                    state.param().as_float_slice(),
-                    g_v.as_float_slice(),
-                    &work.z,
-                    &mut work.r,
-                    &mut work.wa_c,
-                    &mut work.wa_p,
-                    &history.sy,
-                    &work.wt,
-                    &history.ws,
-                    &history.wy,
-                    &work.index,
-                    nfree,
-                    cnstnd,
-                    col,
-                    theta,
-                    m,
-                );
-                self.trace.record(
-                    ModelPhase::ReducedGradient,
-                    reduced_result.is_ok(),
-                    reduced_result
-                        .as_ref()
-                        .err()
-                        .map(|_| ModelFailure::SingularMiddleMatrix),
-                    restart_budget,
-                    *problem.counts(),
-                    m,
-                    &history.ws,
-                    &history.wy,
-                    &history.sy,
-                    &history.ss,
-                    history.theta,
-                    work,
-                    None,
-                );
-                if reduced_result.is_err() {
-                    if try_restart(history, &mut restart_budget) {
-                        continue;
-                    } else {
-                        state.set_evaluation(f_old, g_v).expect(
-                            "gradient dimension differs from parameter",
-                        );
-                        return Ok(crate::SolverStep::from((
-                            state,
-                            Some(Termination::numerical_failure(
-                                "L-BFGS-B reduced-gradient construction failed after exhausting restarts.",
-                            )),
-                        )));
+                    if factor_result.is_err() {
+                        if try_restart(history, &mut restart_budget) {
+                            continue;
+                        } else {
+                            state.set_evaluation(f_old, g_v).expect(
+                                "gradient dimension differs from parameter",
+                            );
+                            return Ok(crate::SolverStep::from((
+                                state,
+                                Some(Termination::numerical_failure(
+                                    "L-BFGS-B compact subspace factorization failed after exhausting restarts.",
+                                )),
+                            )));
+                        }
                     }
-                }
 
-                // subsm: writes the subspace minimizer into `z`.
-                // An alternate solve cannot bypass reference factor/reduced-gradient
-                // validation. Failed candidates leave z/r untouched for the native fallback.
-                let mut alternate = None;
-                if let Some(scratch) = subspace.as_deref_mut() {
-                    let eligible = if nfree == n {
-                        n <= 2 * col
+                    // cmprlb: r = −Z'B(z − x) − Z'g, indexed by the free
+                    // subspace.
+                    let reduced_result = cmprlb(
+                        state.param().as_float_slice(),
+                        g_v.as_float_slice(),
+                        &work.z,
+                        &mut work.r,
+                        &mut work.wa_c,
+                        &mut work.wa_p,
+                        &history.sy,
+                        &work.wt,
+                        &history.ws,
+                        &history.wy,
+                        &work.index,
+                        nfree,
+                        cnstnd,
+                        col,
+                        theta,
+                        m,
+                    );
+                    self.trace.record(
+                        ModelPhase::ReducedGradient,
+                        reduced_result.is_ok(),
+                        reduced_result
+                            .as_ref()
+                            .err()
+                            .map(|_| ModelFailure::SingularMiddleMatrix),
+                        restart_budget,
+                        *problem.counts(),
+                        m,
+                        &history.ws,
+                        &history.wy,
+                        &history.sy,
+                        &history.ss,
+                        history.theta,
+                        work,
+                        None,
+                    );
+                    if reduced_result.is_err() {
+                        if try_restart(history, &mut restart_budget) {
+                            continue;
+                        } else {
+                            state.set_evaluation(f_old, g_v).expect(
+                                "gradient dimension differs from parameter",
+                            );
+                            return Ok(crate::SolverStep::from((
+                                state,
+                                Some(Termination::numerical_failure(
+                                    "L-BFGS-B reduced-gradient construction failed after exhausting restarts.",
+                                )),
+                            )));
+                        }
+                    }
+
+                    // subsm: writes the subspace minimizer into `z`.
+                    // An alternate solve cannot bypass reference factor/reduced-gradient
+                    // validation. Failed candidates leave z/r untouched for the native fallback.
+                    let mut alternate = None;
+                    if let Some(scratch) = subspace.as_deref_mut() {
+                        let eligible = if nfree == n {
+                            n <= 2 * col
+                        } else {
+                            nfree == 1 && col >= 3
+                        };
+                        if eligible
+                            && (0..2 * col).all(|i| {
+                                let pivot = work.wn[i * (2 * m) + i];
+                                pivot != F::zero() && pivot.is_finite()
+                            })
+                            && scratch.try_direction(
+                                n,
+                                &work.index[..nfree],
+                                &work.r[..nfree],
+                                &history.ws,
+                                &history.wy,
+                                &history.sy,
+                                &work.wt,
+                                m,
+                                theta,
+                            )
+                        {
+                            let status = self::subsm::project(
+                                &mut work.z,
+                                &mut scratch.direction,
+                                &mut work.xp,
+                                state.param().as_float_slice(),
+                                g_v.as_float_slice(),
+                                &work.index[..nfree],
+                                problem.inner().lower().as_float_slice(),
+                                problem.inner().upper().as_float_slice(),
+                            );
+                            if work.z.iter().all(|v| v.is_finite()) {
+                                work.r[..nfree]
+                                    .copy_from_slice(&scratch.direction);
+                                alternate = Some(status);
+                            } else {
+                                // Projection saved the original Cauchy point in xp.
+                                work.z.copy_from_slice(&work.xp);
+                            }
+                        }
+                    }
+                    let subsm_res = if let Some(status) = alternate {
+                        Ok(status)
                     } else {
-                        nfree == 1 && col >= 3
-                    };
-                    if eligible
-                        && (0..2 * col).all(|i| {
-                            let pivot = work.wn[i * (2 * m) + i];
-                            pivot != F::zero() && pivot.is_finite()
-                        })
-                        && scratch.try_direction(
-                            n,
-                            &work.index[..nfree],
-                            &work.r[..nfree],
-                            &history.ws,
-                            &history.wy,
-                            &history.sy,
-                            &work.wt,
-                            m,
-                            theta,
-                        )
-                    {
-                        let status = self::subsm::project(
+                        subsm(
                             &mut work.z,
-                            &mut scratch.direction,
+                            &mut work.r,
                             &mut work.xp,
                             state.param().as_float_slice(),
                             g_v.as_float_slice(),
-                            &work.index[..nfree],
+                            &work.index[0..nfree],
                             problem.inner().lower().as_float_slice(),
                             problem.inner().upper().as_float_slice(),
-                        );
-                        if work.z.iter().all(|v| v.is_finite()) {
-                            work.r[..nfree].copy_from_slice(&scratch.direction);
-                            alternate = Some(status);
-                        } else {
-                            // Projection saved the original Cauchy point in xp.
-                            work.z.copy_from_slice(&work.xp);
-                        }
-                    }
-                }
-                let subsm_res = if let Some(status) = alternate {
-                    Ok(status)
-                } else {
-                    subsm(
-                        &mut work.z,
-                        &mut work.r,
-                        &mut work.xp,
-                        state.param().as_float_slice(),
-                        g_v.as_float_slice(),
-                        &work.index[0..nfree],
-                        problem.inner().lower().as_float_slice(),
-                        problem.inner().upper().as_float_slice(),
+                            &history.ws,
+                            &history.wy,
+                            &work.wn,
+                            &mut work.wa_v,
+                            m,
+                            col,
+                            theta,
+                        )
+                    };
+                    self.trace.record(
+                        ModelPhase::Subspace,
+                        subsm_res.is_ok(),
+                        subsm_res
+                            .as_ref()
+                            .err()
+                            .map(|_| ModelFailure::SingularK),
+                        restart_budget,
+                        *problem.counts(),
+                        m,
                         &history.ws,
                         &history.wy,
-                        &work.wn,
-                        &mut work.wa_v,
-                        m,
-                        col,
-                        theta,
-                    )
-                };
-                self.trace.record(
-                    ModelPhase::Subspace,
-                    subsm_res.is_ok(),
-                    subsm_res.as_ref().err().map(|_| ModelFailure::SingularK),
-                    restart_budget,
-                    *problem.counts(),
-                    m,
-                    &history.ws,
-                    &history.wy,
-                    &history.sy,
-                    &history.ss,
-                    history.theta,
-                    work,
-                    subsm_res.as_ref().ok().map(|s| {
-                        *s == self::subsm::SubsmStatus::BoundEncountered
-                    }),
-                );
-                if subsm_res.is_err() {
-                    if try_restart(history, &mut restart_budget) {
-                        continue;
-                    } else {
-                        state.set_evaluation(f_old, g_v).expect(
-                            "gradient dimension differs from parameter",
-                        );
-                        return Ok(crate::SolverStep::from((
-                            state,
-                            Some(Termination::numerical_failure(
-                                "L-BFGS-B subspace minimization failed after exhausting restarts.",
-                            )),
-                        )));
+                        &history.sy,
+                        &history.ss,
+                        history.theta,
+                        work,
+                        subsm_res.as_ref().ok().map(|s| {
+                            *s == self::subsm::SubsmStatus::BoundEncountered
+                        }),
+                    );
+                    if subsm_res.is_err() {
+                        if try_restart(history, &mut restart_budget) {
+                            continue;
+                        } else {
+                            state.set_evaluation(f_old, g_v).expect(
+                                "gradient dimension differs from parameter",
+                            );
+                            return Ok(crate::SolverStep::from((
+                                state,
+                                Some(Termination::numerical_failure(
+                                    "L-BFGS-B subspace minimization failed after exhausting restarts.",
+                                )),
+                            )));
+                        }
                     }
+                    // `subsm` writes the projected step to `z`; its status carries
+                    // no additional information needed by this implementation.
                 }
-                // `subsm` writes the projected step to `z`; its status carries
-                // no additional information needed by this implementation.
             }
 
             // Line search along d = z − x.
@@ -1097,6 +1174,12 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
                 None,
             );
             let Some((param_new, f_new, g_new)) = accepted else {
+                if interior_attempt {
+                    interior_failed = true;
+                    history.direction_buffer = Some(d_v);
+                    continue;
+                }
+
                 // Restart with cleared history when compact-form state exists.
                 if history.ws.is_empty() {
                     state
@@ -1162,32 +1245,38 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
 
                     // Rebuild T = θ SᵀS + L D⁻¹ Lᵀ. On failure, reset.
                     let new_col = history.ws.len();
-                    let factor_result = formt(
-                        history.theta,
-                        &history.sy,
-                        &history.ss,
-                        new_col,
-                        m,
-                        &mut work.wt,
-                    );
-                    self.trace.record(
-                        ModelPhase::FactorT,
-                        factor_result.is_ok(),
-                        factor_result
-                            .as_ref()
-                            .err()
-                            .map(|_| ModelFailure::NotPositiveDefiniteT),
-                        restart_budget,
-                        *problem.counts(),
-                        m,
-                        &history.ws,
-                        &history.wy,
-                        &history.sy,
-                        &history.ss,
-                        history.theta,
-                        work,
-                        None,
-                    );
+                    let factor_result = if model.is_some() {
+                        Ok(())
+                    } else {
+                        formt(
+                            history.theta,
+                            &history.sy,
+                            &history.ss,
+                            new_col,
+                            m,
+                            &mut work.wt,
+                        )
+                    };
+                    if model.is_none() {
+                        self.trace.record(
+                            ModelPhase::FactorT,
+                            factor_result.is_ok(),
+                            factor_result
+                                .as_ref()
+                                .err()
+                                .map(|_| ModelFailure::NotPositiveDefiniteT),
+                            restart_budget,
+                            *problem.counts(),
+                            m,
+                            &history.ws,
+                            &history.wy,
+                            &history.sy,
+                            &history.ss,
+                            history.theta,
+                            work,
+                            None,
+                        );
+                    }
                     if factor_result.is_err() {
                         // Reset history; the next iter starts fresh.
                         history.ws.clear();

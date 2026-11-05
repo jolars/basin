@@ -64,6 +64,36 @@ fn benchmark(c: &mut Criterion) {
     }
     alternatives.finish();
 
+    let mut models = c.benchmark_group("lbfgsb_models");
+    for case in dimension::Case::ALL {
+        let problem =
+            dimension::Quadratic::<Vec<f64>>::new(case, |x| x.to_vec());
+        for policy in [
+            basin::solver::lbfgs::model_strategy::ModelDirection::Bounded,
+            basin::solver::lbfgs::model_strategy::ModelDirection::InteriorFirst,
+            basin::solver::lbfgs::model_strategy::ModelDirection::Projected,
+        ] {
+            let solve = || {
+                basin::Executor::new(
+                    &problem,
+                    problem
+                        .solver()
+                        .with_compact_model()
+                        .with_direction_policy(policy),
+                    basin::FirstOrderState::new(problem.start()),
+                )
+                .max_iter(500)
+                .run()
+                .unwrap()
+            };
+            problem.verify(&solve());
+            models.bench_function(format!("{}/{policy:?}", case.name()), |b| {
+                b.iter(|| black_box(solve()))
+            });
+        }
+    }
+    models.finish();
+
     let mut directions = c.benchmark_group("lbfgsb_subspace");
     for (n, nf) in [(2, 2), (8, 8), (50, 50), (50, 1)] {
         for m in [3, 10] {

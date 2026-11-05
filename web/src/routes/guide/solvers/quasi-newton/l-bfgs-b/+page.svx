@@ -48,6 +48,8 @@ variables that are free to move, followed by a line search that keeps the step
 feasible. This is the bound-constrained algorithm described in
 [Zhu et al. (1997)](#ref-zhu-byrd-lu-nocedal-1997), with the version 3.0
 subspace changes of [Morales and Nocedal (2011)](#ref-morales-nocedal-2011).
+This describes the default path; the optional policies below can select a
+different model or direction.
 
 After an accepted step, the solver retains the change in parameters and the
 change in gradient when they pass its curvature safeguard. At most `m` pairs
@@ -135,6 +137,84 @@ fn main() {
 L-BFGS. Initialization projects this example's seed to `[-1.0, 1.0]` before
 the first objective or gradient evaluation.
 
+## Choose a model and direction policy
+
+Start with the default when you want the reference algorithm. Configure history,
+tolerances, and the line search on `Lbfgsb` before selecting either wrapper.
+Both wrappers support the same contiguous dense backends and scalar precisions.
+They keep bounds on the problem and execution budgets on the executor.
+
+| Selection | Behavior |
+| --- | --- |
+| `Lbfgsb::new()` | Reference L-BFGS-B 3.0 model and subspace arithmetic. |
+| `.with_dimension_aware_subspace()` | Alternate inverse or single-coordinate solves for selected shapes, retaining native factor validation and fallback. |
+| `.with_compact_model()` | Signed columns for small dimensions and a scaled compact model otherwise, with dimension-dependent reduced solves. Selects `ModelDirection::Bounded` by default. |
+
+The [dimension-aware subspace wrapper](https://docs.rs/basin/latest/basin/solver/lbfgs/dimension_aware/struct.DimensionAwareLbfgsb.html)
+retains the reference model machinery. The
+[model wrapper](https://docs.rs/basin/latest/basin/solver/lbfgs/model_strategy/struct.ModelLbfgsb.html)
+validates its own representation and avoids constructing the reference K/T
+factors. Their equivalent model calculations can still change rounding,
+trajectories, callback counts, and stopping outcomes. Compare solution quality
+and evaluation work on your problem before choosing one for speed.
+
+The model wrapper also accepts an explicit
+[`ModelDirection`](https://docs.rs/basin/latest/basin/solver/lbfgs/model_strategy/enum.ModelDirection.html):
+
+- **`Bounded`** constructs a generalized Cauchy point and refines the model on
+  its free coordinates, retaining Basin's projected Newton/backtracking safeguard.
+- **`InteriorFirst`** tries an inverse L-BFGS step when both its start and full
+  endpoint are strictly inside the box. Otherwise it uses the bounded direction.
+  A soft line-search failure retries the bounded direction with history intact;
+  failed probes remain counted, and callback errors propagate normally.
+- **`Projected`** applies retained curvature on the current free coordinates,
+  projects the endpoint into the box, and searches along the feasible chord.
+  This selects projected L-BFGS rather than the L-BFGS-B Cauchy algorithm.
+  Basin inherits the base solver's stopping controls. Sisyfuzz's default
+  projected Armijo search projects each trial; its More–Thuente and Wolfe
+  searches instead cap the original direction at the first bound. The chord
+  policy differs from both choices.
+
+For example, select projected L-BFGS after configuring its base solver:
+
+<!-- compile: solver-lbfgsb-projected-policy -->
+```rust
+use basin::{Lbfgsb, solver::lbfgs::model_strategy::ModelDirection};
+
+fn main() {
+    let solver = Lbfgsb::<Vec<f64>>::new()
+        .with_m_capacity(10)
+        .with_absolute_projected_gradient_tolerance(1e-8)
+        .with_relative_cost_reduction_tolerance(None)
+        .with_compact_model()
+        .with_direction_policy(ModelDirection::Projected);
+
+    assert_eq!(solver.direction_policy(), ModelDirection::Projected);
+}
+```
+
+Pass this solver to `Executor` with a bounded problem as in the example above.
+The inverse policies build derived model factors only when a bounded fallback
+needs them. They are explicit alternatives, with no general guarantee of faster
+convergence or better accuracy than the reference path.
+
+### Preserve curvature across changes at bounds
+
+Default L-BFGS-B already retains accepted full curvature pairs when the free set
+changes. Projected mode additionally restricts the inverse BFGS updates to the
+coordinates currently free to move. A pair whose restricted curvature is unsafe
+is skipped for that direction, while the original pair remains available if
+coordinates become free again. History capacity still limits retention, and
+normal numerical restarts can clear the history.
+
+Fresh runs clear evolving history. Exact solver-and-state checkpoints preserve
+history and the selected policy; serialized checkpoints rebuild only derived
+model scratch. The wrappers differ when recovering the base solver:
+`DimensionAwareLbfgsb::into_inner()` retains its history, whereas
+`ModelLbfgsb::into_inner()` discards curvature and requires a fresh run.
+Native compact-phase diagnostics are available on the reference-based paths;
+the model wrapper provides selected-point diagnostics instead.
+
 ## Practical considerations
 
 ### Use a projected stationarity test
@@ -168,7 +248,7 @@ more memory, but does not guarantee faster convergence.
 
 ## Implementation
 
-Basin ports the L-BFGS-B 3.0 Fortran implementation, including its compact
+The default solver ports the L-BFGS-B 3.0 Fortran implementation, including its compact
 curvature model and subspace minimization. Singular or non-positive-definite
 model factorizations cause it to clear the history and retry. It publishes the
 current point, objective, and gradient through `FirstOrderState`; the solver
@@ -180,6 +260,12 @@ Bounds belong to the problem through `Constraints`, using a box-only
 unsupported constraint blocks. You can supply another strategy through
 `Lbfgs::with_line_search(search)`, but it must implement bounded steps. The
 default line search preserves iteration-wise parity with the Fortran reference.
+
+The optional model and direction strategies adapt the signed-column model,
+reduced solves, InteriorFirst policy, and free-coordinate curvature handling
+from [sisyfuzz 0.1.2](https://github.com/fhenskens/sisyfuzz/tree/39f6d4d0062607eb48b07d5cd5f847fb7da13828/src).
+They retain Basin's lifecycle and bounded line-search contracts. These paths
+can differ from both the Fortran trajectory and sisyfuzz's numerical policies.
 
 Supported parameter types are `Vec<F>`, `nalgebra::DVector<F>`,
 `ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`. Parameter

@@ -43,6 +43,14 @@ src/solver/lbfgs/subspace_direction.rs follows src/lbfgsb/model.rs in the local
 sisyfuzz 0.1.2 source, rewritten for Basin's scalar/backend capabilities and
 L-BFGS-B 3.0 projected-step safeguard.
 
+The signed-column/scaled compact model, smaller reduced systems, interior-first
+policy and retained free-coordinate inverse updates in
+src/solver/lbfgs/integrated_model.rs and src/solver/lbfgs/model_strategy.rs are
+adapted from src/lbfgsb/model.rs, src/lbfgsb.rs and src/quasi_newton.rs at
+sisyfuzz commit 39f6d4d0062607eb48b07d5cd5f847fb7da13828. The adaptation supports
+Basin's scalar/backend types, arbitrary bounds, lifecycle and line-search
+contracts. Projected mode searches a chord to the projected endpoint.
+
 Copyright 2026 Frans Henskens
 
 The upstream implementation is licensed under Apache-2.0. The upstream

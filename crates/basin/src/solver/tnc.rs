@@ -88,6 +88,25 @@ pub enum TncCgTermination {
 /// [`ParameterTransform`](crate::ParameterTransform)). The default tolerance
 /// is `1e-6`; `None` disables the test, including exact-zero stopping.
 ///
+/// # Combined cost and gradient callbacks
+///
+/// Feasible gradient-difference probes use the problem's combined callback, but
+/// the default line search remains ordinary [`Wolfe`]. When cost and gradient
+/// share expensive intermediate work, select [`crate::FusedWolfe`] explicitly:
+///
+/// ```
+/// use basin::{Tnc, Wolfe};
+/// let search = Wolfe::<f64>::new().max_iter(60).with_fused_evaluations();
+/// let solver = Tnc::<_, Vec<f64>>::with_line_search(search);
+/// ```
+///
+/// Override [`Gradient::cost_and_gradient`] to share that work, and
+/// [`Gradient::cost_and_gradient_into`] to reuse storage on subsequent probes.
+/// Fused searches also compute gradients at Armijo-rejected
+/// trials, so separate cheap costs and expensive gradients can favor ordinary
+/// Wolfe. Selected evaluations are reused; request counters still record each
+/// requested category, rather than the number of underlying callback invocations.
+///
 /// # Backends
 ///
 /// `Vec<F>`, nalgebra `DVector<F>`, ndarray `Array1<F>`, and faer `Col<F>`,
