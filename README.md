@@ -183,7 +183,7 @@ export its citation. The concept DOI `10.5281/zenodo.20610944` identifies Basin
 across all releases.
 
 [CITATION.cff](CITATION.cff) contains the software metadata and preferred paper
-citation, and \[basin.rs/guide\] renders the paper in APA, BibTeX, and BibLaTeX.
+citation, and [basin.rs/guide] renders the paper in APA, BibTeX, and BibLaTeX.
 
 ## Acknowledgements
 
