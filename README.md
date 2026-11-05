@@ -16,7 +16,7 @@ point. Use plain Rust vectors or your choice of nalgebra, ndarray, or faer.
 Basin runs natively and in the browser, with no BLAS/LAPACK or threads required
 by the default build. Its design is inspired by [argmin].
 
-Narrative documentation lives at [basin.rs/guide]; the rustdoc reference is at
+See the documentation at [basin.rs/guide] or browse the API reference at
 [docs.rs/basin]. There is also an in-browser [solver visualizer] and a
 [benchmarks site] comparing Basin against competing crates and across backends
 and solvers.
