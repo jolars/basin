@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.3.0](https://github.com/jolars/basin/compare/v3.2.0...v3.3.0) (2026-11-06)
+
+### Features
+
+- add TNC solver and parameter transforms (#129) ([`ac7ea46`](https://github.com/jolars/basin/commit/ac7ea461dd6c0048eccb598e6d20fa7c20cf3485))
+
+### Performance Improvements
+
+- reduce solver overhead and add opt-in L-BFGS-B strategies (#132) ([`8e131e5`](https://github.com/jolars/basin/commit/8e131e5ce9bfab2da4a03d59c20f14e60296d395))
+
 ## [3.2.0](https://github.com/jolars/basin/compare/v3.1.0...v3.2.0) (2026-11-02)
 
 ### Features
