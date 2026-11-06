@@ -127,7 +127,6 @@ pub(crate) fn subsm<F: Scalar, V: AsFloatSlice<F>>(
     }
 
     let zero = F::zero();
-    let one = F::one();
     let m2 = 2 * m;
     let col2 = 2 * col;
 
@@ -180,6 +179,25 @@ pub(crate) fn subsm<F: Scalar, V: AsFloatSlice<F>>(
         *slot = *slot / theta;
     }
 
+    Ok(project(x, d, xp, xx, gg, ind, l, u))
+}
+
+#[allow(clippy::too_many_arguments)]
+#[inline(always)]
+pub(crate) fn project<F: Scalar>(
+    x: &mut [F],
+    d: &mut [F],
+    xp: &mut [F],
+    xx: &[F],
+    gg: &[F],
+    ind: &[usize],
+    l: &[F],
+    u: &[F],
+) -> SubsmStatus {
+    let n = x.len();
+    let nsub = ind.len();
+    let zero = F::zero();
+    let one = F::one();
     // Step 4: projected Newton step. Save x first so the backtracking
     // branch can restore it.
     xp.copy_from_slice(x);
@@ -215,7 +233,7 @@ pub(crate) fn subsm<F: Scalar, V: AsFloatSlice<F>>(
     }
 
     if iword == SubsmStatus::InteriorStep {
-        return Ok(iword);
+        return iword;
     }
 
     // Step 5: sign of the directional derivative at the original
@@ -227,7 +245,7 @@ pub(crate) fn subsm<F: Scalar, V: AsFloatSlice<F>>(
         dd_p = dd_p + (x[i] - xx[i]) * gg[i];
     }
     if dd_p <= zero {
-        return Ok(iword);
+        return iword;
     }
 
     // Step 6: restore x = xp and find the largest uniform α ∈ [0, 1]
@@ -288,7 +306,7 @@ pub(crate) fn subsm<F: Scalar, V: AsFloatSlice<F>>(
         x[k] = x[k] + alpha * d[i];
     }
 
-    Ok(iword)
+    iword
 }
 
 fn add_history_column<F: Scalar>(

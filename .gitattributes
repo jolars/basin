@@ -1,0 +1,20 @@
+# Normalize text in the repository and use LF in working trees on every OS.
+* text=auto eol=lf
+
+# Use native line endings for Windows command scripts.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Treat assets as binary, without line-ending conversion or text diffs.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.wasm binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary

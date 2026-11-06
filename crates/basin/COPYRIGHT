@@ -35,6 +35,30 @@ Upstream Apache-2.0 notice:
     limitations under the License.
 
 ================================================================================
+sisyfuzz local 0.1.2 L-BFGS-B model (https://github.com/fhenskens/sisyfuzz)
+================================================================================
+
+The signed-column/scaled compact model, smaller reduced systems, interior-first
+policy and retained free-coordinate inverse updates in
+src/solver/lbfgs/integrated_model.rs and src/solver/lbfgs/model_strategy.rs are
+adapted from src/lbfgsb/model.rs, src/lbfgsb.rs and src/quasi_newton.rs at
+sisyfuzz commit 39f6d4d0062607eb48b07d5cd5f847fb7da13828. The adaptation supports
+Basin's scalar/backend types, arbitrary bounds, lifecycle and line-search
+contracts. Projected mode searches a chord to the projected endpoint.
+
+The per-trial projected Armijo search in src/line_search/projected_armijo.rs
+and explicit projected ray/Armijo/chord integration in
+src/solver/lbfgs/model_strategy/projected.rs additionally adapt
+src/line_search.rs, src/more_thuente.rs and src/lbfgs.rs at that revision.
+The legacy chord policy remains available separately from the projected trial
+and original-direction feasible-ray policies.
+
+Copyright 2026 Frans Henskens
+
+The upstream implementation is licensed under Apache-2.0. The upstream
+Apache-2.0 notice above applies; see LICENSE-APACHE for the full license text.
+
+================================================================================
 PRIMA (https://github.com/libprima/prima)
 ================================================================================
 

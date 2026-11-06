@@ -130,11 +130,14 @@ where
         if !valid {
             return Ok(LineSearchOutcome::Failed);
         }
-        for _ in 0..self.max_iter {
+        let mut trial = param.clone();
+        for iteration in 0..self.max_iter {
             if alpha <= F::zero() {
                 break;
             }
-            let mut trial = param.clone();
+            if iteration > 0 {
+                trial.clone_from(param);
+            }
             trial.scaled_add(alpha, direction);
             let trial_cost = problem.cost(&trial)?;
             if trial_cost.is_finite()

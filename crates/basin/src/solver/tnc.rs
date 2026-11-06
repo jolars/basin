@@ -88,6 +88,25 @@ pub enum TncCgTermination {
 /// [`ParameterTransform`](crate::ParameterTransform)). The default tolerance
 /// is `1e-6`; `None` disables the test, including exact-zero stopping.
 ///
+/// # Combined cost and gradient callbacks
+///
+/// Feasible gradient-difference probes use the problem's combined callback, but
+/// the default line search remains ordinary [`Wolfe`]. When cost and gradient
+/// share expensive intermediate work, select [`crate::FusedWolfe`] explicitly:
+///
+/// ```
+/// use basin::{Tnc, Wolfe};
+/// let search = Wolfe::<f64>::new().max_iter(60).with_fused_evaluations();
+/// let solver = Tnc::<_, Vec<f64>>::with_line_search(search);
+/// ```
+///
+/// Override [`Gradient::cost_and_gradient`] to share that work, and
+/// [`Gradient::cost_and_gradient_into`] to reuse storage on subsequent probes.
+/// Fused searches also compute gradients at Armijo-rejected
+/// trials, so separate cheap costs and expensive gradients can favor ordinary
+/// Wolfe. Selected evaluations are reused; request counters still record each
+/// requested category, rather than the number of underlying callback invocations.
+///
 /// # Backends
 ///
 /// `Vec<F>`, nalgebra `DVector<F>`, ndarray `Array1<F>`, and faer `Col<F>`,
@@ -149,6 +168,8 @@ pub struct Tnc<L, V, F: Scalar = f64, M = GradientDifferences> {
     upper: Vec<F>,
     cg_iterations: usize,
     cg_termination: TncCgTermination,
+    #[cfg_attr(feature = "serde", serde(skip, default = "Option::default"))]
+    workspace: Option<Box<Workspace<V, F>>>,
     marker: PhantomData<(V, M)>,
 }
 
@@ -180,6 +201,7 @@ impl<L, V, F: Scalar> Tnc<L, V, F> {
             upper: Vec::new(),
             cg_iterations: 0,
             cg_termination: TncCgTermination::Initial,
+            workspace: None,
             marker: PhantomData,
         }
     }
@@ -197,6 +219,7 @@ impl<L, V, F: Scalar> Tnc<L, V, F> {
             upper: self.upper,
             cg_iterations: self.cg_iterations,
             cg_termination: self.cg_termination,
+            workspace: self.workspace,
             marker: PhantomData,
         }
     }
@@ -292,6 +315,7 @@ where
         g: &V,
         v: &V,
         out: &mut V,
+        point: &mut V,
         lower: &[F],
         upper: &[F],
         step: F,
@@ -310,6 +334,7 @@ where
         _: &V,
         v: &V,
         out: &mut V,
+        _: &mut V,
         _: &[F],
         _: &[F],
         _: F,
@@ -330,6 +355,7 @@ where
         g: &V,
         v: &V,
         out: &mut V,
+        point: &mut V,
         lower: &[F],
         upper: &[F],
         step: F,
@@ -354,7 +380,9 @@ where
         if !h.is_finite() || h == F::zero() {
             return Ok(false);
         }
-        let mut point = x.clone();
+        // Preserve any backend metadata carried by the current parameter as
+        // well as its coordinates, while letting Clone::clone_from reuse storage.
+        point.clone_from(x);
         let mut changed = false;
         for i in 0..n {
             let value = (x.get_scalar(i) + h * v.get_scalar(i))
@@ -366,7 +394,7 @@ where
         if !changed {
             return Ok(false);
         }
-        problem.cost_and_gradient_into(&point, out)?;
+        problem.cost_and_gradient_into(point, out)?;
         if out.vec_len() != n {
             return Ok(false);
         }
@@ -379,6 +407,33 @@ where
 fn fill<V: VectorLen + VectorIndex<F>, F: Scalar>(v: &mut V, value: F) {
     for i in 0..v.vec_len() {
         v.set_scalar(i, value);
+    }
+}
+
+/// Derived CG scratch is rebuilt after deserialization and fresh initialization.
+/// Keep its storage across CG iterations without adding backend requirements.
+struct Workspace<V, F> {
+    free: Vec<bool>,
+    projected: Vec<F>,
+    residual: Vec<F>,
+    z: Vec<F>,
+    direction: V,
+    vector: V,
+    product: V,
+    point: V,
+}
+impl<V: Clone, F: Scalar> Workspace<V, F> {
+    fn new(x: &V, g: &V, n: usize) -> Self {
+        Self {
+            free: vec![false; n],
+            projected: vec![F::zero(); n],
+            residual: vec![F::zero(); n],
+            z: vec![F::zero(); n],
+            direction: x.clone(),
+            vector: x.clone(),
+            product: g.clone(),
+            point: x.clone(),
+        }
     }
 }
 fn finite<V: VectorLen + VectorIndex<F>, F: Scalar>(v: &V) -> bool {
@@ -446,6 +501,7 @@ where
         state.reset();
         self.line_search.reset();
         self.history = History::default();
+        self.workspace = None;
         self.cg_iterations = 0;
         self.cg_termination = TncCgTermination::Initial;
         for i in 0..n {
@@ -478,19 +534,6 @@ where
             ));
         }
         let n = x.vec_len();
-        let free: Vec<_> = (0..n)
-            .map(|i| {
-                !blocked(
-                    x.get_scalar(i),
-                    -g.get_scalar(i),
-                    self.lower[i],
-                    self.upper[i],
-                )
-            })
-            .collect();
-        let projected: Vec<_> = (0..n)
-            .map(|i| if free[i] { g.get_scalar(i) } else { F::zero() })
-            .collect();
         if let Some(termination) = projected_gradient_termination(
             x,
             g,
@@ -500,22 +543,43 @@ where
         ) {
             return Ok(SolverStep::stopped(state, termination));
         }
-        let mut direction = x.clone();
-        fill(&mut direction, F::zero());
-        let mut residual: Vec<_> = projected.iter().map(|&v| -v).collect();
-        let mut z = self.history.apply(&residual);
+        let Workspace {
+            free,
+            projected,
+            residual,
+            z,
+            direction,
+            vector,
+            product,
+            point,
+        } = self
+            .workspace
+            .get_or_insert_with(|| Box::new(Workspace::new(x, g, n)))
+            .as_mut();
+        for i in 0..n {
+            free[i] = !blocked(
+                x.get_scalar(i),
+                -g.get_scalar(i),
+                self.lower[i],
+                self.upper[i],
+            );
+            projected[i] = if free[i] { g.get_scalar(i) } else { F::zero() };
+            residual[i] = -projected[i];
+        }
+        direction.clone_from(x);
+        vector.clone_from(x);
+        fill(direction, F::zero());
+        self.history.apply(residual, z);
         for i in 0..n {
             if !free[i] {
                 z[i] = F::zero();
             }
         }
-        let mut vector = x.clone();
         for (i, &v) in z.iter().enumerate() {
             vector.set_scalar(i, v);
         }
-        let mut product = g.clone();
-        let mut rz = dot(&residual, &z);
-        let squared = dot(&projected, &projected);
+        let mut rz = dot(residual, z);
+        let squared = dot(projected, projected);
         let target = self.cg_tolerance * self.cg_tolerance * squared;
         self.cg_iterations = 0;
         self.cg_termination = TncCgTermination::IterationLimit;
@@ -529,8 +593,9 @@ where
                 problem,
                 x,
                 g,
-                &vector,
-                &mut product,
+                vector,
+                product,
+                point,
                 &self.lower,
                 &self.upper,
                 self.difference_step,
@@ -551,7 +616,7 @@ where
                     product.set_scalar(i, F::zero());
                 }
             }
-            let curvature = vector.dot(&product);
+            let curvature = vector.dot(product);
             if !curvature.is_finite() || curvature <= F::zero() {
                 self.cg_termination = TncCgTermination::Breakdown;
                 break;
@@ -561,21 +626,21 @@ where
                 self.cg_termination = TncCgTermination::Breakdown;
                 break;
             }
-            direction.scaled_add(alpha, &vector);
+            direction.scaled_add(alpha, vector);
             for (i, r) in residual.iter_mut().enumerate() {
                 *r = *r - alpha * product.get_scalar(i);
             }
-            if dot(&residual, &residual) <= target {
+            if dot(residual, residual) <= target {
                 self.cg_termination = TncCgTermination::Residual;
                 break;
             }
-            z = self.history.apply(&residual);
+            self.history.apply(residual, z);
             for i in 0..n {
                 if !free[i] {
                     z[i] = F::zero();
                 }
             }
-            let next_rz = dot(&residual, &z);
+            let next_rz = dot(residual, z);
             let beta = next_rz / rz;
             for (i, &value) in z.iter().enumerate() {
                 vector.set_scalar(i, value + beta * vector.get_scalar(i));
@@ -592,19 +657,19 @@ where
                 direction.set_scalar(i, F::zero());
             }
         }
-        if !finite(&direction)
-            || !g.dot(&direction).is_finite()
-            || g.dot(&direction) >= F::zero()
+        if !finite(direction)
+            || !g.dot(direction).is_finite()
+            || g.dot(direction) >= F::zero()
         {
             for (i, &v) in projected.iter().enumerate() {
                 direction.set_scalar(i, -v);
             }
         }
         let mathematical_maximum =
-            ray(x, &direction, &self.lower, &self.upper, F::one());
+            ray(x, direction, &self.lower, &self.upper, F::one());
         if !mathematical_maximum.is_finite()
             || mathematical_maximum <= F::zero()
-            || g.dot(&direction) >= F::zero()
+            || g.dot(direction) >= F::zero()
         {
             return Ok(SolverStep::stopped(
                 state,
@@ -617,7 +682,7 @@ where
         // point. Check the backend's actual arithmetic before any callback.
         let Some(maximum) = representable_limit(
             x,
-            &direction,
+            direction,
             &self.lower,
             &self.upper,
             mathematical_maximum,
@@ -634,7 +699,7 @@ where
             x,
             cost,
             g,
-            &direction,
+            direction,
             LineSearchBounds::new(F::one().min(maximum), maximum),
         )?;
         let LineSearchOutcome::Step(alpha) = result.outcome else {
@@ -652,14 +717,14 @@ where
             ));
         }
         let mut next = x.clone();
-        next.scaled_add(alpha, &direction);
+        next.scaled_add(alpha, direction);
         if alpha == maximum {
             // Adopt the mathematical endpoint, not a positive residual left by
             // multiply/add. If this differs from a retained probe, evaluate it
             // again so accepted cost/gradient always belong to the actual point.
             next = endpoint(
                 x,
-                &direction,
+                direction,
                 &self.lower,
                 &self.upper,
                 mathematical_maximum,
@@ -706,13 +771,7 @@ where
         if changed {
             self.history = History::default();
         } else {
-            let s = (0..n)
-                .map(|i| next.get_scalar(i) - x.get_scalar(i))
-                .collect();
-            let y = (0..n)
-                .map(|i| next_g.get_scalar(i) - g.get_scalar(i))
-                .collect();
-            self.history.update(s, y, self.memory);
+            self.history.update(x, &next, g, &next_g, self.memory);
         }
         state
             .replace(next, next_cost, next_g)

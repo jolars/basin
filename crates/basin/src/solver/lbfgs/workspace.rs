@@ -10,14 +10,18 @@
 //! in oldest-to-newest order" and never depend on the ring-buffer
 //! index modulo `m_capacity`.
 
+use super::{backend::AsFloatSlice, history::newest_products};
 use crate::core::math::{Dot, Scalar};
-use crate::solver::lbfgs::{backend::AsFloatSlice, history::newest_products};
 
 /// Limited-memory model shared by the bounded and unbounded solvers.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(super) struct History<V, F: Scalar = f64> {
     #[cfg_attr(feature = "serde", serde(skip, default = "Option::default"))]
     pub(crate) gradient_buffer: Option<V>,
+    #[cfg_attr(feature = "serde", serde(skip, default = "Option::default"))]
+    pub(crate) direction_buffer: Option<V>,
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub(crate) alpha: Vec<F>,
     /// History capacity. Fortran's `m`; recommended `[3, 20]`.
     pub(crate) m_capacity: usize,
     /// `s_k = x_{k+1} − x_k`, chronological, oldest first.
@@ -155,6 +159,8 @@ impl<V, F: Scalar> History<V, F> {
         let mm = m_capacity * m_capacity;
         Self {
             gradient_buffer: None,
+            direction_buffer: None,
+            alpha: Vec::new(),
             m_capacity,
             ws: Vec::with_capacity(m_capacity),
             wy: Vec::with_capacity(m_capacity),
@@ -194,7 +200,7 @@ impl<V, F: Scalar> History<V, F> {
 
         // Drop oldest when at capacity.
         if self.ws.len() == m {
-            self.ws.remove(0);
+            self.direction_buffer = Some(self.ws.remove(0));
             self.gradient_buffer = Some(self.wy.remove(0));
             // Shift the leading `(m-1) × (m-1)` block of sy and ss
             // up-and-left by one row+column. Use a forward sweep:

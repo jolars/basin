@@ -256,9 +256,12 @@ impl<F: Scalar> MoreThuente<F> {
         let mut stp = self.alpha_init;
 
         let mut gradient_buffer = None;
-        for _ in 0..self.maxfev {
+        let mut trial = param.clone();
+        for iteration in 0..self.maxfev {
             // Evaluate f(stp), g(stp): Fortran `task = 'FG'` callback.
-            let mut trial = param.clone();
+            if iteration > 0 {
+                trial.clone_from(param);
+            }
             trial.scaled_add(stp, direction);
             let counts_before = *problem.counts();
             let result = problem

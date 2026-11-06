@@ -23,6 +23,51 @@
 
 use crate::core::math::Scalar;
 
+/// Add `X^T X` to the upper triangle of `a`. Both square blocks use the
+/// row-major leading dimension `stride`; padding and the lower triangle of
+/// `a` are untouched. Used by the compact K factor's Schur update.
+pub(crate) fn add_gram_upper<F: Scalar>(
+    x: &[F],
+    a: &mut [F],
+    n: usize,
+    stride: usize,
+) {
+    if n == 0 {
+        return;
+    }
+    debug_assert!(stride >= n);
+    debug_assert!(x.len() >= (n - 1) * stride + n);
+    debug_assert!(a.len() >= (n - 1) * stride + n);
+    for i in 0..n {
+        let mut j = i;
+        // Independent output columns share each source load. Each accumulator
+        // still visits k in ascending order: no reassociation of dot products.
+        while j + 4 <= n {
+            let mut sums = [F::zero(); 4];
+            for k in 0..n {
+                let left = x[k * stride + i];
+                let row = &x[k * stride + j..k * stride + j + 4];
+                for (sum, &right) in sums.iter_mut().zip(row) {
+                    *sum = *sum + left * right;
+                }
+            }
+            for (value, sum) in
+                a[i * stride + j..i * stride + j + 4].iter_mut().zip(sums)
+            {
+                *value = *value + sum;
+            }
+            j += 4;
+        }
+        for j in j..n {
+            let mut sum = F::zero();
+            for k in 0..n {
+                sum = sum + x[k * stride + i] * x[k * stride + j];
+            }
+            a[i * stride + j] = a[i * stride + j] + sum;
+        }
+    }
+}
+
 /// Build the upper triangle of `T = θ · SᵀS + L D⁻¹ Lᵀ` from
 /// `sy = SᵀY`, `ss = SᵀS`, and `theta`, then Cholesky-factorize so the
 /// upper triangle of `wt` holds `J` with `T = Jᵀ J`.
@@ -266,6 +311,77 @@ pub(crate) enum BmvError {
 #[allow(clippy::identity_op, clippy::erasing_op)]
 mod tests {
     use super::*;
+
+    fn check_gram_order<F: Scalar>() {
+        for n in 0..=20 {
+            for padding in [0, 1, 5] {
+                let stride = n + padding;
+                for nonfinite in [false, true] {
+                    let values =
+                        [0.0, -0.0, 1.0, -1.0, 1e16, -1e16, 0.125, -0.125];
+                    let mut x = vec![F::nan(); n * stride];
+                    let mut actual =
+                        vec![F::from_f64(-77.0).unwrap(); n * stride];
+                    for i in 0..n {
+                        for j in 0..n {
+                            x[i * stride + j] =
+                                F::from_f64(values[(i * 3 + j) % values.len()])
+                                    .unwrap();
+                            if j >= i {
+                                actual[i * stride + j] = if (i + j) % 2 == 0 {
+                                    -F::zero()
+                                } else {
+                                    F::from_f64(0.25).unwrap()
+                                };
+                            }
+                        }
+                    }
+                    if nonfinite && n > 0 {
+                        x[0] = F::infinity();
+                    }
+                    if nonfinite && n > 1 {
+                        x[stride + 1] = F::nan();
+                    }
+                    let mut expected = actual.clone();
+                    // The original Fortran-order Schur update, independent of
+                    // the batched implementation and covering scalar tails.
+                    for i in 0..n {
+                        for j in i..n {
+                            let mut sum = F::zero();
+                            for k in 0..n {
+                                sum =
+                                    sum + x[k * stride + i] * x[k * stride + j];
+                            }
+                            expected[i * stride + j] =
+                                expected[i * stride + j] + sum;
+                        }
+                    }
+                    add_gram_upper(&x, &mut actual, n, stride);
+                    for (actual, expected) in actual.iter().zip(expected) {
+                        if expected.is_nan() {
+                            assert!(actual.is_nan());
+                        } else {
+                            assert_eq!(*actual, expected);
+                            assert_eq!(
+                                actual.is_sign_negative(),
+                                expected.is_sign_negative()
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn gram_update_preserves_order_and_padding_f64() {
+        check_gram_order::<f64>();
+    }
+
+    #[test]
+    fn gram_update_preserves_order_and_padding_f32() {
+        check_gram_order::<f32>();
+    }
 
     #[test]
     fn cholesky_round_trip_2x2() {

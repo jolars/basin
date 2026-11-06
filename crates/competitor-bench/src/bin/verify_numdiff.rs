@@ -12,13 +12,79 @@ use std::{
     },
 };
 
-use basin::{CostFunction, Gradient, MatrixIndex, Residual};
+use basin::{
+    CostFunction, DenseMatrixFromFn, Gradient, MatrixIndex, Residual,
+    VectorIndex, VectorLen,
+};
 use support::{BenchVector, Fixture, Function};
 
 static RECORDING: AtomicBool = AtomicBool::new(false);
 static ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
 static REALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
 static BYTES: AtomicUsize = AtomicUsize::new(0);
+static VECTOR_CLONES: AtomicUsize = AtomicUsize::new(0);
+
+// A separate pass counts vector clone requests, including Rayon job-local
+// probes. Keep this wrapper out of timing and allocation measurements.
+struct CloneCounted<V>(V);
+
+impl<V: Clone> Clone for CloneCounted<V> {
+    fn clone(&self) -> Self {
+        VECTOR_CLONES.fetch_add(1, Relaxed);
+        Self(self.0.clone())
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        VECTOR_CLONES.fetch_add(1, Relaxed);
+        self.0.clone_from(&source.0);
+    }
+}
+
+impl<V: VectorLen> VectorLen for CloneCounted<V> {
+    fn vec_len(&self) -> usize {
+        self.0.vec_len()
+    }
+}
+
+impl<V: VectorIndex> VectorIndex for CloneCounted<V> {
+    fn get_scalar(&self, index: usize) -> f64 {
+        self.0.get_scalar(index)
+    }
+    fn set_scalar(&mut self, index: usize, value: f64) {
+        self.0.set_scalar(index, value);
+    }
+}
+
+impl<V: DenseMatrixFromFn> DenseMatrixFromFn for CloneCounted<V> {
+    type Matrix = V::Matrix;
+
+    fn dense_from_fn<G: FnMut(usize, usize) -> f64>(
+        rows: usize,
+        cols: usize,
+        f: G,
+    ) -> Self::Matrix {
+        V::dense_from_fn(rows, cols, f)
+    }
+
+    fn dense_from_fn_into<G: FnMut(usize, usize) -> f64>(
+        rows: usize,
+        cols: usize,
+        f: G,
+        out: &mut Self::Matrix,
+    ) {
+        V::dense_from_fn_into(rows, cols, f, out);
+    }
+}
+
+impl<V: BenchVector> BenchVector for CloneCounted<V> {
+    fn from_fn(n: usize, f: impl FnMut(usize) -> f64) -> Self {
+        Self(V::from_fn(n, f))
+    }
+
+    fn fill(n: usize, f: impl FnMut(usize) -> f64, out: &mut Self) {
+        V::fill(n, f, &mut out.0);
+    }
+}
 
 struct CountingAllocator;
 
@@ -193,7 +259,7 @@ impl Options {
                 }
                 "--help" | "-h" => {
                     println!(
-                        "verify_numdiff [--filter SUBSTRING] [--repeats COUNT]\n\nValidates analytic derivatives, then prints separate callback and allocation\nmeasurements as CSV totals over COUNT repeated calls (default: 5).\nSee crates/competitor-bench/NUMDIFF.md for the measurement protocol."
+                        "verify_numdiff [--filter SUBSTRING] [--repeats COUNT]\n\nValidates analytic derivatives, then prints separate callback, allocation, and\nvector-clone measurements as CSV totals over COUNT repeated calls (default: 5).\nSee crates/competitor-bench/NUMDIFF.md for the measurement protocol."
                     );
                     std::process::exit(0);
                 }
@@ -254,8 +320,19 @@ where
             let reallocations = REALLOCATIONS.load(Relaxed);
             let bytes = BYTES.load(Relaxed);
             fixture.verify();
+
+            let mut fixture =
+                Fixture::<CloneCounted<V>, _>::new(case, Function::new(case));
+            fixture.run(call);
+            fixture.verify();
+            VECTOR_CLONES.store(0, Relaxed);
+            for _ in 0..options.repeats {
+                fixture.run(call);
+            }
+            let vector_clones = VECTOR_CLONES.load(Relaxed);
+            fixture.verify();
             println!(
-                "{mode},{name},{},{},{},{},{},{},{allocations},{reallocations},{bytes}",
+                "{mode},{name},{},{},{},{},{},{},{allocations},{reallocations},{bytes},{vector_clones}",
                 options.repeats,
                 counts[0],
                 counts[1],
@@ -279,7 +356,7 @@ fn main() {
         options.repeats
     );
     println!(
-        "execution,benchmark,repeats,cost_calls,residual_calls,residual_into_calls,gradient_calls,gradient_into_calls,alloc_calls,realloc_calls,requested_bytes"
+        "execution,benchmark,repeats,cost_calls,residual_calls,residual_into_calls,gradient_calls,gradient_into_calls,alloc_calls,realloc_calls,requested_bytes,vector_clones"
     );
     let checked = backend::<Vec<f64>>(&options, &mode, "vec")
         + backend::<support::NalgebraVector>(&options, &mode, "nalgebra")

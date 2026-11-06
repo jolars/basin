@@ -50,6 +50,7 @@
 //! used by [`super::subsm`].
 
 use super::backend::AsFloatSlice;
+use super::compact::add_gram_upper;
 use crate::core::math::Scalar;
 
 /// Reasons [`formk`] can fail. Matches Fortran's `info ≠ 0` exits.
@@ -328,15 +329,8 @@ pub(crate) fn formk<F: Scalar, V: AsFloatSlice<F>>(
     // -----------------------------------------------------------------
     // Phase 6: Schur-update (2,2): wn(2,2) += X^T X (upper triangle).
     // -----------------------------------------------------------------
-    for is in col..col2 {
-        for js in is..col2 {
-            let mut acc = F::zero();
-            for k in 0..col {
-                acc = acc + wn[k * two_m + is] * wn[k * two_m + js];
-            }
-            wn[is * two_m + js] = wn[is * two_m + js] + acc;
-        }
-    }
+    let (upper, lower) = wn.split_at_mut(col * two_m);
+    add_gram_upper(&upper[col..], &mut lower[col..], col, two_m);
 
     // -----------------------------------------------------------------
     // Phase 7: Cholesky of (2,2) in place. Same algorithm as Phase 4,
