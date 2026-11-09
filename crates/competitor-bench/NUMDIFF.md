@@ -26,6 +26,26 @@ Jacobians also cover active lower bounds, active upper bounds, fixed
 coordinates, and interior coordinates. Those bounds repeat every four
 coordinates. Fixed coordinates produce zero derivative columns.
 
+Forward Hessians and fused cost/gradient/Hessian calls also cover `n=1,2,16`
+with cheap and expensive callbacks. Their `uneven` workload covers
+`n=1,2,4,16,64`: it returns the same cheap quadratic but simulates adaptive
+callback work with a dependent sine loop (2,048 iterations at the base, 1,024
+when one coordinate differs, and 64 when two differ). Diagonal second probes
+also change only one coordinate. The loop's result is consumed separately
+from the objective so it cannot change the derivatives. This deliberately
+uneven distribution exposes barriers between base, single-coordinate, and
+two-coordinate probes without using sleeps or callback counters in timings.
+Compare both ordinary Hessians and fused calls, which reuse their existing base.
+For example, use the Criterion regex
+`numdiff/vec/(hessian|cost_gradient_hessian)/(cheap|expensive|uneven)/forward/n(1|2|4|16|64)_m0/into_reused$`
+in separate processes with `RAYON_NUM_THREADS=1,2,4,8`. Forward Hessians use
+`1+n+n(n+1)/2` cost calls; fused forward calls use `1+2n+n(n+1)/2`, including
+their forward gradient probes. Count these separately from timing, and keep
+the stencil, thread count, and output API fixed in before/after comparisons.
+Even `n=1` has three independent evaluations. Running them concurrently can
+help costly callbacks, but adds pool overhead to cheap scalar objectives;
+dimension alone does not predict whether that overhead pays off.
+
 The cheap objective is a weighted separable quadratic. The expensive objective
 adds 16 cosine terms per coordinate. Residuals combine the same scalar function
 with a dense linear term so both tall and wide Jacobians exercise every column.

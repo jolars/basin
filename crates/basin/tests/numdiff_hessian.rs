@@ -1,4 +1,4 @@
-//! Preserve the original Hessian stencils while changing their assembly storage.
+//! Preserve Hessian stencils, probe sets, and publication across scheduling changes.
 
 use std::marker::PhantomData;
 
@@ -261,6 +261,179 @@ where
 #[test]
 fn vec_hessian_matches_original_stencils() {
     check::<Vec<f64>>(|x| x.to_vec());
+}
+
+#[test]
+fn forward_hessian_evaluates_each_probe_once() {
+    use std::sync::Mutex;
+
+    struct Recorded {
+        probes: Mutex<Vec<Vec<u8>>>,
+        fail: Option<Vec<u8>>,
+    }
+
+    impl CostFunction for Recorded {
+        type Param = Vec<f64>;
+        type Output = f64;
+        type Error = &'static str;
+
+        fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
+            let probe: Vec<_> = x.iter().map(|xi| (xi * 8.0) as u8).collect();
+            self.probes.lock().unwrap().push(probe.clone());
+            if self.fail.as_ref() == Some(&probe) {
+                return Err("failed probe");
+            }
+            nonlinear(x)
+        }
+    }
+
+    let run = || {
+        for n in [0, 1, 2, 5] {
+            let mut expected = vec![vec![0; n]];
+            for i in 0..n {
+                let mut probe = vec![0; n];
+                probe[i] = 1;
+                expected.push(probe);
+                for j in i..n {
+                    let mut probe = vec![0; n];
+                    probe[i] += 1;
+                    probe[j] += 1;
+                    expected.push(probe);
+                }
+            }
+            expected.sort();
+            let fd = FiniteDiff::new(Recorded {
+                probes: Mutex::new(Vec::new()),
+                fail: None,
+            })
+            .hessian_method(Method::Forward)
+            .with_step(0.125);
+            let x = vec![0.0; n];
+            let reference =
+                reference(nonlinear, &x, Method::Forward, Some(0.125));
+            check_matrix(&fd.hessian(&x).unwrap(), &reference);
+            let mut probes = fd.get_ref().probes.lock().unwrap();
+            probes.sort();
+            assert_eq!(*probes, expected);
+            probes.clear();
+            drop(probes);
+            let mut out = Vec::<f64>::dense_from_fn(n + 1, n + 1, |_, _| 99.0);
+            fd.hessian_into(&x, &mut out).unwrap();
+            check_matrix(&out, &reference);
+            let mut probes = fd.get_ref().probes.lock().unwrap();
+            probes.sort();
+            assert_eq!(*probes, expected);
+            drop(probes);
+
+            // Every kind of probe can fail, including the base at n = 0.
+            for fail in expected {
+                let fd = FiniteDiff::new(Recorded {
+                    probes: Mutex::new(Vec::new()),
+                    fail: Some(fail),
+                })
+                .hessian_method(Method::Forward)
+                .with_step(0.125);
+                let mut out = Vec::<f64>::dense_from_fn(2, 3, |_, _| 99.0);
+                assert_eq!(fd.hessian_into(&x, &mut out), Err("failed probe"));
+                assert_eq!((out.matrix_rows(), out.matrix_cols()), (2, 3));
+                for i in 0..2 {
+                    for j in 0..3 {
+                        assert_eq!(out.matrix_entry(i, j), 99.0);
+                    }
+                }
+            }
+        }
+    };
+    #[cfg(feature = "parallel")]
+    for workers in [1, 2, 4] {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(workers)
+            .build()
+            .unwrap()
+            .install(run);
+    }
+    #[cfg(not(feature = "parallel"))]
+    run();
+}
+
+#[cfg(feature = "parallel")]
+#[test]
+fn forward_hessian_pair_probes_can_finish_before_base_and_singles() {
+    use std::{
+        sync::{Condvar, Mutex},
+        time::Duration,
+    };
+
+    struct Overlap {
+        mixed_done: Mutex<bool>,
+        ready: Condvar,
+        step: f64,
+        wait_for_base: bool,
+    }
+
+    impl CostFunction for Overlap {
+        type Param = Vec<f64>;
+        type Output = f64;
+        type Error = &'static str;
+
+        fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
+            if x == &[self.step, self.step] {
+                *self.mixed_done.lock().unwrap() = true;
+                self.ready.notify_all();
+            } else if (self.wait_for_base && x.iter().all(|&xi| xi == 0.0))
+                || (x.iter().filter(|&&xi| xi == self.step).count() == 1
+                    && x.iter().filter(|&&xi| xi == 0.0).count() == 1)
+            {
+                // Require a mixed probe to run while the base and singles
+                // remain active. The timeout lets a barrier regression fail
+                // instead of leaving a blocked test process.
+                let (done, _) = self
+                    .ready
+                    .wait_timeout_while(
+                        self.mixed_done.lock().unwrap(),
+                        Duration::from_secs(5),
+                        |done| !*done,
+                    )
+                    .unwrap();
+                if !*done {
+                    return Err("probe barrier");
+                }
+            }
+            nonlinear(x)
+        }
+    }
+
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(4)
+        .build()
+        .unwrap();
+    pool.install(|| {
+        for shared_base in [false, true] {
+            // Adaptive gradient and Hessian steps distinguish the fused call's
+            // earlier central-gradient probes from its forward-Hessian probes.
+            let fixed = if shared_base { None } else { Some(0.125) };
+            let mut fd = FiniteDiff::new(Overlap {
+                mixed_done: Mutex::new(false),
+                ready: Condvar::new(),
+                step: fixed.unwrap_or_else(|| f64::EPSILON.powf(0.25)),
+                wait_for_base: !shared_base,
+            })
+            .hessian_method(Method::Forward);
+            if let Some(step) = fixed {
+                fd = fd.with_step(step);
+            }
+            let x = vec![0.0; 2];
+            let hessian = if shared_base {
+                fd.cost_and_gradient_and_hessian(&x).unwrap().2
+            } else {
+                fd.hessian(&x).unwrap()
+            };
+            check_matrix(
+                &hessian,
+                &reference(nonlinear, &x, Method::Forward, fixed),
+            );
+        }
+    });
 }
 
 macro_rules! backend_tests {

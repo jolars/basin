@@ -424,12 +424,13 @@ scalar types.
   including slower expensive Jacobian workloads, and was discarded. The
   helper documentation now describes scratch as per-job rather than
   per-thread.
-- [ ] **Remove forward-Hessian probe barriers.** Schedule base,
-  single-coordinate, and two-coordinate evaluations together, then combine
-  their results. The probe evaluations do not depend on each other; their
-  final arithmetic needs the shared results. Compare low-dimensional cases
-  and uneven callback costs across thread counts, keeping probe counts
-  fixed.
+- [x] **Remove forward-Hessian probe barriers.** Base, single-coordinate,
+  and two-coordinate evaluations share one ordered batch, then form the
+  differences. Fused calls reuse their base. Tests preserve exact probe sets,
+  bitwise results, and output publication on errors. Low-dimensional cheap,
+  expensive, and uneven callbacks were compared on 1, 2, 4, and 8 workers
+  with unchanged probe counts. Small multi-dimensional and costly 1D cases
+  benefit; cheap 1D callbacks now pay pool overhead.
 - [ ] **Overlap base evaluations with derivative probes.** Evaluate `f(x)` or
   `r(x)` concurrently with the independent probes for forward gradients and
   Jacobians, then form differences once the base is available. Apply the

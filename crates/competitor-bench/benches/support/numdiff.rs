@@ -79,6 +79,7 @@ impl BenchVector for faer::Col<f64> {
 pub enum Work {
     Cheap,
     Expensive,
+    Uneven,
 }
 
 impl Work {
@@ -86,12 +87,13 @@ impl Work {
         match self {
             Self::Cheap => "cheap",
             Self::Expensive => "expensive",
+            Self::Uneven => "uneven",
         }
     }
 
     fn terms(self) -> usize {
         match self {
-            Self::Cheap => 0,
+            Self::Cheap | Self::Uneven => 0,
             Self::Expensive => 16,
         }
     }
@@ -284,6 +286,24 @@ pub fn cases() -> Vec<Case> {
             }
         }
     }
+    for kernel in [Kernel::Hessian, Kernel::CostGradientHessian] {
+        for work in [Work::Cheap, Work::Expensive, Work::Uneven] {
+            let dimensions: &[usize] = if matches!(work, Work::Uneven) {
+                &[1, 2, 4, 16, 64]
+            } else {
+                &[1, 2, 16]
+            };
+            for &n in dimensions {
+                cases.push(Case {
+                    kernel,
+                    work,
+                    method: Method::Forward,
+                    n,
+                    m: 0,
+                });
+            }
+        }
+    }
     cases
 }
 
@@ -308,6 +328,23 @@ impl<V: BenchVector> CostFunction for Function<V> {
     type Error = Infallible;
 
     fn cost(&self, x: &V) -> Result<f64, Infallible> {
+        if matches!(self.case.work, Work::Uneven) {
+            let changed = (0..x.vec_len())
+                .filter(|&j| x.get_scalar(j) != self.case.coordinate(j))
+                .count();
+            let iterations = match changed {
+                0 => 2048,
+                1 => 1024,
+                _ => 64,
+            };
+            // Model adaptive callback work without changing the quadratic or
+            // making its finite differences depend on the simulated work.
+            let mut work = black_box(x.get_scalar(0));
+            for _ in 0..iterations {
+                work = (work + 0.5).sin();
+            }
+            black_box(work);
+        }
         Ok((0..x.vec_len())
             .map(|j| weight(j) * self.case.work.value(x.get_scalar(j)))
             .sum())

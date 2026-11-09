@@ -67,9 +67,11 @@
 //! The probes of one derivative are independent, so with the `parallel`
 //! feature they fan across a `rayon` thread pool: the `n` gradient/Jacobian
 //! columns, and the `n(n+1)/2` upper-triangular Hessian entries, are evaluated
-//! concurrently. When the stencil needs a shared `f(x)`/`r(x)` base,
-//! it runs once up front; unbounded central Jacobians infer their output
-//! shape from the probes instead. The result is **bit-identical** to the
+//! concurrently. Forward Hessians schedule the base, single-coordinate, and
+//! two-coordinate probes together, then combine their values. Other stencils
+//! evaluate a shared `f(x)`/`r(x)` base once up front when needed; unbounded
+//! central Jacobians infer their output shape from the probes instead.
+//! The result is **bit-identical** to the
 //! sequential path (each output slot is written independently and collected in order, with no
 //! floating-point reduction), so enabling the feature never changes the
 //! numbers, only the wall-clock.
@@ -497,7 +499,7 @@ where
                 param,
                 self.function_precision,
                 self.fixed_step,
-                cost,
+                Some(cost),
                 hess,
             ),
             Method::Central => central_difference_hessian_with_base_into(
@@ -1359,13 +1361,12 @@ where
     V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + MaybeSync,
     P::Error: MaybeSend,
 {
-    let f0 = problem.cost(x)?;
     forward_difference_hessian_with_base_into(
         problem,
         x,
         function_precision,
         fixed_step,
-        f0,
+        None,
         out,
     )
 }
@@ -1375,7 +1376,7 @@ fn forward_difference_hessian_with_base_into<P, V>(
     x: &V,
     function_precision: f64,
     fixed_step: Option<f64>,
-    f0: f64,
+    base: Option<f64>,
     out: &mut <V as DenseMatrixFromFn>::Matrix,
 ) -> Result<(), P::Error>
 where
@@ -1384,28 +1385,38 @@ where
     P::Error: MaybeSend,
 {
     let n = x.vec_len();
+    if n == 0 {
+        if base.is_none() {
+            problem.cost(x)?;
+        }
+        V::dense_from_fn_into(0, 0, |_, _| unreachable!(), out);
+        return Ok(());
+    }
     let scale = function_precision.max(f64::EPSILON).powf(0.25);
     let h: Vec<f64> = (0..n)
         .map(|j| nr_step(x.get_scalar(j), scale, fixed_step))
         .collect();
-    // f(x + hₖeₖ) for each k, independent across k.
-    let fi = try_map_range_with(
-        n,
-        || x.clone(),
-        |probe, k| {
-            let xk = x.get_scalar(k);
-            probe.set_scalar(k, xk + h[k]);
-            let f = problem.cost(probe)?;
-            probe.set_scalar(k, xk);
-            Ok(f)
-        },
-    )?;
     let triangle = HessianTriangle::new(n);
-    let values = try_map_range_with(
-        triangle.len,
+    let base_probes = usize::from(base.is_none());
+    let pair_start = base_probes + n;
+    // Probe evaluations are independent. Only the final differences need the
+    // base and singles, so one map avoids barriers between the three groups.
+    let mut probes = try_map_range_with(
+        pair_start + triangle.len,
         || (x.clone(), 0),
         |(probe, row), index| {
-            let (i, j) = triangle.coordinates(index, row);
+            if index < base_probes {
+                return problem.cost(x);
+            }
+            if index < pair_start {
+                let k = index - base_probes;
+                let xk = x.get_scalar(k);
+                probe.set_scalar(k, xk + h[k]);
+                let f = problem.cost(probe)?;
+                probe.set_scalar(k, xk);
+                return Ok(f);
+            }
+            let (i, j) = triangle.coordinates(index - pair_start, row);
             let xi = x.get_scalar(i);
             let cross = if i == j {
                 probe.set_scalar(i, xi + 2.0 * h[i]);
@@ -1421,9 +1432,18 @@ where
                 probe.set_scalar(j, xj);
                 c
             };
-            Ok((cross - fi[i] - fi[j] + f0) / (h[i] * h[j]))
+            Ok(cross)
         },
     )?;
+    let (prefix, values) = probes.split_at_mut(pair_start);
+    let f0 = base.unwrap_or_else(|| prefix[0]);
+    let fi = &prefix[base_probes..];
+    for i in 0..n {
+        for j in i..n {
+            let value = &mut values[triangle.symmetric_index(i, j)];
+            *value = (*value - fi[i] - fi[j] + f0) / (h[i] * h[j]);
+        }
+    }
     V::dense_from_fn_into(
         n,
         n,
