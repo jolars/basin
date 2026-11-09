@@ -350,39 +350,6 @@ production solvers.
 
 ## General design
 
-### L-BFGS-B work from sisyfuzz
-
-- [x] **Use dimension-dependent solves in the compact model.**
-  `with_compact_model()` implements inverse recursion, direct free-coordinate
-  solves and the smaller symmetric history-space system. The separate
-  reference-model dimension-aware wrapper was removed before release because
-  its narrow measured gains did not justify another public strategy.
-- [x] **Avoid redundant compact factors on alternate paths.** The compact
-  model owns and validates its signed/scaled representation, avoiding reference
-  K/T construction. Interior and projected policies defer derived factor
-  construction until a bounded fallback needs it. Cover delayed updates,
-  changing free sets, skipped updates, rollover, reset, recovery and continuation.
-- [x] **Add a small-dimensional model representation.** `with_compact_model()`
-  uses signed columns for `n <= m` and a scaled Schur factor otherwise. Dense
-  oracles verify products, Cauchy points, inverse updates and reduced solves
-  through eviction/reset for both precisions on every dense backend version.
-- [x] **Profile and improve the remaining compact kernels.** Isolated phase
-  measurements confirm the new model avoids native `formk`, `formt` and `bmv`.
-  The measured redundant model construction on inverse policies is deferred.
-  Keep the reference compact kernels and the previously measured Gram change;
-  no further speculative rewrites are retained.
-- [x] **Evaluate alternative numerical policies as explicit options.**
-  `ModelDirection::InteriorFirst` retries bounded directions without dropping
-  history after a soft line-search failure, charging every probe. `Projected`
-  retains free-coordinate curvature and searches a feasible chord to the
-  projected endpoint. `with_projected_search()` now independently selects the
-  original feasible ray (matching sisyfuzz's More-Thuente/Wolfe geometry),
-  per-trial projected Armijo, or the chord. A reset-on-mask-change option isolates
-  curvature retention under the same search; accepted pairs use actual steps
-  and exact checkpoints retain the preceding mask. Defaults remain
-  unchanged. Benchmark numerical policies separately, including target misses,
-  against fixed main/sisyfuzz revisions and frozen additional validation cases.
-
 ### Finite-difference performance
 
 Source review of `core/numdiff.rs` and its child modules on 2026-10-27. These
@@ -441,20 +408,22 @@ scalar types.
   `Clone` and `Copy` contracts.
 - [x] **Avoid one-worker Jacobian and Hessian scheduling overhead.** Range maps
   use one scratch value and an ordinary loop when the current Rayon pool has
-  one worker. Unbounded Jacobians reuse the padded sequential kernels in that
-  case. Preserve stencil arithmetic, probe counts, error propagation, and
-  output publication. The verifier now counts vector-clone requests separately
-  from callback work, allocations, and timing. Keep gradient staging unchanged:
-  a direct loop improved small cases but regressed an expensive large case.
-- [ ] **Tune multi-worker Rayon task and scratch granularity.** The parallel
-  map helpers use `map_init`, which initializes scratch per job rather than guaranteeing one
-  buffer per worker. Count probe-buffer clones and compare minimum job
-  lengths or chunked tasks for gradients, Jacobians, and Hessians. Measure
-  small cheap cases as well as expensive callbacks before choosing a serial
-  fallback or exposing a granularity control. An initial minimum-job-length
-  policy reduced probe clones but had mixed timings, including slower expensive
-  Jacobian workloads, and was discarded. The helper documentation now describes scratch as
-  per-job rather than per-thread.
+  one worker. Unbounded Jacobians reuse the padded sequential kernels in
+  that case. Preserve stencil arithmetic, probe counts, error propagation,
+  and output publication. The verifier now counts vector-clone requests
+  separately from callback work, allocations, and timing. Keep gradient
+  staging unchanged: a direct loop improved small cases but regressed an
+  expensive large case.
+- [ ] **Tune multi-worker Rayon task and scratch granularity.** The parallel map
+  helpers use `map_init`, which initializes scratch per job rather than
+  guaranteeing one buffer per worker. Count probe-buffer clones and compare
+  minimum job lengths or chunked tasks for gradients, Jacobians, and
+  Hessians. Measure small cheap cases as well as expensive callbacks before
+  choosing a serial fallback or exposing a granularity control. An initial
+  minimum-job-length policy reduced probe clones but had mixed timings,
+  including slower expensive Jacobian workloads, and was discarded. The
+  helper documentation now describes scratch as per-job rather than
+  per-thread.
 - [ ] **Remove forward-Hessian probe barriers.** Schedule base,
   single-coordinate, and two-coordinate evaluations together, then combine
   their results. The probe evaluations do not depend on each other; their
