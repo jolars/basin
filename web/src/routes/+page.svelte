@@ -98,19 +98,6 @@
     </div>
 </section>
 
-<!-- Quick taste: interactive code-gen playground -->
-<section class="site-container pb-16">
-    <Playground />
-    <p class="mt-6 text-sm text-stone-600 dark:text-stone-300">
-        If you want to play around with a larger set of problems and solvers,
-        please see the
-        <a
-            class="underline decoration-dotted hover:text-stone-900 dark:hover:text-stone-100"
-            href={resolve("visualizer/")}>visualizer</a
-        >.
-    </p>
-</section>
-
 <!-- Features -->
 <section
     class="border-t border-stone-200 dark:border-stone-800 bg-stone-50/60 dark:bg-stone-900/40"

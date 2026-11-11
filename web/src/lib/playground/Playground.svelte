@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { resolve } from "$app/paths";
     import type { Component } from "svelte";
     import Prism from "prismjs";
     import "prismjs/components/prism-rust";
@@ -160,6 +161,15 @@
             descent on the Rosenbrock valley: drag the sliders, or click the
             plot to move the start, and watch the run and the code update
             together.
+        </p>
+
+        <p class="mt-3 text-sm text-stone-600 dark:text-stone-300">
+            If you want to play around with a larger set of problems and
+            solvers, please see the
+            <a
+                class="underline decoration-dotted hover:text-stone-900 dark:hover:text-stone-100"
+                href={resolve("visualizer/")}>visualizer</a
+            >.
         </p>
 
         <!-- Live solver. Lazily booted on scroll (see the IntersectionObserver
