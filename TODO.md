@@ -263,7 +263,9 @@ compatibility and numerical behavior still need verification.
   - [ ] **Compare bounded BOBYQA against NLopt.**
   - [ ] **Compare constrained SLSQP against NLopt.** Reuse HS71 and an analytic
     constrained quadratic.
-  - [ ] **Compare BFGS against argmin.**
+  - [x] **Compare BFGS against argmin.** Published 100-variable Rosenbrock
+    traces with matched identity seeds and Moré–Thuente settings, callback
+    counts, and independent returned-objective checks.
   - [ ] **Compare nonlinear CG against argmin with PR+.** Match Basin's update
     explicitly: its default is Hager-Zhang, while argmin 0.11 has no
     built-in Hager-Zhang update.

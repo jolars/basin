@@ -32,6 +32,7 @@ continuing iterations after reaching the target.
   | SLSQP               | 100 variables and an active nonlinear ball constraint  |
   | Gradient descent    | 100-variable Rosenbrock                                |
   | Nelder–Mead         | 12-variable Rosenbrock                                 |
+  | BFGS                | 100-variable Rosenbrock                                |
   | L-BFGS              | 100-variable Rosenbrock                                |
   | L-BFGS-B            | 20,000-variable extended Rosenbrock with box bounds     |
   | NEWUOA              | 30-variable Styblinski–Tang                            |
@@ -160,6 +161,36 @@ All seek $f \le 10^{-10}$. Basin, argmin, and gomez have a
 {data.iterations}-objective-evaluation cap.
 
 <CompetitorFigure solver="nm" problem="rosenbrock" />
+
+## BFGS
+
+Basin and [argmin's BFGS](https://docs.rs/argmin/0.11.0/argmin/solver/quasinewton/struct.BFGS.html)
+{data.versions.argmin} solve the same 100-variable chained Rosenbrock problem
+from the alternating start used above. Both use `Vec<f64>`, analytic gradients,
+and an identity initial inverse Hessian. The harness disables Basin's default
+first-update rescaling to match argmin's unscaled identity seed.
+
+Both use a Moré–Thuente line search with sufficient-decrease coefficient
+$10^{-4}$, curvature coefficient $0.9$, relative bracket tolerance $10^{-10}$,
+an initial trial step of 1, and step bounds $[\sqrt{\epsilon},10^{10}]$, where
+$\epsilon$ is `f64` machine epsilon. Basin caps each search at 20 evaluations;
+argmin exposes no equivalent cap. Both seek $f \le 10^{-10}$ with a
+{data.iterations}-iteration safety cap. Argmin's optional gradient and
+cost-change stops are zeroed; Basin BFGS has no such optional stops.
+
+<CompetitorFigure solver="bfgs" problem="rosenbrock" />
+
+Basin applies the inverse-BFGS update through in-place rank-one operations,
+requiring quadratic work in the dimension. Argmin 0.11 evaluates the factored
+update with dense matrix products, requiring cubic work. Curvature safeguards,
+line-search details, and rounding can also change trajectories. The curves show
+effectiveness at this dimension, including those implementation differences.
+
+Samples follow initialization and accepted iterates, with an endpoint after
+solver teardown. The run details report objective and gradient callback counts,
+including repeated evaluations at line-search endpoints. Independent checks
+recompute the returned point's objective and require the common target outside
+the timer. A failed or budget-limited run remains in the data.
 
 ## L-BFGS
 
@@ -298,7 +329,7 @@ timestamps. Repetitions reduce timing noise; they are not independent starting
 points or a measure of reliability across problems.
 
 Timings include initialization and trace instrumentation. Some driving loops
-construct their executor before starting the clock. LM, COBYLA, CMA-ES, and
+construct their executor before starting the clock. LM, COBYLA, BFGS, CMA-ES, and
 L-BFGS-B also include solver teardown; NLopt curves include an explicit endpoint
 after optimization.
 Independent solution checks and constrained-trace reconstruction happen outside
@@ -332,6 +363,8 @@ To verify both CMA-ES problems and all five seeds, run
 Append `-- --untraced` to disable intermediate trace recording. The verifier
 reports timing ranges across repetitions, objective counts, and target checks.
 To generate only the CMA-ES traces, pass `--cmaes` to the prebuilt `trace` binary.
+
+To generate only the BFGS traces, pass `--bfgs` to the prebuilt `trace` binary.
 
 The [trace
 harness](https://github.com/jolars/basin/blob/main/crates/competitor-bench/src/bin/trace.rs)

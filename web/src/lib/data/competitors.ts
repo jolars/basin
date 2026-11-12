@@ -91,7 +91,7 @@ export interface CompetitorBenchmarks {
     };
     repetitions: number;
     versions: Record<string, string>;
-    /** Safety cap for GD, Nelder–Mead, and L-BFGS; other caps are documented per case. */
+    /** Safety cap for GD, Nelder–Mead, BFGS, and L-BFGS; other caps are documented per case. */
     iterations: number;
     results: CompetitorResult[];
 }
@@ -190,6 +190,13 @@ export const COMPETITOR_CASES: CompetitorCase[] = [
         blurb: "Derivative-free Nelder–Mead. Basin and argmin run from a bit-identical initial simplex (standard coefficients); gomez and nlopt construct their own simplex with their default coefficients.",
     },
     {
+        solver: "bfgs",
+        problem: "rosenbrock",
+        n: 100,
+        libraries: ["basin", "argmin"],
+        blurb: "Dense BFGS on 100-variable Rosenbrock with an identity inverse Hessian, matched Moré–Thuente settings, and a common objective target. Basin uses rank updates; argmin uses dense matrix products.",
+    },
+    {
         solver: "lbfgs",
         libraries: ["basin", "argmin", "nlopt"],
         problem: "rosenbrock",
@@ -266,7 +273,11 @@ export function validateCompetitorResults(raw: unknown): CompetitorResult[] {
         validatePoints(row.points, "subopt", key);
         if (row.violations !== undefined)
             validatePoints(row.violations, "violation", key);
-        if (["lm", "cobyla", "slsqp", "lbfgsb", "cmaes"].includes(c.solver)) {
+        if (
+            ["lm", "cobyla", "slsqp", "bfgs", "lbfgsb", "cmaes"].includes(
+                c.solver,
+            )
+        ) {
             const s = row.summary;
             if (
                 !s ||
@@ -312,6 +323,27 @@ export function validateCompetitorResults(raw: unknown): CompetitorResult[] {
                 (s.objectiveCalls < 1 || !row.violations?.length)
             )
                 throw new Error(`Missing constrained measurements: ${key}`);
+            if (c.solver === "bfgs") {
+                if (
+                    !Number.isInteger(s.iterations) ||
+                    (s.iterations ?? -1) < 0 ||
+                    (s.iterations ?? Infinity) > 10_000 ||
+                    s.residualCalls !== 0 ||
+                    s.jacobianCalls !== 0 ||
+                    s.constraintCalls !== 0 ||
+                    s.violation !== 0
+                )
+                    throw new Error(`Invalid BFGS diagnostics: ${key}`);
+                if (
+                    s.verified &&
+                    (s.cost === null ||
+                        s.cost < 0 ||
+                        s.cost > 1e-10 ||
+                        s.objectiveCalls < 1 ||
+                        s.gradientCalls < 1)
+                )
+                    throw new Error(`Invalid verified BFGS solution: ${key}`);
+            }
             if (c.solver === "lbfgsb") {
                 if (
                     !Number.isInteger(s.iterations) ||

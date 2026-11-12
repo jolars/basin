@@ -5,6 +5,7 @@
 //! Append `-- --nm` to run only the shared-simplex Nelder-Mead comparison.
 //! Append `-- --cmaes` to run only the seeded active CMA-ES comparisons.
 //! Append `-- --lbfgsb` to run only the bounded L-BFGS-B comparison.
+//! Append `-- --bfgs` to run only the dense BFGS comparison against argmin.
 //! Cases, starts, targets, and remaining comparison asymmetries are documented
 //! on the website's library-benchmark page. These traces measure solver
 //! effectiveness, including differences in trajectories and stopping rules.
@@ -30,7 +31,8 @@ use basin::{
     State as BasinState, StepOutcome,
 };
 use competitor_bench::{
-    ArgminProblem, GomezProblem, cmaes, cobyla, convergence, lm, nm, slsqp,
+    ArgminProblem, GomezProblem, bfgs, cmaes, cobyla, convergence, lm, nm,
+    slsqp,
 };
 use gomez::OptimizerDriver;
 
@@ -587,6 +589,10 @@ fn main() {
         print_traces(&cmaes_traces());
         return;
     }
+    if std::env::args().nth(1).as_deref() == Some("--bfgs") {
+        print_traces(&bfgs_traces());
+        return;
+    }
     assert!(
         cfg!(feature = "lbfgsb-reference"),
         "Enable --features lbfgsb-reference to generate the complete published dataset"
@@ -766,6 +772,7 @@ fn main() {
     ];
 
     traces.extend(nm_traces());
+    traces.extend(bfgs_traces());
 
     for library in [
         slsqp::Library::Basin,
@@ -840,6 +847,24 @@ fn main() {
     traces.extend(lbfgsb_traces());
     traces.extend(cmaes_traces());
     print_traces(&traces);
+}
+
+fn bfgs_traces() -> Vec<Trace> {
+    [bfgs::Library::Basin, bfgs::Library::Argmin]
+        .into_iter()
+        .map(|library| {
+            published_trace(
+                "bfgs",
+                "rosenbrock",
+                0.0,
+                library.name(),
+                convergence::median_run(
+                    || bfgs::run(library, bfgs::DIMENSION, true),
+                    REPS,
+                ),
+            )
+        })
+        .collect()
 }
 
 #[cfg(feature = "lbfgsb-reference")]

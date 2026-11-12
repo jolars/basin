@@ -22,6 +22,7 @@ function fixture(): CompetitorResult[] {
                 ...(c.solver === "cobyla" ||
                 c.solver === "slsqp" ||
                 c.solver === "lbfgsb" ||
+                c.solver === "bfgs" ||
                 c.solver === "lm" ||
                 c.solver === "cmaes"
                     ? {
@@ -49,6 +50,16 @@ function fixture(): CompetitorResult[] {
                                         constraintCalls: 0,
                                     }
                                   : {}),
+                              ...(c.solver === "bfgs"
+                                  ? {
+                                        point: Array(c.n).fill(1),
+                                        cost: 1e-12,
+                                        iterations: 100,
+                                        residualCalls: 0,
+                                        jacobianCalls: 0,
+                                        constraintCalls: 0,
+                                    }
+                                  : {}),
                               ...(c.solver === "lbfgsb"
                                   ? {
                                         iterations: 40,
@@ -65,7 +76,7 @@ function fixture(): CompetitorResult[] {
 }
 
 test("collects exactly one measured row per curated case, library, and seed", () => {
-    assert.equal(validateCompetitorResults(fixture()).length, 41);
+    assert.equal(validateCompetitorResults(fixture()).length, 43);
     assert.throws(
         () => validateCompetitorResults(fixture().slice(1)),
         /Missing result/,
@@ -169,7 +180,7 @@ test("requires L-BFGS-B stationarity and fused callback diagnostics", () => {
     );
     bounded.summary.verified = false;
     bounded.summary.projectedGradient = null;
-    assert.equal(validateCompetitorResults(rows).length, 41);
+    assert.equal(validateCompetitorResults(rows).length, 43);
     bounded.summary.projectedGradient = -1;
     assert.throws(
         () => validateCompetitorResults(rows),
@@ -208,7 +219,7 @@ test("requires every stochastic seed and retains failed seeds", () => {
     );
     stochastic.summary.verified = false;
     stochastic.summary.status = "EvaluationBudget";
-    assert.equal(validateCompetitorResults(rows).length, 41);
+    assert.equal(validateCompetitorResults(rows).length, 43);
     stochastic.summary.objectiveCalls = 100_017;
     assert.throws(
         () => validateCompetitorResults(rows),
@@ -220,5 +231,31 @@ test("requires every stochastic seed and retains failed seeds", () => {
     stochastic.summary.point = Array(stochastic.n).fill(null);
     stochastic.summary.status = "InvalidFunctionValue";
     stochastic.points = [];
-    assert.equal(validateCompetitorResults(rows).length, 41);
+    assert.equal(validateCompetitorResults(rows).length, 43);
+});
+
+test("requires BFGS accuracy and derivative diagnostics but retains failed solves", () => {
+    const rows = fixture();
+    const bfgs = rows.find((r) => r.solver === "bfgs");
+    assert.ok(bfgs?.summary);
+    delete bfgs.summary.iterations;
+    assert.throws(
+        () => validateCompetitorResults(rows),
+        /Invalid BFGS diagnostics/,
+    );
+    bfgs.summary.iterations = 100;
+    bfgs.summary.gradientCalls = 0;
+    assert.throws(
+        () => validateCompetitorResults(rows),
+        /Invalid verified BFGS/,
+    );
+    bfgs.summary.gradientCalls = 5;
+    bfgs.summary.cost = 1e-5;
+    assert.throws(
+        () => validateCompetitorResults(rows),
+        /Invalid verified BFGS/,
+    );
+    bfgs.summary.verified = false;
+    bfgs.summary.status = "SolverFailed";
+    assert.equal(validateCompetitorResults(rows).length, 43);
 });

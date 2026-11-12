@@ -188,6 +188,10 @@
                                 "nonfinite"}; projected-gradient norm
                             {r.summary.projectedGradient?.toExponential(3) ??
                                 "nonfinite"}.
+                        {:else if solver === "bfgs"}
+                            {r.summary.iterations} iterations;
+                            {r.summary.objectiveCalls} objective and
+                            {r.summary.gradientCalls} gradient calls.
                         {:else if solver === "cmaes"}
                             {r.summary.iterations} sampled generations;
                             {r.summary.objectiveCalls} objective calls.

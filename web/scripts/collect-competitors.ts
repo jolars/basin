@@ -36,7 +36,7 @@ const outFile = resolve(
     "competitor-benchmarks.json",
 );
 
-/** Safety cap for GD, Nelder–Mead, and L-BFGS; other caps are documented per case. */
+/** Safety cap for GD, Nelder–Mead, BFGS, and L-BFGS; other caps are documented per case. */
 const ITERATIONS = 10_000;
 
 const caseIndex = (solver: string, problem: string) =>
