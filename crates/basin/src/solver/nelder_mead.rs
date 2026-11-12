@@ -427,25 +427,47 @@ impl<V, Mode, F: Scalar> NelderMead<V, F, Mode> {
 /// solver enforces this by pre-allocating scratch in `init`).
 fn affine_into<V, F>(out: &mut V, a: &V, b: &V, t: F)
 where
-    V: Clone + ScaleInPlace<F> + ScaledAdd<F>,
+    V: VectorLen + VectorIndex<F>,
     F: Scalar,
 {
-    out.scale_in_place(F::zero());
-    out.scaled_add(F::one() - t, a);
-    out.scaled_add(t, b);
+    let s = F::one() - t;
+    for j in 0..out.vec_len() {
+        // Overwrite scratch directly so a previous nonfinite trial cannot
+        // contaminate this one through multiplication by zero.
+        out.set_scalar(j, s * a.get_scalar(j) + t * b.get_scalar(j));
+    }
 }
 
 /// Write the mean of `vertices` into `out`, in place. `out`'s previous
 /// contents are overwritten.
 fn centroid_into<V, F>(out: &mut V, vertices: &[V])
 where
-    V: Clone + ScaleInPlace<F> + ScaledAdd<F>,
+    V: VectorLen + VectorIndex<F>,
     F: Scalar,
 {
     let inv = F::from_usize(vertices.len()).unwrap().recip();
-    out.scale_in_place(F::zero());
-    for v in vertices {
-        out.scaled_add(inv, v);
+    let chunks = out.vec_len() / 4;
+    // Keep coordinate sums in registers instead of repeatedly reading and
+    // writing scratch. Preserve vertex order and scale before adding, since
+    // an unscaled sum can overflow even when the centroid is finite.
+    for chunk in 0..chunks {
+        let j = chunk * 4;
+        let mut sums = [F::zero(); 4];
+        for v in vertices {
+            for (k, sum) in sums.iter_mut().enumerate() {
+                *sum = *sum + inv * v.get_scalar(j + k);
+            }
+        }
+        for (k, sum) in sums.into_iter().enumerate() {
+            out.set_scalar(j + k, sum);
+        }
+    }
+    for j in chunks * 4..out.vec_len() {
+        let mut sum = F::zero();
+        for v in vertices {
+            sum = sum + inv * v.get_scalar(j);
+        }
+        out.set_scalar(j, sum);
     }
 }
 
@@ -490,7 +512,7 @@ fn next_iter_inner<P, V, F, Proj>(
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
-    V: Clone + ScaleInPlace<F> + ScaledAdd<F>,
+    V: Clone + VectorLen + VectorIndex<F> + ScaleInPlace<F> + ScaledAdd<F>,
     Proj: Fn(&P, &mut V),
 {
     trace.trials.clear();

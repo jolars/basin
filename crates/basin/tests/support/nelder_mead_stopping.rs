@@ -1,7 +1,7 @@
 use basin::{
     ClampInPlace, ConvergenceEvidence, ConvergenceTest, CostFunction, Executor,
-    NelderMead, Scalar, ScaleInPlace, ScaledAdd, SimplexProgress, Termination,
-    TerminationCode, VectorIndex, VectorLen,
+    NelderMead, Problem, Scalar, ScaleInPlace, ScaledAdd, SimplexProgress,
+    Solver, Termination, TerminationCode, VectorIndex, VectorLen,
 };
 use std::convert::Infallible;
 
@@ -80,6 +80,74 @@ where
         + ClampInPlace,
 {
     let f = |x| F::from_f64(x).unwrap();
+    // An overflowing reflection must not poison the next finite trial through
+    // reused scratch. The objective itself remains well scaled.
+    let mut problem = Problem::new(Objective {
+        scale: F::max_value(),
+        magnitude: F::one(),
+        offset: F::zero(),
+        landscape: Landscape::Sphere,
+        bounds: (make(&[F::neg_infinity(); 2]), make(&[F::infinity(); 2])),
+    });
+    let mut solver = NelderMead::new().with_trial_diagnostics(true);
+    let state = solver
+        .init(
+            &mut problem,
+            SimplexProgress::from_simplex(vec![
+                make(&[-f(0.5) * F::max_value(), F::zero()]),
+                make(&[f(0.75) * F::max_value(), F::zero()]),
+            ]),
+        )
+        .unwrap();
+    let state = solver.next_iter(&mut problem, state).unwrap().state;
+    assert!(
+        solver.trial_observations()[0]
+            .point
+            .get_scalar(0)
+            .is_infinite()
+    );
+    let _ = solver.next_iter(&mut problem, state).unwrap();
+    assert!(
+        solver.trial_observations()[0]
+            .point
+            .get_scalar(0)
+            .is_finite()
+    );
+
+    for dimension in [3, 4, 5, 8] {
+        let mut problem = Problem::new(Objective {
+            scale: F::max_value(),
+            magnitude: F::one(),
+            offset: F::zero(),
+            landscape: Landscape::Sphere,
+            bounds: (
+                make(&vec![F::neg_infinity(); dimension]),
+                make(&vec![F::infinity(); dimension]),
+            ),
+        });
+        let mut solver = NelderMead::new().with_trial_diagnostics(true);
+        let state = solver
+            .init(
+                &mut problem,
+                SimplexProgress::from_simplex(
+                    (0..=dimension)
+                        .map(|_| {
+                            make(&vec![f(0.5) * F::max_value(); dimension])
+                        })
+                        .collect(),
+                ),
+            )
+            .unwrap();
+        let _ = solver.next_iter(&mut problem, state).unwrap();
+        // The mean is representable even though the unscaled sum overflows.
+        // Exercise complete coordinate blocks and their remainders.
+        let reflection = &solver.trial_observations()[0].point;
+        for j in 0..dimension {
+            let scaled = reflection.get_scalar(j) / F::max_value();
+            assert!((scaled - f(0.5)).abs() <= f(16.0) * F::epsilon());
+        }
+    }
+
     for landscape in [
         Landscape::Quadratic,
         Landscape::Sphere,
