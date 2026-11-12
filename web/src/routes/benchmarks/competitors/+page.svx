@@ -36,7 +36,7 @@ continuing iterations after reaching the target.
   | L-BFGS              | 100-variable Rosenbrock                                |
   | L-BFGS-B            | 20,000-variable extended Rosenbrock with box bounds     |
   | NEWUOA              | 30-variable Styblinski–Tang                            |
-  | Active CMA-ES       | 40-variable rotated ellipsoid and Ackley, five seeds each |
+  | Active CMA-ES       | 40-variable rotated ellipsoid and Ackley                |
 
 Configurations match where the APIs allow it. Line searches, stopping rules, and
 numerical safeguards can still produce different paths. These are comparisons of
@@ -263,7 +263,7 @@ Basin is compared with [cmaes](https://docs.rs/cmaes/0.2.2/cmaes/)
 {data.versions.cmaes} on two unconstrained problems with 40 variables. Both
 use active covariance adaptation; the reference explicitly selects
 `Weights::Negative`. Both start with mean $(3,\ldots,3)$, identity covariance,
-step size $\sigma_0 = 2$, and a population of 16. Runs use seeds 0 through 4,
+step size $\sigma_0 = 2$, and a population of 16. Runs use a fixed seed of 0,
 without restarts or local search. Matching seed numbers do not produce the same
 random samples across libraries.
 
@@ -303,15 +303,14 @@ as success.
 Basin uses nalgebra {data.versions.nalgebra}, while `cmaes` uses nalgebra
 {cmaesNalgebraVersion}. Basin evaluates the mean as well as the 16
 population members, charging 17 objective calls per sampled generation; the
-reference evaluates only the 16 members. Basin refreshes its eigendecomposition
-every generation, while the reference refreshes periodically. These differences
-affect trajectories, evaluation counts, and runtime.
+reference evaluates only the 16 members. Basin uses
+`with_eigen_update_period(3)` to refresh its eigendecomposition every three
+generations, matching the reference's cadence for this workload. Basin's solver
+default remains every generation. Periodic refresh changes seeded trajectories
+and can affect convergence.
 
-Use the seed selector to inspect individual convergence curves. The table
-reports how many of the five seeds reached the common target, plus the ranges
-of final times and objective calls across all seeds. Each seed warms up once
-and uses {data.repetitions} timing repetitions of that same numerical path.
-Five seeds on two problems give limited evidence of stochastic reliability.
+Each run warms up once and uses {data.repetitions} timing repetitions of the
+same numerical path. A single seed does not measure stochastic reliability.
 
 ## Methodology and reproduction
 
@@ -358,7 +357,7 @@ Append `-- --calibrate` to remeasure untraced solves, starting at 20,000 variabl
 and doubling until both medians reach 20 ms. The published dimension remains
 fixed between benchmark refreshes.
 
-To verify both CMA-ES problems and all five seeds, run
+To verify both CMA-ES problems with the published seed and refresh period, run
 `compute bench --reason "Verify active CMA-ES" -- cargo run --locked --release -p competitor-bench --bin verify_cmaes`.
 Append `-- --untraced` to disable intermediate trace recording. The verifier
 reports timing ranges across repetitions, objective counts, and target checks.

@@ -70,7 +70,7 @@ export interface CompetitorResult {
     problem: string;
     n: number;
     library: Library;
-    /** Each stochastic seed retains its own trace and diagnostics. */
+    /** Fixed seed used for a stochastic solver. */
     seed?: number;
     points: TracePoint[];
     violations?: { tNs: number; violation: number }[];
@@ -145,7 +145,7 @@ export interface CompetitorCase {
     blurb: string;
     n: number;
     libraries: Library[];
-    seeds?: number[];
+    seed?: number;
 }
 
 /**
@@ -222,16 +222,16 @@ export const COMPETITOR_CASES: CompetitorCase[] = [
         problem: "rotated_ellipsoid",
         n: 40,
         libraries: ["basin", "cmaes"],
-        seeds: [0, 1, 2, 3, 4],
-        blurb: "Active CMA-ES on a densely rotated quadratic with condition number 10⁶. Five seeds, a population of 16, and a shared objective target and evaluation budget.",
+        seed: 0,
+        blurb: "Active CMA-ES on a densely rotated quadratic with condition number 10⁶. A fixed seed, a population of 16, eigen refresh every three generations, and a shared objective target and evaluation budget.",
     },
     {
         solver: "cmaes",
         problem: "ackley",
         n: 40,
         libraries: ["basin", "cmaes"],
-        seeds: [0, 1, 2, 3, 4],
-        blurb: "Standalone active CMA-ES on multimodal Ackley. Each seed starts from the same mean and step size; failed runs remain visible alongside successes.",
+        seed: 0,
+        blurb: "Standalone active CMA-ES on multimodal Ackley with a fixed seed, the same initial mean and step size, and eigen refresh every three generations.",
     },
 ];
 
@@ -260,13 +260,7 @@ export function validateCompetitorResults(raw: unknown): CompetitorResult[] {
         const key = resultKey(row);
         if (!c?.libraries.includes(row.library) || keys.has(key))
             throw new Error(`Unexpected or duplicate result: ${key}`);
-        if (
-            c.seeds
-                ? !Number.isInteger(row.seed) ||
-                  !c.seeds.includes(row.seed as number)
-                : row.seed !== undefined
-        )
-            throw new Error(`Unexpected seed: ${key}`);
+        if (row.seed !== c.seed) throw new Error(`Unexpected seed: ${key}`);
         keys.add(key);
         if (!Number.isInteger(row.n) || row.n !== c.n)
             throw new Error(`Invalid dimension: ${key}`);
@@ -393,10 +387,8 @@ export function validateCompetitorResults(raw: unknown): CompetitorResult[] {
     }
     for (const c of COMPETITOR_CASES) {
         for (const library of c.libraries) {
-            for (const seed of c.seeds ?? [undefined]) {
-                const key = resultKey({ ...c, library, seed });
-                if (!keys.has(key)) throw new Error(`Missing result: ${key}`);
-            }
+            const key = resultKey({ ...c, library });
+            if (!keys.has(key)) throw new Error(`Missing result: ${key}`);
         }
     }
     return rows;

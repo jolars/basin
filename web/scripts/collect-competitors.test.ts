@@ -8,75 +8,73 @@ import {
 
 function fixture(): CompetitorResult[] {
     return COMPETITOR_CASES.flatMap((c) =>
-        c.libraries.flatMap((library) =>
-            (c.seeds ?? [undefined]).map((seed) => ({
-                solver: c.solver,
-                problem: c.problem,
-                library,
-                n: c.n,
-                ...(seed === undefined ? {} : { seed }),
-                points: [{ tNs: 10, subopt: 1 }],
-                ...(c.solver === "cobyla" || c.solver === "slsqp"
-                    ? { violations: [{ tNs: 10, violation: 1e-16 }] }
-                    : {}),
-                ...(c.solver === "cobyla" ||
-                c.solver === "slsqp" ||
-                c.solver === "lbfgsb" ||
-                c.solver === "bfgs" ||
-                c.solver === "lm" ||
-                c.solver === "cmaes"
-                    ? {
-                          summary: {
-                              point: Array(c.n).fill(0.75),
-                              cost: 0.125,
-                              violation: 0,
-                              objectiveCalls: 5,
-                              residualCalls: 5,
-                              jacobianCalls: 3,
-                              gradientCalls: 3,
-                              constraintCalls: 5,
-                              status: "Converged",
-                              verified: true,
-                              ...(c.solver === "cmaes"
-                                  ? {
-                                        point: Array(c.n).fill(0),
-                                        cost: 5e-9,
-                                        iterations: 2,
-                                        objectiveCalls:
-                                            2 * (library === "basin" ? 17 : 16),
-                                        residualCalls: 0,
-                                        jacobianCalls: 0,
-                                        gradientCalls: 0,
-                                        constraintCalls: 0,
-                                    }
-                                  : {}),
-                              ...(c.solver === "bfgs"
-                                  ? {
-                                        point: Array(c.n).fill(1),
-                                        cost: 1e-12,
-                                        iterations: 100,
-                                        residualCalls: 0,
-                                        jacobianCalls: 0,
-                                        constraintCalls: 0,
-                                    }
-                                  : {}),
-                              ...(c.solver === "lbfgsb"
-                                  ? {
-                                        iterations: 40,
-                                        projectedGradient: 1e-9,
-                                        gradientCalls: 5,
-                                    }
-                                  : {}),
-                          },
-                      }
-                    : {}),
-            })),
-        ),
+        c.libraries.map((library) => ({
+            solver: c.solver,
+            problem: c.problem,
+            library,
+            n: c.n,
+            ...(c.seed === undefined ? {} : { seed: c.seed }),
+            points: [{ tNs: 10, subopt: 1 }],
+            ...(c.solver === "cobyla" || c.solver === "slsqp"
+                ? { violations: [{ tNs: 10, violation: 1e-16 }] }
+                : {}),
+            ...(c.solver === "cobyla" ||
+            c.solver === "slsqp" ||
+            c.solver === "lbfgsb" ||
+            c.solver === "bfgs" ||
+            c.solver === "lm" ||
+            c.solver === "cmaes"
+                ? {
+                      summary: {
+                          point: Array(c.n).fill(0.75),
+                          cost: 0.125,
+                          violation: 0,
+                          objectiveCalls: 5,
+                          residualCalls: 5,
+                          jacobianCalls: 3,
+                          gradientCalls: 3,
+                          constraintCalls: 5,
+                          status: "Converged",
+                          verified: true,
+                          ...(c.solver === "cmaes"
+                              ? {
+                                    point: Array(c.n).fill(0),
+                                    cost: 5e-9,
+                                    iterations: 2,
+                                    objectiveCalls:
+                                        2 * (library === "basin" ? 17 : 16),
+                                    residualCalls: 0,
+                                    jacobianCalls: 0,
+                                    gradientCalls: 0,
+                                    constraintCalls: 0,
+                                }
+                              : {}),
+                          ...(c.solver === "bfgs"
+                              ? {
+                                    point: Array(c.n).fill(1),
+                                    cost: 1e-12,
+                                    iterations: 100,
+                                    residualCalls: 0,
+                                    jacobianCalls: 0,
+                                    constraintCalls: 0,
+                                }
+                              : {}),
+                          ...(c.solver === "lbfgsb"
+                              ? {
+                                    iterations: 40,
+                                    projectedGradient: 1e-9,
+                                    gradientCalls: 5,
+                                }
+                              : {}),
+                      },
+                  }
+                : {}),
+        })),
     );
 }
 
-test("collects exactly one measured row per curated case, library, and seed", () => {
-    assert.equal(validateCompetitorResults(fixture()).length, 43);
+test("collects exactly one measured row per curated case and library", () => {
+    assert.equal(validateCompetitorResults(fixture()).length, 27);
     assert.throws(
         () => validateCompetitorResults(fixture().slice(1)),
         /Missing result/,
@@ -180,7 +178,7 @@ test("requires L-BFGS-B stationarity and fused callback diagnostics", () => {
     );
     bounded.summary.verified = false;
     bounded.summary.projectedGradient = null;
-    assert.equal(validateCompetitorResults(rows).length, 43);
+    assert.equal(validateCompetitorResults(rows).length, 27);
     bounded.summary.projectedGradient = -1;
     assert.throws(
         () => validateCompetitorResults(rows),
@@ -195,7 +193,7 @@ test("requires L-BFGS-B stationarity and fused callback diagnostics", () => {
     );
 });
 
-test("requires every stochastic seed and retains failed seeds", () => {
+test("requires the fixed stochastic seed and retains failed runs", () => {
     const rows = fixture();
     const stochastic = rows.find((r) => r.solver === "cmaes");
     assert.ok(stochastic?.summary);
@@ -219,7 +217,7 @@ test("requires every stochastic seed and retains failed seeds", () => {
     );
     stochastic.summary.verified = false;
     stochastic.summary.status = "EvaluationBudget";
-    assert.equal(validateCompetitorResults(rows).length, 43);
+    assert.equal(validateCompetitorResults(rows).length, 27);
     stochastic.summary.objectiveCalls = 100_017;
     assert.throws(
         () => validateCompetitorResults(rows),
@@ -231,7 +229,7 @@ test("requires every stochastic seed and retains failed seeds", () => {
     stochastic.summary.point = Array(stochastic.n).fill(null);
     stochastic.summary.status = "InvalidFunctionValue";
     stochastic.points = [];
-    assert.equal(validateCompetitorResults(rows).length, 43);
+    assert.equal(validateCompetitorResults(rows).length, 27);
 });
 
 test("requires BFGS accuracy and derivative diagnostics but retains failed solves", () => {
@@ -257,5 +255,5 @@ test("requires BFGS accuracy and derivative diagnostics but retains failed solve
     );
     bfgs.summary.verified = false;
     bfgs.summary.status = "SolverFailed";
-    assert.equal(validateCompetitorResults(rows).length, 43);
+    assert.equal(validateCompetitorResults(rows).length, 27);
 });

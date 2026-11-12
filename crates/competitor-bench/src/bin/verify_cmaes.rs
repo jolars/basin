@@ -1,4 +1,5 @@
-//! Verify all published CMA-ES seeds; `--untraced` disables intermediate samples.
+//! Verify CMA-ES with the published seed and refresh period.
+//! `--untraced` disables intermediate samples.
 //! Investigation options: `--dimension N`, `--eigen-update-period N`,
 //! `--generations N` (fixed work), and `--repetitions N` (positive and odd).
 
@@ -37,41 +38,40 @@ fn main() {
         "reference eigen update period={}",
         cmaes::reference_eigen_update_period(config.dimension)
     );
+    let seed = cmaes::SEED;
     for case in [Case::RotatedEllipsoid, Case::Ackley] {
-        for seed in cmaes::SEEDS {
-            for library in [Library::Basin, Library::Reference] {
-                let mut times = Vec::new();
-                let run = convergence::median_run(
-                    || {
-                        let run = cmaes::run_configured(
-                            library, case, seed, config, tracing,
-                        );
-                        times.push(run.points.last().unwrap().0);
-                        run
-                    },
-                    repetitions,
-                );
-                times.remove(0);
-                times.sort_unstable();
-                eprintln!(
-                    "{}/{} seed={seed} samples_ns={times:?}",
-                    case.name(),
-                    library.name()
-                );
-                println!(
-                    "{}/{} seed={seed}: {:.3} ms (range {:.3}–{:.3}), f={:.6e}, generations={}, calls={}, status={}, verified={}",
-                    case.name(),
-                    library.name(),
-                    times[times.len() / 2] as f64 / 1e6,
-                    times[0] as f64 / 1e6,
-                    *times.last().unwrap() as f64 / 1e6,
-                    run.summary.cost,
-                    run.summary.iterations.unwrap(),
-                    run.summary.objective_calls,
-                    run.summary.status,
-                    run.summary.verified,
-                );
-            }
+        for library in [Library::Basin, Library::Reference] {
+            let mut times = Vec::new();
+            let run = convergence::median_run(
+                || {
+                    let run = cmaes::run_configured(
+                        library, case, seed, config, tracing,
+                    );
+                    times.push(run.points.last().unwrap().0);
+                    run
+                },
+                repetitions,
+            );
+            times.remove(0);
+            times.sort_unstable();
+            eprintln!(
+                "{}/{} seed={seed} samples_ns={times:?}",
+                case.name(),
+                library.name()
+            );
+            println!(
+                "{}/{} seed={seed}: {:.3} ms (range {:.3}–{:.3}), f={:.6e}, generations={}, calls={}, status={}, verified={}",
+                case.name(),
+                library.name(),
+                times[times.len() / 2] as f64 / 1e6,
+                times[0] as f64 / 1e6,
+                *times.last().unwrap() as f64 / 1e6,
+                run.summary.cost,
+                run.summary.iterations.unwrap(),
+                run.summary.objective_calls,
+                run.summary.status,
+                run.summary.verified,
+            );
         }
     }
 }

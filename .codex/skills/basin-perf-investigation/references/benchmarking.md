@@ -49,11 +49,12 @@ separate benchmark and allocation tests. For LM, use `src/bin/verify.rs`,
 Neither maintained comparison needs GlobalSearch.
 Historical measurements are leads to remeasure, not current facts.
 
-For CMA-ES, `verify_cmaes --untraced` checks all published seeds without trace
+For CMA-ES, `verify_cmaes --untraced` checks the fixed published seed without trace
 sampling. It also accepts `--dimension`, `--eigen-update-period`,
 `--generations` (fixed work with the target disabled), and `--repetitions`.
-The default retains the published settings; periodic eigen refresh changes
-trajectories and must be reported explicitly. The `cmaes` Criterion benchmark
+The default retains the published settings, including eigen refresh every three
+generations; changing the refresh period changes trajectories and must be
+reported explicitly. The `cmaes` Criterion benchmark
 isolates eigendecomposition on identical covariances, including a reference
 with Basin's tolerance and iteration cap.
 

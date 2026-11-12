@@ -2,8 +2,8 @@
 //!
 //! The reference is `cmaes` 0.2.2 with explicit negative recombination weights.
 //! Both drivers stop at the same best-objective target or evaluation budget.
-//! Basin also evaluates each mean and refreshes its eigendecomposition every
-//! generation; the reference samples only and refreshes eigenpairs periodically.
+//! Both refresh eigenpairs every three generations in the published workload.
+//! Basin also evaluates each mean; the reference evaluates only the population.
 
 use std::convert::Infallible;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -24,7 +24,7 @@ pub const SIGMA: f64 = 2.0;
 pub const TARGET: f64 = 1e-8;
 pub const MAX_EVALUATIONS: usize = 100_000;
 pub const MAX_GENERATIONS: usize = 10_000;
-pub const SEEDS: [u64; 5] = [0, 1, 2, 3, 4];
+pub const SEED: u64 = 0;
 
 /// Investigation settings; published traces retain the defaults.
 #[derive(Clone, Copy, Debug)]
@@ -39,7 +39,7 @@ impl Default for Configuration {
     fn default() -> Self {
         Self {
             dimension: DIMENSION,
-            eigen_update_period: 1,
+            eigen_update_period: 3,
             generations: None,
         }
     }
@@ -364,7 +364,10 @@ mod tests {
         assert_eq!(options.seed, Some(42));
         assert_eq!(options.population_size, POPULATION);
         assert_eq!(options.initial_step_size, SIGMA);
-        assert_eq!(reference_eigen_update_period(DIMENSION), 3);
+        assert_eq!(
+            reference_eigen_update_period(DIMENSION) as u64,
+            Configuration::default().eigen_update_period
+        );
     }
 
     #[test]
@@ -403,6 +406,9 @@ mod tests {
                     0,
                     Configuration {
                         dimension: 4,
+                        // This smaller fixture needs more frequent refreshes
+                        // than the published 40-dimensional workload.
+                        eigen_update_period: 1,
                         ..Configuration::default()
                     },
                     true,

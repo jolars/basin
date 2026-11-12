@@ -60,8 +60,7 @@ const results = validateCompetitorResults(
 results.sort(
     (a, b) =>
         caseIndex(a.solver, a.problem) - caseIndex(b.solver, b.problem) ||
-        LIBRARY_ORDER.indexOf(a.library) - LIBRARY_ORDER.indexOf(b.library) ||
-        (a.seed ?? 0) - (b.seed ?? 0),
+        LIBRARY_ORDER.indexOf(a.library) - LIBRARY_ORDER.indexOf(b.library),
 );
 
 const packages = readFileSync(join(repoRoot, "Cargo.lock"), "utf8").split(
@@ -118,9 +117,6 @@ const data = {
 mkdirSync(dirname(outFile), { recursive: true });
 writeFileSync(outFile, `${JSON.stringify(data, null, 2)}\n`);
 
-const expected = CASE_ORDER.reduce(
-    (acc, c) => acc + c.libraries.length * (c.seeds?.length ?? 1),
-    0,
-);
+const expected = CASE_ORDER.reduce((acc, c) => acc + c.libraries.length, 0);
 console.log(`✓ wrote ${results.length} result(s) to ${outFile}`);
 if (results.length !== expected) throw new Error("Unexpected result count");

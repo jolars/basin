@@ -3,7 +3,7 @@
 //! Run with the serial L-BFGS-B reference feature:
 //! `cargo run --release -p competitor-bench --features lbfgsb-reference --bin trace`.
 //! Append `-- --nm` to run only the shared-simplex Nelder-Mead comparison.
-//! Append `-- --cmaes` to run only the seeded active CMA-ES comparisons.
+//! Append `-- --cmaes` to run only the fixed-seed active CMA-ES comparisons.
 //! Append `-- --lbfgsb` to run only the bounded L-BFGS-B comparison.
 //! Append `-- --bfgs` to run only the dense BFGS comparison against argmin.
 //! Cases, starts, targets, and remaining comparison asymmetries are documented
@@ -890,21 +890,19 @@ fn lbfgsb_traces() -> Vec<Trace> {
 fn cmaes_traces() -> Vec<Trace> {
     let mut traces = Vec::new();
     for case in [cmaes::Case::RotatedEllipsoid, cmaes::Case::Ackley] {
-        for seed in cmaes::SEEDS {
-            for library in [cmaes::Library::Basin, cmaes::Library::Reference] {
-                let mut trace = published_trace(
-                    "cmaes",
-                    case.name(),
-                    0.0,
-                    library.name(),
-                    convergence::median_run(
-                        || cmaes::run(library, case, seed),
-                        REPS,
-                    ),
-                );
-                trace.seed = Some(seed);
-                traces.push(trace);
-            }
+        for library in [cmaes::Library::Basin, cmaes::Library::Reference] {
+            let mut trace = published_trace(
+                "cmaes",
+                case.name(),
+                0.0,
+                library.name(),
+                convergence::median_run(
+                    || cmaes::run(library, case, cmaes::SEED),
+                    REPS,
+                ),
+            );
+            trace.seed = Some(cmaes::SEED);
+            traces.push(trace);
         }
     }
     traces
