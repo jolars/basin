@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.3.1](https://github.com/jolars/basin/compare/v3.3.0...v3.3.1) (2026-11-12)
+
+### Performance Improvements
+
+- streamline Nelder-Mead vector updates ([`13bd5bb`](https://github.com/jolars/basin/commit/13bd5bb066c8f2f44f93f9740398fd78c9cc2037))
+- add BFGS competitor benchmark to docs ([`89c4aa8`](https://github.com/jolars/basin/commit/89c4aa8edd061e58bbdcb59a2a93428a7c3d4ea5))
+- remove forward Hessian probe barriers ([`41efd1f`](https://github.com/jolars/basin/commit/41efd1f252860187f7b5741c2dc111b25f1dfe5f))
+
 ## [3.3.0](https://github.com/jolars/basin/compare/v3.2.0...v3.3.0) (2026-11-06)
 
 ### Features
