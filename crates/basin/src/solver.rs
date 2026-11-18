@@ -164,8 +164,8 @@ pub use simulated_annealing::{
 pub use solis_wets::SolisWets;
 pub use ssga::Ssga;
 pub use trust_region::{
-    CauchyPoint, Dogleg, ExactHessian, MatrixFree, MoreSorensen, Steihaug,
-    TrustRegion,
+    CauchyPoint, Dogleg, ExactHessian, GaussNewtonModel, MatrixFree,
+    MoreSorensen, Steihaug, TrustRegion,
 };
 pub use trust_region_reflective::TrustRegionReflective;
 

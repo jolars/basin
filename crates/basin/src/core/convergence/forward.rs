@@ -533,8 +533,8 @@ impl<CG, CX, CC, CT, F: Scalar> ConfiguredSolver<Ssga<F>, CG, CX, CC, CT> {
     forward_setting!(Ssga, with_offspring_per_step, n: usize);
 }
 
-impl<CG, CX, CC, CT, Sub, F: Scalar, Mode>
-    ConfiguredSolver<TrustRegion<Sub, F, Mode>, CG, CX, CC, CT>
+impl<CG, CX, CC, CT, Sub, F: Scalar, Mode, W>
+    ConfiguredSolver<TrustRegion<Sub, F, Mode, W>, CG, CX, CC, CT>
 {
     forward_setting!(TrustRegion, with_radius, radius: F);
     forward_setting!(TrustRegion, with_max_radius, max_radius: F);

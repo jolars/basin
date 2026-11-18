@@ -225,3 +225,78 @@ fn scale_must_be_finite_and_positive() {
         );
     }
 }
+
+#[test]
+fn builtin_reductions_match_wider_cost_differences() {
+    fn check(
+        loss: impl LossFunction<f32> + LossFunction<f64>,
+        rho: impl Fn(f64) -> f64,
+    ) {
+        for (a, b, scale) in [
+            (0.5_f32, 0.49999997, 1.0),
+            (1.0000001, 0.99999994, 1.0),
+            (2.0, 1.9999999, 1.0),
+            (300_000.0, 299_999.97, 1000.0),
+            (300_000.0, 1.0, 1000.0),
+        ] {
+            for (before, after) in [(a, -b), (b, -a)] {
+                let cost = |r| {
+                    <_ as LossFunction<f32>>::evaluate_scaled(&loss, r, scale)
+                        .value
+                };
+                let reduction = loss.reduction_scaled(
+                    before,
+                    after,
+                    scale,
+                    cost(before),
+                    cost(after),
+                );
+                let scale = f64::from(scale);
+                let reference = |r: f32| {
+                    0.5 * scale * scale * rho((f64::from(r) / scale).powi(2))
+                };
+                let expected = reference(before) - reference(after);
+                assert!(
+                    (f64::from(reduction) / expected - 1.0).abs() < 0.002,
+                    "reduction {reduction}, expected {expected}, residuals {before}, {after}"
+                );
+            }
+        }
+    }
+    check(SquaredLoss, |z| z);
+    check(
+        HuberLoss,
+        |z| if z <= 1.0 { z } else { 2.0 * z.sqrt() - 1.0 },
+    );
+    check(SoftL1Loss, |z| 2.0 * ((1.0 + z).sqrt() - 1.0));
+    check(CauchyLoss, f64::ln_1p);
+    check(ArctanLoss, f64::atan);
+}
+
+#[test]
+fn arctan_reduction_stays_finite_near_the_float_limit() {
+    let a = 2.8230258e19_f32;
+    let b = 1.4115128e15_f32;
+    let scale = 3.230007e19_f32;
+    let cost = |r| ArctanLoss.evaluate_scaled(r, scale).value;
+    let cost_a = cost(a);
+    let cost_b = cost(b);
+    assert!(cost_a.is_finite() && cost_b.is_finite());
+
+    let reference_cost = |r| {
+        let scale = f64::from(scale);
+        (0.5 * scale * scale) * (f64::from(r) / scale).powi(2).atan()
+    };
+    let expected = reference_cost(a) - reference_cost(b);
+    assert!(expected < f64::from(f32::MAX));
+    let reduction = ArctanLoss.reduction_scaled(a, b, scale, cost_a, cost_b);
+    assert!(
+        (f64::from(reduction) / expected - 1.0).abs()
+            <= f64::from(f32::EPSILON),
+        "reduction {reduction}, expected {expected}"
+    );
+    assert_eq!(
+        ArctanLoss.reduction_scaled(b, a, scale, cost_b, cost_a),
+        -reduction
+    );
+}

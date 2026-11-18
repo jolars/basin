@@ -8,13 +8,15 @@ use crate::{EvalCounts, Scalar};
 pub enum Phase {
     /// The strategy is computing its model step.
     Subproblem,
-    /// The strategy returned non-finite model reduction.
+    /// The strategy returned non-finite model reduction or the trial could
+    /// not supply a usable gradient.
     InvalidModel,
     /// The model cannot decrease in native arithmetic.
     NoProgress,
-    /// A cost call is active and may have failed.
+    /// A trial cost or residual call is active and may have failed.
     TrialEvaluation,
-    /// An accepted trial's gradient call is active and may have failed.
+    /// A trial passed the ratio test and its gradient or Jacobian call is
+    /// active and may have failed.
     GradientRefresh,
     /// The trial was accepted with a coherent evaluation.
     Accepted,

@@ -3,7 +3,9 @@
 use super::{LossFunction, RobustLeastSquares};
 use crate::core::constraint::RelaxedProblem;
 use crate::core::constraint::evaluation::BoxProblem;
-use crate::core::math::{Scalar, ScaleRowsInPlace, VectorIndex, VectorLen};
+use crate::core::math::{
+    MatTransposeVec, Scalar, ScaleRowsInPlace, VectorIndex, VectorLen,
+};
 use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::state::PointState;
 
@@ -55,8 +57,21 @@ pub(crate) trait Evaluation<V, M, F: Scalar> {
     }
 
     fn cost(&self, r: &V, quadratic: impl FnOnce(&V) -> F) -> F;
+    // The caller supplies residuals with matching lengths.
+    fn cost_and_reduction(
+        &self,
+        current: &V,
+        trial: &V,
+        quadratic: impl FnOnce(&V, &V) -> (F, F),
+    ) -> (F, F);
     // The inner None retains raw residuals without cloning on quadratic paths.
     fn model(&self, r: &V, j: M) -> Option<(Option<V>, M)>;
+    fn gradient_model(&self, r: &V, j: M) -> Option<(V, M)>
+    where
+        M: MatTransposeVec<V>,
+    {
+        Some((j.mat_transpose_vec(r), j))
+    }
     fn valid_vector(&self, vector: &V) -> bool;
 }
 
@@ -100,6 +115,14 @@ where
     }
     fn cost(&self, r: &V, quadratic: impl FnOnce(&V) -> F) -> F {
         quadratic(r)
+    }
+    fn cost_and_reduction(
+        &self,
+        current: &V,
+        trial: &V,
+        quadratic: impl FnOnce(&V, &V) -> (F, F),
+    ) -> (F, F) {
+        quadratic(current, trial)
     }
     fn model(&self, _r: &V, j: M) -> Option<(Option<V>, M)> {
         Some((None, j))
@@ -156,11 +179,35 @@ macro_rules! robust_evaluation {
             fn cost(&self, r: &V, _: impl FnOnce(&V) -> F) -> F {
                 self.inner()$(.$field)*.residual_cost(r)
             }
+            fn cost_and_reduction(
+                &self,
+                current: &V,
+                trial: &V,
+                _: impl FnOnce(&V, &V) -> (F, F),
+            ) -> (F, F) {
+                self.inner()$(.$field)*.residual_cost_and_reduction(current, trial)
+            }
             fn model(&self, r: &V, mut j: M) -> Option<(Option<V>, M)> {
                 let (residual, factors) =
                     self.inner()$(.$field)*.model_residual(r)?;
                 j.scale_rows_in_place(&factors);
                 Some((Some(residual), j))
+            }
+            fn gradient_model(&self, r: &V, mut j: M) -> Option<(V, M)>
+            where
+                M: MatTransposeVec<V>,
+            {
+                let mut derivatives = r.clone();
+                let mut factors = Vec::with_capacity(r.vec_len());
+                let objective = &self.inner()$(.$field)*;
+                for i in 0..r.vec_len() {
+                    let term = objective.term(r.get_scalar(i))?;
+                    derivatives.set_scalar(i, term.derivative);
+                    factors.push(term.curvature.max(F::epsilon()).sqrt());
+                }
+                let gradient = j.mat_transpose_vec(&derivatives);
+                j.scale_rows_in_place(&factors);
+                Some((gradient, j))
             }
             fn valid_vector(&self, v: &V) -> bool {
                 (0..v.vec_len()).all(|i| v.get_scalar(i).is_finite())

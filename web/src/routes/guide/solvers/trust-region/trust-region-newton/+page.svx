@@ -4,19 +4,18 @@
 
 # Trust-region Newton
 
-Trust-region Newton minimizes smooth scalar objectives using a gradient and
-second-order information. It limits each quadratic-model step to a ball and
-adjusts that ball according to how well the model predicts objective reduction.
-You can supply a full Hessian or use Hessian-vector products without forming a
-matrix.
+`TrustRegion` limits each quadratic-model step to a ball and adjusts the
+radius according to how well the model predicts objective reduction. It can
+use a full Hessian, Hessian-vector products, or a Gauss–Newton model for
+least squares.
 
 [API
 reference](https://docs.rs/basin/latest/basin/solver/trust_region/struct.TrustRegion.html)
 
   | Property    | Requirement                                                    |
   | ----------- | -------------------------------------------------------------- |
-  | Objective   | A smooth scalar function                                       |
-  | Evaluations | `CostFunction`, `Gradient`, and `Hessian` or `HessianProduct`  |
+  | Objective   | A smooth scalar function or a nonlinear least-squares fit      |
+  | Evaluations | `CostFunction`, `Gradient`, and `Hessian` or `HessianProduct` for Newton. `Residual` and `Jacobian` for Gauss–Newton. |
   | Search      | Local, from one starting point                                 |
   | Constraints | Unconstrained; the trust-region ball is an internal step limit |
   | Parameters  | All four dense backends, with `f32` or `f64`                   |
@@ -25,9 +24,9 @@ reference](https://docs.rs/basin/latest/basin/solver/trust_region/struct.TrustRe
 
 Consider this solver when you can supply useful second-order information. The
 matrix-free mode is useful when forming and storing a Hessian is too expensive.
-If you only have a gradient, compare [L-BFGS](../../quasi-newton/l-bfgs/). If
-the objective is a residual sum of squares, compare the [nonlinear least-squares
-solvers](../../#nonlinear-least-squares).
+If you only have a gradient, compare [L-BFGS](../../quasi-newton/l-bfgs/).
+For a fit expressed as residuals, [least-squares dogleg](#least-squares-dogleg)
+limits the Gauss–Newton step using the trust radius.
 
 [Nocedal and Wright (2006)](#ref-nocedal-wright-2006), Chapter 4 and Algorithm
 4.1, describe the trust-region framework. Its convergence results require
@@ -36,7 +35,8 @@ global minimum, and a small gradient alone need not exclude a saddle.
 
 ## How it works
 
-Each iteration approximately minimizes `gᵀp + 0.5 pᵀHp` subject to `‖p‖ ≤ Δ`.
+Each iteration approximately minimizes `gᵀp + 0.5 pᵀBp` subject to `‖p‖ ≤ Δ`,
+where `B` is the curvature of the model.
 The ratio of actual to predicted reduction determines whether to accept the
 trial and shrink or grow `Δ`. Rejected trials solve the model again at a smaller
 radius.
@@ -122,6 +122,20 @@ require a matrix and cannot run in matrix-free mode.
 ndarray, exact-Hessian mode needs a supplied `Array2` Hessian because the
 adapter cannot construct one. Numerical derivatives add evaluations and
 approximation error; set budgets and tolerances accordingly.
+
+### Least-squares dogleg
+
+`TrustRegion::least_squares_with(Dogleg)` takes a problem implementing
+`Residual` and `Jacobian`. It uses the model `0.5 ‖r + Jp‖²` and measures
+actual reduction using the residuals at the trial point. Rejected steps reuse
+the current model. With `RobustLeastSquares`, the solver uses the safeguarded
+model and measures reduction in the robust objective.
+
+Dogleg forms the full Gauss–Newton step by Cholesky on `JᵀJ`. If factorization
+fails, for example when the Jacobian is rank deficient, it uses a Cauchy step.
+The mode publishes `FirstOrderState` and supports Vec, nalgebra, ndarray, and
+faer with both `f32` and `f64`.
+[Constructor example](https://docs.rs/basin/latest/basin/solver/trust_region/struct.TrustRegion.html#method.least_squares_with)
 
 ### Configure resolution and stopping separately
 

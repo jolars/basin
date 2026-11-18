@@ -427,8 +427,8 @@ pub use crate::solver::tnc::{
     ExactProducts, GradientDifferences, Tnc, TncCgTermination,
 };
 pub use crate::solver::trust_region::{
-    CauchyPoint, Dogleg, ExactHessian, MatrixFree, MoreSorensen, Steihaug,
-    TrustRegion,
+    CauchyPoint, Dogleg, ExactHessian, GaussNewtonModel, MatrixFree,
+    MoreSorensen, Steihaug, TrustRegion,
 };
 pub use crate::solver::{
     AcceptanceTest, AugmentedLagrangianMethod, BarrierMethod, BasinHopping,

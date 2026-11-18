@@ -69,6 +69,35 @@ fn adapter_exposes_the_robust_objective_and_gradient() {
     assert_eq!(cost, problem.cost(&vec![1.0 / 3.0]).unwrap());
 }
 
+#[test]
+fn dogleg_uses_the_robust_model_and_reports_the_robust_objective() {
+    let problem = RobustLeastSquares::new(Location, HuberLoss).with_scale(2.0);
+    let make = || {
+        Executor::from_start(
+            problem.clone(),
+            basin::TrustRegion::least_squares_with(basin::Dogleg)
+                .with_radius(0.25)
+                .with_absolute_gradient_tolerance(1e-8),
+            vec![0.0],
+        )
+    };
+    let limited = make().max_iter(1).run().unwrap();
+    let (x, cost, gradient) = limited.state.current().unwrap();
+    let (expected_cost, expected_gradient) =
+        problem.cost_and_gradient(x).unwrap();
+    assert!((x[0] - 0.25).abs() < 1e-14);
+    assert!((cost - expected_cost).abs() < 1e-12);
+    assert!((gradient[0] - expected_gradient[0]).abs() < 1e-12);
+    assert_eq!(limited.counts.residual_evals, 2);
+    assert_eq!(limited.counts.jacobian_evals, 2);
+    assert_eq!(limited.counts.total_work(), 4);
+
+    let converged = make().max_iter(20).run().unwrap();
+    assert_eq!(converged.report.code(), TerminationCode::GradientTolerance);
+    assert!((converged.param()[0] - 2.0 / 3.0).abs() < 1e-8);
+    assert!((converged.cost() - 52.0 / 3.0).abs() < 1e-12);
+}
+
 macro_rules! location_solver {
     ($name:ident, $solver:expr) => {
         #[test]

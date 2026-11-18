@@ -167,8 +167,8 @@ cost_setters!([V,Mode,L,F:Scalar] Lbfgs<V,F,Mode,L>, []);
 step_setters!([V,Mode,L,F:Scalar] Lbfgs<V,F,Mode,L>, []);
 cost_setters!([L,F:Scalar] ProjectedGradientDescent<L,F>, []);
 step_setters!([L,F:Scalar] ProjectedGradientDescent<L,F>, []);
-cost_setters!([Sub,F:Scalar,Mode] TrustRegion<Sub,F,Mode>, []);
-step_setters!([Sub,F:Scalar,Mode] TrustRegion<Sub,F,Mode>, []);
+cost_setters!([Sub,F:Scalar,Mode,W] TrustRegion<Sub,F,Mode,W>, []);
+step_setters!([Sub,F:Scalar,Mode,W] TrustRegion<Sub,F,Mode,W>, []);
 cost_setters!([V,Mode,F:Scalar] NelderMead<V,F,Mode>, []);
 step_setters!([V,Mode,F:Scalar] NelderMead<V,F,Mode>, []);
 cost_setters!([V,M,F:Scalar] GaussNewton<V,M,F>, []);
@@ -230,7 +230,7 @@ step_setters!([V,I,T,A,F:Scalar] BasinHopping<I,V,F,T,A>, [I: crate::WarmStart<V
 gradient_setters!([L, V, F: Scalar] GradientDescent<L, V, F>, []);
 gradient_setters!([V, L, M, I, F: Scalar] Bfgs<V,F,M,L,I>, [V: crate::DenseBackend<F>]);
 gradient_setters!([V,L,F:Scalar] Lbfgs<V,F,crate::solver::lbfgs::Unbounded,L>, []);
-gradient_setters!([Sub,F:Scalar,Mode] TrustRegion<Sub,F,Mode>, []);
+gradient_setters!([Sub,F:Scalar,Mode,W] TrustRegion<Sub,F,Mode,W>, []);
 gradient_setters!([F:Scalar] BrentDerivative<F>, []);
 projected_setters!([L,F:Scalar] ProjectedGradientDescent<L,F>, []);
 

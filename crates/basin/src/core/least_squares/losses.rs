@@ -1,5 +1,30 @@
-use super::{LossEvaluation, LossFunction};
+use super::{LossEvaluation, LossFunction, squared_loss_reduction};
 use crate::Scalar;
+
+// Write reductions for descending magnitudes, then restore the sign.
+fn ordered_reduction<F: Scalar>(
+    before: F,
+    after: F,
+    decrease: impl FnOnce(F, F) -> F,
+) -> F {
+    let before = before.abs();
+    let after = after.abs();
+    if before == after {
+        F::zero()
+    } else if before > after {
+        decrease(before, after)
+    } else {
+        -decrease(after, before)
+    }
+}
+
+fn atan_ratio<F: Scalar>(x: F) -> F {
+    if x == F::zero() {
+        F::one()
+    } else {
+        x.atan() / x
+    }
+}
 
 /// Ordinary squared loss: `ρ(z) = z`.
 #[derive(Clone, Copy, Debug, Default)]
@@ -34,6 +59,15 @@ impl<F: Scalar> LossFunction<F> for SquaredLoss {
             second_derivative: F::one(),
         }
     }
+
+    fn reduction_scaled(&self, before: F, after: F, _: F, _: F, _: F) -> F {
+        let (term, error) = squared_loss_reduction(before, after);
+        term + error
+    }
+
+    fn reduction_parts(&self, before: F, after: F, _: F, _: F, _: F) -> (F, F) {
+        squared_loss_reduction(before, after)
+    }
 }
 impl<F: Scalar> LossFunction<F> for HuberLoss {
     fn evaluate(&self, z: F) -> LossEvaluation<F> {
@@ -59,6 +93,41 @@ impl<F: Scalar> LossFunction<F> for HuberLoss {
             first_derivative: scale.copysign(residual),
             second_derivative: F::zero(),
         }
+    }
+
+    fn reduction_scaled(
+        &self,
+        before: F,
+        after: F,
+        scale: F,
+        before_cost: F,
+        after_cost: F,
+    ) -> F {
+        let (term, error) =
+            self.reduction_parts(before, after, scale, before_cost, after_cost);
+        term + error
+    }
+
+    fn reduction_parts(
+        &self,
+        before: F,
+        after: F,
+        scale: F,
+        _: F,
+        _: F,
+    ) -> (F, F) {
+        if before.abs().max(after.abs()) <= scale {
+            return squared_loss_reduction(before, after);
+        }
+        let term = ordered_reduction(before, after, |a, b| {
+            if b >= scale {
+                return scale * (a - b);
+            }
+            let half = F::from_f64(0.5).unwrap();
+            // Split at the kink and use the average slope below it.
+            scale * (a - scale) + (scale - b) * (half * scale + half * b)
+        });
+        (term, F::zero())
     }
 }
 impl<F: Scalar> LossFunction<F> for SoftL1Loss {
@@ -97,6 +166,23 @@ impl<F: Scalar> LossFunction<F> for SoftL1Loss {
                 second_derivative: inverse * inverse * inverse,
             }
         }
+    }
+
+    fn reduction_scaled(&self, before: F, after: F, scale: F, _: F, _: F) -> F {
+        ordered_reduction(before, after, |a, b| {
+            // Rationalize the difference of the two hypotenuses.
+            let normalizer = a.max(scale);
+            let s = scale / normalizer;
+            let a_normalized = a / normalizer;
+            let b_normalized = b / normalizer;
+            let denominator = s.hypot(a_normalized) + s.hypot(b_normalized);
+            let slope = if a <= scale {
+                a / denominator + b / denominator
+            } else {
+                scale * ((a_normalized + b_normalized) / denominator)
+            };
+            (a - b) * slope
+        })
     }
 }
 impl<F: Scalar> LossFunction<F> for CauchyLoss {
@@ -141,6 +227,42 @@ impl<F: Scalar> LossFunction<F> for CauchyLoss {
                 second_derivative: (t * inverse)
                     * ((z - F::one()) * t * inverse),
             }
+        }
+    }
+
+    fn reduction_scaled(
+        &self,
+        before: F,
+        after: F,
+        scale: F,
+        before_cost: F,
+        after_cost: F,
+    ) -> F {
+        let reduction = ordered_reduction(before, after, |a, b| {
+            // ln((s²+a²)/(s²+b²)) = ln1p((a-b)(a+b)/(s²+b²)).
+            let m = b.max(scale);
+            let s = scale / m;
+            let b_normalized = b / m;
+            let denominator = s * s + b_normalized * b_normalized;
+            let sum = a / m + b_normalized;
+            let q = ((a - b) / m) * (sum / denominator);
+            let half = F::from_f64(0.5).unwrap();
+            if q > F::one() {
+                (scale * (half * q.ln_1p())) * scale
+            } else {
+                let ratio = if q == F::zero() {
+                    F::one()
+                } else {
+                    q.ln_1p() / q
+                };
+                ((a - b) * s)
+                    * ((s * (half * a + half * b)) * (ratio / denominator))
+            }
+        });
+        if reduction.is_finite() {
+            reduction
+        } else {
+            before_cost - after_cost
         }
     }
 }
@@ -197,6 +319,53 @@ impl<F: Scalar> LossFunction<F> for ArctanLoss {
                 second_derivative: (z * inverse)
                     * ((z * z - three) * z * inverse),
             }
+        }
+    }
+
+    fn reduction_scaled(
+        &self,
+        before: F,
+        after: F,
+        scale: F,
+        before_cost: F,
+        after_cost: F,
+    ) -> F {
+        let reduction = ordered_reduction(before, after, |a, b| {
+            let half = F::from_f64(0.5).unwrap();
+            // The angle difference is atan((z_a - z_b)/(1 + z_a*z_b)).
+            if a <= scale {
+                let a_normalized = a / scale;
+                let b_normalized = b / scale;
+                let denominator =
+                    F::one() + (a_normalized * b_normalized).powi(2);
+                let difference = a - b;
+                let q = (difference / scale) * (a_normalized + b_normalized)
+                    / denominator;
+                // Attenuate the average before multiplying by the difference.
+                // The squared-loss reduction can overflow at finite arctan costs.
+                let slope =
+                    (half * a + half * b) * (atan_ratio(q) / denominator);
+                return difference * slope;
+            }
+            let inverse_a = scale / a;
+            let delta = ((a - b) / a) * (F::one() + b / a);
+            if b >= scale {
+                // Divide by both squared normalized magnitudes in the tail.
+                let inverse_b = scale / b;
+                let denominator = F::one() + (inverse_a * inverse_b).powi(2);
+                let q = inverse_b.powi(2) * delta / denominator;
+                let scaled = scale * inverse_b;
+                (scaled * (half * delta * atan_ratio(q) / denominator)) * scaled
+            } else {
+                let denominator = inverse_a.powi(2) + (b / scale).powi(2);
+                (scale * (half * delta.atan2(denominator))) * scale
+            }
+        });
+        if reduction.is_finite() {
+            reduction
+        } else {
+            // Rounding can overflow even the attenuated product near MAX.
+            before_cost - after_cost
         }
     }
 }

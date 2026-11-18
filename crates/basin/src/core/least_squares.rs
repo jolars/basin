@@ -37,6 +37,70 @@ mod losses;
 mod tests;
 pub use losses::{ArctanLoss, CauchyLoss, HuberLoss, SoftL1Loss, SquaredLoss};
 
+pub(crate) fn squared_loss_reduction<F: Scalar>(before: F, after: F) -> (F, F) {
+    let half = F::from_f64(0.5).unwrap();
+    let before = before.abs();
+    let after = after.abs();
+    if before == after {
+        return (F::zero(), F::zero());
+    }
+    // TwoSum recovers the error in each factor. The factored difference
+    // also avoids subtracting two separately rounded squares.
+    let two_sum = |a: F, b: F| {
+        let sum = a + b;
+        let b_rounded = sum - a;
+        (sum, (a - (sum - b_rounded)) + (b - b_rounded))
+    };
+    let (sum, sum_error) = two_sum(before, after);
+    let (difference, difference_error) = two_sum(before, -after);
+    let average = half * sum;
+    let average_error = half * sum_error;
+    let term = difference * average;
+    if !term.is_finite() {
+        return (term, F::zero());
+    }
+    // Expand the product of the corrected factors. Their first-order
+    // corrections can cancel, leaving the product of the two errors.
+    let error = difference.mul_add(average, -term)
+        + difference * average_error
+        + difference_error * average
+        + difference_error * average_error;
+    (term, error)
+}
+
+pub(crate) struct ReductionSum<F> {
+    sum: F,
+    correction: F,
+}
+
+impl<F: Scalar> ReductionSum<F> {
+    pub(crate) fn new() -> Self {
+        Self {
+            sum: F::zero(),
+            correction: F::zero(),
+        }
+    }
+
+    pub(crate) fn add(&mut self, term: F) {
+        let sum = self.sum + term;
+        if sum.is_finite() {
+            // Neumaier compensation recovers rounding error even when the
+            // new term is larger in magnitude than the running sum.
+            let error = if self.sum.abs() >= term.abs() {
+                (self.sum - sum) + term
+            } else {
+                (term - sum) + self.sum
+            };
+            self.correction = self.correction + error;
+        }
+        self.sum = sum;
+    }
+
+    pub(crate) fn total(self) -> F {
+        self.sum + self.correction
+    }
+}
+
 /// A scalar loss value and its first two derivatives.
 ///
 /// The differentiation variable is the squared normalized residual for
@@ -102,6 +166,44 @@ pub trait LossFunction<F: Scalar = f64> {
                 + F::from_f64(2.0).unwrap() * (value.second_derivative * z),
         }
     }
+
+    /// Compute the signed decrease in scaled loss from `before` to `after`.
+    ///
+    /// The adapter supplies finite residuals, a finite positive scale, and
+    /// their validated costs from [`evaluate_scaled`](Self::evaluate_scaled).
+    /// The default subtracts the costs. Override this method to preserve
+    /// small reductions that would round away in the individual costs.
+    fn reduction_scaled(
+        &self,
+        _before: F,
+        _after: F,
+        _scale: F,
+        before_cost: F,
+        after_cost: F,
+    ) -> F {
+        before_cost - after_cost
+    }
+    /// Return a reduction and its rounding correction for compensated summation.
+    #[doc(hidden)]
+    fn reduction_parts(
+        &self,
+        before: F,
+        after: F,
+        scale: F,
+        before_cost: F,
+        after_cost: F,
+    ) -> (F, F) {
+        (
+            self.reduction_scaled(
+                before,
+                after,
+                scale,
+                before_cost,
+                after_cost,
+            ),
+            F::zero(),
+        )
+    }
 }
 
 impl<F: Scalar, L: LossFunction<F> + ?Sized> LossFunction<F> for &L {
@@ -112,15 +214,37 @@ impl<F: Scalar, L: LossFunction<F> + ?Sized> LossFunction<F> for &L {
     fn evaluate_scaled(&self, residual: F, scale: F) -> LossEvaluation<F> {
         (**self).evaluate_scaled(residual, scale)
     }
+
+    fn reduction_scaled(
+        &self,
+        before: F,
+        after: F,
+        scale: F,
+        before_cost: F,
+        after_cost: F,
+    ) -> F {
+        (**self).reduction_scaled(before, after, scale, before_cost, after_cost)
+    }
+    fn reduction_parts(
+        &self,
+        before: F,
+        after: F,
+        scale: F,
+        before_cost: F,
+        after_cost: F,
+    ) -> (F, F) {
+        (**self).reduction_parts(before, after, scale, before_cost, after_cost)
+    }
 }
 
 /// An explicit robust objective built from a residual problem and a loss.
 ///
 /// Supports [`crate::GaussNewton`], [`crate::LevenbergMarquardt`],
-/// [`crate::LevenbergMarquardtQr`], [`crate::BoundedLevenbergMarquardt`], and
-/// [`crate::TrustRegionReflective`]. Their normal algorithmic limitations
-/// remain: in particular, Gauss–Newton takes full steps, and redescending
-/// losses such as Cauchy and arctangent can have several local minima.
+/// [`crate::LevenbergMarquardtQr`], [`crate::BoundedLevenbergMarquardt`],
+/// [`crate::TrustRegionReflective`], and
+/// [`TrustRegion`'s least-squares mode](crate::TrustRegion::least_squares_with).
+/// Redescending losses such as Cauchy and arctangent can have several local
+/// minima.
 ///
 /// This type does not implement `Residual` or `Jacobian`: its robust cost
 /// differs from the squared norm of the raw residuals. Access those through
@@ -280,6 +404,40 @@ impl<P, L: LossFunction<F>, F: Scalar, W> RobustLeastSquares<P, L, F, W> {
             sum = sum + term.cost;
         }
         sum
+    }
+
+    fn residual_cost_and_reduction<V: VectorLen + VectorIndex<F>>(
+        &self,
+        current: &V,
+        trial: &V,
+    ) -> (F, F) {
+        let mut cost = F::zero();
+        let mut reduction = ReductionSum::new();
+        for i in 0..trial.vec_len() {
+            let before = current.get_scalar(i);
+            let after = trial.get_scalar(i);
+            let Some(next) = self.term(after) else {
+                return (F::infinity(), F::neg_infinity());
+            };
+            cost = cost + next.cost;
+            if before != after {
+                let (term, error) = self.term(before).map_or(
+                    (F::nan(), F::zero()),
+                    |previous| {
+                        self.loss.reduction_parts(
+                            before,
+                            after,
+                            self.scale,
+                            previous.cost,
+                            next.cost,
+                        )
+                    },
+                );
+                reduction.add(term);
+                reduction.add(error);
+            }
+        }
+        (cost, reduction.total())
     }
 
     fn model_residual<V: Clone + VectorLen + VectorIndex<F>>(

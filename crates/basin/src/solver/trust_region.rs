@@ -1,9 +1,8 @@
-//! Trust-region (Newton) minimization.
+//! Trust-region minimization with Newton and Gauss–Newton models.
 //!
 //! [`TrustRegion`] is a general unconstrained minimizer over the
-//! second-order model `m(p) = f + gᵀp + ½ pᵀ B p`, where `g = ∇f(x)` and
-//! `B = ∇²f(x)` are supplied by the problem's
-//! [`Gradient`](crate::core::problem::Gradient) and [`Hessian`](crate::core::problem::Hessian) impls. Each iteration approximately
+//! quadratic model `m(p) = f + gᵀp + ½ pᵀ B p`, where `g = ∇f(x)` and
+//! the mode supplies the curvature `B`. Each iteration approximately
 //! minimizes `m` over a ball `‖p‖ ≤ Δ`, compares the achieved reduction to
 //! the model's prediction, and grows or shrinks the radius `Δ` accordingly
 //! (Nocedal & Wright, *Numerical Optimization*, 2e, Algorithm 4.1).
@@ -28,20 +27,19 @@
 //!   eq. 4.11–4.12). A bulletproof baseline with only linear convergence;
 //!   mostly a reference strategy.
 //!
-//! The solver runs in one of two modes, selected by the `Mode` type
-//! parameter: [`ExactHessian`] (the default) forms the full Hessian via the
-//! problem's [`Hessian`](crate::core::problem::Hessian) impl, while
-//! [`MatrixFree`] (via [`TrustRegion::matrix_free`]) drives the subproblem
-//! purely through the problem's
-//! [`HessianProduct`](crate::core::problem::HessianProduct) impl and never
-//! forms a matrix.
+//! [`ExactHessian`] forms the Hessian, [`MatrixFree`] uses Hessian-vector
+//! products, and [`GaussNewtonModel`] forms a Gram matrix from the residual
+//! Jacobian. Use [`TrustRegion::least_squares_with`] to select the least-squares
+//! mode with an explicit strategy such as [`Dogleg`].
 
 pub mod diagnostics;
 pub mod dogleg;
+mod least_squares;
 pub mod more_sorensen;
 pub mod steihaug;
 
 pub use dogleg::Dogleg;
+pub use least_squares::GaussNewtonWorkspace;
 pub use more_sorensen::MoreSorensen;
 pub use steihaug::Steihaug;
 
@@ -274,18 +272,18 @@ where
     }
 }
 
-/// Trust-region Newton minimizer (Nocedal & Wright, *Numerical
+/// Trust-region minimizer (Nocedal & Wright, *Numerical
 /// Optimization*, 2e, §4 / Algorithm 4.1).
 ///
 /// At each iterate `x` the local quadratic model
-/// `m(p) = f(x) + ∇f(x)ᵀp + ½ pᵀ ∇²f(x) p` is approximately minimized over a
+/// `m(p) = f(x) + gᵀp + ½ pᵀ B p` is approximately minimized over a
 /// ball `‖p‖ ≤ Δ` by the configured `Subproblem` strategy. The ratio of
 /// achieved to predicted reduction,
 /// `ρ = (f(x) − f(x + p)) / (m(0) − m(p))`, drives the radius: `Δ` shrinks
 /// when `ρ` is poor (`< ¼`), grows when `ρ` is excellent (`> ¾`) and the
 /// step is constrained by the boundary, and the step is accepted when
 /// `ρ > η`. A rejected step shrinks `Δ` and re-solves the subproblem with
-/// the *same* gradient and Hessian (no extra derivative evaluations) up to
+/// the same gradient and curvature up to
 /// [`with_max_inner_attempts`](Self::with_max_inner_attempts) times per
 /// outer iteration (the same reuse pattern as
 /// [`LevenbergMarquardt`](crate::solver::LevenbergMarquardt)).
@@ -333,6 +331,26 @@ where
 /// regions; [`EvalCounts::hessian_product_evals`](crate::EvalCounts) makes
 /// the cost visible.
 ///
+/// # Least-squares mode
+///
+/// [`least_squares_with`](Self::least_squares_with) selects a
+/// [`GaussNewtonModel`] and an explicit matrix strategy such as [`Dogleg`].
+/// For a problem implementing [`Residual`](crate::Residual) and
+/// [`Jacobian`](crate::Jacobian), the cost is `½‖r‖²`, the gradient is
+/// `Jᵀr`, and the model matrix is `JᵀJ`. With
+/// [`RobustLeastSquares`](crate::RobustLeastSquares), the model uses the
+/// safeguarded curvature of the loss and the state reports the true robust
+/// cost and gradient.
+///
+/// Each trial evaluates the residual. The solver evaluates the Jacobian at
+/// initialization and when a trial passes the reduction test. It builds the
+/// Gram matrix when a step needs it and reuses the matrix and residual across
+/// rejections. Residual and Jacobian evaluations appear in their own count
+/// categories, and the derived cost and gradient are published together in
+/// [`FirstOrderState`]. The Gram matrix must be finite to take another step.
+/// Dogleg uses Cholesky on the Gram matrix and falls back to a Cauchy step if
+/// factorization fails, including on a singular model.
+///
 /// # Backends
 ///
 /// The solver itself needs `Clone`, [`VectorLen`], [`ScaledAdd`], and
@@ -346,23 +364,24 @@ where
 /// [`LinearSolveSpd`](crate::core::math::LinearSolveSpd), while
 /// [`MoreSorensen`] needs that Cholesky solve plus
 /// [`SymmetricEigen`](crate::core::math::SymmetricEigen). Those operations are
-/// available on all four dense backends. In [`MatrixFree`] mode no matrix type
-/// is bound at all, so every vector backend works. Both scalar types, `f32`
-/// and `f64`, are supported on all four dense backends. All shipped strategies are
-/// wasm-clean in their pure-Rust configurations; the optional nalgebra LAPACK
-/// acceleration remains non-WASM as documented by that feature.
+/// available on all four dense backends. Least-squares mode also supports these
+/// backends and requires [`ScaleInPlace`] and
+/// [`VectorIndex`](crate::VectorIndex) on the vector type and
+/// [`GramMatrix`](crate::GramMatrix), [`MatTransposeVec`](crate::MatTransposeVec),
+/// and [`MatrixFinite`](crate::MatrixFinite) on the Jacobian, along with the
+/// chosen strategy's capabilities. Robust losses also require
+/// [`ScaleRowsInPlace`](crate::ScaleRowsInPlace) on the Jacobian.
 ///
-/// Second-order information can reach the solver by three routes: an
-/// analytic [`Hessian`] (exact mode), an analytic
-/// [`HessianProduct`] (matrix-free
-/// mode; see also the gradient-difference helpers
+/// [`MatrixFree`] mode works on every vector backend. All four dense backends
+/// support both `f32` and `f64`. The pure-Rust configurations support WASM.
+///
+/// Newton models can use an analytic [`Hessian`] or [`HessianProduct`].
+/// Numerical derivatives are available through the gradient-difference helpers
 /// [`forward_difference_hessian_product`](crate::core::numdiff::forward_difference_hessian_product)
-/// /
-/// [`central_difference_hessian_product`](crate::core::numdiff::central_difference_hessian_product)),
-/// or [`FiniteDiff`](crate::core::numdiff::FiniteDiff), which synthesizes
-/// both: a finite-difference [`Hessian`] over a backend with a dense matrix
-/// type (nalgebra / faer), or a finite-difference Hessian product on any
-/// backend.
+/// and [`central_difference_hessian_product`](crate::core::numdiff::central_difference_hessian_product),
+/// or through [`FiniteDiff`](crate::core::numdiff::FiniteDiff). The adapter
+/// can synthesize a full Hessian on supported matrix backends and a Hessian
+/// product on any vector backend.
 ///
 /// # References
 ///
@@ -507,6 +526,13 @@ pub struct ExactHessian;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MatrixFree;
 
+/// Marker for [`TrustRegion`]'s Gauss–Newton model for nonlinear least squares.
+///
+/// Construct this mode with [`TrustRegion::least_squares_with`].
+#[derive(Debug, Clone, Copy, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct GaussNewtonModel;
+
 impl Default for TrustRegion<Steihaug> {
     fn default() -> Self {
         Self::new()
@@ -540,18 +566,7 @@ impl<Sub, F: Scalar> TrustRegion<Sub, F, MatrixFree> {
     /// ([`Steihaug`] or [`CauchyPoint`]; [`Dogleg`] and [`MoreSorensen`] need
     /// the actual matrix and are compile errors here).
     pub fn matrix_free_with(subproblem: Sub) -> Self {
-        Self {
-            subproblem,
-            radius: F::one(),
-            initial_radius: F::one(),
-            max_radius: F::from_f64(100.0).unwrap(),
-            eta: F::from_f64(0.125).unwrap(),
-            max_inner: 10,
-            rejected_step: false,
-            trials: None,
-            mode: PhantomData,
-            workspace: (),
-        }
+        Self::with_workspace(subproblem, ())
     }
 }
 
@@ -583,6 +598,12 @@ impl<Sub, F: Scalar> TrustRegion<Sub, F> {
     /// Trust-region solver with an explicit subproblem strategy
     /// ([`Steihaug`], [`Dogleg`], [`MoreSorensen`], or [`CauchyPoint`]).
     pub fn with_subproblem(subproblem: Sub) -> Self {
+        Self::with_workspace(subproblem, ())
+    }
+}
+
+impl<Sub, F: Scalar, Mode, W> TrustRegion<Sub, F, Mode, W> {
+    fn with_workspace(subproblem: Sub, workspace: W) -> Self {
         Self {
             subproblem,
             radius: F::one(),
@@ -593,12 +614,18 @@ impl<Sub, F: Scalar> TrustRegion<Sub, F> {
             rejected_step: false,
             trials: None,
             mode: PhantomData,
-            workspace: (),
+            workspace,
         }
     }
-}
 
-impl<Sub, F: Scalar, Mode, W> TrustRegion<Sub, F, Mode, W> {
+    fn reset_run(&mut self) {
+        self.radius = self.initial_radius;
+        self.rejected_step = false;
+        if let Some(records) = self.trials.as_mut() {
+            records.clear();
+        }
+    }
+
     /// Enable native trial records without changing the numerical policy.
     pub fn with_trial_diagnostics(mut self, enabled: bool) -> Self {
         self.trials = enabled.then(Vec::new);
@@ -667,13 +694,8 @@ where
     }
 }
 
-/// Shared `Solver::init` body for both modes: reset the radius and seed
-/// cost + gradient so iter-0 termination checks (e.g. `GradientTolerance`
-/// on a near-optimal start) see a complete state. Second-order information
-/// is (re)computed per iteration in `next_iter`, so none is seeded here.
+/// Seed the scalar objective and its gradient for the Newton modes.
 fn tr_init<P, V, F>(
-    radius: &mut F,
-    initial_radius: F,
     problem: &mut Problem<P>,
     mut state: FirstOrderState<V, F>,
 ) -> Result<FirstOrderState<V, F>, P::Error>
@@ -683,8 +705,6 @@ where
     P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
 {
     state.reset();
-    // A reused solver instance must restart from the configured radius.
-    *radius = initial_radius;
     let (cost, grad) =
         problem.cost_and_gradient_reusing(state.param(), None)?;
     state
@@ -693,14 +713,75 @@ where
     Ok(state)
 }
 
-/// Shared `Solver::next_iter` body for both modes: the accept/shrink loop
-/// of N&W Algorithm 4.1. The mode-specific part — how a subproblem attempt
-/// obtains `B·v` — is injected as `attempt(problem, x, g, radius)`, called
-/// once per inner radius reduction at the *same* iterate `x`.
+trait TrialEvaluation<P, V, F> {
+    type Error;
+
+    /// Evaluate the trial cost and the actual reduction from the current point.
+    fn evaluate_trial(
+        &mut self,
+        problem: &mut Problem<P>,
+        trial: &V,
+        cost_old: F,
+    ) -> Result<(F, F), Self::Error>;
+
+    /// Returns false on an unusable trial gradient and retains the current
+    /// gradient in that case.
+    fn refresh_gradient(
+        &mut self,
+        problem: &mut Problem<P>,
+        trial: &V,
+        gradient: &mut V,
+    ) -> Result<bool, Self::Error>;
+}
+
+struct ObjectiveTrial;
+
+impl<P, V, F> TrialEvaluation<P, V, F> for ObjectiveTrial
+where
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
+{
+    type Error = P::Error;
+
+    fn evaluate_trial(
+        &mut self,
+        problem: &mut Problem<P>,
+        trial: &V,
+        cost_old: F,
+    ) -> Result<(F, F), Self::Error> {
+        let cost = problem.cost(trial)?;
+        Ok((cost, cost_old - cost))
+    }
+
+    fn refresh_gradient(
+        &mut self,
+        problem: &mut Problem<P>,
+        trial: &V,
+        gradient: &mut V,
+    ) -> Result<bool, Self::Error> {
+        problem.gradient_into(trial, gradient)?;
+        Ok(true)
+    }
+}
+
+fn zero_gradient<F: Scalar>(norm: F) -> Termination<F> {
+    Termination::custom(
+        "trust_region.zero_gradient",
+        "The Euclidean gradient norm is exactly zero.",
+        vec![crate::Measurement {
+            name: "gradient_norm".into(),
+            value: norm,
+        }],
+    )
+}
+
+/// Shared acceptance and radius updates from N&W Algorithm 4.1.
+/// The mode supplies a subproblem attempt and a trial evaluator. Attempts
+/// use the same iterate until the loop accepts a step.
 /// The final tuple element reports whether a step was accepted, so rejected
 /// iterations cannot trigger the generic iterate-change checks.
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
-fn tr_next_iter<P, V, F>(
+fn tr_next_iter<P, V, F, E>(
     radius: &mut F,
     max_radius: F,
     eta: F,
@@ -708,16 +789,11 @@ fn tr_next_iter<P, V, F>(
     trials: &mut Option<Vec<diagnostics::Trial<F>>>,
     problem: &mut Problem<P>,
     mut state: FirstOrderState<V, F>,
-    mut attempt: impl FnMut(
-        &mut Problem<P>,
-        &V,
-        &V,
-        F,
-    ) -> Result<Step<V, F>, P::Error>,
-) -> Result<(FirstOrderState<V, F>, Option<Termination<F>>, bool), P::Error>
+    evaluator: &mut impl TrialEvaluation<P, V, F, Error = E>,
+    mut attempt: impl FnMut(&mut Problem<P>, &V, &V, F) -> Result<Step<V, F>, E>,
+) -> Result<(FirstOrderState<V, F>, Option<Termination<F>>, bool), E>
 where
     F: Scalar,
-    P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
     V: Clone + ScaledAdd<F> + NormSquared<F> + VectorLen,
 {
     let (cost_old, mut g) = state
@@ -782,14 +858,7 @@ where
             }
             let gradient_norm = g.norm_l2();
             let reason = if gradient_norm == F::zero() {
-                Termination::custom(
-                    "trust_region.zero_gradient",
-                    "The Euclidean gradient norm is exactly zero.",
-                    vec![crate::Measurement {
-                        name: "gradient_norm".into(),
-                        value: gradient_norm,
-                    }],
-                )
+                zero_gradient(gradient_norm)
             } else {
                 Termination::numerical_stall(
                     "trust_region: no numerical progress",
@@ -806,13 +875,14 @@ where
         if let Some(record) = trials.as_mut().and_then(|r| r.last_mut()) {
             record.phase = diagnostics::Phase::TrialEvaluation;
         }
-        let cost_trial = problem.cost(&trial)?;
+        let (cost_trial, actual_reduction) =
+            evaluator.evaluate_trial(problem, &trial, cost_old)?;
         if let Some(record) = trials.as_mut().and_then(|r| r.last_mut()) {
             record.trial_cost = Some(cost_trial);
             record.counts_after = *problem.counts();
         }
 
-        let rho = (cost_old - cost_trial) / step.predicted_reduction;
+        let rho = actual_reduction / step.predicted_reduction;
         let step_norm = step.d.norm_squared().sqrt();
 
         // Radius update (N&W Algorithm 4.1). A non-finite ρ (trial cost
@@ -847,13 +917,26 @@ where
             };
         }
         if rho > eta {
-            // Accept: move to the trial point and refresh the gradient
-            // there (second-order information is recomputed by the next
-            // iteration).
-            problem.gradient_into(&trial, &mut g)?;
+            let valid = evaluator.refresh_gradient(problem, &trial, &mut g)?;
             if let Some(record) = trials.as_mut().and_then(|r| r.last_mut()) {
-                record.phase = diagnostics::Phase::Accepted;
+                record.phase = if valid {
+                    diagnostics::Phase::Accepted
+                } else {
+                    diagnostics::Phase::InvalidModel
+                };
                 record.counts_after = *problem.counts();
+            }
+            if !valid {
+                state
+                    .set_evaluation(cost_old, g)
+                    .expect("gradient dimension differs from parameter");
+                return Ok((
+                    state,
+                    Some(Termination::numerical_failure(
+                        "The trust-region trial produced an unusable gradient.",
+                    )),
+                    false,
+                ));
             }
             state
                 .replace(trial, cost_trial, g)
@@ -895,11 +978,8 @@ where
         problem: &mut Problem<P>,
         state: FirstOrderState<V, F>,
     ) -> Result<FirstOrderState<V, F>, Self::Error> {
-        self.rejected_step = false;
-        if let Some(records) = self.trials.as_mut() {
-            records.clear();
-        }
-        tr_init(&mut self.radius, self.initial_radius, problem, state)
+        self.reset_run();
+        tr_init(problem, state)
     }
 
     fn next_iter(
@@ -926,6 +1006,7 @@ where
                 &mut self.trials,
                 problem,
                 state,
+                &mut ObjectiveTrial,
                 |_, _, g, radius| Ok(subproblem.solve(g, &b, radius)),
             );
             *buffer = Some(b);
@@ -957,11 +1038,8 @@ where
         problem: &mut Problem<P>,
         state: FirstOrderState<V, F>,
     ) -> Result<FirstOrderState<V, F>, Self::Error> {
-        self.rejected_step = false;
-        if let Some(records) = self.trials.as_mut() {
-            records.clear();
-        }
-        tr_init(&mut self.radius, self.initial_radius, problem, state)
+        self.reset_run();
+        tr_init(problem, state)
     }
 
     fn next_iter(
@@ -983,6 +1061,7 @@ where
             &mut self.trials,
             problem,
             state,
+            &mut ObjectiveTrial,
             |problem, x, g, radius| {
                 subproblem.solve_hvp_into(g, radius, |v, out| {
                     problem.hessian_product_into(x, v, out)
@@ -1191,13 +1270,9 @@ mod tests {
         ] {
             let mut problem = Problem::new(Quadratic);
             let mut radius = 1.0;
-            let state = tr_init(
-                &mut radius,
-                1.0,
-                &mut problem,
-                FirstOrderState::new(vec![1.0, 0.0]),
-            )
-            .unwrap();
+            let state =
+                tr_init(&mut problem, FirstOrderState::new(vec![1.0, 0.0]))
+                    .unwrap();
             let counts = *problem.counts();
             let (state, reason, _) = tr_next_iter(
                 &mut radius,
@@ -1207,6 +1282,7 @@ mod tests {
                 &mut None,
                 &mut problem,
                 state,
+                &mut ObjectiveTrial,
                 |_, _, _, _| {
                     Ok(Step {
                         d: vec![0.0, 0.0],

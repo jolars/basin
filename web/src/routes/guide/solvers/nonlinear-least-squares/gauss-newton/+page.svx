@@ -27,7 +27,9 @@ for understanding the effect of damping. [Madsen, Nielsen, and Tingleff
 (2004)](#ref-madsen-nielsen-tingleff-2004), §3.1, describe the method.
 
 For a less reliable start, compare
-[Levenberg–Marquardt](../levenberg-marquardt/). For ill-conditioned dense
+[Levenberg–Marquardt](../levenberg-marquardt/) or
+[least-squares dogleg](../../trust-region/trust-region-newton/#least-squares-dogleg).
+For ill-conditioned dense
 Jacobians, compare its [QR variant](../levenberg-marquardt-qr/). These are local
 methods; a stationary point need not be the global minimum.
 

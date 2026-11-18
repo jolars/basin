@@ -27,6 +27,10 @@ use crate::{VectorIndex, VectorLen};
 /// Levenberg-Marquardt is for. See Madsen, Nielsen, Tingleff (2004),
 /// *Methods for Non-Linear Least Squares Problems*, §3.1.
 ///
+/// For trust-region dogleg steps with the same model, use
+/// [`TrustRegion::least_squares_with`](crate::TrustRegion::least_squares_with)
+/// with [`Dogleg`](crate::Dogleg).
+///
 /// **Cholesky-on-`JᵀJ` vs QR-on-`J`.** Cholesky on the Gram is the
 /// simple path and the only one the
 /// [`linalg`](crate::core::math) tier exposes today. It squares the
