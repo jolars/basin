@@ -320,14 +320,11 @@ compatibility and numerical behavior still need verification.
   crate](https://docs.rs/differential-evolution/0.2.2/differential_evolution/)
   is another self-adaptive candidate if its seed and precision controls fit
   reproducible comparisons.
-- [ ] **Evaluate the Rust `dogleg` least-squares solver.** [`dogleg`
+- [x] **Evaluate the Rust `dogleg` least-squares solver.** [`dogleg`
   0.1.1](https://docs.rs/dogleg/0.1.1/dogleg/) implements Powell's
   least-squares dogleg method with nalgebra and faer backends and an adapter
-  for `levenberg-marquardt` problems. Reuse NIST fixtures and analytic
-  Jacobians. Compare with Basin LM for solver effectiveness; a matched
-  dogleg comparison needs a Gauss-Newton model rather than blindly using an
-  exact objective Hessian with Basin's general trust-region solver. Keep
-  this distinct from rectangular dogbox and reflective least squares.
+  for `levenberg-marquardt` problems. See the
+  [NIST benchmark results](https://basin.rs/benchmarks/competitors/#powell-dogleg-on-nist-least-squares).
 
 ### Algorithm gaps to revisit after comparisons
 

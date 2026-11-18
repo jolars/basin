@@ -1,5 +1,6 @@
 <script>
     import Seo from "#lib/Seo.svelte";
+    import DoglegFigure from "#lib/benchmarks/DoglegFigure.svelte";
     import CompetitorFigure from "#lib/benchmarks/CompetitorFigure.svelte";
     import { COMPETITOR_BENCHMARKS as data } from "#lib/data/competitors.ts";
 
@@ -19,7 +20,7 @@ How much progress does each implementation make, and how long does it take?
 These comparisons follow individual solvers on shared problems. The curves show
 the objective gap $f(\mathbf{x}) - f^\star$ against elapsed time. Compare the
 time needed to reach a given accuracy as well as the accuracy ultimately
-reached.
+reached. The NIST dogleg plot uses residual evaluations on the horizontal axis.
 
 Sizes differ by solver: a useful workload for L-BFGS can be excessive for a
 simplex method. We choose larger problems instead of repeating tiny solves or
@@ -28,6 +29,7 @@ continuing iterations after reaching the target.
   | Solver              | Workload                                               |
   | ------------------- | ------------------------------------------------------ |
   | Levenberg–Marquardt | 32 parameters, 4,096 residuals                         |
+  | Powell dogleg      | BoxBOD nonlinear regression, NIST start 1              |
   | COBYLA              | 30 variables, box bounds, and an active sum constraint |
   | SLSQP               | 100 variables and an active nonlinear ball constraint  |
   | Gradient descent    | 100-variable Rosenbrock                                |
@@ -70,6 +72,29 @@ damping and disables its absolute-gradient and unscaled-step checks. Both have a
 The curve records the best objective seen at residual evaluations, including
 rejected trials. Internal damping searches and acceptance rules still differ
 from the reference's MINPACK path.
+
+## Powell dogleg on NIST least squares
+
+The plot shows the first published start for BoxBOD, one of the 27 NIST
+Statistical Reference Datasets for nonlinear regression. All three
+configurations use the same residuals and analytic Jacobian, with `f64` and
+nalgebra 0.34.
+
+Basin's dogleg uses the Gauss–Newton least-squares model, with Cholesky on
+$J^\top J$ and a Cauchy step if the solve fails. The
+[`dogleg` 0.1.1 crate](https://docs.rs/dogleg/0.1.1/dogleg/) uses an SVD of
+the Jacobian. The unscaled configuration shares Basin's Euclidean trust region
+and initial radius of 1. The default configuration uses the crate's own
+scaling and initial radius. Each implementation applies its own acceptance
+and stopping rules.
+
+<DoglegFigure />
+
+Regenerate the plot data from the repository root.
+
+```sh
+cargo run --release -p competitor-bench --bin verify_dogleg -- --trace > web/src/lib/data/dogleg-convergence.json
+```
 
 ## COBYLA
 

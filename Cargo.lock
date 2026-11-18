@@ -380,6 +380,7 @@ dependencies = [
  "cmaes",
  "cobyla",
  "criterion",
+ "dogleg",
  "faer 0.24.4",
  "gomez",
  "lbfgsb",
@@ -503,6 +504,28 @@ name = "defer"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "930c7171c8df9fb1782bdf9b918ed9ed2d33d1d22300abb754f9085bc48bf8e8"
+
+[[package]]
+name = "dogleg"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20813a8d2bc5e14cabcd87c270aba5b7dd619db1f5a23c0ff72b41043e8a69d1"
+dependencies = [
+ "dogleg-matx",
+ "num-traits",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "dogleg-matx"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26823537c4fb095057ca8f136f8c60fa21051e603683ce34f4fe855c9b179aca"
+dependencies = [
+ "nalgebra 0.34.2",
+ "num-traits",
+ "rayon",
+]
 
 [[package]]
 name = "dyn-stack"

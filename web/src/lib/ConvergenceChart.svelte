@@ -2,7 +2,9 @@
     import { formatDuration } from "./data/benchmarks";
     import { placeLineLabels } from "./lineLabels";
 
-    type Point = { tNs: number; subopt: number };
+    type Point = ({ tNs: number } | { evaluation: number }) & {
+        subopt: number;
+    };
     type Series = { label: string; color: string; points: Point[] };
 
     let {
@@ -10,6 +12,7 @@
         ariaLabel = "convergence chart",
         yLabel = "suboptimality f(x) − f*",
         xScale = "log",
+        xUnit = "time",
         /** Drop the per-chart axis titles ("suboptimality f(x) − f*",
          * "time"). For multi-panel grids where the caller provides
          * shared labels around the grid edges. Tightens the left + bottom
@@ -23,6 +26,7 @@
         ariaLabel?: string;
         yLabel?: string;
         xScale?: "log" | "linear";
+        xUnit?: "time" | "evaluations";
         compact?: boolean;
         directLabels?: boolean;
     } = $props();
@@ -41,10 +45,13 @@
     const innerH = $derived(H - padT - padB);
     const axisY = $derived(padT + innerH);
 
+    const xValue = (point: Point) =>
+        "evaluation" in point ? point.evaluation : point.tNs;
+
     // Logarithmic time clamps the initial sample at t = 0 to the left edge.
     const g = $derived.by(() => {
         const allT = series
-            .flatMap((s) => s.points.map((p) => p.tNs))
+            .flatMap((s) => s.points.map(xValue))
             .filter((v) => v > 0);
         const xLo = Math.floor(Math.log10(allT.length ? Math.min(...allT) : 1));
         const xHi = Math.max(
@@ -89,7 +96,13 @@
                 const time = (i / 4) * timeLimit;
                 xTicks.push({
                     x: xPx(time),
-                    label: String(Number((time / 1e6).toPrecision(6))),
+                    label: String(
+                        Number(
+                            (time / (xUnit === "time" ? 1e6 : 1)).toPrecision(
+                                6,
+                            ),
+                        ),
+                    ),
                     anchor: i === 0 ? "start" : i === 4 ? "end" : "middle",
                 });
             }
@@ -99,7 +112,10 @@
                     k === xLo ? "start" : k === xHi ? "end" : "middle";
                 xTicks.push({
                     x: xPx(10 ** k),
-                    label: formatDuration(10 ** k).replace(/\.0+ /, " "),
+                    label:
+                        xUnit === "time"
+                            ? formatDuration(10 ** k).replace(/\.0+ /, " ")
+                            : String(10 ** k),
                     anchor,
                 });
             }
@@ -115,12 +131,13 @@
 
         const lines = series.map((s) => {
             const pts = [...s.points]
-                .sort((a, b) => a.tNs - b.tNs)
-                .map((p) => ({ x: xPx(p.tNs), y: yPx(p.subopt) }));
+                .sort((a, b) => xValue(a) - xValue(b))
+                .map((p) => ({ x: xPx(xValue(p)), y: yPx(p.subopt) }));
             const d = pts
-                .map(
-                    (p, i) =>
-                        `${i ? "L" : "M"}${p.x.toFixed(1)},${p.y.toFixed(1)}`,
+                .map((p, i) =>
+                    i && xUnit === "evaluations"
+                        ? `H${p.x.toFixed(1)}V${p.y.toFixed(1)}`
+                        : `${i ? "L" : "M"}${p.x.toFixed(1)},${p.y.toFixed(1)}`,
                 )
                 .join(" ");
             return { label: s.label, color: s.color, d, points: pts };
@@ -216,7 +233,12 @@
             class="fill-stone-500 dark:fill-stone-400"
             x={padL + innerW / 2}
             y={H - 4}
-            text-anchor="middle">time{xScale === "linear" ? " (ms)" : ""}</text
+            text-anchor="middle"
+            >{xUnit === "evaluations"
+                ? "residual evaluations"
+                : xScale === "linear"
+                  ? "time (ms)"
+                  : "time"}</text
         >
     {/if}
 
