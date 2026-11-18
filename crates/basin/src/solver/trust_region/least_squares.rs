@@ -56,6 +56,8 @@ impl<Sub, F: Scalar, V, M>
     /// The solver builds the Gram matrix on the first step from each point
     /// and reuses it across rejections. Radius defaults match
     /// [`TrustRegion::new`].
+    /// If a step rounds back to the current point, the solver reports a
+    /// numerical stall before requesting another residual.
     ///
     /// ```
     /// use basin::{DenseMatrix, Dogleg, Executor, Jacobian, Residual, TrustRegion};
@@ -157,6 +159,15 @@ where
     Problem<P>: Evaluation<V, M, F, Error = E>,
 {
     type Error = E;
+
+    fn trial_is_unchanged(&self, current: &V, trial: &V) -> bool {
+        let len = current.vec_len();
+        len == trial.vec_len()
+            && (0..len).all(|i| {
+                let base = current.get_scalar(i);
+                base.is_finite() && base == trial.get_scalar(i)
+            })
+    }
 
     fn evaluate_trial(
         &mut self,

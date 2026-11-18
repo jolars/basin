@@ -118,6 +118,41 @@ where
         assert_eq!(result.counts.jacobian_evals, 2);
         assert_eq!(result.counts.total_work(), 4);
     }
+
+    // This radius gives a positive predicted reduction, but the step rounds
+    // back to the starting point in both scalar precisions.
+    let result = Executor::from_start(
+        Linear { vector },
+        TrustRegion::least_squares_with(Dogleg)
+            .with_radius(F::epsilon() / num(16.0))
+            .with_trial_diagnostics(true),
+        vector(&[num(4.0), num(4.0)]),
+    )
+    .require_evaluated_state()
+    .max_iter(1)
+    .run_with_solver()
+    .unwrap();
+    assert_eq!(result.report.code(), TerminationCode::NumericalNoProgress);
+    assert_eq!(
+        result.report.stage,
+        TerminationStage::Step { completed: false }
+    );
+    assert_eq!(result.report.iteration, 0);
+    let (x, cost, gradient) = result.state.current().unwrap();
+    assert_eq!(x.get_scalar(0), num(4.0));
+    assert_eq!(x.get_scalar(1), num(4.0));
+    assert_eq!(cost, num(20.125));
+    assert_eq!(gradient.get_scalar(0), num(2.0));
+    assert_eq!(gradient.get_scalar(1), num(12.0));
+    assert_eq!(result.counts.residual_evals, 1);
+    assert_eq!(result.counts.jacobian_evals, 1);
+    let [trial] = result.solver.trial_observations() else {
+        panic!("expected one subproblem attempt");
+    };
+    assert_eq!(trial.phase, Phase::NoProgress);
+    assert!(trial.predicted_reduction.unwrap() > F::zero());
+    assert!(trial.trial_cost.is_none());
+    assert_eq!(trial.counts_before, trial.counts_after);
 }
 
 #[test]

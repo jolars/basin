@@ -11,7 +11,8 @@ pub enum Phase {
     /// The strategy returned non-finite model reduction or the trial could
     /// not supply a usable gradient.
     InvalidModel,
-    /// The model cannot decrease in native arithmetic.
+    /// The model cannot decrease or its step leaves the point unchanged at
+    /// working precision.
     NoProgress,
     /// A trial cost or residual call is active and may have failed.
     TrialEvaluation,

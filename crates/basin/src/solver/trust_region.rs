@@ -716,6 +716,12 @@ where
 trait TrialEvaluation<P, V, F> {
     type Error;
 
+    /// Detect a step that rounded back to the current point when coordinate
+    /// access is available.
+    fn trial_is_unchanged(&self, _current: &V, _trial: &V) -> bool {
+        false
+    }
+
     /// Evaluate the trial cost and the actual reduction from the current point.
     fn evaluate_trial(
         &mut self,
@@ -872,6 +878,21 @@ where
 
         let mut trial = state.param().clone();
         trial.scaled_add(F::one(), &step.d);
+        if evaluator.trial_is_unchanged(state.param(), &trial) {
+            if let Some(record) = trials.as_mut().and_then(|r| r.last_mut()) {
+                record.phase = diagnostics::Phase::NoProgress;
+            }
+            state
+                .set_evaluation(cost_old, g)
+                .expect("gradient dimension differs from parameter");
+            return Ok((
+                state,
+                Some(Termination::numerical_stall(
+                    "The trust-region trial leaves every parameter unchanged.",
+                )),
+                false,
+            ));
+        }
         if let Some(record) = trials.as_mut().and_then(|r| r.last_mut()) {
             record.phase = diagnostics::Phase::TrialEvaluation;
         }
