@@ -328,13 +328,6 @@ compatibility and numerical behavior still need verification.
   dogleg comparison needs a Gauss-Newton model rather than blindly using an
   exact objective Hessian with Basin's general trust-region solver. Keep
   this distinct from rectangular dogbox and reflective least squares.
-- [ ] **Assess the native Rust `liblbfgs` port as a specialist baseline.**
-  [`liblbfgs` 0.1.0](https://docs.rs/crate/liblbfgs/0.1.0) is a Rust
-  implementation derived from the C library, despite its name. It offers
-  L-BFGS and OWL-QN. Add an unconstrained L-BFGS comparison only if it
-  contributes beyond argmin and NLopt, matching memory, line search, and
-  fused objective/gradient callbacks. An OWL-QN comparison would require an
-  explicit L1-regularized workload and is a different algorithm.
 
 ### Algorithm gaps to revisit after comparisons
 
@@ -426,13 +419,13 @@ scalar types.
   including slower expensive Jacobian workloads, and was discarded. The
   helper documentation now describes scratch as per-job rather than
   per-thread.
-- [x] **Remove forward-Hessian probe barriers.** Base, single-coordinate,
-  and two-coordinate evaluations share one ordered batch, then form the
-  differences. Fused calls reuse their base. Tests preserve exact probe sets,
-  bitwise results, and output publication on errors. Low-dimensional cheap,
-  expensive, and uneven callbacks were compared on 1, 2, 4, and 8 workers
-  with unchanged probe counts. Small multi-dimensional and costly 1D cases
-  benefit; cheap 1D callbacks now pay pool overhead.
+- [x] **Remove forward-Hessian probe barriers.** Base, single-coordinate, and
+  two-coordinate evaluations share one ordered batch, then form the
+  differences. Fused calls reuse their base. Tests preserve exact probe
+  sets, bitwise results, and output publication on errors. Low-dimensional
+  cheap, expensive, and uneven callbacks were compared on 1, 2, 4, and 8
+  workers with unchanged probe counts. Small multi-dimensional and costly 1D
+  cases benefit; cheap 1D callbacks now pay pool overhead.
 - [ ] **Overlap base evaluations with derivative probes.** Evaluate `f(x)` or
   `r(x)` concurrently with the independent probes for forward gradients and
   Jacobians, then form differences once the base is available. Apply the
