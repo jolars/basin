@@ -29,10 +29,10 @@
         "collect:solvers": "tsx scripts/collect-solvers.ts"
     },
     "devDependencies": {
-        "@iconify-json/lucide": "^1.2.152",
-        "@iconify-json/simple-icons": "^1.2.101",
+        "@iconify-json/lucide": "^1.2.155",
+        "@iconify-json/simple-icons": "^1.2.102",
         "@sveltejs/adapter-static": "^4.0.1",
-        "@sveltejs/kit": "^3.1.1",
+        "@sveltejs/kit": "^3.2.0",
         "@sveltejs/vite-plugin-svelte": "^7.3.1",
         "@tailwindcss/typography": "^0.5.20",
         "@tailwindcss/vite": "^4.3.5",
@@ -42,7 +42,7 @@
         "mdsvex": "^0.12.8",
         "node-html-markdown": "^2.0.0",
         "parse5": "^8.1.1",
-        "prettier": "^3.9.10",
+        "prettier": "^3.10.1",
         "prettier-plugin-svelte": "^4.1.1",
         "prismjs": "^1.30.0",
         "remark-math": "^3.0.1",
@@ -54,8 +54,8 @@
         "tsx": "^4.23.15",
         "typescript": "npm:@typescript/typescript6@^6.0.2",
         "unplugin-icons": "^24.0.0",
-        "vite": "^8.3.6",
+        "vite": "^8.3.8",
         "vite-plugin-wasm": "^3.4.0",
-        "wrangler": "^4.158.0"
+        "wrangler": "^4.162.0"
     }
 }
