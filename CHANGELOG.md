@@ -1,5 +1,21 @@
 # Changelog
 
+## [3.4.0](https://github.com/jolars/basin/compare/v3.3.0...v3.4.0) (2026-11-19)
+
+### Features
+
+- add least-squares trust-region mode ([`28ad077`](https://github.com/jolars/basin/commit/28ad0777eac3a2ff3497cd22cb7e0a03690ff920))
+
+### Bug Fixes
+
+- stop on rounded least-squares trust-region steps ([`58f78ea`](https://github.com/jolars/basin/commit/58f78ea5d90356e363285e2d7395cfff735dcdc3))
+
+### Performance Improvements
+
+- streamline Nelder-Mead vector updates ([`13bd5bb`](https://github.com/jolars/basin/commit/13bd5bb066c8f2f44f93f9740398fd78c9cc2037))
+- add BFGS competitor benchmark to docs ([`89c4aa8`](https://github.com/jolars/basin/commit/89c4aa8edd061e58bbdcb59a2a93428a7c3d4ea5))
+- remove forward Hessian probe barriers ([`41efd1f`](https://github.com/jolars/basin/commit/41efd1f252860187f7b5741c2dc111b25f1dfe5f))
+
 ## [3.3.0](https://github.com/jolars/basin/compare/v3.2.0...v3.3.0) (2026-11-06)
 
 ### Features
