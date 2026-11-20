@@ -102,7 +102,7 @@
                                 "nonfinite"}; projected-gradient norm
                             {r.summary.projectedGradient?.toExponential(3) ??
                                 "nonfinite"}.
-                        {:else if solver === "bfgs"}
+                        {:else if solver === "bfgs" || solver === "nonlinear_cg"}
                             {r.summary.iterations} iterations;
                             {r.summary.objectiveCalls} objective and
                             {r.summary.gradientCalls} gradient calls.

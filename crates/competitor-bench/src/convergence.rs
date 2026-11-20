@@ -1,6 +1,12 @@
 //! Traces and run diagnostics shared by the published library comparisons.
 
+use std::convert::Infallible;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
+
+use argmin::core::Error as ArgminError;
+use basin::problems::{rosenbrock, rosenbrock_gradient};
+use basin::{CostFunction, Gradient};
 
 #[derive(Debug)]
 pub struct Summary {
@@ -223,5 +229,51 @@ mod tests {
             [0.5, 0.5, 0.125]
         );
         assert_eq!(run.violations[1].1, 0.5);
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct RosenbrockWorkload {
+    pub costs: AtomicUsize,
+    pub gradients: AtomicUsize,
+}
+
+impl CostFunction for &RosenbrockWorkload {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Vec<f64>) -> Result<f64, Infallible> {
+        self.costs.fetch_add(1, Ordering::Relaxed);
+        Ok(rosenbrock(x))
+    }
+}
+
+impl Gradient for &RosenbrockWorkload {
+    type Gradient = Vec<f64>;
+
+    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, Infallible> {
+        self.gradients.fetch_add(1, Ordering::Relaxed);
+        let mut g = vec![0.0; x.len()];
+        rosenbrock_gradient(x, &mut g);
+        Ok(g)
+    }
+}
+
+impl argmin::core::CostFunction for &RosenbrockWorkload {
+    type Param = Vec<f64>;
+    type Output = f64;
+
+    fn cost(&self, x: &Vec<f64>) -> Result<f64, ArgminError> {
+        Ok(CostFunction::cost(self, x)?)
+    }
+}
+
+impl argmin::core::Gradient for &RosenbrockWorkload {
+    type Param = Vec<f64>;
+    type Gradient = Vec<f64>;
+
+    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, ArgminError> {
+        Ok(Gradient::gradient(self, x)?)
     }
 }

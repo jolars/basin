@@ -282,9 +282,8 @@ compatibility and numerical behavior still need verification.
   - [x] **Compare BFGS against argmin.** Published 100-variable Rosenbrock
     traces with matched identity seeds and Moré–Thuente settings, callback
     counts, and independent returned-objective checks.
-  - [ ] **Compare nonlinear CG against argmin with PR+.** Match Basin's update
-    explicitly: its default is Hager-Zhang, while argmin 0.11 has no
-    built-in Hager-Zhang update.
+  - [x] **Compare nonlinear CG against argmin with PR+.** Added local Criterion
+    timings and published objective traces on 100-variable Rosenbrock.
   - [ ] **Compare trust-region Steihaug against argmin.**
   - [ ] **Compare trust-region dogleg against argmin.**
   - [ ] **Compare particle swarm against argmin.** Reuse the existing PSO

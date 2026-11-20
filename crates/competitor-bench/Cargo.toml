@@ -129,3 +129,7 @@ harness = false
 name = "population_scaling"
 harness = false
 required-features = ["parallel"]
+
+[[bench]]
+name = "nonlinear_cg"
+harness = false

@@ -16,10 +16,11 @@ import {
 } from "./benchmarks";
 import rawData from "./competitor-benchmarks.json";
 
-export type Solver = BaseSolver | "lbfgsb";
+export type Solver = BaseSolver | "lbfgsb" | "nonlinear_cg";
 export const SOLVER_LABELS: Record<Solver, string> = {
     ...BASE_SOLVER_LABELS,
     lbfgsb: "L-BFGS-B",
+    nonlinear_cg: "Nonlinear CG (PR+)",
 };
 export const PROBLEM_LABELS: Record<string, string> = {
     ...BASE_PROBLEM_LABELS,
@@ -91,7 +92,7 @@ export interface CompetitorBenchmarks {
     };
     repetitions: number;
     versions: Record<string, string>;
-    /** Safety cap for GD, Nelder–Mead, BFGS, and L-BFGS; other caps are documented per case. */
+    /** Safety cap for GD, Nelder–Mead, BFGS, nonlinear CG, and L-BFGS; other caps are documented per case. */
     iterations: number;
     results: CompetitorResult[];
 }
@@ -197,6 +198,13 @@ export const COMPETITOR_CASES: CompetitorCase[] = [
         blurb: "Dense BFGS on 100-variable Rosenbrock with an identity inverse Hessian, matched Moré–Thuente settings, and a common objective target. Basin uses rank updates; argmin uses dense matrix products.",
     },
     {
+        solver: "nonlinear_cg",
+        problem: "rosenbrock",
+        n: 100,
+        libraries: ["basin", "argmin"],
+        blurb: "Nonlinear conjugate gradient on 100-variable Rosenbrock with the Polak–Ribière+ update, matched Moré–Thuente settings, and a common objective target.",
+    },
+    {
         solver: "lbfgs",
         libraries: ["basin", "argmin", "nlopt"],
         problem: "rosenbrock",
@@ -268,9 +276,15 @@ export function validateCompetitorResults(raw: unknown): CompetitorResult[] {
         if (row.violations !== undefined)
             validatePoints(row.violations, "violation", key);
         if (
-            ["lm", "cobyla", "slsqp", "bfgs", "lbfgsb", "cmaes"].includes(
-                c.solver,
-            )
+            [
+                "lm",
+                "cobyla",
+                "slsqp",
+                "bfgs",
+                "nonlinear_cg",
+                "lbfgsb",
+                "cmaes",
+            ].includes(c.solver)
         ) {
             const s = row.summary;
             if (
@@ -317,7 +331,7 @@ export function validateCompetitorResults(raw: unknown): CompetitorResult[] {
                 (s.objectiveCalls < 1 || !row.violations?.length)
             )
                 throw new Error(`Missing constrained measurements: ${key}`);
-            if (c.solver === "bfgs") {
+            if (c.solver === "bfgs" || c.solver === "nonlinear_cg") {
                 if (
                     !Number.isInteger(s.iterations) ||
                     (s.iterations ?? -1) < 0 ||
@@ -327,7 +341,9 @@ export function validateCompetitorResults(raw: unknown): CompetitorResult[] {
                     s.constraintCalls !== 0 ||
                     s.violation !== 0
                 )
-                    throw new Error(`Invalid BFGS diagnostics: ${key}`);
+                    throw new Error(
+                        `Invalid ${SOLVER_LABELS[c.solver]} diagnostics: ${key}`,
+                    );
                 if (
                     s.verified &&
                     (s.cost === null ||

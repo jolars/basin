@@ -6,6 +6,7 @@
 //! Append `-- --cmaes` to run only the fixed-seed active CMA-ES comparisons.
 //! Append `-- --lbfgsb` to run only the bounded L-BFGS-B comparison.
 //! Append `-- --bfgs` to run only the dense BFGS comparison against argmin.
+//! Append `-- --nonlinear-cg` to run only the nonlinear CG comparison.
 //! Cases, starts, targets, and remaining comparison asymmetries are documented
 //! on the website's library-benchmark page. These traces measure solver
 //! effectiveness, including differences in trajectories and stopping rules.
@@ -32,7 +33,7 @@ use basin::{
 };
 use competitor_bench::{
     ArgminProblem, GomezProblem, bfgs, cmaes, cobyla, convergence, lm, nm,
-    slsqp,
+    nonlinear_cg, slsqp,
 };
 use gomez::OptimizerDriver;
 
@@ -593,6 +594,10 @@ fn main() {
         print_traces(&bfgs_traces());
         return;
     }
+    if std::env::args().nth(1).as_deref() == Some("--nonlinear-cg") {
+        print_traces(&nonlinear_cg_traces());
+        return;
+    }
     assert!(
         cfg!(feature = "lbfgsb-reference"),
         "Enable --features lbfgsb-reference to generate the complete published dataset"
@@ -773,6 +778,7 @@ fn main() {
 
     traces.extend(nm_traces());
     traces.extend(bfgs_traces());
+    traces.extend(nonlinear_cg_traces());
 
     for library in [
         slsqp::Library::Basin,
@@ -860,6 +866,30 @@ fn bfgs_traces() -> Vec<Trace> {
                 library.name(),
                 convergence::median_run(
                     || bfgs::run(library, bfgs::DIMENSION, true),
+                    REPS,
+                ),
+            )
+        })
+        .collect()
+}
+
+fn nonlinear_cg_traces() -> Vec<Trace> {
+    [nonlinear_cg::Library::Basin, nonlinear_cg::Library::Argmin]
+        .into_iter()
+        .map(|library| {
+            published_trace(
+                "nonlinear_cg",
+                "rosenbrock",
+                0.0,
+                library.name(),
+                convergence::median_run(
+                    || {
+                        nonlinear_cg::run(
+                            library,
+                            nonlinear_cg::DIMENSION,
+                            true,
+                        )
+                    },
                     REPS,
                 ),
             )

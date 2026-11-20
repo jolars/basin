@@ -22,6 +22,7 @@ function fixture(): CompetitorResult[] {
             c.solver === "slsqp" ||
             c.solver === "lbfgsb" ||
             c.solver === "bfgs" ||
+            c.solver === "nonlinear_cg" ||
             c.solver === "lm" ||
             c.solver === "cmaes"
                 ? {
@@ -49,7 +50,7 @@ function fixture(): CompetitorResult[] {
                                     constraintCalls: 0,
                                 }
                               : {}),
-                          ...(c.solver === "bfgs"
+                          ...(c.solver === "bfgs" || c.solver === "nonlinear_cg"
                               ? {
                                     point: Array(c.n).fill(1),
                                     cost: 1e-12,
@@ -74,7 +75,7 @@ function fixture(): CompetitorResult[] {
 }
 
 test("collects exactly one measured row per curated case and library", () => {
-    assert.equal(validateCompetitorResults(fixture()).length, 27);
+    assert.equal(validateCompetitorResults(fixture()).length, 29);
     assert.throws(
         () => validateCompetitorResults(fixture().slice(1)),
         /Missing result/,
@@ -178,7 +179,7 @@ test("requires L-BFGS-B stationarity and fused callback diagnostics", () => {
     );
     bounded.summary.verified = false;
     bounded.summary.projectedGradient = null;
-    assert.equal(validateCompetitorResults(rows).length, 27);
+    assert.equal(validateCompetitorResults(rows).length, 29);
     bounded.summary.projectedGradient = -1;
     assert.throws(
         () => validateCompetitorResults(rows),
@@ -217,7 +218,7 @@ test("requires the fixed stochastic seed and retains failed runs", () => {
     );
     stochastic.summary.verified = false;
     stochastic.summary.status = "EvaluationBudget";
-    assert.equal(validateCompetitorResults(rows).length, 27);
+    assert.equal(validateCompetitorResults(rows).length, 29);
     stochastic.summary.objectiveCalls = 100_017;
     assert.throws(
         () => validateCompetitorResults(rows),
@@ -229,7 +230,7 @@ test("requires the fixed stochastic seed and retains failed runs", () => {
     stochastic.summary.point = Array(stochastic.n).fill(null);
     stochastic.summary.status = "InvalidFunctionValue";
     stochastic.points = [];
-    assert.equal(validateCompetitorResults(rows).length, 27);
+    assert.equal(validateCompetitorResults(rows).length, 29);
 });
 
 test("requires BFGS accuracy and derivative diagnostics but retains failed solves", () => {
@@ -255,5 +256,29 @@ test("requires BFGS accuracy and derivative diagnostics but retains failed solve
     );
     bfgs.summary.verified = false;
     bfgs.summary.status = "SolverFailed";
-    assert.equal(validateCompetitorResults(rows).length, 27);
+    assert.equal(validateCompetitorResults(rows).length, 29);
+});
+
+test("requires nonlinear CG diagnostics and retains failed runs", () => {
+    const rows = fixture();
+    const cg = rows.find(
+        (r) => r.solver === "nonlinear_cg" && r.library === "argmin",
+    );
+    assert.ok(cg?.summary);
+    assert.throws(
+        () => validateCompetitorResults(rows.filter((r) => r !== cg)),
+        /Missing result/,
+    );
+    const summary = cg.summary;
+    delete cg.summary;
+    assert.throws(
+        () => validateCompetitorResults(rows),
+        /Missing run diagnostics/,
+    );
+    cg.summary = summary;
+    cg.summary.cost = null;
+    cg.summary.point = Array(cg.n).fill(null);
+    cg.summary.verified = false;
+    cg.summary.status = "SolverFailed";
+    assert.equal(validateCompetitorResults(rows).length, 29);
 });

@@ -1,7 +1,6 @@
 //! Dense BFGS on chained Rosenbrock with matched seeds and line-search settings.
 
-use std::convert::Infallible;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -9,14 +8,14 @@ use argmin::core::observers::{Observe, ObserverMode};
 use argmin::core::{Error, KV, State as ArgminState};
 use argmin::solver::linesearch::MoreThuenteLineSearch;
 use argmin::solver::quasinewton::BFGS;
-use basin::problems::{rosenbrock, rosenbrock_gradient};
+use basin::problems::rosenbrock;
 use basin::solver::bfgs::InitialInverseHessian;
 use basin::{
-    Bfgs, CostFunction, DenseMatrix, Executor, FirstOrderState, Gradient,
-    MatrixIdentity, MoreThuente, State, StepOutcome,
+    Bfgs, DenseMatrix, Executor, FirstOrderState, MatrixIdentity, MoreThuente,
+    State, StepOutcome,
 };
 
-use crate::convergence::{Run, Summary};
+use crate::convergence::{RosenbrockWorkload as Workload, Run, Summary};
 
 pub const DIMENSION: usize = 100;
 pub const TARGET: f64 = 1e-10;
@@ -34,52 +33,6 @@ impl Library {
             Self::Basin => "basin",
             Self::Argmin => "argmin",
         }
-    }
-}
-
-#[derive(Default)]
-struct Workload {
-    costs: AtomicUsize,
-    gradients: AtomicUsize,
-}
-
-impl CostFunction for &Workload {
-    type Param = Vec<f64>;
-    type Output = f64;
-    type Error = Infallible;
-
-    fn cost(&self, x: &Vec<f64>) -> Result<f64, Infallible> {
-        self.costs.fetch_add(1, Ordering::Relaxed);
-        Ok(rosenbrock(x))
-    }
-}
-
-impl Gradient for &Workload {
-    type Gradient = Vec<f64>;
-
-    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, Infallible> {
-        self.gradients.fetch_add(1, Ordering::Relaxed);
-        let mut g = vec![0.0; x.len()];
-        rosenbrock_gradient(x, &mut g);
-        Ok(g)
-    }
-}
-
-impl argmin::core::CostFunction for &Workload {
-    type Param = Vec<f64>;
-    type Output = f64;
-
-    fn cost(&self, x: &Vec<f64>) -> Result<f64, Error> {
-        Ok(CostFunction::cost(self, x)?)
-    }
-}
-
-impl argmin::core::Gradient for &Workload {
-    type Param = Vec<f64>;
-    type Gradient = Vec<f64>;
-
-    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, Error> {
-        Ok(Gradient::gradient(self, x)?)
     }
 }
 

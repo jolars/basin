@@ -40,6 +40,7 @@ pub mod lm;
 pub mod lm_defaults;
 pub mod nist;
 pub mod nm;
+pub mod nonlinear_cg;
 pub mod slsqp;
 
 // Share the benchmark-only adapter with the backend harness.
