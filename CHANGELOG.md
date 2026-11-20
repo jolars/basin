@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.5.0](https://github.com/jolars/basin/compare/v3.4.0...v3.5.0) (2026-11-20)
+
+### Features
+
+- support rectangular least squares with fixed-size nalgebra vectors ([`20f7d9a`](https://github.com/jolars/basin/commit/20f7d9accece1f02715d84500dbe945e8e2288d0))
+- support fixed-size nalgebra types in dense solvers ([`1072fb0`](https://github.com/jolars/basin/commit/1072fb051972c35a2a7139a077b43505974c7118))
+
+### Performance Improvements
+
+- speed up nonlinear conjugate gradient ([`13fc45a`](https://github.com/jolars/basin/commit/13fc45a0cd71f806a20771fb5462862810a80a27))
+
 ## [3.4.0](https://github.com/jolars/basin/compare/v3.3.0...v3.4.0) (2026-11-19)
 
 ### Features
