@@ -42,7 +42,7 @@ pub use initial_inverse_hessian::{
 ///
 /// Runs on `Vec<F>` (via the hand-rolled
 /// [`DenseMatrix`](crate::core::math::DenseMatrix)), nalgebra
-/// (`DVector<F>`/`DMatrix<F>`), ndarray (`Array1<F>`/`Array2<F>`), and
+/// (`DVector<F>`/`DMatrix<F>` or `SVector<F, N>`/`SMatrix<F, N, N>`), ndarray (`Array1<F>`/`Array2<F>`), and
 /// faer (`Col<F>`/`Mat<F>`), for both `f32` and `f64`. The dense
 /// inverse-Hessian needs only matvec, an identity constructor, scaling, and
 /// the rank-one update `GeneralRankOneUpdate` (no factorization), so it

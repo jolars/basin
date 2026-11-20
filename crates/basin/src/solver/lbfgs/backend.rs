@@ -49,6 +49,20 @@ mod nalgebra_slices {
         nalgebra_lapack,
         {
             use super::{AsFloatSlice, AsFloatSliceMut};
+            impl<F: nalgebra::Scalar, const N: usize> AsFloatSlice<F>
+                for nalgebra::SVector<F, N>
+            {
+                fn as_float_slice(&self) -> &[F] {
+                    self.as_slice()
+                }
+            }
+            impl<F: nalgebra::Scalar, const N: usize> AsFloatSliceMut<F>
+                for nalgebra::SVector<F, N>
+            {
+                fn as_float_slice_mut(&mut self) -> &mut [F] {
+                    self.as_mut_slice()
+                }
+            }
             impl<F: nalgebra::Scalar> AsFloatSlice<F> for nalgebra::DVector<F> {
                 fn as_float_slice(&self) -> &[F] {
                     self.as_slice()

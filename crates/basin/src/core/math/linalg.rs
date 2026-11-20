@@ -40,9 +40,9 @@
 /// `faer::Mat<f64>` (`V = faer::Col<f64>`), and `ndarray::Array2<f64>`
 /// (`V = Array1<f64>`), each behind its backend feature where
 /// applicable.
-pub trait MatVec<V> {
+pub trait MatVec<V, Y = V> {
     /// Compute `A x`, allocating a fresh `V` of length `self.nrows()`.
-    fn matvec(&self, x: &V) -> V;
+    fn matvec(&self, x: &V) -> Y;
 }
 
 /// Transposed matrix-vector product `y = Aᵀ x`. Lets least-squares
@@ -60,17 +60,14 @@ pub trait MatVec<V> {
 /// # Backends
 ///
 /// Same backend coverage as [`MatVec`].
-pub trait MatTransposeVec<V> {
+pub trait MatTransposeVec<V, R = V> {
     /// Compute `Aᵀ x`, allocating a fresh `V` of length `self.ncols()`.
-    fn mat_transpose_vec(&self, x: &V) -> V;
+    fn mat_transpose_vec(&self, x: &R) -> V;
 }
 
 /// Gram matrix `G = Aᵀ A`. The SPD matrix at the heart of the
-/// Gauss-Newton normal equations. Returns `Self` because for both
-/// supported dense backends a Gram of a dense matrix is the same
-/// type; when sparse backends land in S2b the `Output` may need to
-/// become an associated type, but premature parameterization here
-/// would buy nothing for the dense prototype.
+/// Gauss-Newton normal equations. The result defaults to `Self`. Fixed-size rectangular matrices
+/// use a square result with one row and column per input column.
 ///
 /// # Contract
 ///
@@ -88,9 +85,9 @@ pub trait MatTransposeVec<V> {
 /// [`DenseMatrix`](super::DenseMatrix), and `ndarray::Array2<f64>`, the
 /// latter via a pure-Rust row-outer-product accumulation, wasm-clean with no
 /// BLAS/LAPACK.
-pub trait GramMatrix {
+pub trait GramMatrix<G = Self> {
     /// Compute `Aᵀ A` and return the freshly allocated SPD matrix.
-    fn gram(&self) -> Self;
+    fn gram(&self) -> G;
 }
 
 /// Solve the SPD linear system `A x = b` via Cholesky factorization.
@@ -152,14 +149,14 @@ pub trait LinearSolveSpd<V> {
 /// `f64`. All implementations are pure Rust. Neither sparse backend implements
 /// this capability: nalgebra-sparse has no QR, and faer's sparse QR uses a
 /// fill-reducing permutation rather than numerical column pivoting.
-pub trait FactorizePivotedQr<V, F: super::Scalar = f64> {
+pub trait FactorizePivotedQr<V, F: super::Scalar = f64, R = V> {
     /// Reusable factorization for this backend's vector type.
     type Factorization: RegularizedQrSolve<V, F>;
 
     /// Factor `self · P = Q · R` and retain the transformed right-hand side.
     fn factorize_pivoted_qr(
         &self,
-        b: &V,
+        b: &R,
     ) -> Result<Self::Factorization, QrSolveError>;
 }
 

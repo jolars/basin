@@ -37,6 +37,22 @@ numerical work against analytic cases and reference implementations.
   existing backends. Outlier-contaminated fits agree with [SciPy's
   least-squares
   API](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.least_squares.html).
+- [ ] **Support rectangular least squares with fixed-size nalgebra types.**
+  The backend can multiply and factor a rectangular `SMatrix`. Generalize
+  the shared evaluation code and solver workspaces so `SVector<F, N>`
+  parameters can pair with `SVector<F, M>` residuals, an
+  `SMatrix<F, M, N>` Jacobian, and an `SMatrix<F, N, N>` Gram matrix.
+  Cover Gauss–Newton, both LM routes, bounded LM, trust-region reflective,
+  and the trust-region Gauss–Newton model, including robust loss. Preserve
+  existing constructors, type inference, custom matrix implementations,
+  evaluation counts, and checkpoint continuation.
+- [ ] **Integrate fixed-size types with finite-difference Jacobians.**
+  Let `FiniteDiff` and `BoundedFiniteDiff` accept distinct parameter and
+  residual types. Their matrix construction can keep using `DMatrix` for
+  runtime dimensions. Verify that the least-squares drivers consume those
+  Jacobians with fixed-size parameters. Test analytic and numerical
+  rectangular fits for `f32` and `f64` where supported, and check all four
+  nalgebra releases individually and with their features enabled together.
 - [x] **Add full trust-region-reflective least squares.** Added
   `TrustRegionReflective` with Coleman-Li scaling, an explicit radius,
   reflected-step selection, a rank-aware dense SVD solve, and

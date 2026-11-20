@@ -1,5 +1,7 @@
 use nalgebra::{ClosedAddAssign, ClosedMulAssign};
-use nalgebra::{DMatrix, DVector, Dim, Matrix, Storage, StorageMut};
+use nalgebra::{
+    DMatrix, DVector, Dim, Matrix, SMatrix, SVector, Storage, StorageMut,
+};
 use rand::{Rng, RngExt};
 use rand_distr::{Distribution, StandardNormal, uniform::SampleUniform};
 
@@ -122,6 +124,298 @@ impl<F: Scalar> VectorIndex<F> for DVector<F> {
     }
     fn set_scalar(&mut self, i: usize, value: F) {
         self[i] = value;
+    }
+}
+
+impl<F: Scalar, const N: usize> VectorLen for SVector<F, N> {
+    fn vec_len(&self) -> usize {
+        N
+    }
+}
+
+impl<F: Scalar, const N: usize> VectorIndex<F> for SVector<F, N> {
+    fn get_scalar(&self, i: usize) -> F {
+        self[i]
+    }
+
+    fn set_scalar(&mut self, i: usize, value: F) {
+        self[i] = value;
+    }
+}
+
+impl<F: Scalar + SampleUniform, const N: usize> SampleUniformBox
+    for SVector<F, N>
+{
+    fn sample_uniform_box<G: Rng + ?Sized>(
+        lower: &Self,
+        upper: &Self,
+        rng: &mut G,
+    ) -> Self {
+        assert_finite_box(lower, upper);
+        Self::from_fn(|i, _| rng.random_range(lower[i]..=upper[i]))
+    }
+}
+
+impl<F: Scalar, const N: usize> SampleStandardNormal for SVector<F, N>
+where
+    StandardNormal: Distribution<F>,
+{
+    fn sample_standard_normal<G: Rng + ?Sized>(_: &Self, rng: &mut G) -> Self {
+        Self::from_fn(|_, _| StandardNormal.sample(rng))
+    }
+}
+
+impl<F: Scalar, const N: usize> super::DenseBackend<F> for SVector<F, N> {
+    type Matrix = SMatrix<F, N, N>;
+}
+
+impl<F: Scalar, const N: usize> MatrixIdentity for SMatrix<F, N, N> {
+    fn identity(n: usize) -> Self {
+        assert_eq!(n, N, "identity dimension does not match the fixed matrix");
+        Self::identity()
+    }
+}
+
+impl<F: Scalar, const R: usize, const C: usize>
+    MatVec<SVector<F, C>, SVector<F, R>> for SMatrix<F, R, C>
+{
+    fn matvec(&self, x: &SVector<F, C>) -> SVector<F, R> {
+        SVector::from_fn(|i, _| (0..C).map(|j| self[(i, j)] * x[j]).sum())
+    }
+}
+
+impl<F: Scalar, const R: usize, const C: usize>
+    MatTransposeVec<SVector<F, C>, SVector<F, R>> for SMatrix<F, R, C>
+{
+    fn mat_transpose_vec(&self, x: &SVector<F, R>) -> SVector<F, C> {
+        SVector::from_fn(|j, _| (0..R).map(|i| self[(i, j)] * x[i]).sum())
+    }
+}
+
+impl<F: Scalar, const R: usize, const C: usize> GramMatrix<SMatrix<F, C, C>>
+    for SMatrix<F, R, C>
+{
+    fn gram(&self) -> SMatrix<F, C, C> {
+        SMatrix::from_fn(|i, j| {
+            (0..R).map(|k| self[(k, i)] * self[(k, j)]).sum()
+        })
+    }
+}
+
+/// Pivoted QR with a compile-time solution dimension.
+pub struct FixedQrFactorization<F: Scalar, const N: usize>(
+    super::QrFactorization<F>,
+);
+
+impl<F: Scalar, const R: usize, const C: usize>
+    super::FactorizePivotedQr<SVector<F, C>, F, SVector<F, R>>
+    for SMatrix<F, R, C>
+{
+    type Factorization = FixedQrFactorization<F, C>;
+
+    fn factorize_pivoted_qr(
+        &self,
+        b: &SVector<F, R>,
+    ) -> Result<Self::Factorization, super::QrSolveError> {
+        let rows = (0..R)
+            .flat_map(|i| (0..C).map(move |j| self[(i, j)]))
+            .collect();
+        super::dense_qr::factorize(R, C, rows, b.as_slice())
+            .map(FixedQrFactorization)
+    }
+}
+
+impl<F: Scalar, const N: usize> super::RegularizedQrSolve<SVector<F, N>, F>
+    for FixedQrFactorization<F, N>
+{
+    fn column_norms_squared(&self) -> SVector<F, N> {
+        SVector::from_column_slice(&self.0.norms_squared())
+    }
+
+    fn solve_regularized(
+        &self,
+        mu: F,
+        diagonal: &SVector<F, N>,
+        tolerance: Option<F>,
+    ) -> Result<SVector<F, N>, super::QrSolveError> {
+        self.0
+            .solve(mu, diagonal.as_slice(), tolerance)
+            .map(|x| SVector::from_column_slice(&x))
+    }
+}
+
+impl<F: Scalar, const N: usize> GeneralRankOneUpdate<SVector<F, N>, F>
+    for SMatrix<F, N, N>
+{
+    fn general_rank_one_update(
+        &mut self,
+        alpha: F,
+        u: &SVector<F, N>,
+        v: &SVector<F, N>,
+    ) {
+        for j in 0..N {
+            for i in 0..N {
+                self[(i, j)] = self[(i, j)] + alpha * u[i] * v[j];
+            }
+        }
+    }
+}
+
+impl<F: Scalar, const R: usize, const C: usize> super::MatrixShape
+    for SMatrix<F, R, C>
+{
+    fn matrix_rows(&self) -> usize {
+        R
+    }
+
+    fn matrix_cols(&self) -> usize {
+        C
+    }
+}
+
+impl<F: Scalar, const R: usize, const C: usize> super::MatrixIndex<F>
+    for SMatrix<F, R, C>
+{
+    fn matrix_entry(&self, row: usize, col: usize) -> F {
+        self[(row, col)]
+    }
+}
+
+impl<F: Scalar, const N: usize> RankOneUpdate<SVector<F, N>, F>
+    for SMatrix<F, N, N>
+{
+    fn rank_one_update(&mut self, alpha: F, v: &SVector<F, N>) {
+        self.general_rank_one_update(alpha, v, v);
+    }
+}
+
+impl<F: Scalar, const N: usize> MatrixFromDiagonal<SVector<F, N>>
+    for SMatrix<F, N, N>
+{
+    fn from_diagonal(diag: &SVector<F, N>) -> Self {
+        Self::from_diagonal(diag)
+    }
+}
+
+impl<F: Scalar, const N: usize> MatDiagonal<SVector<F, N>>
+    for SMatrix<F, N, N>
+{
+    fn diagonal(&self) -> SVector<F, N> {
+        SVector::from_fn(|i, _| self[(i, i)])
+    }
+}
+
+impl<F: Scalar, const N: usize> MaxDiagonal<F> for SMatrix<F, N, N> {
+    fn max_diagonal(&self) -> F {
+        (0..N).map(|i| self[(i, i)]).fold(F::neg_infinity(), F::max)
+    }
+}
+
+impl<F: Scalar, const N: usize> AddDiagonalVectorInPlace<SVector<F, N>>
+    for SMatrix<F, N, N>
+{
+    fn add_diagonal_vector_in_place(&mut self, diag: &SVector<F, N>) {
+        for i in 0..N {
+            self[(i, i)] = self[(i, i)] + diag[i];
+        }
+    }
+}
+
+impl<F: Scalar, const R: usize, const C: usize> super::MatrixFinite
+    for SMatrix<F, R, C>
+{
+    fn matrix_is_finite(&self) -> bool {
+        self.iter().all(|x| x.is_finite())
+    }
+}
+
+impl<F: Scalar, const R: usize, const C: usize> super::ScaleRowsInPlace<F>
+    for SMatrix<F, R, C>
+{
+    fn scale_rows_in_place(&mut self, factors: &[F]) {
+        assert_eq!(R, factors.len(), "row scale shape mismatch");
+        for j in 0..C {
+            for (i, &factor) in factors.iter().enumerate() {
+                self[(i, j)] = self[(i, j)] * factor;
+            }
+        }
+    }
+}
+
+impl<F: Scalar, const N: usize> LinearSolveSpd<SVector<F, N>>
+    for SMatrix<F, N, N>
+{
+    fn solve_spd(
+        &self,
+        b: &SVector<F, N>,
+    ) -> Result<SVector<F, N>, LinearSolveError> {
+        let rows = (0..N)
+            .flat_map(|i| (0..N).map(move |j| self[(i, j)]))
+            .collect::<Vec<_>>();
+        super::dense_chol::cholesky_solve_spd(&rows, N, b.as_slice())
+            .map(|x| SVector::from_column_slice(&x))
+            .ok_or(LinearSolveError::NotPositiveDefinite)
+    }
+}
+
+impl<F: Scalar, const N: usize> SymmetricEigen<SVector<F, N>>
+    for SMatrix<F, N, N>
+{
+    fn try_eigh(&self) -> Result<(Self, SVector<F, N>), SymmetricEigenError> {
+        let rows = (0..N)
+            .flat_map(|i| (0..N).map(move |j| self[(i, j)]))
+            .collect::<Vec<_>>();
+        super::dense_eig::jacobi_eigen(&rows, N)
+            .map(|(values, vectors)| {
+                (
+                    Self::from_row_slice(&vectors),
+                    SVector::from_column_slice(&values),
+                )
+            })
+            .ok_or(SymmetricEigenError::Failed)
+    }
+}
+
+impl<F: Scalar, const N: usize> DenseMatrixFromFn<F> for SVector<F, N> {
+    type Matrix = DMatrix<F>;
+
+    fn dense_from_fn<G: FnMut(usize, usize) -> F>(
+        rows: usize,
+        cols: usize,
+        f: G,
+    ) -> Self::Matrix {
+        DMatrix::from_fn(rows, cols, f)
+    }
+
+    fn dense_from_fn_into<G: FnMut(usize, usize) -> F>(
+        rows: usize,
+        cols: usize,
+        f: G,
+        out: &mut Self::Matrix,
+    ) {
+        <DVector<F> as DenseMatrixFromFn<F>>::dense_from_fn_into(
+            rows, cols, f, out,
+        );
+    }
+}
+
+// Finite differences construct a matrix from runtime dimensions. Keep the
+// parameter and product in fixed storage when applying that matrix.
+impl<F: Scalar, const R: usize, const C: usize>
+    MatVec<SVector<F, C>, SVector<F, R>> for DMatrix<F>
+{
+    fn matvec(&self, x: &SVector<F, C>) -> SVector<F, R> {
+        assert_eq!(self.shape(), (R, C), "matvec: shape mismatch");
+        SVector::from_fn(|i, _| (0..C).map(|j| self[(i, j)] * x[j]).sum())
+    }
+}
+
+impl<F: Scalar, const R: usize, const C: usize>
+    MatTransposeVec<SVector<F, C>, SVector<F, R>> for DMatrix<F>
+{
+    fn mat_transpose_vec(&self, x: &SVector<F, R>) -> SVector<F, C> {
+        assert_eq!(self.shape(), (R, C), "mat_transpose_vec: shape mismatch");
+        SVector::from_fn(|j, _| (0..R).map(|i| self[(i, j)] * x[i]).sum())
     }
 }
 
@@ -876,6 +1170,21 @@ where
         }
     }
 }
+
+impl<V, F, const R: usize, const C: usize> super::MatVecInto<V, F>
+    for SMatrix<F, R, C>
+where
+    V: super::VectorLen + std::ops::Index<usize, Output = F>,
+    F: super::Scalar,
+{
+    fn matvec_into(&self, input: &V, output: &mut [F]) {
+        assert_eq!(input.vec_len(), C);
+        assert_eq!(output.len(), R);
+        for (i, value) in output.iter_mut().enumerate() {
+            *value = (0..C).map(|j| self[(i, j)] * input[j]).sum();
+        }
+    }
+}
 impl<V, F> super::MatTransposeVecInto<V, F> for nalgebra::DMatrix<F>
 where
     V: super::VectorLen + std::ops::IndexMut<usize, Output = F>,
@@ -890,6 +1199,21 @@ where
                     super::MatrixIndex::matrix_entry(self, i, j) * input[i]
                 })
                 .sum();
+        }
+    }
+}
+
+impl<V, F, const R: usize, const C: usize> super::MatTransposeVecInto<V, F>
+    for SMatrix<F, R, C>
+where
+    V: super::VectorLen + std::ops::IndexMut<usize, Output = F>,
+    F: super::Scalar,
+{
+    fn mat_transpose_vec_into(&self, input: &[F], output: &mut V) {
+        assert_eq!(input.len(), R);
+        assert_eq!(output.vec_len(), C);
+        for j in 0..C {
+            output[j] = (0..R).map(|i| self[(i, j)] * input[i]).sum();
         }
     }
 }

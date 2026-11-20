@@ -123,7 +123,8 @@ finding uses a direct callback API and a separate result type.
 
 - **<span id="bfgs"></span>[`Bfgs`](https://docs.rs/basin/latest/basin/solver/bfgs/struct.Bfgs.html)**:
   dense quasi-Newton with a full inverse-Hessian approximation (Nocedal &
-  Wright, 2006). Supports all four dense backends with `f32` or `f64`.
+  Wright, 2006). Supports all four dense backends with `f32` or `f64`,
+  including fixed-size nalgebra `SVector` and `SMatrix`.
   Optional fixed initial matrices require cloning and entry access; closure
   initializers require entry access. Named initializers enforce their own
   seed contracts. [Read the BFGS guide](quasi-newton/bfgs/).

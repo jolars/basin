@@ -18,7 +18,14 @@ fn ndarray_0_17_norm() {
 }
 
 macro_rules! dense_checks {
-    ($vector:ty, $matrix:ty, $scalar:ty, $make:expr) => {{
+    ($vector:ty, $matrix:ty, $scalar:ty, $make:expr) => {
+        dense_checks!($vector, $matrix, $scalar, $make, dynamic)
+    };
+    (@seed dynamic, $v:ty, $f:ty, $make:expr) => {
+        crate::bfgs_initial_inverse_hessian::check::<$v, $f>($make)
+    };
+    (@seed fixed, $v:ty, $f:ty, $make:expr) => {};
+    ($vector:ty, $matrix:ty, $scalar:ty, $make:expr, $storage:ident) => {{
         use basin::{
             Bfgs, CostFunction, Executor, FactorizePivotedQr,
             FirstOrderState, Gradient, Lbfgs, LinearSolveSpd, MatVec,
@@ -528,7 +535,7 @@ impl Quadratic  {
         .run()
         .unwrap();
         assert!(seeded.cost() < 128.0 * F::EPSILON);
-        crate::bfgs_initial_inverse_hessian::check::<V, F>(make);
+        dense_checks!(@seed $storage, V, F, make);
         let lbfgs = Executor::new(
             boxed(problem()),
             Lbfgs::<_, F>::with_line_search(basin::MoreThuente::<F>::new())
@@ -966,6 +973,103 @@ macro_rules! nalgebra_checks {
     ($module:ident, $dependency:ident, $sparse:ident) => {
         mod $module {
             use $dependency as backend;
+
+            impl<const N: usize> basin::CostFunction for FixedQuadratic<N> {
+                type Param = backend::SVector<f64, N>;
+                type Output = f64;
+                type Error = std::convert::Infallible;
+
+                fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+                    Ok(x.norm_squared())
+                }
+            }
+
+            impl<const N: usize> basin::Gradient for FixedQuadratic<N> {
+                type Gradient = backend::SVector<f64, N>;
+
+                fn gradient(
+                    &self,
+                    x: &Self::Param,
+                ) -> Result<Self::Gradient, Self::Error> {
+                    Ok(x * 2.0)
+                }
+            }
+
+            fn fixed_bfgs<const N: usize>() {
+                type F = f64;
+
+                let matrix = backend::SMatrix::<F, N, N>::identity();
+                let solver =
+                    basin::Bfgs::with_line_search(basin::Backtracking::new())
+                        .with_initial_inverse_hessian(matrix);
+                let result = basin::Executor::from_start(
+                    FixedQuadratic::<N>,
+                    solver,
+                    backend::SVector::<F, N>::repeat(3.0),
+                )
+                .max_iter(20)
+                .run_with_solver()
+                .unwrap();
+                let _: &backend::SMatrix<F, N, N> =
+                    result.solver.inverse_hessian().unwrap();
+                assert!(result.cost() < 1e-12);
+            }
+
+            struct FixedQuadratic<const N: usize>;
+
+            #[test]
+            fn fixed_bfgs_in_geometry_dimensions() {
+                fixed_bfgs::<1>();
+                fixed_bfgs::<2>();
+                fixed_bfgs::<3>();
+            }
+
+            #[test]
+            fn fixed_rectangular_kernels() {
+                use basin::{
+                    FactorizePivotedQr, GramMatrix, MatTransposeVec, MatVec,
+                    RegularizedQrSolve,
+                };
+                let a = backend::SMatrix::<f32, 3, 2>::from_row_slice(&[
+                    1.0, 0.0, 0.0, 2.0, 1.0, 1.0,
+                ]);
+                let x = backend::SVector::<f32, 2>::new(2.0, -1.0);
+                let b = a.matvec(&x);
+                assert_eq!(b.as_slice(), &[2.0, -2.0, 1.0]);
+                assert_eq!(a.mat_transpose_vec(&b), a.gram().matvec(&x));
+                let qr = a.factorize_pivoted_qr(&b).unwrap();
+                let solved = qr
+                    .solve_regularized(
+                        0.0,
+                        &backend::SVector::<f32, 2>::repeat(1.0),
+                        None,
+                    )
+                    .unwrap();
+                assert!((solved - x).norm() < 1e-5);
+            }
+
+            #[test]
+            fn fixed_f32_dense_and_solvers() {
+                dense_checks!(
+                    backend::SVector<f32, 2>,
+                    backend::SMatrix<f32, 2, 2>,
+                    f32,
+                    |x: &[f32]| backend::SVector::from_column_slice(x),
+                    fixed
+                );
+            }
+
+            #[test]
+            fn fixed_f64_dense_and_solvers() {
+                dense_checks!(
+                    backend::SVector<f64, 2>,
+                    backend::SMatrix<f64, 2, 2>,
+                    f64,
+                    |x: &[f64]| backend::SVector::from_column_slice(x),
+                    fixed
+                );
+            }
+
             #[test]
             fn f32_dense_and_solvers() {
                 dense_checks!(
