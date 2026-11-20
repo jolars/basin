@@ -13,7 +13,11 @@ timeout = 20
 # This GSL manual page repeatedly times out or resets connections, even with
 # serialized requests and a custom User-Agent. Exclude only this page so its
 # availability cannot block website builds.
-exclude = ['^https://www\.gnu\.org/software/gsl/doc/html/roots\.html(?:#.*)?$']
+exclude = [
+  '^https://www\.gnu\.org/software/gsl/doc/html/roots\.html(?:#.*)?$',
+  # Stanford's Convex Optimization book page reset connections during release CI.
+  '^https://web\.stanford\.edu/~boyd/cvxbook/$',
+]
 
 # mdsvex marks external links as nofollow, which lychee otherwise skips.
 preprocess = { command = "web/scripts/lychee-preprocess.sh" }
