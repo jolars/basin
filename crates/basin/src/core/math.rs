@@ -141,17 +141,20 @@ pub trait NormInfinity<F = f64> {
     fn norm_infinity(&self) -> F;
 }
 
-fn norm_infinity<F: Scalar>(mut values: impl Iterator<Item = F>) -> F {
-    // Float::max alone discards NaNs, masking invalid gradients in solver checks.
-    values
-        .try_fold(F::zero(), |norm, value| {
-            if value.is_nan() {
-                None
-            } else {
-                Some(norm.max(value.abs()))
-            }
-        })
-        .unwrap_or_else(F::nan)
+fn norm_infinity<F: Scalar>(values: impl Iterator<Item = F>) -> F {
+    let mut norm = F::zero();
+    for value in values {
+        let magnitude = value.abs();
+        // An ordered comparison skips smaller magnitudes and lets NaNs through.
+        if magnitude <= norm {
+            continue;
+        }
+        if magnitude.is_nan() {
+            return F::nan();
+        }
+        norm = magnitude;
+    }
+    norm
 }
 
 /// Inner product of two same-shaped values. Used by line searches that take

@@ -45,9 +45,9 @@ impl<P> HasSpec for Rosenbrock<P> {
 /// Evaluates Rosenbrock's function at `x`.
 pub fn rosenbrock(x: &[f64]) -> f64 {
     let mut s = 0.0;
-    for i in 0..x.len().saturating_sub(1) {
-        let a = x[i + 1] - x[i] * x[i];
-        let b = 1.0 - x[i];
+    for pair in x.windows(2) {
+        let a = pair[1] - pair[0] * pair[0];
+        let b = 1.0 - pair[0];
         s += 100.0 * a * a + b * b;
     }
     s

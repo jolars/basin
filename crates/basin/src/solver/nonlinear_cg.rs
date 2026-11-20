@@ -347,15 +347,18 @@ where
                 beta_pr.max(F::zero())
             }
         };
-        let mut next = negative(next_gradient);
-        next.scaled_add(beta, direction);
-        if beta == F::zero()
-            || !sufficient_descent(next_gradient, &next, self.update)
-        {
+        if beta == F::zero() {
+            return self.restart(next_gradient);
+        }
+        // The gradient difference is no longer needed. Reuse its buffer.
+        y.clone_from(next_gradient);
+        y.neg_in_place();
+        y.scaled_add(beta, direction);
+        if !sufficient_descent(next_gradient, &y, self.update) {
             return self.restart(next_gradient);
         }
         self.steepest = false;
-        next
+        y
     }
 
     fn search<P>(
@@ -409,9 +412,10 @@ where
     F: Scalar,
     V: Clone + ScaledAdd<F> + NormInfinity<F> + VectorLen,
 {
-    if next.vec_len() != param.vec_len() || !next.norm_infinity().is_finite() {
+    if next.vec_len() != param.vec_len() {
         return false;
     }
+    // The displacement check rejects non-finite coordinates and subtraction overflow.
     let mut displacement = next.clone();
     displacement.scaled_add(-F::one(), param);
     let size = displacement.norm_infinity();
@@ -470,23 +474,26 @@ where
             .direction
             .take()
             .unwrap_or_else(|| self.restart(gradient));
-        if !sufficient_descent(gradient, &direction, self.update) {
+        let mut descending =
+            sufficient_descent(gradient, &direction, self.update);
+        if !descending {
             direction = self.restart(gradient);
+            descending = sufficient_descent(gradient, &direction, self.update);
         }
-        let accepted = loop {
-            if !sufficient_descent(gradient, &direction, self.update) {
-                break None;
-            }
+        let mut accepted = None;
+        while descending {
             if let Some(evaluation) =
                 self.search(problem, param, cost, gradient, &direction)?
             {
-                break Some(evaluation);
+                accepted = Some(evaluation);
+                break;
             }
             if self.steepest {
-                break None;
+                break;
             }
             direction = self.restart(gradient);
-        };
+            descending = sufficient_descent(gradient, &direction, self.update);
+        }
         let Some(evaluation) = accepted else {
             self.direction = Some(direction);
             return Ok(crate::SolverStep::from((
@@ -514,8 +521,8 @@ where
     ) -> Option<Termination<F>> {
         let (param, cost, gradient) = state.current()?;
         (cost.is_finite()
-            && param.norm_infinity().is_finite()
-            && gradient.norm_infinity() == F::zero())
+            && gradient.norm_infinity() == F::zero()
+            && param.norm_infinity().is_finite())
         .then(|| {
             Termination::upper_bound(
                 crate::ConvergenceTest::AbsoluteGradientSquared,
@@ -541,6 +548,21 @@ impl<L, V: Clone, F: Scalar> WarmStart<V> for NonlinearCg<L, V, F> {}
 mod tests {
     use super::*;
     use crate::Constant;
+
+    #[test]
+    fn displacement_requires_a_finite_nonzero_move() {
+        let start = vec![f64::MAX, 1.0];
+        assert!(usable_displacement(&start, &vec![f64::MAX, 2.0]));
+        for next in [
+            start.clone(),
+            vec![f64::MAX],
+            vec![-f64::MAX, 2.0],
+            vec![f64::MAX, f64::INFINITY],
+            vec![f64::MAX, f64::NAN],
+        ] {
+            assert!(!usable_displacement(&start, &next));
+        }
+    }
 
     #[test]
     fn polak_ribiere_plus_uses_its_own_coefficient_and_descent_bound() {
