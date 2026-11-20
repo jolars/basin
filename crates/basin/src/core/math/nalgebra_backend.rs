@@ -1,6 +1,7 @@
 use nalgebra::{ClosedAddAssign, ClosedMulAssign};
 use nalgebra::{
-    DMatrix, DVector, Dim, Matrix, SMatrix, SVector, Storage, StorageMut,
+    Const, DMatrix, DVector, Dim, Dyn, Matrix, OMatrix, SMatrix, SVector,
+    Storage, StorageMut,
 };
 use rand::{Rng, RngExt};
 use rand_distr::{Distribution, StandardNormal, uniform::SampleUniform};
@@ -116,6 +117,10 @@ impl<F: Scalar> VectorLen for DVector<F> {
     fn vec_len(&self) -> usize {
         self.len()
     }
+
+    fn residual_buffer() -> Option<Self> {
+        Some(Self::zeros(0))
+    }
 }
 
 impl<F: Scalar> VectorIndex<F> for DVector<F> {
@@ -130,6 +135,10 @@ impl<F: Scalar> VectorIndex<F> for DVector<F> {
 impl<F: Scalar, const N: usize> VectorLen for SVector<F, N> {
     fn vec_len(&self) -> usize {
         N
+    }
+
+    fn residual_buffer() -> Option<Self> {
+        Some(Self::zeros())
     }
 }
 
@@ -185,6 +194,15 @@ impl<F: Scalar, const R: usize, const C: usize>
 }
 
 impl<F: Scalar, const R: usize, const C: usize>
+    MatVec<SVector<F, C>, SVector<F, R>> for FixedColumns<F, C>
+{
+    fn matvec(&self, x: &SVector<F, C>) -> SVector<F, R> {
+        assert_eq!(self.nrows(), R, "matvec: shape mismatch");
+        SVector::from_fn(|i, _| (0..C).map(|j| self[(i, j)] * x[j]).sum())
+    }
+}
+
+impl<F: Scalar, const R: usize, const C: usize>
     MatTransposeVec<SVector<F, C>, SVector<F, R>> for SMatrix<F, R, C>
 {
     fn mat_transpose_vec(&self, x: &SVector<F, R>) -> SVector<F, C> {
@@ -192,12 +210,21 @@ impl<F: Scalar, const R: usize, const C: usize>
     }
 }
 
-impl<F: Scalar, const R: usize, const C: usize> GramMatrix<SMatrix<F, C, C>>
-    for SMatrix<F, R, C>
+impl<F: Scalar, const R: usize, const C: usize>
+    MatTransposeVec<SVector<F, C>, SVector<F, R>> for FixedColumns<F, C>
+{
+    fn mat_transpose_vec(&self, x: &SVector<F, R>) -> SVector<F, C> {
+        assert_eq!(self.nrows(), R, "mat_transpose_vec: shape mismatch");
+        SVector::from_fn(|j, _| (0..R).map(|i| self[(i, j)] * x[i]).sum())
+    }
+}
+
+impl<F: Scalar, D: Dim, S: Storage<F, D, Const<C>>, const C: usize>
+    GramMatrix<SMatrix<F, C, C>> for Matrix<F, D, Const<C>, S>
 {
     fn gram(&self) -> SMatrix<F, C, C> {
         SMatrix::from_fn(|i, j| {
-            (0..R).map(|k| self[(k, i)] * self[(k, j)]).sum()
+            (0..self.nrows()).map(|k| self[(k, i)] * self[(k, j)]).sum()
         })
     }
 }
@@ -217,6 +244,25 @@ impl<F: Scalar, const R: usize, const C: usize>
         &self,
         b: &SVector<F, R>,
     ) -> Result<Self::Factorization, super::QrSolveError> {
+        let rows = (0..R)
+            .flat_map(|i| (0..C).map(move |j| self[(i, j)]))
+            .collect();
+        super::dense_qr::factorize(R, C, rows, b.as_slice())
+            .map(FixedQrFactorization)
+    }
+}
+
+impl<F: Scalar, const R: usize, const C: usize>
+    super::FactorizePivotedQr<SVector<F, C>, F, SVector<F, R>>
+    for FixedColumns<F, C>
+{
+    type Factorization = FixedQrFactorization<F, C>;
+
+    fn factorize_pivoted_qr(
+        &self,
+        b: &SVector<F, R>,
+    ) -> Result<Self::Factorization, super::QrSolveError> {
+        assert_eq!(self.nrows(), R, "pivoted QR shape mismatch");
         let rows = (0..R)
             .flat_map(|i| (0..C).map(move |j| self[(i, j)]))
             .collect();
@@ -261,26 +307,6 @@ impl<F: Scalar, const N: usize> GeneralRankOneUpdate<SVector<F, N>, F>
     }
 }
 
-impl<F: Scalar, const R: usize, const C: usize> super::MatrixShape
-    for SMatrix<F, R, C>
-{
-    fn matrix_rows(&self) -> usize {
-        R
-    }
-
-    fn matrix_cols(&self) -> usize {
-        C
-    }
-}
-
-impl<F: Scalar, const R: usize, const C: usize> super::MatrixIndex<F>
-    for SMatrix<F, R, C>
-{
-    fn matrix_entry(&self, row: usize, col: usize) -> F {
-        self[(row, col)]
-    }
-}
-
 impl<F: Scalar, const N: usize> RankOneUpdate<SVector<F, N>, F>
     for SMatrix<F, N, N>
 {
@@ -321,27 +347,6 @@ impl<F: Scalar, const N: usize> AddDiagonalVectorInPlace<SVector<F, N>>
     }
 }
 
-impl<F: Scalar, const R: usize, const C: usize> super::MatrixFinite
-    for SMatrix<F, R, C>
-{
-    fn matrix_is_finite(&self) -> bool {
-        self.iter().all(|x| x.is_finite())
-    }
-}
-
-impl<F: Scalar, const R: usize, const C: usize> super::ScaleRowsInPlace<F>
-    for SMatrix<F, R, C>
-{
-    fn scale_rows_in_place(&mut self, factors: &[F]) {
-        assert_eq!(R, factors.len(), "row scale shape mismatch");
-        for j in 0..C {
-            for (i, &factor) in factors.iter().enumerate() {
-                self[(i, j)] = self[(i, j)] * factor;
-            }
-        }
-    }
-}
-
 impl<F: Scalar, const N: usize> LinearSolveSpd<SVector<F, N>>
     for SMatrix<F, N, N>
 {
@@ -376,46 +381,44 @@ impl<F: Scalar, const N: usize> SymmetricEigen<SVector<F, N>>
     }
 }
 
+// Numerical differentiation knows the parameter dimension statically but
+// discovers the number of residual rows at runtime.
+type FixedColumns<F, const C: usize> = OMatrix<F, Dyn, Const<C>>;
+
 impl<F: Scalar, const N: usize> DenseMatrixFromFn<F> for SVector<F, N> {
-    type Matrix = DMatrix<F>;
+    type Matrix = FixedColumns<F, N>;
 
     fn dense_from_fn<G: FnMut(usize, usize) -> F>(
         rows: usize,
         cols: usize,
         f: G,
     ) -> Self::Matrix {
-        DMatrix::from_fn(rows, cols, f)
+        assert_eq!(
+            cols, N,
+            "matrix column count must match the parameter dimension"
+        );
+        OMatrix::from_fn_generic(Dyn(rows), Const, f)
     }
 
     fn dense_from_fn_into<G: FnMut(usize, usize) -> F>(
         rows: usize,
         cols: usize,
-        f: G,
+        mut f: G,
         out: &mut Self::Matrix,
     ) {
-        <DVector<F> as DenseMatrixFromFn<F>>::dense_from_fn_into(
-            rows, cols, f, out,
+        assert_eq!(
+            cols, N,
+            "matrix column count must match the parameter dimension"
         );
-    }
-}
-
-// Finite differences construct a matrix from runtime dimensions. Keep the
-// parameter and product in fixed storage when applying that matrix.
-impl<F: Scalar, const R: usize, const C: usize>
-    MatVec<SVector<F, C>, SVector<F, R>> for DMatrix<F>
-{
-    fn matvec(&self, x: &SVector<F, C>) -> SVector<F, R> {
-        assert_eq!(self.shape(), (R, C), "matvec: shape mismatch");
-        SVector::from_fn(|i, _| (0..C).map(|j| self[(i, j)] * x[j]).sum())
-    }
-}
-
-impl<F: Scalar, const R: usize, const C: usize>
-    MatTransposeVec<SVector<F, C>, SVector<F, R>> for DMatrix<F>
-{
-    fn mat_transpose_vec(&self, x: &SVector<F, R>) -> SVector<F, C> {
-        assert_eq!(self.shape(), (R, C), "mat_transpose_vec: shape mismatch");
-        SVector::from_fn(|j, _| (0..R).map(|i| self[(i, j)] * x[i]).sum())
+        if out.nrows() != rows {
+            *out = Self::dense_from_fn(rows, cols, f);
+            return;
+        }
+        for j in 0..N {
+            for i in 0..rows {
+                out[(i, j)] = f(i, j);
+            }
+        }
     }
 }
 
@@ -1115,7 +1118,9 @@ impl<F: Scalar> super::RegularizedQrSolve<DVector<F>, F>
     }
 }
 
-impl<F: Scalar> super::MatrixShape for nalgebra::DMatrix<F> {
+impl<F: Scalar, R: Dim, C: Dim, S: Storage<F, R, C>> super::MatrixShape
+    for Matrix<F, R, C, S>
+{
     fn matrix_rows(&self) -> usize {
         self.nrows()
     }
@@ -1123,26 +1128,30 @@ impl<F: Scalar> super::MatrixShape for nalgebra::DMatrix<F> {
         self.ncols()
     }
 }
-impl<F: Scalar> super::MatrixFinite for nalgebra::DMatrix<F> {
+
+impl<F: Scalar, R: Dim, C: Dim, S: Storage<F, R, C>> super::MatrixFinite
+    for Matrix<F, R, C, S>
+{
     fn matrix_is_finite(&self) -> bool {
-        (0..super::MatrixShape::matrix_rows(self)).all(|i| {
-            (0..super::MatrixShape::matrix_cols(self)).all(|j| {
-                super::MatrixIndex::matrix_entry(self, i, j).is_finite()
-            })
-        })
+        self.iter().all(|x| x.is_finite())
     }
 }
-impl<F: Scalar> super::MatrixIndex<F> for nalgebra::DMatrix<F> {
+
+impl<F: Scalar, R: Dim, C: Dim, S: Storage<F, R, C>> super::MatrixIndex<F>
+    for Matrix<F, R, C, S>
+{
     fn matrix_entry(&self, row: usize, col: usize) -> F {
         self[(row, col)]
     }
 }
 
-impl<F: Scalar> super::ScaleRowsInPlace<F> for DMatrix<F> {
+impl<F: Scalar, R: Dim, C: Dim, S: StorageMut<F, R, C>>
+    super::ScaleRowsInPlace<F> for Matrix<F, R, C, S>
+{
     fn scale_rows_in_place(&mut self, factors: &[F]) {
         assert_eq!(self.nrows(), factors.len(), "row scale shape mismatch");
-        for (i, &factor) in factors.iter().enumerate() {
-            for j in 0..self.ncols() {
+        for j in 0..self.ncols() {
+            for (i, &factor) in factors.iter().enumerate() {
                 self[(i, j)] = self[(i, j)] * factor;
             }
         }

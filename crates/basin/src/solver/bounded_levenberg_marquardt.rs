@@ -138,6 +138,12 @@ use super::least_squares_diagnostics::{
 ///
 /// # Backends
 ///
+/// Fixed-size nalgebra fits can use `SVector<F, N>` parameters and
+/// `SVector<F, M>` residuals with an analytic `SMatrix<F, M, N>` or a
+/// finite-difference Jacobian with dynamic rows and `N` fixed columns.
+/// For distinct Jacobian and Gram matrix types, use
+/// [`Self::new_with_gram`] with `G = SMatrix<F, N, N>`.
+///
 /// LA-heavy: the default `Vec<f64>` backend (over the hand-rolled
 /// [`DenseMatrix<f64>`](crate::DenseMatrix), via a pure-Rust Cholesky),
 /// nalgebra (`DVector<f64>`/`DMatrix<f64>`), faer (`Col<f64>` /
@@ -181,7 +187,7 @@ use super::least_squares_diagnostics::{
 /// `Residual` + `Jacobian` least-squares pattern. `BoundedLevenbergMarquardt`
 /// additionally requires a box-only constraint declaration and is constructed
 /// with `BoundedLevenbergMarquardt::new()`.
-pub struct BoundedLevenbergMarquardt<V, M, F: Scalar = f64> {
+pub struct BoundedLevenbergMarquardt<V, M, F: Scalar = f64, R = V, G = M> {
     tol_grad: Option<F>,
     tau: F,
     rstep: F,
@@ -192,6 +198,7 @@ pub struct BoundedLevenbergMarquardt<V, M, F: Scalar = f64> {
     // through `&mut self`.
     mu: Option<F>,
     nu: F,
+    gram: std::marker::PhantomData<G>,
     rejected_step: bool,
 
     // Residual and Jacobian caches across iterations, same shape as
@@ -199,26 +206,35 @@ pub struct BoundedLevenbergMarquardt<V, M, F: Scalar = f64> {
     // trial residual is at the new iterate (so it's stashed) but the
     // Jacobian there is unknown (so it's cleared); on reject both are
     // unchanged at the current iterate (both stashed).
-    r_cache: Option<V>,
-    trial_residual: Option<V>,
+    r_cache: Option<R>,
+    trial_residual: Option<R>,
     j_cache: Option<M>,
     jacobian_buffer: Option<M>,
-    model_r_cache: Option<V>,
+    model_r_cache: Option<R>,
     failed: bool,
     trace: Option<Trace<F>>,
     trace_vector: Option<fn(&V) -> Vec<F>>,
 }
 
-impl<V, M, F: Scalar> LeastSquaresDiagnostics<F>
-    for BoundedLevenbergMarquardt<V, M, F>
+impl<V, M, F: Scalar, R, G> LeastSquaresDiagnostics<F>
+    for BoundedLevenbergMarquardt<V, M, F, R, G>
 {
     fn least_squares_observations(&self) -> &[LeastSquaresObservation<F>] {
         self.trace.as_ref().map_or(&[], |trace| &trace.observations)
     }
 }
 
-impl<V, M, F: Scalar> Default for BoundedLevenbergMarquardt<V, M, F> {
+impl<V, M, F: Scalar, R> Default for BoundedLevenbergMarquardt<V, M, F, R> {
     fn default() -> Self {
+        Self::new_with_gram()
+    }
+}
+
+impl<V, M, F: Scalar, R, G> BoundedLevenbergMarquardt<V, M, F, R, G> {
+    /// Construct the solver with an explicitly selected Gram matrix type `G`.
+    ///
+    /// Use this when the Jacobian and Gram matrix have different types.
+    pub fn new_with_gram() -> Self {
         Self {
             tol_grad: Some(F::from_f64(1e-8).unwrap()),
             tau: F::from_f64(1e-3).unwrap(),
@@ -227,6 +243,7 @@ impl<V, M, F: Scalar> Default for BoundedLevenbergMarquardt<V, M, F> {
             max_inner_attempts: 50,
             mu: None,
             nu: F::from_f64(2.0).unwrap(),
+            gram: std::marker::PhantomData,
             rejected_step: false,
             r_cache: None,
             trial_residual: None,
@@ -240,7 +257,7 @@ impl<V, M, F: Scalar> Default for BoundedLevenbergMarquardt<V, M, F> {
     }
 }
 
-impl<V, M> BoundedLevenbergMarquardt<V, M> {
+impl<V, M, R> BoundedLevenbergMarquardt<V, M, f64, R> {
     /// `BoundedLevenbergMarquardt` with the canonical defaults: `tol_grad = 1e-8`,
     /// `tau = 1e-3`, `rstep = 1e-10`, `theta = 0.99995`,
     /// `max_inner_attempts = 50`.
@@ -249,7 +266,7 @@ impl<V, M> BoundedLevenbergMarquardt<V, M> {
     }
 }
 
-impl<V, M, F: Scalar> BoundedLevenbergMarquardt<V, M, F> {
+impl<V, M, F: Scalar, R, G> BoundedLevenbergMarquardt<V, M, F, R, G> {
     /// Enable native model and trial observations (disabled by default).
     ///
     /// Recording requires indexed vectors but adds no problem evaluations.
@@ -323,7 +340,7 @@ impl<V, M, F: Scalar> BoundedLevenbergMarquardt<V, M, F> {
     }
 }
 
-impl<V, M, F> InitialState<V> for BoundedLevenbergMarquardt<V, M, F>
+impl<V, M, F, R, G> InitialState<V> for BoundedLevenbergMarquardt<V, M, F, R, G>
 where
     F: Scalar,
     V: Clone,
@@ -334,11 +351,11 @@ where
     }
 }
 
-impl<P, V, M, F> Solver<P, PointState<V, F>>
-    for BoundedLevenbergMarquardt<V, M, F>
+impl<P, V, M, F, R, G> Solver<P, PointState<V, F>>
+    for BoundedLevenbergMarquardt<V, M, F, R, G>
 where
     F: Scalar,
-    P: Residual<Param = V, Output = V>
+    P: Residual<Param = V, Output = R>
         + Jacobian<Jacobian = M>
         + BoxProblem<Param = V>,
     V: ScaledAdd<F>
@@ -347,12 +364,9 @@ where
         + Dot<F>
         + BoxAffineScaling<F>
         + Clone,
-    M: GramMatrix
-        + MatTransposeVec<V>
-        + LinearSolveSpd<V>
-        + AddDiagonalVectorInPlace<V>
-        + MaxDiagonal<F>
-        + Clone,
+    R: NormSquared<F> + Clone,
+    M: GramMatrix<G> + MatTransposeVec<V, R>,
+    G: LinearSolveSpd<V> + AddDiagonalVectorInPlace<V> + MaxDiagonal<F> + Clone,
     V: crate::VectorLen + std::ops::Index<usize, Output = F>,
 {
     type Error = crate::ConstraintSolveError<<P as Residual>::Error>;
@@ -383,13 +397,13 @@ where
     }
 }
 
-impl<P, L, V, M, F, RW>
+impl<P, L, V, M, F, RW, R, G>
     Solver<RobustLeastSquares<P, L, F, RW>, PointState<V, F>>
-    for BoundedLevenbergMarquardt<V, M, F>
+    for BoundedLevenbergMarquardt<V, M, F, R, G>
 where
     F: Scalar,
     P: crate::Constraints<Set = crate::ConstraintSet<crate::BoxBounds<V>>>,
-    P: Residual<Param = V, Output = V>
+    P: Residual<Param = V, Output = R>
         + Jacobian<Jacobian = M>
         + BoxProblem<Param = V>,
     V: ScaledAdd<F>
@@ -398,14 +412,12 @@ where
         + Dot<F>
         + BoxAffineScaling<F>
         + Clone,
-    M: GramMatrix
-        + MatTransposeVec<V>
-        + LinearSolveSpd<V>
-        + AddDiagonalVectorInPlace<V>
-        + MaxDiagonal<F>
-        + Clone,
+    R: NormSquared<F> + Clone,
+    M: GramMatrix<G> + MatTransposeVec<V, R>,
+    G: LinearSolveSpd<V> + AddDiagonalVectorInPlace<V> + MaxDiagonal<F> + Clone,
     L: LossFunction<F>,
     V: VectorLen + VectorIndex<F>,
+    R: VectorLen + VectorIndex<F>,
     M: ScaleRowsInPlace<F>,
     V: crate::VectorLen + std::ops::Index<usize, Output = F>,
 {
@@ -437,7 +449,7 @@ where
     }
 }
 
-impl<V, M, F: Scalar> BoundedLevenbergMarquardt<V, M, F>
+impl<V, M, F: Scalar, R, G> BoundedLevenbergMarquardt<V, M, F, R, G>
 where
     V: ScaledAdd<F>
         + NormSquared<F>
@@ -445,14 +457,11 @@ where
         + Dot<F>
         + BoxAffineScaling<F>
         + Clone,
-    M: GramMatrix
-        + MatTransposeVec<V>
-        + LinearSolveSpd<V>
-        + AddDiagonalVectorInPlace<V>
-        + MaxDiagonal<F>
-        + Clone,
+    R: NormSquared<F> + Clone,
+    M: GramMatrix<G> + MatTransposeVec<V, R>,
+    G: LinearSolveSpd<V> + AddDiagonalVectorInPlace<V> + MaxDiagonal<F> + Clone,
 {
-    fn init_evaluated<E: BoundedEvaluation<V, M, F>>(
+    fn init_evaluated<E: BoundedEvaluation<V, M, F, R>>(
         &mut self,
         problem: &mut E,
         mut state: PointState<V, F>,
@@ -473,7 +482,7 @@ where
         }
         self.failed = false;
         self.rejected_step = false;
-        let residual = self.r_cache.take().unwrap_or_else(|| param.clone());
+        let residual = self.r_cache.take();
         self.trial_residual = None;
         let jacobian =
             self.j_cache.take().or_else(|| self.jacobian_buffer.take());
@@ -520,7 +529,7 @@ where
         Ok(state)
     }
 
-    fn next_evaluated<E: BoundedEvaluation<V, M, F>>(
+    fn next_evaluated<E: BoundedEvaluation<V, M, F, R>>(
         &mut self,
         problem: &mut E,
         mut state: PointState<V, F>,

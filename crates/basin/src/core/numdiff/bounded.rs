@@ -36,7 +36,10 @@ use crate::core::problem::{CostFunction, Gradient, Jacobian, Residual};
 ///
 /// `Vec<F>`, nalgebra `DVector<F>`, ndarray `Array1<F>`, and faer `Col<F>`,
 /// for `F = f64` or `f32`. Jacobians use each vector's [`DenseMatrixFromFn`]
-/// matrix type; the constraint trait's `Matrix` must match it.
+/// matrix type. For fixed-size nalgebra parameters `SVector<F, N>`, the
+/// residual may be `SVector<F, M>` and the Jacobian is an
+/// `OMatrix<F, Dyn, Const<N>>`.
+/// The constraint trait's `Matrix` must match the parameter backend's matrix.
 ///
 /// # Solver stopping tolerances
 ///
@@ -514,14 +517,15 @@ where
 }
 impl<P, V, F> Jacobian for BoundedFiniteDiff<P, F>
 where
-    P: Residual<Param = V, Output = V> + MaybeSync,
+    P: Residual<Param = V> + MaybeSync,
     V: Clone + VectorLen + VectorIndex<F> + DenseMatrixFromFn<F> + MaybeSync,
+    P::Output: Clone + VectorLen + VectorIndex<F> + MaybeSync,
     F: Scalar + MaybeSync + MaybeSend,
     P::Error: MaybeSend,
 {
     type Jacobian = V::Matrix;
     fn jacobian(&self, x: &V) -> Result<V::Matrix, P::Error> {
-        let mut out = V::dense_from_fn(0, 0, |_, _| unreachable!());
+        let mut out = V::dense_from_fn(0, x.vec_len(), |_, _| unreachable!());
         self.jacobian_into(x, &mut out)?;
         Ok(out)
     }
@@ -530,39 +534,50 @@ where
         x: &V,
         out: &mut V::Matrix,
     ) -> Result<(), P::Error> {
-        let (m, cols) = columns_into(
-            x,
-            self.options(true),
-            Some((&self.lower, &self.upper)),
-            x.clone(),
-            Clone::clone,
-            |x, out| self.problem.residual_into(x, out),
-        )?;
-        V::dense_from_fn_into(m, x.vec_len(), |i, j| cols[j][i], out);
-        Ok(())
+        validate_point(x, Some((&self.lower, &self.upper)));
+        let res = super::residual_base(&self.problem, x)?;
+        self.jacobian_with_base_into(x, &res, out)
     }
     fn residual_and_jacobian(
         &self,
         x: &V,
-    ) -> Result<(V, Self::Jacobian), P::Error> {
-        let mut res = x.clone();
-        let mut jac = V::dense_from_fn(0, 0, |_, _| unreachable!());
-        self.residual_and_jacobian_into(x, &mut res, &mut jac)?;
+    ) -> Result<(P::Output, Self::Jacobian), P::Error> {
+        validate_point(x, Some((&self.lower, &self.upper)));
+        let res = super::residual_base(&self.problem, x)?;
+        let mut jac = V::dense_from_fn(0, x.vec_len(), |_, _| unreachable!());
+        self.jacobian_with_base_into(x, &res, &mut jac)?;
         Ok((res, jac))
     }
     fn residual_and_jacobian_into(
         &self,
         x: &V,
-        res: &mut V,
+        res: &mut P::Output,
         jac: &mut Self::Jacobian,
     ) -> Result<(), P::Error> {
-        let bounds = Some((&self.lower[..], &self.upper[..]));
-        validate_point(x, bounds);
+        validate_point(x, Some((&self.lower, &self.upper)));
         self.residual_into(x, res)?;
+        self.jacobian_with_base_into(x, res, jac)
+    }
+}
+
+impl<P, V, F> BoundedFiniteDiff<P, F>
+where
+    P: Residual<Param = V> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex<F> + DenseMatrixFromFn<F> + MaybeSync,
+    P::Output: Clone + VectorLen + VectorIndex<F> + MaybeSync,
+    F: Scalar + MaybeSync + MaybeSend,
+    P::Error: MaybeSend,
+{
+    fn jacobian_with_base_into(
+        &self,
+        x: &V,
+        res: &P::Output,
+        jac: &mut V::Matrix,
+    ) -> Result<(), P::Error> {
         let (m, cols) = columns_with_base(
             x,
             self.options(true),
-            bounds,
+            Some((&self.lower, &self.upper)),
             res,
             Clone::clone,
             |x, out| self.problem.residual_into(x, out),

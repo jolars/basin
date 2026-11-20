@@ -196,6 +196,18 @@ pub trait ScaleInPlace<F = f64> {
 pub trait VectorLen {
     /// Number of components in `self`.
     fn vec_len(&self) -> usize;
+
+    /// Construct scratch storage for a residual evaluation.
+    ///
+    /// The evaluation determines the final contents and length. Backends
+    /// that cannot construct storage independently may return `None`, in
+    /// which case the first evaluation obtains storage from the owned callback.
+    fn residual_buffer() -> Option<Self>
+    where
+        Self: Sized,
+    {
+        None
+    }
 }
 
 /// In-place componentwise multiplication `self[i] ← self[i] · other[i]`.

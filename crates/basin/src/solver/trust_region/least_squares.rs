@@ -14,21 +14,21 @@ use crate::{FirstOrderState, Problem, Solver, SolverStep, State, Termination};
 /// [`TrustRegion::least_squares_with`].
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct GaussNewtonWorkspace<V, M> {
-    residual: V,
-    matrix: GaussNewtonMatrix<M>,
+pub struct GaussNewtonWorkspace<R, M, G = M> {
+    residual: R,
+    matrix: GaussNewtonMatrix<M, G>,
 }
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-enum GaussNewtonMatrix<M> {
+enum GaussNewtonMatrix<M, G> {
     Unavailable,
-    Gram(M),
+    Gram(G),
     Jacobian(M),
 }
 
-impl<M: GramMatrix + MatrixFinite> GaussNewtonMatrix<M> {
-    fn gram(&mut self) -> Option<&M> {
+impl<M: GramMatrix<G>, G: MatrixFinite> GaussNewtonMatrix<M, G> {
+    fn gram(&mut self) -> Option<&G> {
         if let Self::Jacobian(jacobian) = self {
             let gram = jacobian.gram();
             *self = if gram.matrix_is_finite() {
@@ -45,8 +45,8 @@ impl<M: GramMatrix + MatrixFinite> GaussNewtonMatrix<M> {
     }
 }
 
-impl<Sub, F: Scalar, V, M>
-    TrustRegion<Sub, F, GaussNewtonModel, Option<GaussNewtonWorkspace<V, M>>>
+impl<Sub, F: Scalar, R, M>
+    TrustRegion<Sub, F, GaussNewtonModel, Option<GaussNewtonWorkspace<R, M>>>
 {
     /// Trust-region solver for unconstrained nonlinear least squares, with an
     /// explicit matrix strategy such as [`Dogleg`](super::Dogleg).
@@ -94,6 +94,17 @@ impl<Sub, F: Scalar, V, M>
     }
 }
 
+impl<Sub, F: Scalar, R, M, G>
+    TrustRegion<Sub, F, GaussNewtonModel, Option<GaussNewtonWorkspace<R, M, G>>>
+{
+    /// Select a least-squares strategy with an explicit Gram matrix type.
+    ///
+    /// Use this when the Jacobian and Gram matrix have different types.
+    pub fn least_squares_with_gram(subproblem: Sub) -> Self {
+        Self::with_workspace(subproblem, None)
+    }
+}
+
 fn quadratic_cost<F: Scalar, V: VectorLen + VectorIndex<F>>(r: &V) -> F {
     let half = F::from_f64(0.5).unwrap();
     (0..r.vec_len())
@@ -122,15 +133,15 @@ fn quadratic_cost_and_reduction<F: Scalar, V: VectorLen + VectorIndex<F>>(
     (cost, reduction.total())
 }
 
-fn finite_gradient_model<V, M, F>(
-    problem: &impl Evaluation<V, M, F>,
-    residual: &V,
+fn finite_gradient_model<V, M, F, R, G>(
+    problem: &impl Evaluation<V, M, F, R>,
+    residual: &R,
     jacobian: M,
-) -> Option<(V, GaussNewtonMatrix<M>)>
+) -> Option<(V, GaussNewtonMatrix<M, G>)>
 where
     F: Scalar,
     V: VectorLen + VectorIndex<F>,
-    M: MatTransposeVec<V>,
+    M: MatTransposeVec<V, R>,
 {
     let (gradient, jacobian) = problem.gradient_model(residual, jacobian)?;
     let dimension = gradient.vec_len();
@@ -145,18 +156,20 @@ where
     Some((gradient, matrix))
 }
 
-struct LeastSquaresTrial<'a, V, M> {
-    current_residual: &'a V,
-    residual: V,
-    matrix: GaussNewtonMatrix<M>,
+struct LeastSquaresTrial<'a, R, M, G> {
+    current_residual: &'a R,
+    residual: Option<R>,
+    matrix: GaussNewtonMatrix<M, G>,
 }
 
-impl<P, V, M, F, E> TrialEvaluation<P, V, F> for LeastSquaresTrial<'_, V, M>
+impl<P, V, M, F, E, R, G> TrialEvaluation<P, V, F>
+    for LeastSquaresTrial<'_, R, M, G>
 where
     F: Scalar,
     V: VectorLen + VectorIndex<F>,
-    M: MatTransposeVec<V>,
-    Problem<P>: Evaluation<V, M, F, Error = E>,
+    M: MatTransposeVec<V, R>,
+    R: Clone + VectorLen + VectorIndex<F>,
+    Problem<P>: Evaluation<V, M, F, R, Error = E>,
 {
     type Error = E;
 
@@ -175,14 +188,18 @@ where
         trial: &V,
         cost_old: F,
     ) -> Result<(F, F), E> {
-        Evaluation::residual_into(problem, trial, &mut self.residual)?;
-        if self.current_residual.vec_len() != self.residual.vec_len() {
-            let cost = problem.cost(&self.residual, quadratic_cost);
+        let residual = self.residual.get_or_insert_with(|| {
+            R::residual_buffer()
+                .unwrap_or_else(|| self.current_residual.clone())
+        });
+        Evaluation::residual_into(problem, trial, residual)?;
+        if self.current_residual.vec_len() != residual.vec_len() {
+            let cost = problem.cost(residual, quadratic_cost);
             return Ok((cost, cost_old - cost));
         }
         let (cost, reduction) = problem.cost_and_reduction(
             self.current_residual,
-            &self.residual,
+            residual,
             quadratic_cost_and_reduction,
         );
         let reduction = if cost.is_finite() {
@@ -200,8 +217,12 @@ where
         gradient: &mut V,
     ) -> Result<bool, E> {
         let jacobian = Evaluation::jacobian(problem, trial)?;
+        let residual = self
+            .residual
+            .as_ref()
+            .expect("the trial residual was evaluated");
         let Some((next_gradient, matrix)) =
-            finite_gradient_model(problem, &self.residual, jacobian)
+            finite_gradient_model(problem, residual, jacobian)
         else {
             return Ok(false);
         };
@@ -211,12 +232,12 @@ where
     }
 }
 
-impl<P, Sub, V, M, F, E> Solver<P, FirstOrderState<V, F>>
+impl<P, Sub, V, M, F, E, R, G> Solver<P, FirstOrderState<V, F>>
     for TrustRegion<
         Sub,
         F,
         GaussNewtonModel,
-        Option<GaussNewtonWorkspace<V, M>>,
+        Option<GaussNewtonWorkspace<R, M, G>>,
     >
 where
     F: Scalar,
@@ -226,9 +247,11 @@ where
         + ScaledAdd<F>
         + VectorLen
         + VectorIndex<F>,
-    M: GramMatrix + MatTransposeVec<V> + MatrixFinite,
-    Sub: Subproblem<V, M, F>,
-    Problem<P>: Evaluation<V, M, F, Error = E>,
+    M: GramMatrix<G> + MatTransposeVec<V, R>,
+    G: MatrixFinite,
+    Sub: Subproblem<V, G, F>,
+    R: Clone + VectorLen + VectorIndex<F>,
+    Problem<P>: Evaluation<V, M, F, R, Error = E>,
 {
     type Error = E;
 
@@ -300,7 +323,7 @@ where
         let subproblem = &self.subproblem;
         let mut trial = LeastSquaresTrial {
             current_residual: &workspace.residual,
-            residual: state.param().clone(),
+            residual: None,
             matrix: GaussNewtonMatrix::Unavailable,
         };
         let (state, reason, accepted) = tr_next_iter(
@@ -320,6 +343,7 @@ where
             let LeastSquaresTrial {
                 residual, matrix, ..
             } = trial;
+            let residual = residual.expect("the accepted trial was evaluated");
             *workspace = GaussNewtonWorkspace { residual, matrix };
         }
         self.rejected_step = !accepted;

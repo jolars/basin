@@ -14,11 +14,11 @@ pub(crate) type NllsStep<V, F, E> =
 
 // Separate implementations keep additional robust math capabilities off the
 // existing solver bounds, including downstream minimal Jacobian types.
-pub(crate) trait Evaluation<V, M, F: Scalar> {
+pub(crate) trait Evaluation<V, M, F: Scalar, R = V> {
     type Error;
     const ROBUST: bool;
-    fn residual(&mut self, x: &V) -> Result<V, Self::Error>;
-    fn residual_into(&mut self, x: &V, out: &mut V) -> Result<(), Self::Error>;
+    fn residual(&mut self, x: &V) -> Result<R, Self::Error>;
+    fn residual_into(&mut self, x: &V, out: &mut R) -> Result<(), Self::Error>;
     fn jacobian(&mut self, x: &V) -> Result<M, Self::Error>;
     fn jacobian_into(&mut self, x: &V, out: &mut M) -> Result<(), Self::Error>;
     fn jacobian_reusing(
@@ -33,20 +33,20 @@ pub(crate) trait Evaluation<V, M, F: Scalar> {
             self.jacobian(x)
         }
     }
-    fn residual_and_jacobian(&mut self, x: &V) -> Result<(V, M), Self::Error>;
+    fn residual_and_jacobian(&mut self, x: &V) -> Result<(R, M), Self::Error>;
     fn residual_and_jacobian_into(
         &mut self,
         x: &V,
-        r: &mut V,
+        r: &mut R,
         j: &mut M,
     ) -> Result<(), Self::Error>;
     fn residual_and_jacobian_reusing(
         &mut self,
         x: &V,
-        mut r: V,
+        r: Option<R>,
         j: Option<M>,
-    ) -> Result<(V, M), Self::Error> {
-        if let Some(mut j) = j {
+    ) -> Result<(R, M), Self::Error> {
+        if let (Some(mut r), Some(mut j)) = (r, j) {
             self.residual_and_jacobian_into(x, &mut r, &mut j)?;
             Ok((r, j))
         } else {
@@ -56,44 +56,42 @@ pub(crate) trait Evaluation<V, M, F: Scalar> {
         }
     }
 
-    fn cost(&self, r: &V, quadratic: impl FnOnce(&V) -> F) -> F;
+    fn cost(&self, r: &R, quadratic: impl FnOnce(&R) -> F) -> F;
     // The caller supplies residuals with matching lengths.
     fn cost_and_reduction(
         &self,
-        current: &V,
-        trial: &V,
-        quadratic: impl FnOnce(&V, &V) -> (F, F),
+        current: &R,
+        trial: &R,
+        quadratic: impl FnOnce(&R, &R) -> (F, F),
     ) -> (F, F);
     // The inner None retains raw residuals without cloning on quadratic paths.
-    fn model(&self, r: &V, j: M) -> Option<(Option<V>, M)>;
-    fn gradient_model(&self, r: &V, j: M) -> Option<(V, M)>
+    fn model(&self, r: &R, j: M) -> Option<(Option<R>, M)>;
+    fn gradient_model(&self, r: &R, j: M) -> Option<(V, M)>
     where
-        M: MatTransposeVec<V>,
+        M: MatTransposeVec<V, R>,
     {
         Some((j.mat_transpose_vec(r), j))
     }
     fn valid_vector(&self, vector: &V) -> bool;
 }
 
-pub(crate) trait BoundedEvaluation<V, M, F: Scalar>:
-    Evaluation<V, M, F>
+pub(crate) trait BoundedEvaluation<V, M, F: Scalar, R = V>:
+    Evaluation<V, M, F, R>
 {
     fn lower(&self) -> &V;
     fn upper(&self) -> &V;
 }
 
-impl<P, V: Clone, M, F: Scalar> Evaluation<V, M, F> for Problem<P>
+impl<P, V, M, F: Scalar, R> Evaluation<V, M, F, R> for Problem<P>
 where
-    P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
+    P: Residual<Param = V, Output = R> + Jacobian<Jacobian = M>,
 {
     type Error = P::Error;
     const ROBUST: bool = false;
-    fn residual(&mut self, x: &V) -> Result<V, Self::Error> {
-        let mut out = x.clone();
-        Problem::residual_into(self, x, &mut out)?;
-        Ok(out)
+    fn residual(&mut self, x: &V) -> Result<R, Self::Error> {
+        Problem::residual(self, x)
     }
-    fn residual_into(&mut self, x: &V, out: &mut V) -> Result<(), Self::Error> {
+    fn residual_into(&mut self, x: &V, out: &mut R) -> Result<(), Self::Error> {
         Problem::residual_into(self, x, out)
     }
     fn jacobian(&mut self, x: &V) -> Result<M, Self::Error> {
@@ -102,29 +100,29 @@ where
     fn jacobian_into(&mut self, x: &V, out: &mut M) -> Result<(), Self::Error> {
         Problem::jacobian_into(self, x, out)
     }
-    fn residual_and_jacobian(&mut self, x: &V) -> Result<(V, M), Self::Error> {
+    fn residual_and_jacobian(&mut self, x: &V) -> Result<(R, M), Self::Error> {
         Problem::residual_and_jacobian(self, x)
     }
     fn residual_and_jacobian_into(
         &mut self,
         x: &V,
-        r: &mut V,
+        r: &mut R,
         j: &mut M,
     ) -> Result<(), Self::Error> {
         Problem::residual_and_jacobian_into(self, x, r, j)
     }
-    fn cost(&self, r: &V, quadratic: impl FnOnce(&V) -> F) -> F {
+    fn cost(&self, r: &R, quadratic: impl FnOnce(&R) -> F) -> F {
         quadratic(r)
     }
     fn cost_and_reduction(
         &self,
-        current: &V,
-        trial: &V,
-        quadratic: impl FnOnce(&V, &V) -> (F, F),
+        current: &R,
+        trial: &R,
+        quadratic: impl FnOnce(&R, &R) -> (F, F),
     ) -> (F, F) {
         quadratic(current, trial)
     }
-    fn model(&self, _r: &V, j: M) -> Option<(Option<V>, M)> {
+    fn model(&self, _r: &R, j: M) -> Option<(Option<R>, M)> {
         Some((None, j))
     }
     fn valid_vector(&self, _: &V) -> bool {
@@ -135,23 +133,22 @@ where
 // Relaxing a box must retain the loss, scale, and raw callback accounting.
 macro_rules! robust_evaluation {
     ($problem:ty, $($field:ident).*) => {
-        impl<P, L, V, M, F, W> Evaluation<V, M, F> for Problem<$problem>
+        impl<P, L, V, M, F, W, R> Evaluation<V, M, F, R> for Problem<$problem>
         where
             F: Scalar,
-            P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
+            P: Residual<Param = V, Output = R> + Jacobian<Jacobian = M>,
             L: LossFunction<F>,
-            V: Clone + VectorLen + VectorIndex<F>,
+            V: VectorLen + VectorIndex<F>,
+            R: Clone + VectorLen + VectorIndex<F>,
             M: ScaleRowsInPlace<F>,
         {
             type Error = P::Error;
             const ROBUST: bool = true;
-            fn residual(&mut self, x: &V) -> Result<V, Self::Error> {
+            fn residual(&mut self, x: &V) -> Result<R, Self::Error> {
                 self.counts_mut().residual_evals += 1;
-                let mut out = x.clone();
-                self.inner()$(.$field)*.problem.residual_into(x, &mut out)?;
-                Ok(out)
+                self.inner()$(.$field)*.problem.residual(x)
             }
-            fn residual_into(&mut self, x: &V, out: &mut V) -> Result<(), Self::Error> {
+            fn residual_into(&mut self, x: &V, out: &mut R) -> Result<(), Self::Error> {
                 self.counts_mut().residual_evals += 1;
                 self.inner()$(.$field)*.problem.residual_into(x, out)
             }
@@ -166,36 +163,36 @@ macro_rules! robust_evaluation {
             fn residual_and_jacobian(
                 &mut self,
                 x: &V,
-            ) -> Result<(V, M), Self::Error> {
+            ) -> Result<(R, M), Self::Error> {
                 self.counts_mut().residual_evals += 1;
                 self.counts_mut().jacobian_evals += 1;
                 self.inner()$(.$field)*.problem.residual_and_jacobian(x)
             }
-            fn residual_and_jacobian_into(&mut self, x: &V, r: &mut V, j: &mut M) -> Result<(), Self::Error> {
+            fn residual_and_jacobian_into(&mut self, x: &V, r: &mut R, j: &mut M) -> Result<(), Self::Error> {
                 self.counts_mut().residual_evals += 1;
                 self.counts_mut().jacobian_evals += 1;
                 self.inner()$(.$field)*.problem.residual_and_jacobian_into(x, r, j)
             }
-            fn cost(&self, r: &V, _: impl FnOnce(&V) -> F) -> F {
+            fn cost(&self, r: &R, _: impl FnOnce(&R) -> F) -> F {
                 self.inner()$(.$field)*.residual_cost(r)
             }
             fn cost_and_reduction(
                 &self,
-                current: &V,
-                trial: &V,
-                _: impl FnOnce(&V, &V) -> (F, F),
+                current: &R,
+                trial: &R,
+                _: impl FnOnce(&R, &R) -> (F, F),
             ) -> (F, F) {
                 self.inner()$(.$field)*.residual_cost_and_reduction(current, trial)
             }
-            fn model(&self, r: &V, mut j: M) -> Option<(Option<V>, M)> {
+            fn model(&self, r: &R, mut j: M) -> Option<(Option<R>, M)> {
                 let (residual, factors) =
                     self.inner()$(.$field)*.model_residual(r)?;
                 j.scale_rows_in_place(&factors);
                 Some((Some(residual), j))
             }
-            fn gradient_model(&self, r: &V, mut j: M) -> Option<(V, M)>
+            fn gradient_model(&self, r: &R, mut j: M) -> Option<(V, M)>
             where
-                M: MatTransposeVec<V>,
+                M: MatTransposeVec<V, R>,
             {
                 let mut derivatives = r.clone();
                 let mut factors = Vec::with_capacity(r.vec_len());
@@ -218,9 +215,9 @@ macro_rules! robust_evaluation {
 robust_evaluation!(RobustLeastSquares<P, L, F, W>,);
 robust_evaluation!(RelaxedProblem<'_, RobustLeastSquares<P, L, F, W>>, problem);
 
-impl<P, V: Clone, M, F: Scalar> BoundedEvaluation<V, M, F> for Problem<P>
+impl<P, V, M, F: Scalar, R> BoundedEvaluation<V, M, F, R> for Problem<P>
 where
-    P: Residual<Param = V, Output = V>
+    P: Residual<Param = V, Output = R>
         + Jacobian<Jacobian = M>
         + BoxProblem<Param = V>,
 {
@@ -232,15 +229,16 @@ where
     }
 }
 
-impl<P, L, V, M, F, W> BoundedEvaluation<V, M, F>
+impl<P, L, V, M, F, W, R> BoundedEvaluation<V, M, F, R>
     for Problem<RobustLeastSquares<P, L, F, W>>
 where
     F: Scalar,
-    P: Residual<Param = V, Output = V>
+    P: Residual<Param = V, Output = R>
         + Jacobian<Jacobian = M>
         + BoxProblem<Param = V>,
     L: LossFunction<F>,
-    V: Clone + VectorLen + VectorIndex<F>,
+    V: VectorLen + VectorIndex<F>,
+    R: Clone + VectorLen + VectorIndex<F>,
     M: ScaleRowsInPlace<F>,
 {
     fn lower(&self) -> &V {

@@ -10,7 +10,11 @@
 #![cfg(feature = "problems")]
 
 use basin::problems::{PowellSingular, RosenbrockResiduals};
-use basin::{Executor, GaussNewton, PointState, TerminationCode};
+use basin::{
+    DenseMatrix, Executor, GaussNewton, GramMatrix, Jacobian, LinearSolveError,
+    LinearSolveSpd, MatTransposeVec, PointState, Residual, TerminationCode,
+};
+use std::convert::Infallible;
 
 #[test]
 fn gauss_newton_converges_on_rosenbrock_residuals() {
@@ -122,4 +126,64 @@ fn gauss_newton_caches_residual_and_jacobian_across_iterations() {
         "expected init's J reused for iter 1, then one J recompute per subsequent iter \
          (3 total)"
     );
+}
+
+struct Fit;
+struct CustomJacobian(f64);
+
+impl Residual for Fit {
+    type Param = Vec<f64>;
+    type Output = Vec<f64>;
+    type Error = Infallible;
+    fn residual(&self, x: &Vec<f64>) -> Result<Vec<f64>, Infallible> {
+        Ok(vec![2.0 * x[0] - 4.0])
+    }
+}
+
+impl Jacobian for Fit {
+    type Jacobian = CustomJacobian;
+    fn jacobian(&self, _: &Vec<f64>) -> Result<CustomJacobian, Infallible> {
+        Ok(CustomJacobian(2.0))
+    }
+}
+
+impl MatTransposeVec<Vec<f64>> for CustomJacobian {
+    fn mat_transpose_vec(&self, rhs: &Vec<f64>) -> Vec<f64> {
+        vec![self.0 * rhs[0]]
+    }
+}
+
+impl GramMatrix for CustomJacobian {
+    fn gram(&self) -> Self {
+        Self(self.0 * self.0)
+    }
+}
+
+impl GramMatrix<DenseMatrix> for CustomJacobian {
+    fn gram(&self) -> DenseMatrix {
+        DenseMatrix::from_row_slice(1, 1, &[self.0 * self.0])
+    }
+}
+
+impl LinearSolveSpd<Vec<f64>> for CustomJacobian {
+    fn solve_spd(&self, rhs: &Vec<f64>) -> Result<Vec<f64>, LinearSolveError> {
+        Ok(vec![rhs[0] / self.0])
+    }
+}
+
+#[test]
+fn gauss_newton_infers_the_legacy_gram_type() {
+    let result = Executor::from_start(Fit, GaussNewton::new(), vec![0.0])
+        .run()
+        .unwrap();
+    assert_eq!(result.param(), &[2.0]);
+
+    let result = Executor::from_start(
+        Fit,
+        GaussNewton::<_, _, _, _, DenseMatrix>::new_with_gram(),
+        vec![0.0],
+    )
+    .run()
+    .unwrap();
+    assert_eq!(result.param(), &[2.0]);
 }

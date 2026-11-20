@@ -1112,3 +1112,55 @@ fn dogleg_rejects_an_uphill_arctan_step_with_large_finite_costs() {
     assert_eq!(result.param(), &[0.0]);
     assert_eq!(result.counts.jacobian_evals, 1);
 }
+
+#[test]
+fn tall_fit_starts_trial_evaluation_with_empty_scratch() {
+    const ROWS: usize = 4096;
+
+    struct TallFit<'a> {
+        trial_buffer_capacity: &'a Cell<Option<usize>>,
+    }
+
+    impl Residual for TallFit<'_> {
+        type Param = Vec<f64>;
+        type Output = Vec<f64>;
+        type Error = Infallible;
+
+        fn residual(&self, x: &Vec<f64>) -> Result<Vec<f64>, Infallible> {
+            Ok(vec![x[0] - 0.5; ROWS])
+        }
+
+        fn residual_into(
+            &self,
+            x: &Vec<f64>,
+            out: &mut Vec<f64>,
+        ) -> Result<(), Infallible> {
+            self.trial_buffer_capacity.set(Some(out.capacity()));
+            *out = self.residual(x)?;
+            Ok(())
+        }
+    }
+
+    impl Jacobian for TallFit<'_> {
+        type Jacobian = DenseMatrix;
+
+        fn jacobian(&self, _: &Vec<f64>) -> Result<DenseMatrix, Infallible> {
+            Ok(DenseMatrix::from_fn(ROWS, 1, |_, _| 1.0))
+        }
+    }
+
+    let trial_buffer_capacity = Cell::new(None);
+    let result = Executor::from_start(
+        TallFit {
+            trial_buffer_capacity: &trial_buffer_capacity,
+        },
+        TrustRegion::least_squares_with(Dogleg),
+        vec![0.0],
+    )
+    .max_iter(1)
+    .run()
+    .unwrap();
+
+    assert_eq!(result.param(), &[0.5]);
+    assert_eq!(trial_buffer_capacity.get(), Some(0));
+}

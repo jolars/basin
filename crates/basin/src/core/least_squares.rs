@@ -461,11 +461,12 @@ impl<P, L: LossFunction<F>, F: Scalar, W> RobustLeastSquares<P, L, F, W> {
         cost.is_finite().then_some((model, factors))
     }
 
-    fn gradient_from<V: VectorLen + VectorIndex<F>, M: MatTransposeVec<V>>(
-        &self,
-        mut r: V,
-        j: M,
-    ) -> V {
+    fn gradient_from<V, R, M>(&self, mut r: R, j: M) -> V
+    where
+        V: VectorLen + VectorIndex<F>,
+        R: VectorLen + VectorIndex<F>,
+        M: MatTransposeVec<V, R>,
+    {
         let mut valid = true;
         for i in 0..r.vec_len() {
             let derivative = self.term(r.get_scalar(i)).map_or_else(
@@ -504,11 +505,12 @@ where
     }
 }
 
-impl<P, L, V, F> Gradient for RobustLeastSquares<P, L, F>
+impl<P, L, V, F, R> Gradient for RobustLeastSquares<P, L, F>
 where
     F: Scalar,
-    P: Residual<Param = V, Output = V> + Jacobian,
-    P::Jacobian: MatTransposeVec<V>,
+    P: Residual<Param = V, Output = R> + Jacobian,
+    P::Jacobian: MatTransposeVec<V, R>,
+    R: VectorLen + VectorIndex<F>,
     V: VectorLen + VectorIndex<F>,
     L: LossFunction<F>,
 {
@@ -559,12 +561,13 @@ where
     }
 }
 
-impl<P, L, V, M, F> Gradient
-    for RobustLeastSquares<P, L, F, SharedEvaluationBuffers<V, M, F>>
+impl<P, L, V, M, F, R> Gradient
+    for RobustLeastSquares<P, L, F, SharedEvaluationBuffers<R, M, F>>
 where
     F: Scalar,
-    P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
+    P: Residual<Param = V, Output = R> + Jacobian<Jacobian = M>,
     M: MatTransposeVecInto<V, F>,
+    R: VectorLen + VectorIndex<F>,
     V: Clone + VectorLen + VectorIndex<F>,
     L: LossFunction<F>,
 {

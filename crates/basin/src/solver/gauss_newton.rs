@@ -69,6 +69,12 @@ use crate::{VectorIndex, VectorLen};
 ///
 /// # Backends
 ///
+/// Fixed-size nalgebra fits can use `SVector<F, N>` parameters and
+/// `SVector<F, M>` residuals with an analytic `SMatrix<F, M, N>` or a
+/// finite-difference Jacobian with dynamic rows and `N` fixed columns.
+/// For distinct Jacobian and Gram matrix types, use
+/// [`Self::new_with_gram`] with `G = SMatrix<F, N, N>`.
+///
 /// LA-heavy: the default `Vec<f64>` backend (over the hand-rolled
 /// [`DenseMatrix<f64>`](crate::DenseMatrix), via a pure-Rust Cholesky),
 /// nalgebra (`DVector<f64>`/`DMatrix<f64>`), faer (`Col<f64>` /
@@ -97,7 +103,7 @@ use crate::{VectorIndex, VectorLen};
 /// implement `Residual` + `Jacobian`, then drive a `PointState` through
 /// the `Executor`, swapping `LevenbergMarquardt::new()` for
 /// `GaussNewton::new()`.
-pub struct GaussNewton<V, M, F: Scalar = f64> {
+pub struct GaussNewton<V, M, F: Scalar = f64, R = V, G = M> {
     tol_grad: Option<F>,
 
     // Residual and Jacobian caches across iterations. `r_cache` is set
@@ -105,29 +111,42 @@ pub struct GaussNewton<V, M, F: Scalar = f64> {
     // next iter. `j_cache` is set only by `init` (init's `J(x₀)` is
     // reused for iter 0); after a step `J` is at the old iterate and
     // is dropped.
-    r_cache: Option<V>,
+    r_cache: Option<R>,
     j_cache: Option<M>,
     jacobian_buffer: Option<M>,
-    model_r_cache: Option<V>,
+    model_r_cache: Option<R>,
+    gram: std::marker::PhantomData<G>,
     failed: bool,
     trace: Option<Trace<F>>,
     trace_vector: Option<fn(&V) -> Vec<F>>,
 }
 
-impl<V, M, F: Scalar> LeastSquaresDiagnostics<F> for GaussNewton<V, M, F> {
+impl<V, M, F: Scalar, R, G> LeastSquaresDiagnostics<F>
+    for GaussNewton<V, M, F, R, G>
+{
     fn least_squares_observations(&self) -> &[LeastSquaresObservation<F>] {
         self.trace.as_ref().map_or(&[], |trace| &trace.observations)
     }
 }
 
-impl<V, M, F: Scalar> Default for GaussNewton<V, M, F> {
+impl<V, M, F: Scalar, R> Default for GaussNewton<V, M, F, R> {
     fn default() -> Self {
+        Self::new_with_gram()
+    }
+}
+
+impl<V, M, F: Scalar, R, G> GaussNewton<V, M, F, R, G> {
+    /// Construct the solver with an explicitly selected Gram matrix type `G`.
+    ///
+    /// Use this when the Jacobian and Gram matrix have different types.
+    pub fn new_with_gram() -> Self {
         Self {
             tol_grad: Some(F::from_f64(1e-8).unwrap()),
             r_cache: None,
             j_cache: None,
             jacobian_buffer: None,
             model_r_cache: None,
+            gram: std::marker::PhantomData,
             failed: false,
             trace: None,
             trace_vector: None,
@@ -135,7 +154,7 @@ impl<V, M, F: Scalar> Default for GaussNewton<V, M, F> {
     }
 }
 
-impl<V, M> GaussNewton<V, M> {
+impl<V, M, R> GaussNewton<V, M, f64, R> {
     /// Pure Gauss-Newton with the default first-order optimality
     /// tolerance (`tol_grad = 1e-8`).
     pub fn new() -> Self {
@@ -143,7 +162,7 @@ impl<V, M> GaussNewton<V, M> {
     }
 }
 
-impl<V, M, F: Scalar> GaussNewton<V, M, F> {
+impl<V, M, F: Scalar, R, G> GaussNewton<V, M, F, R, G> {
     /// Enable native model, Cholesky, and full-step observations.
     ///
     /// Recording is disabled by default and performs no problem callbacks.
@@ -176,7 +195,7 @@ impl<V, M, F: Scalar> GaussNewton<V, M, F> {
     }
 }
 
-impl<V, M, F> InitialState<V> for GaussNewton<V, M, F>
+impl<V, M, F, R, G> InitialState<V> for GaussNewton<V, M, F, R, G>
 where
     F: Scalar,
     V: Clone,
@@ -187,12 +206,15 @@ where
     }
 }
 
-impl<P, V, M, F, E> Solver<P, PointState<V, F>> for GaussNewton<V, M, F>
+impl<P, V, M, F, E, R, G> Solver<P, PointState<V, F>>
+    for GaussNewton<V, M, F, R, G>
 where
     F: Scalar,
-    Problem<P>: Evaluation<V, M, F, Error = E>,
+    Problem<P>: Evaluation<V, M, F, R, Error = E>,
     V: ScaledAdd<F> + NormSquared<F> + NormInfinity<F> + NegInPlace + Clone,
-    M: GramMatrix + MatTransposeVec<V> + LinearSolveSpd<V>,
+    R: NormSquared<F> + Clone,
+    M: GramMatrix<G> + MatTransposeVec<V, R>,
+    G: LinearSolveSpd<V>,
 {
     type Error = E;
     fn init(
@@ -211,12 +233,14 @@ where
     }
 }
 
-impl<V, M, F: Scalar> GaussNewton<V, M, F>
+impl<V, M, F: Scalar, R, G> GaussNewton<V, M, F, R, G>
 where
     V: ScaledAdd<F> + NormSquared<F> + NormInfinity<F> + NegInPlace + Clone,
-    M: GramMatrix + MatTransposeVec<V> + LinearSolveSpd<V>,
+    R: NormSquared<F> + Clone,
+    M: GramMatrix<G> + MatTransposeVec<V, R>,
+    G: LinearSolveSpd<V>,
 {
-    fn init_evaluated<E: Evaluation<V, M, F>>(
+    fn init_evaluated<E: Evaluation<V, M, F, R>>(
         &mut self,
         problem: &mut E,
         mut state: PointState<V, F>,
@@ -229,8 +253,7 @@ where
         // state. Both `r(x₀)` and `J(x₀)` are stashed so the first
         // `next_iter` doesn't re-evaluate them at the same point.
         self.failed = false;
-        let residual =
-            self.r_cache.take().unwrap_or_else(|| state.param().clone());
+        let residual = self.r_cache.take();
         let jacobian =
             self.j_cache.take().or_else(|| self.jacobian_buffer.take());
         self.model_r_cache = None;
@@ -256,7 +279,7 @@ where
         Ok(state)
     }
 
-    fn next_evaluated<E: Evaluation<V, M, F>>(
+    fn next_evaluated<E: Evaluation<V, M, F, R>>(
         &mut self,
         problem: &mut E,
         mut state: PointState<V, F>,

@@ -25,6 +25,12 @@ macro_rules! dense_checks {
         crate::bfgs_initial_inverse_hessian::check::<$v, $f>($make)
     };
     (@seed fixed, $v:ty, $f:ty, $make:expr) => {};
+    (@matrix_shapes dynamic) => {
+        [(0, 0), (3, 2), (3, 2), (1, 4), (0, 2)]
+    };
+    (@matrix_shapes fixed) => {
+        [(0, 2), (3, 2), (3, 2), (1, 2), (0, 2)]
+    };
     ($vector:ty, $matrix:ty, $scalar:ty, $make:expr, $storage:ident) => {{
         use basin::{
             Bfgs, CostFunction, Executor, FactorizePivotedQr,
@@ -38,10 +44,11 @@ macro_rules! dense_checks {
         let make = $make;
         let x = make(&[3.0, 4.0]);
         assert_eq!(NormSquared::norm_squared(&x), 25.0);
+        let [initial, shapes @ ..] = dense_checks!(@matrix_shapes $storage);
         let mut filled = <V as basin::DenseMatrixFromFn<F>>::dense_from_fn(
-            0, 0, |_, _| F::NAN,
+            initial.0, initial.1, |_, _| unreachable!(),
         );
-        for (rows, cols) in [(3, 2), (3, 2), (1, 4), (0, 2)] {
+        for (rows, cols) in shapes {
             let mut visits = 0;
             <V as basin::DenseMatrixFromFn<F>>::dense_from_fn_into(
                 rows, cols,
@@ -969,6 +976,163 @@ macro_rules! sparse_checks {
     }};
 }
 #[cfg(feature = "nalgebra_all")]
+macro_rules! fixed_rectangular_fits {
+    ($scalar:ty $(, $finite_diff:path)?) => {{
+        use basin::{
+            BoundedFiniteDiff, BoundedLevenbergMarquardt, BoxBounds,
+            Constrained, ConstraintSet, Dogleg, Executor, GaussNewton,
+            HuberLoss, Jacobian, LevenbergMarquardt, LevenbergMarquardtQr,
+            Method, Residual, RobustLeastSquares, TrustRegion, TrustRegionReflective,
+        };
+        use std::convert::Infallible;
+
+        type F = $scalar;
+        type Param = backend::SVector<F, 2>;
+        type Rows = backend::SVector<F, 3>;
+        type Matrix = backend::SMatrix<F, 3, 2>;
+        type Gram = backend::SMatrix<F, 2, 2>;
+
+        #[derive(Clone, Copy)]
+        struct Fit;
+
+        impl Residual for Fit {
+            type Param = Param;
+            type Output = Rows;
+            type Error = Infallible;
+
+            fn residual(&self, x: &Param) -> Result<Rows, Infallible> {
+                let u = x[0] - 2.0;
+                let v = x[1] + 1.0;
+                Ok(Rows::new(u, 2.0 * v, u + v))
+            }
+        }
+
+        impl Jacobian for Fit {
+            type Jacobian = Matrix;
+
+            fn jacobian(&self, _: &Param) -> Result<Matrix, Infallible> {
+                Ok(Matrix::from_row_slice(&[1.0, 0.0, 0.0, 2.0, 1.0, 1.0]))
+            }
+        }
+
+        let start = Param::new(0.0, 0.0);
+        let target = Param::new(2.0, -1.0);
+        let lower = Param::new(0.0, -4.0);
+        let upper = Param::new(4.0, 4.0);
+        let bounded = |p| {
+            Constrained::new(
+                p,
+                ConstraintSet::new()
+                    .with_bounds(BoxBounds::new(Some(lower), Some(upper))),
+            )
+        };
+        let numerical = |method| {
+            BoundedFiniteDiff::new(bounded(Fit), lower, upper)
+                .jacobian_method(method)
+                .with_step(0.125)
+        };
+        let check = |x: &Param| {
+            assert!((x - target).norm() <= (128.0 * F::EPSILON).max(1e-8), "{x:?}");
+        };
+
+        macro_rules! solve {
+            ($problem:expr, $solver:expr) => {{
+                let result = Executor::from_start($problem, $solver, start)
+                    .max_iter(100)
+                    .run()
+                    .unwrap();
+                check(result.param());
+                let checkpoint = Executor::from_start($problem, $solver, start)
+                    .max_iter(1)
+                    .run_with_solver()
+                    .unwrap()
+                    .into_checkpoint();
+                let resumed = Executor::resume_from_checkpoint($problem, checkpoint)
+                    .max_iter(100)
+                    .run()
+                    .unwrap();
+                assert_eq!(resumed.param(), result.param(), stringify!($solver));
+                assert_eq!(resumed.counts, result.counts, stringify!($solver));
+            }};
+        }
+
+        macro_rules! unbounded_solvers {
+            ($problem:expr) => {{
+                solve!($problem, GaussNewton::<_, _, F, _, Gram>::new_with_gram());
+                solve!($problem, LevenbergMarquardt::<_, _, F, _, Gram>::new_with_gram());
+                solve!(
+                    $problem,
+                    LevenbergMarquardtQr::<_, _, F, (), _>::new()
+                        .with_evaluation_buffers()
+                );
+                solve!($problem, TrustRegion::least_squares_with_gram(Dogleg));
+            }};
+        }
+
+        macro_rules! bounded_solvers {
+            ($problem:expr) => {{
+                solve!(
+                    $problem,
+                    BoundedLevenbergMarquardt::<_, _, F, _, Gram>::new_with_gram()
+                );
+                solve!(
+                    $problem,
+                    TrustRegionReflective::new().with_evaluation_buffers()
+                );
+            }};
+        }
+
+        unbounded_solvers!(Fit);
+        bounded_solvers!(bounded(Fit));
+        unbounded_solvers!(RobustLeastSquares::new(Fit, HuberLoss).with_scale(4.0));
+        bounded_solvers!(
+            RobustLeastSquares::new(bounded(Fit), HuberLoss).with_scale(4.0)
+        );
+        for method in [Method::Forward, Method::Central] {
+            let problem = numerical(method);
+            let expected = Fit.jacobian(&start).unwrap();
+            let (residual, jacobian) =
+                problem.residual_and_jacobian(&start).unwrap();
+            assert_eq!(residual, Fit.residual(&start).unwrap());
+            assert_eq!(jacobian.shape(), (3, 2));
+            assert_eq!(jacobian.as_slice(), expected.as_slice());
+            unbounded_solvers!(numerical(method));
+            bounded_solvers!(numerical(method));
+        }
+
+        $(
+            solve!(Fit, LevenbergMarquardt::new().with_pivoted_qr());
+            solve!(
+                Fit,
+                LevenbergMarquardt::<Param, Matrix, F, Rows, Gram>::new_with_gram()
+                    .with_absolute_gradient_tolerance(1e-10)
+                    .with_pivoted_qr()
+            );
+            for method in [Method::Forward, Method::Central] {
+                let problem = $finite_diff(Fit)
+                    .jacobian_method(method)
+                    .with_step(0.125);
+                let expected = Fit.jacobian(&start).unwrap();
+                let mut jacobian = backend::OMatrix::zeros_generic(
+                    backend::Dyn(1), backend::Const,
+                );
+                let mut residual = Rows::zeros();
+                problem.residual_and_jacobian_into(
+                    &start, &mut residual, &mut jacobian,
+                ).unwrap();
+                assert_eq!(residual, Fit.residual(&start).unwrap());
+                assert_eq!(jacobian.shape(), (3, 2));
+                assert_eq!(jacobian.as_slice(), expected.as_slice());
+                unbounded_solvers!($finite_diff(Fit).jacobian_method(method).with_step(0.125));
+                bounded_solvers!(
+                    $finite_diff(bounded(Fit)).jacobian_method(method).with_step(0.125)
+                );
+            }
+        )?
+    }};
+}
+
+#[cfg(feature = "nalgebra_all")]
 macro_rules! nalgebra_checks {
     ($module:ident, $dependency:ident, $sparse:ident) => {
         mod $module {
@@ -1022,6 +1186,33 @@ macro_rules! nalgebra_checks {
                 fixed_bfgs::<1>();
                 fixed_bfgs::<2>();
                 fixed_bfgs::<3>();
+            }
+
+            #[test]
+            fn dynamic_nalgebra_kernels_infer_rhs() {
+                use basin::{
+                    AddDiagonalVectorInPlace, FactorizePivotedQr, LinearSolveSpd,
+                };
+
+                let mut matrix = backend::DMatrix::<f64>::identity(2, 2);
+                let solution = matrix.solve_spd(&vec![1.0, 2.0].into()).unwrap();
+                assert_eq!(solution.as_slice(), &[1.0, 2.0]);
+
+                matrix.add_diagonal_vector_in_place(&vec![1.0, 2.0].into());
+                assert_eq!(matrix[(0, 0)], 2.0);
+                assert_eq!(matrix[(1, 1)], 3.0);
+
+                assert!(matrix.factorize_pivoted_qr(&vec![1.0, 2.0].into()).is_ok());
+            }
+
+            #[test]
+            fn fixed_rectangular_f32_fits() {
+                fixed_rectangular_fits!(f32);
+            }
+
+            #[test]
+            fn fixed_rectangular_f64_fits() {
+                fixed_rectangular_fits!(f64, basin::FiniteDiff::new);
             }
 
             #[test]

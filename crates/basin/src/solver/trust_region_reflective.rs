@@ -118,6 +118,10 @@ use step::{Model, interior, number, update_radius};
 ///
 /// # Backends
 ///
+/// Fixed-size nalgebra fits can use `SVector<F, N>` parameters and
+/// `SVector<F, M>` residuals with an analytic `SMatrix<F, M, N>` or a
+/// finite-difference Jacobian with dynamic rows and `N` fixed columns.
+///
 /// `Vec<F>`/`DenseMatrix<F>`, nalgebra `DVector<F>`/`DMatrix<F>`, ndarray
 /// `Array1<F>`/`Array2<F>`, and faer `Col<F>`/`Mat<F>`, for `f32` and `f64`.
 /// All share the pure-Rust dense kernel through [`MatrixIndex`]; BLAS/LAPACK
@@ -435,13 +439,14 @@ impl<F: Scalar> Work<F> {
     }
 }
 
-impl<P, V, F, W> Solver<P, PointState<V, F>> for TrustRegionReflective<F, W>
+impl<P, V, F, W, R> Solver<P, PointState<V, F>> for TrustRegionReflective<F, W>
 where
     F: Scalar,
-    W: BufferStorage<V, P::Jacobian>,
-    P: Residual<Param = V, Output = V> + Jacobian + BoxProblem<Param = V>,
+    W: BufferStorage<R, P::Jacobian>,
+    P: Residual<Param = V, Output = R> + Jacobian + BoxProblem<Param = V>,
     P::Jacobian: MatrixIndex<F>,
     V: Clone + VectorLen + VectorIndex<F>,
+    R: Clone + VectorLen + VectorIndex<F>,
 {
     type Error = crate::ConstraintSolveError<<P as Residual>::Error>;
     fn reset_convergence(&mut self) {
@@ -484,16 +489,17 @@ where
     }
 }
 
-impl<P, L, V, F, W, RW>
+impl<P, L, V, F, W, RW, R>
     Solver<RobustLeastSquares<P, L, F, RW>, PointState<V, F>>
     for TrustRegionReflective<F, W>
 where
     F: Scalar,
-    W: BufferStorage<V, P::Jacobian>,
+    W: BufferStorage<R, P::Jacobian>,
     P: crate::Constraints<Set = crate::ConstraintSet<crate::BoxBounds<V>>>,
-    P: Residual<Param = V, Output = V> + Jacobian + BoxProblem<Param = V>,
+    P: Residual<Param = V, Output = R> + Jacobian + BoxProblem<Param = V>,
     P::Jacobian: MatrixIndex<F>,
     V: Clone + VectorLen + VectorIndex<F>,
+    R: Clone + VectorLen + VectorIndex<F>,
     L: LossFunction<F>,
     P::Jacobian: ScaleRowsInPlace<F>,
 {
@@ -539,53 +545,60 @@ where
 }
 
 impl<F: Scalar, W> TrustRegionReflective<F, W> {
-    fn init_evaluated<V, M, E>(
+    fn init_evaluated<V, M, E, R>(
         &mut self,
         problem: &mut E,
         state: PointState<V, F>,
     ) -> Result<PointState<V, F>, E::Error>
     where
         V: Clone + VectorLen + VectorIndex<F>,
+        R: Clone + VectorLen + VectorIndex<F>,
         M: MatrixIndex<F>,
-        E: BoundedEvaluation<V, M, F>,
-        W: BufferStorage<V, M>,
+        E: BoundedEvaluation<V, M, F, R>,
+        W: BufferStorage<R, M>,
     {
         let mut workspace = std::mem::take(&mut self.workspace);
-        let result = workspace
-            .with_buffers(|r, j| self.init_model(problem, state, r, j));
+        let result = workspace.with_buffers(|r, j| {
+            *r = r.take().or_else(R::residual_buffer);
+            self.init_model(problem, state, r, j)
+        });
         self.workspace = workspace;
         result
     }
 
-    fn next_evaluated<V, M, E>(
+    fn next_evaluated<V, M, E, R>(
         &mut self,
         problem: &mut E,
         state: PointState<V, F>,
     ) -> NllsStep<V, F, E::Error>
     where
         V: Clone + VectorLen + VectorIndex<F>,
+        R: Clone + VectorLen + VectorIndex<F>,
         M: MatrixIndex<F>,
-        E: BoundedEvaluation<V, M, F>,
-        W: BufferStorage<V, M>,
+        E: BoundedEvaluation<V, M, F, R>,
+        W: BufferStorage<R, M>,
     {
         let mut workspace = std::mem::take(&mut self.workspace);
-        let result = workspace
-            .with_buffers(|r, j| self.next_model(problem, state, r, j));
+        let result = workspace.with_buffers(|r, j| {
+            *r = r.take().or_else(R::residual_buffer);
+            self.next_model(problem, state, r, j)
+        });
         self.workspace = workspace;
         result
     }
 
-    fn init_model<V, M, E>(
+    fn init_model<V, M, E, R>(
         &mut self,
         problem: &mut E,
         state: PointState<V, F>,
-        residual_buffer: &mut Option<V>,
+        residual_buffer: &mut Option<R>,
         jacobian_buffer: &mut Option<M>,
     ) -> Result<PointState<V, F>, E::Error>
     where
         V: Clone + VectorLen + VectorIndex<F>,
+        R: Clone + VectorLen + VectorIndex<F>,
         M: MatrixIndex<F>,
-        E: BoundedEvaluation<V, M, F>,
+        E: BoundedEvaluation<V, M, F, R>,
     {
         self.native_convergence.clear();
         if let Some(trace) = &mut self.trace {
@@ -638,15 +651,19 @@ impl<F: Scalar, W> TrustRegionReflective<F, W> {
         let mut value = F::infinity();
         if !work.failed {
             if work.free.is_empty() {
-                let r = residual_buffer.get_or_insert_with(|| param.clone());
-                problem.residual_into(&param, r)?;
+                let r = if let Some(r) = residual_buffer {
+                    problem.residual_into(&param, r)?;
+                    r
+                } else {
+                    residual_buffer.insert(problem.residual(&param)?)
+                };
                 work.residual = vector(r);
                 value = problem.cost(r, |_| cost(&work.residual));
                 work.optimality = F::zero();
             } else {
                 let (r, j) = problem.residual_and_jacobian_reusing(
                     &param,
-                    residual_buffer.take().unwrap_or_else(|| param.clone()),
+                    residual_buffer.take(),
                     jacobian_buffer.take(),
                 )?;
                 work.residual = vector(&r);
@@ -702,17 +719,18 @@ impl<F: Scalar, W> TrustRegionReflective<F, W> {
         Ok(state)
     }
 
-    fn next_model<V, M, E>(
+    fn next_model<V, M, E, R>(
         &mut self,
         problem: &mut E,
         mut state: PointState<V, F>,
-        residual_buffer: &mut Option<V>,
+        residual_buffer: &mut Option<R>,
         jacobian_buffer: &mut Option<M>,
     ) -> NllsStep<V, F, E::Error>
     where
         V: Clone + VectorLen + VectorIndex<F>,
+        R: Clone + VectorLen + VectorIndex<F>,
         M: MatrixIndex<F>,
-        E: BoundedEvaluation<V, M, F>,
+        E: BoundedEvaluation<V, M, F, R>,
     {
         self.native_convergence.clear();
         let work = self.work.as_mut().expect("TRF must be initialized");
@@ -779,8 +797,6 @@ impl<F: Scalar, W> TrustRegionReflective<F, W> {
             .collect();
         let theta = number::<F>(0.995).max(F::one() - work.optimality);
         let old_cost = state.cost();
-        let raw_r =
-            residual_buffer.get_or_insert_with(|| state.param().clone());
         for _ in 0..self.max_inner_attempts {
             let result = svd.trust_step(
                 &rhs,
@@ -920,13 +936,19 @@ impl<F: Scalar, W> TrustRegionReflective<F, W> {
                 row.model_solves = 1;
                 trace.push(row)
             });
-            if let Err(error) = problem.residual_into(&trial, raw_r) {
+            let evaluated = if let Some(r) = residual_buffer {
+                problem.residual_into(&trial, r)
+            } else {
+                problem.residual(&trial).map(|r| *residual_buffer = Some(r))
+            };
+            if let Err(error) = evaluated {
                 if let Some(index) = trial_record {
                     self.trace.as_mut().unwrap().observations[index].outcome =
                         Some("callback_failed");
                 }
                 return Err(error);
             }
+            let raw_r = residual_buffer.as_ref().unwrap();
             let r = vector(raw_r);
             assert_eq!(r.len(), m, "residual shape changed during solve");
             let new_cost = problem.cost(raw_r, |_| cost(&r));

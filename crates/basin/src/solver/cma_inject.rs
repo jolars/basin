@@ -191,7 +191,7 @@ where
     }
 }
 
-impl<V, M, F> InitialState<V> for LevenbergMarquardt<V, M, F>
+impl<V, M, F, R, G> InitialState<V> for LevenbergMarquardt<V, M, F, R, G>
 where
     F: Scalar,
     V: Clone,
@@ -202,14 +202,14 @@ where
     }
 }
 
-impl<V, M, F> WarmStart<V> for LevenbergMarquardt<V, M, F>
+impl<V, M, F, R, G> WarmStart<V> for LevenbergMarquardt<V, M, F, R, G>
 where
     F: Scalar,
     V: Clone,
 {
 }
 
-impl<V, M, F> MemeticInner<V, F> for LevenbergMarquardt<V, M, F>
+impl<V, M, F, R, G> MemeticInner<V, F> for LevenbergMarquardt<V, M, F, R, G>
 where
     F: Scalar,
     V: Clone,

@@ -101,15 +101,16 @@ where
     v.all_zip(v, |value, _| value.is_finite())
 }
 
-pub(super) fn orthogonality_converged<V, F>(
+pub(super) fn orthogonality_converged<V, F, R>(
     g: &V,
     diagonal: &V,
-    r: &V,
+    r: &R,
     tol: F,
 ) -> bool
 where
     F: Scalar,
-    V: Clone
+    V: NormInfinity<F> + ComponentZip<F>,
+    R: Clone
         + NormInfinity<F>
         + NormSquared<F>
         + ScaleInPlace<F>
@@ -390,16 +391,17 @@ where
     })
 }
 
-pub(super) fn orthogonality_evidence<V, F>(
+pub(super) fn orthogonality_evidence<V, F, R>(
     g: &V,
     d: &V,
-    r: &V,
+    r: &R,
     robust_cost: Option<F>,
     tolerance: F,
 ) -> crate::ConvergenceEvidence<F>
 where
     F: Scalar,
-    V: Clone
+    V: NormInfinity<F> + ComponentZip<F>,
+    R: Clone
         + NormInfinity<F>
         + NormSquared<F>
         + ScaleInPlace<F>
@@ -409,16 +411,17 @@ where
         .expect("a passing predicate has finite evidence")
 }
 
-pub(super) fn try_orthogonality_evidence<V, F>(
+pub(super) fn try_orthogonality_evidence<V, F, R>(
     g: &V,
     d: &V,
-    r: &V,
+    r: &R,
     robust_cost: Option<F>,
     tolerance: F,
 ) -> Option<crate::ConvergenceEvidence<F>>
 where
     F: Scalar,
-    V: Clone
+    V: NormInfinity<F> + ComponentZip<F>,
+    R: Clone
         + NormInfinity<F>
         + NormSquared<F>
         + ScaleInPlace<F>

@@ -129,6 +129,10 @@ impl<F: Scalar> VectorLen for Vec<F> {
     fn vec_len(&self) -> usize {
         self.len()
     }
+
+    fn residual_buffer() -> Option<Self> {
+        Some(Vec::new())
+    }
 }
 
 impl<F: Scalar> VectorIndex<F> for Vec<F> {

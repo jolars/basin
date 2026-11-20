@@ -213,6 +213,12 @@ pub enum LmDamping {
 ///
 /// # Backends
 ///
+/// Fixed-size nalgebra fits can use `SVector<F, N>` parameters and
+/// `SVector<F, M>` residuals with an analytic `SMatrix<F, M, N>` or a
+/// finite-difference Jacobian with dynamic rows and `N` fixed columns.
+/// For distinct Jacobian and Gram matrix types, use
+/// [`Self::new_with_gram`] with `G = SMatrix<F, N, N>`.
+///
 /// LA-heavy: the default `Vec<f64>` backend (over the hand-rolled
 /// [`DenseMatrix<f64>`](crate::DenseMatrix), via a pure-Rust Cholesky),
 /// nalgebra (`DVector<f64>`/`DMatrix<f64>`), faer (`Col<f64>` /
@@ -309,7 +315,7 @@ pub enum LmDamping {
 /// assert!((result.param()[1] - 2.0).abs() < 1e-6);
 /// # }
 /// ```
-pub struct LevenbergMarquardt<V, M, F: Scalar = f64> {
+pub struct LevenbergMarquardt<V, M, F: Scalar = f64, R = V, G = M> {
     tol_grad: Option<F>,
     tol_grad_rel: Option<F>,
     tol_cost_rel: Option<F>,
@@ -334,9 +340,9 @@ pub struct LevenbergMarquardt<V, M, F: Scalar = f64> {
 
     // Rejected steps leave these quantities valid. Accepted steps retain
     // the trial residual but invalidate the linear model and gradient.
-    r_cache: Option<V>,
-    trial_residual: Option<V>,
-    model_cache: Option<Result<M, QrSolveError>>,
+    r_cache: Option<R>,
+    trial_residual: Option<R>,
+    model_cache: Option<Result<G, QrSolveError>>,
     jtr_cache: Option<V>,
     jacobian_buffer: Option<M>,
     failed: bool,
@@ -344,40 +350,43 @@ pub struct LevenbergMarquardt<V, M, F: Scalar = f64> {
     trace: Option<Trace<F>>,
 }
 
-impl<V, M, F: Scalar> NativeConvergenceDiagnostics
-    for LevenbergMarquardt<V, M, F>
+impl<V, M, F: Scalar, R, G> NativeConvergenceDiagnostics
+    for LevenbergMarquardt<V, M, F, R, G>
 {
     fn native_convergence_tests(&self) -> &[NativeConvergenceTest] {
         &self.native_convergence
     }
 }
 
-impl<V, M, F: Scalar> LeastSquaresDiagnostics<F>
-    for LevenbergMarquardt<V, M, F>
+impl<V, M, F: Scalar, R, G> LeastSquaresDiagnostics<F>
+    for LevenbergMarquardt<V, M, F, R, G>
 {
     fn least_squares_observations(&self) -> &[LeastSquaresObservation<F>] {
         self.trace.as_ref().map_or(&[], |trace| &trace.observations)
     }
 }
 
-impl<V, M, F: Scalar> Default for LevenbergMarquardt<V, M, F> {
+impl<V, M, F: Scalar, R> Default for LevenbergMarquardt<V, M, F, R> {
     fn default() -> Self {
-        Self::defaults()
+        Self::new_with_gram()
     }
 }
 
-impl<V, M> LevenbergMarquardt<V, M> {
+impl<V, M, R> LevenbergMarquardt<V, M, f64, R> {
     /// Levenberg-Marquardt with trust-region damping: absolute gradient
     /// tolerance `1e-8`, orthogonality and all relative convergence tests
     /// disabled, initial step-bound factor `100`, `max_inner_attempts = 50`,
     /// and numerical no-progress handling enabled.
     pub fn new() -> Self {
-        Self::defaults()
+        Self::new_with_gram()
     }
 }
 
-impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
-    fn defaults() -> Self {
+impl<V, M, F: Scalar, R, G> LevenbergMarquardt<V, M, F, R, G> {
+    /// Construct the solver with an explicitly selected Gram matrix type `G`.
+    ///
+    /// Use this when the Jacobian and Gram matrix have different types.
+    pub fn new_with_gram() -> Self {
         Self {
             tol_grad: Some(F::from_f64(1e-8).unwrap()),
             tol_grad_rel: None,
@@ -641,10 +650,11 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     }
 }
 
-impl<P, V, M, F, E> Solver<P, PointState<V, F>> for LevenbergMarquardt<V, M, F>
+impl<P, V, M, F, E, R, G> Solver<P, PointState<V, F>>
+    for LevenbergMarquardt<V, M, F, R, G>
 where
     F: Scalar,
-    Problem<P>: Evaluation<V, M, F, Error = E>,
+    Problem<P>: Evaluation<V, M, F, R, Error = E>,
     V: ScaledAdd<F>
         + NormSquared<F>
         + NormInfinity<F>
@@ -657,12 +667,13 @@ where
         + ComponentMaxAssign
         + FloorZerosInPlace<F>
         + Clone,
-    M: GramMatrix
-        + MatTransposeVec<V>
-        + LinearSolveSpd<V>
-        + AddDiagonalVectorInPlace<V>
-        + MatDiagonal<V>
+    R: NormSquared<F>
+        + NormInfinity<F>
+        + ScaleInPlace<F>
+        + ComponentZip<F>
         + Clone,
+    M: GramMatrix<G> + MatTransposeVec<V, R>,
+    G: LinearSolveSpd<V> + AddDiagonalVectorInPlace<V> + MatDiagonal<V> + Clone,
 {
     type Error = E;
     fn should_check_iterate_change(&self) -> bool {
@@ -680,7 +691,7 @@ where
         state: PointState<V, F>,
     ) -> Result<PointState<V, F>, Self::Error> {
         let mut buffer = self.jacobian_buffer.take();
-        let result = self.init_model::<_, M, NormalEquations>(
+        let result = self.init_model::<_, M, NormalEquations<G>>(
             problem,
             state,
             &mut buffer,
@@ -694,7 +705,7 @@ where
         state: PointState<V, F>,
     ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         let mut buffer = self.jacobian_buffer.take();
-        let result = self.next_iter_model::<_, M, NormalEquations>(
+        let result = self.next_iter_model::<_, M, NormalEquations<G>>(
             problem,
             state,
             None,
@@ -705,7 +716,7 @@ where
     }
 }
 
-impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
+impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
     fn init_model<E, M, Model>(
         &mut self,
         problem: &mut E,
@@ -713,9 +724,14 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         jacobian_buffer: &mut Option<M>,
     ) -> Result<PointState<V, F>, E::Error>
     where
-        E: Evaluation<V, M, F>,
-        M: MatTransposeVec<V>,
-        Model: LinearModel<M, V, F, Cache = C>,
+        E: Evaluation<V, M, F, R>,
+        R: NormSquared<F>
+            + NormInfinity<F>
+            + ScaleInPlace<F>
+            + ComponentZip<F>
+            + Clone,
+        M: MatTransposeVec<V, R>,
+        Model: LinearModel<M, V, F, R, Cache = C>,
         V: ScaledAdd<F>
             + NormSquared<F>
             + NormInfinity<F>
@@ -738,8 +754,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         if let Some(trace) = &mut self.trace {
             trace.reset();
         }
-        let residual =
-            self.r_cache.take().unwrap_or_else(|| state.param().clone());
+        let residual = self.r_cache.take();
         self.trial_residual = None;
         self.model_cache = None;
         self.jtr_cache = None;
@@ -803,9 +818,14 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         jacobian_buffer: &mut Option<M>,
     ) -> LmStep<V, F, E::Error>
     where
-        E: Evaluation<V, M, F>,
-        M: MatTransposeVec<V>,
-        Model: LinearModel<M, V, F, Cache = C>,
+        E: Evaluation<V, M, F, R>,
+        R: NormSquared<F>
+            + NormInfinity<F>
+            + ScaleInPlace<F>
+            + ComponentZip<F>
+            + Clone,
+        M: MatTransposeVec<V, R>,
+        Model: LinearModel<M, V, F, R, Cache = C>,
         V: ScaledAdd<F>
             + NormSquared<F>
             + NormInfinity<F>
@@ -1227,16 +1247,18 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             && [prev_cost, f_trial, actual_diff, l_diff, rho]
                 .iter()
                 .all(|value| value.is_finite())
-            && [&h, &r, &r_trial, &g].into_iter().all(all_finite);
+            && [&h, &g].into_iter().all(all_finite)
+            && [&r, &r_trial].into_iter().all(all_finite);
 
         let radius_tolerance = self.tol_radius_rel.filter(|_| {
             self.damping == LmDamping::TrustRegion
                 && [prev_cost, f_trial, actual_diff, l_diff, rho]
                     .into_iter()
                     .all(|value| value.is_finite())
-                && [state.param(), &x_trial, &h, &r, &r_trial, &g]
+                && [state.param(), &x_trial, &h, &g]
                     .into_iter()
                     .all(all_finite)
+                && [&r, &r_trial].into_iter().all(all_finite)
         });
 
         if self.damping == LmDamping::TrustRegion {
@@ -1533,10 +1555,10 @@ enum ModelSolveError {
     Failed,
 }
 
-trait LinearModel<M, V, F: Scalar> {
+trait LinearModel<M, V, F: Scalar, R> {
     type Cache;
     const CHECK_FINITE: bool;
-    fn prepare(j: &M, r: &V) -> Result<Self::Cache, QrSolveError>;
+    fn prepare(j: &M, r: &R) -> Result<Self::Cache, QrSolveError>;
     fn diagonal(cache: &Self::Cache) -> V;
     // Only rank loss can be repaired by increasing damping on the QR route.
     fn solve(
@@ -1547,26 +1569,23 @@ trait LinearModel<M, V, F: Scalar> {
         tolerance: Option<F>,
     ) -> Result<V, ModelSolveError>;
 }
-struct NormalEquations;
-impl<M, V, F: Scalar> LinearModel<M, V, F> for NormalEquations
+struct NormalEquations<G>(std::marker::PhantomData<G>);
+impl<M, V, F: Scalar, R, G> LinearModel<M, V, F, R> for NormalEquations<G>
 where
-    M: GramMatrix
-        + MatDiagonal<V>
-        + LinearSolveSpd<V>
-        + AddDiagonalVectorInPlace<V>
-        + Clone,
+    M: GramMatrix<G>,
+    G: MatDiagonal<V> + LinearSolveSpd<V> + AddDiagonalVectorInPlace<V> + Clone,
     V: Clone + NegInPlace + ScaleInPlace<F>,
 {
-    type Cache = M;
+    type Cache = G;
     const CHECK_FINITE: bool = false;
-    fn prepare(j: &M, _: &V) -> Result<M, QrSolveError> {
+    fn prepare(j: &M, _: &R) -> Result<G, QrSolveError> {
         Ok(j.gram())
     }
-    fn diagonal(cache: &M) -> V {
+    fn diagonal(cache: &G) -> V {
         cache.diagonal()
     }
     fn solve(
-        cache: &M,
+        cache: &G,
         g: &V,
         d: &V,
         mu: F,
@@ -1582,14 +1601,14 @@ where
     }
 }
 struct PivotedQr;
-impl<M, V, F: Scalar> LinearModel<M, V, F> for PivotedQr
+impl<M, V, F: Scalar, R> LinearModel<M, V, F, R> for PivotedQr
 where
-    M: FactorizePivotedQr<V, F>,
-    V: Clone + NegInPlace,
+    M: FactorizePivotedQr<V, F, R>,
+    R: Clone + NegInPlace,
 {
     type Cache = M::Factorization;
     const CHECK_FINITE: bool = true;
-    fn prepare(j: &M, r: &V) -> Result<Self::Cache, QrSolveError> {
+    fn prepare(j: &M, r: &R) -> Result<Self::Cache, QrSolveError> {
         let mut rhs = r.clone();
         rhs.neg_in_place();
         j.factorize_pivoted_qr(&rhs)
@@ -1646,6 +1665,10 @@ where
 ///
 /// # Backends
 ///
+/// Fixed-size nalgebra fits can use `SVector<F, N>` parameters and
+/// `SVector<F, M>` residuals with an analytic `SMatrix<F, M, N>` or a
+/// finite-difference Jacobian with dynamic rows and `N` fixed columns.
+///
 /// `Vec<F>` with [`DenseMatrix`](crate::DenseMatrix), nalgebra
 /// `DVector<F>`/`DMatrix<F>`, ndarray `Array1<F>`/`Array2<F>`, and faer
 /// `Col<F>`/`Mat<F>`, for `f32` and `f64`, in pure Rust. Sparse matrices
@@ -1673,40 +1696,40 @@ where
 ///         .with_absolute_gradient_tolerance(1e-10)
 ///         .with_pivoted_qr();
 /// ```
-pub struct LevenbergMarquardtQr<V, M, F: Scalar = f64, W = ()>
+pub struct LevenbergMarquardtQr<V, M, F: Scalar = f64, W = (), R = V>
 where
-    M: FactorizePivotedQr<V, F>,
+    M: FactorizePivotedQr<V, F, R>,
 {
-    inner: LevenbergMarquardt<V, M::Factorization, F>,
+    inner: LevenbergMarquardt<V, M::Factorization, F, R>,
     workspace: W,
     rank_tolerance: Option<F>,
 }
 
-impl<V, M: FactorizePivotedQr<V, F>, F: Scalar, W> NativeConvergenceDiagnostics
-    for LevenbergMarquardtQr<V, M, F, W>
+impl<V, M: FactorizePivotedQr<V, F, R>, F: Scalar, W, R>
+    NativeConvergenceDiagnostics for LevenbergMarquardtQr<V, M, F, W, R>
 {
     fn native_convergence_tests(&self) -> &[NativeConvergenceTest] {
         self.inner.native_convergence_tests()
     }
 }
 
-impl<V, M: FactorizePivotedQr<V, F>, F: Scalar, W> LeastSquaresDiagnostics<F>
-    for LevenbergMarquardtQr<V, M, F, W>
+impl<V, M: FactorizePivotedQr<V, F, R>, F: Scalar, W, R>
+    LeastSquaresDiagnostics<F> for LevenbergMarquardtQr<V, M, F, W, R>
 {
     fn least_squares_observations(&self) -> &[LeastSquaresObservation<F>] {
         self.inner.least_squares_observations()
     }
 }
 
-impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
+impl<V, M, F: Scalar, R, G> LevenbergMarquardt<V, M, F, R, G> {
     /// Select pivoted QR while preserving configuration and resetting caches.
     ///
     /// This additive route requires [`FactorizePivotedQr`] only on the
     /// returned solver. Existing Cholesky-only matrix implementations retain
     /// their original solver bounds. Configure this before starting a solve.
-    pub fn with_pivoted_qr(self) -> LevenbergMarquardtQr<V, M, F>
+    pub fn with_pivoted_qr(self) -> LevenbergMarquardtQr<V, M, F, (), R>
     where
-        M: FactorizePivotedQr<V, F>,
+        M: FactorizePivotedQr<V, F, R>,
     {
         LevenbergMarquardtQr {
             inner: LevenbergMarquardt {
@@ -1722,7 +1745,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
                 damping: self.damping,
                 initial_step_bound: self.initial_step_bound,
                 max_inner_attempts: self.max_inner_attempts,
-                ..LevenbergMarquardt::defaults()
+                ..LevenbergMarquardt::new_with_gram()
             },
             rank_tolerance: None,
             workspace: (),
@@ -1730,22 +1753,22 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     }
 }
 
-impl<V, M, F: Scalar> Default for LevenbergMarquardtQr<V, M, F>
+impl<V, M, F: Scalar, R> Default for LevenbergMarquardtQr<V, M, F, (), R>
 where
-    M: FactorizePivotedQr<V, F>,
+    M: FactorizePivotedQr<V, F, R>,
 {
     fn default() -> Self {
         Self::new()
     }
 }
-impl<V, M, F: Scalar> LevenbergMarquardtQr<V, M, F>
+impl<V, M, F: Scalar, R> LevenbergMarquardtQr<V, M, F, (), R>
 where
-    M: FactorizePivotedQr<V, F>,
+    M: FactorizePivotedQr<V, F, R>,
 {
     /// QR with the same defaults as [`LevenbergMarquardt::new`].
     pub fn new() -> Self {
         Self {
-            inner: LevenbergMarquardt::defaults(),
+            inner: LevenbergMarquardt::new_with_gram(),
             rank_tolerance: None,
             workspace: (),
         }
@@ -1759,7 +1782,7 @@ where
     /// the buffer along with the factorization.
     pub fn with_evaluation_buffers(
         self,
-    ) -> LevenbergMarquardtQr<V, M, F, EvaluationBuffers<(), M>> {
+    ) -> LevenbergMarquardtQr<V, M, F, EvaluationBuffers<(), M>, R> {
         LevenbergMarquardtQr {
             inner: self.inner,
             rank_tolerance: self.rank_tolerance,
@@ -1768,9 +1791,9 @@ where
     }
 }
 
-impl<V, M, F: Scalar, W> LevenbergMarquardtQr<V, M, F, W>
+impl<V, M, F: Scalar, W, R> LevenbergMarquardtQr<V, M, F, W, R>
 where
-    M: FactorizePivotedQr<V, F>,
+    M: FactorizePivotedQr<V, F, R>,
 {
     /// Enable [`LevenbergMarquardt::with_trial_diagnostics`] on the QR route.
     pub fn with_trial_diagnostics(mut self, enabled: bool) -> Self {
@@ -1891,12 +1914,12 @@ where
         self
     }
 }
-impl<P, V, M, F, E, W> Solver<P, PointState<V, F>>
-    for LevenbergMarquardtQr<V, M, F, W>
+impl<P, V, M, F, E, W, R> Solver<P, PointState<V, F>>
+    for LevenbergMarquardtQr<V, M, F, W, R>
 where
     F: Scalar,
     W: BufferStorage<(), M>,
-    Problem<P>: Evaluation<V, M, F, Error = E>,
+    Problem<P>: Evaluation<V, M, F, R, Error = E>,
     V: ScaledAdd<F>
         + NormSquared<F>
         + NormInfinity<F>
@@ -1909,7 +1932,13 @@ where
         + ComponentMaxAssign
         + FloorZerosInPlace<F>
         + Clone,
-    M: FactorizePivotedQr<V, F> + MatTransposeVec<V>,
+    M: FactorizePivotedQr<V, F, R> + MatTransposeVec<V, R>,
+    R: NormSquared<F>
+        + NormInfinity<F>
+        + ScaleInPlace<F>
+        + ComponentZip<F>
+        + Clone
+        + NegInPlace,
 {
     type Error = E;
     fn should_check_iterate_change(&self) -> bool {
@@ -1947,26 +1976,26 @@ where
     }
 }
 
-impl<V: Clone, M, F: Scalar, W> crate::core::inner::InitialState<V>
-    for LevenbergMarquardtQr<V, M, F, W>
+impl<V: Clone, M, F: Scalar, W, R> crate::core::inner::InitialState<V>
+    for LevenbergMarquardtQr<V, M, F, W, R>
 where
-    M: FactorizePivotedQr<V, F>,
+    M: FactorizePivotedQr<V, F, R>,
 {
     type State = PointState<V, F>;
     fn seed(&self, x: &V) -> Self::State {
         PointState::new(x.clone())
     }
 }
-impl<V: Clone, M, F: Scalar, W> crate::core::inner::WarmStart<V>
-    for LevenbergMarquardtQr<V, M, F, W>
+impl<V: Clone, M, F: Scalar, W, R> crate::core::inner::WarmStart<V>
+    for LevenbergMarquardtQr<V, M, F, W, R>
 where
-    M: FactorizePivotedQr<V, F>,
+    M: FactorizePivotedQr<V, F, R>,
 {
 }
-impl<V: Clone, M, F: Scalar, W> super::cma_inject::MemeticInner<V, F>
-    for LevenbergMarquardtQr<V, M, F, W>
+impl<V: Clone, M, F: Scalar, W, R> super::cma_inject::MemeticInner<V, F>
+    for LevenbergMarquardtQr<V, M, F, W, R>
 where
-    M: FactorizePivotedQr<V, F>,
+    M: FactorizePivotedQr<V, F, R>,
 {
 }
 

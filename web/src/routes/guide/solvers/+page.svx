@@ -270,7 +270,10 @@ finding uses a direct callback API and a separate result type.
   `TrustRegion::least_squares_with(Dogleg)` runs dogleg on the Gauss–Newton
   model from `Residual` and `Jacobian` or a `RobustLeastSquares` objective.
   It supports all four dense backends and falls back to the Cauchy step if
-  Cholesky on the Gram matrix fails.
+  Cholesky on the Gram matrix fails. Dogleg accepts fixed-size nalgebra
+  parameters and residuals of different lengths. Use
+  `TrustRegion::least_squares_with_gram(Dogleg)` when the Jacobian and Gram
+  matrix types differ.
   With ndarray, exact-Hessian mode requires a supplied `Array2` Hessian because
   `FiniteDiff` cannot construct one. Its matrix-free Hessian-vector products
   work on every backend. All modes publish `FirstOrderState` and support
@@ -290,6 +293,14 @@ backends and also exposes the objective to general optimizers. See the
 [loss API and model](https://docs.rs/basin/latest/basin/core/least_squares/index.html)
 for the safeguarded curvature formula, following Triggs et al. (1999),
 _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
+
+All five solvers below support nalgebra `SVector<F, N>` parameters with
+`SVector<F, M>` residuals for `f32` and `f64`. Use an analytic
+`SMatrix<F, M, N>` Jacobian or a numerical Jacobian with dynamic rows and
+`N` fixed columns from `BoundedFiniteDiff` or, for `f64`, `FiniteDiff`.
+For Gauss–Newton and the Cholesky routes of LM and bounded LM, use
+`new_with_gram` when the Jacobian and the `SMatrix<F, N, N>` Gram matrix have
+different types.
 
 - **<span id="gauss-newton"></span>[`GaussNewton`](https://docs.rs/basin/latest/basin/solver/gauss_newton/struct.GaussNewton.html)**:
   undamped normal-equations solver (Madsen, Nielsen & Tingleff, 2004, §3.1).

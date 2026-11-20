@@ -367,9 +367,14 @@ where
 /// available on all four dense backends. Least-squares mode also supports these
 /// backends and requires [`ScaleInPlace`] and
 /// [`VectorIndex`](crate::VectorIndex) on the vector type and
-/// [`GramMatrix`](crate::GramMatrix), [`MatTransposeVec`](crate::MatTransposeVec),
-/// and [`MatrixFinite`](crate::MatrixFinite) on the Jacobian, along with the
-/// chosen strategy's capabilities. Robust losses also require
+/// [`GramMatrix`](crate::GramMatrix) and [`MatTransposeVec`](crate::MatTransposeVec)
+/// on the Jacobian and [`MatrixFinite`](crate::MatrixFinite) on the Gram
+/// matrix, along with the chosen strategy's capabilities. With Dogleg,
+/// fixed-size nalgebra fits can use `SVector<F, N>` parameters and
+/// `SVector<F, M>` residuals with an analytic `SMatrix<F, M, N>` or a
+/// finite-difference Jacobian with dynamic rows and `N` fixed columns.
+/// Use [`Self::least_squares_with_gram`] when these Jacobians produce
+/// a distinct `SMatrix<F, N, N>` Gram matrix. Robust losses also require
 /// [`ScaleRowsInPlace`](crate::ScaleRowsInPlace) on the Jacobian.
 ///
 /// [`MatrixFree`] mode works on every vector backend. All four dense backends

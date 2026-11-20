@@ -115,7 +115,10 @@ pub enum Method {
 /// VectorLen + VectorIndex`; no matrix type is involved). [`Jacobian`] and
 /// [`Hessian`] additionally require `V: DenseMatrixFromFn`, so they are
 /// available for `Vec<f64>`/`DenseMatrix`, nalgebra `DVector<f64>`/`DMatrix`,
-/// ndarray `Array1<f64>`/`Array2`, and faer `Col<f64>`/`Mat`.
+/// ndarray `Array1<f64>`/`Array2`, and faer `Col<f64>`/`Mat`. Nalgebra
+/// `SVector<f64, N>` parameters use `OMatrix<f64, Dyn, Const<N>>` and may
+/// be paired with `SVector<f64, M>` residuals. The Jacobian row count comes
+/// from the residual length.
 /// [`crate::ConstraintJacobian`] uses the parameter backend's dense matrix,
 /// independently of the linear block matrices. Use [`BoundedFiniteDiff`] for `f32` first derivatives.
 ///
@@ -341,14 +344,15 @@ where
 
 impl<P, V> Jacobian for FiniteDiff<P>
 where
-    P: Residual<Param = V, Output = V> + MaybeSync,
+    P: Residual<Param = V> + MaybeSync,
     V: Clone
         + VectorLen
         + VectorIndex
         + DenseMatrixFromFn
         + MaybeSync
         + MaybeSend,
-    <P as Residual>::Error: MaybeSend,
+    P::Output: Clone + VectorLen + VectorIndex + MaybeSync + MaybeSend,
+    P::Error: MaybeSend,
 {
     type Jacobian = <V as DenseMatrixFromFn>::Matrix;
     fn jacobian(&self, param: &V) -> Result<Self::Jacobian, P::Error> {
@@ -394,20 +398,43 @@ where
     fn residual_and_jacobian(
         &self,
         param: &V,
-    ) -> Result<(V, Self::Jacobian), P::Error> {
-        let mut res = param.clone();
-        let mut jac = V::dense_from_fn(0, 0, |_, _| unreachable!());
-        self.residual_and_jacobian_into(param, &mut res, &mut jac)?;
+    ) -> Result<(P::Output, Self::Jacobian), P::Error> {
+        let res = residual_base(&self.problem, param)?;
+        let mut jac =
+            V::dense_from_fn(0, param.vec_len(), |_, _| unreachable!());
+        self.jacobian_with_base_into(param, &res, &mut jac)?;
         Ok((res, jac))
     }
 
     fn residual_and_jacobian_into(
         &self,
         param: &V,
-        res: &mut V,
+        res: &mut P::Output,
         jac: &mut Self::Jacobian,
     ) -> Result<(), P::Error> {
         self.residual_into(param, res)?;
+        self.jacobian_with_base_into(param, res, jac)
+    }
+}
+
+impl<P, V> FiniteDiff<P>
+where
+    P: Residual<Param = V> + MaybeSync,
+    V: Clone
+        + VectorLen
+        + VectorIndex
+        + DenseMatrixFromFn
+        + MaybeSync
+        + MaybeSend,
+    P::Output: Clone + VectorLen + VectorIndex + MaybeSync + MaybeSend,
+    P::Error: MaybeSend,
+{
+    fn jacobian_with_base_into(
+        &self,
+        param: &V,
+        res: &P::Output,
+        jac: &mut V::Matrix,
+    ) -> Result<(), P::Error> {
         match self.jacobian_method {
             Method::Forward => forward_difference_jacobian_with_base_into(
                 &self.problem,
@@ -480,7 +507,8 @@ where
         param: &V,
     ) -> Result<(f64, V, Self::Hessian), P::Error> {
         let mut grad = param.clone();
-        let mut hess = V::dense_from_fn(0, 0, |_, _| unreachable!());
+        let mut hess =
+            V::dense_from_fn(0, param.vec_len(), |_, _| unreachable!());
         let cost = self
             .cost_and_gradient_and_hessian_into(param, &mut grad, &mut hess)?;
         Ok((cost, grad, hess))
@@ -818,16 +846,17 @@ pub fn forward_difference_jacobian<P, V>(
     fixed_step: Option<f64>,
 ) -> Result<<V as DenseMatrixFromFn>::Matrix, P::Error>
 where
-    P: Residual<Param = V, Output = V> + MaybeSync,
+    P: Residual<Param = V> + MaybeSync,
     V: Clone
         + VectorLen
         + VectorIndex
         + DenseMatrixFromFn
         + MaybeSync
         + MaybeSend,
+    P::Output: Clone + VectorLen + VectorIndex + MaybeSync + MaybeSend,
     P::Error: MaybeSend,
 {
-    let mut out = V::dense_from_fn(0, 0, |_, _| unreachable!());
+    let mut out = V::dense_from_fn(0, x.vec_len(), |_, _| unreachable!());
     forward_difference_jacobian_into(
         problem,
         x,
@@ -846,17 +875,17 @@ fn forward_difference_jacobian_into<P, V>(
     out: &mut <V as DenseMatrixFromFn>::Matrix,
 ) -> Result<(), P::Error>
 where
-    P: Residual<Param = V, Output = V> + MaybeSync,
+    P: Residual<Param = V> + MaybeSync,
     V: Clone
         + VectorLen
         + VectorIndex
         + DenseMatrixFromFn
         + MaybeSync
         + MaybeSend,
+    P::Output: Clone + VectorLen + VectorIndex + MaybeSync + MaybeSend,
     P::Error: MaybeSend,
 {
-    let mut r0 = x.clone();
-    problem.residual_into(x, &mut r0)?;
+    let r0 = residual_base(problem, x)?;
     forward_difference_jacobian_with_base_into(
         problem,
         x,
@@ -947,17 +976,18 @@ fn forward_difference_jacobian_with_base_into<P, V>(
     x: &V,
     function_precision: f64,
     fixed_step: Option<f64>,
-    r0: &V,
+    r0: &P::Output,
     out: &mut <V as DenseMatrixFromFn>::Matrix,
 ) -> Result<(), P::Error>
 where
-    P: Residual<Param = V, Output = V> + MaybeSync,
+    P: Residual<Param = V> + MaybeSync,
     V: Clone
         + VectorLen
         + VectorIndex
         + DenseMatrixFromFn
         + MaybeSync
         + MaybeSend,
+    P::Output: Clone + VectorLen + VectorIndex + MaybeSync + MaybeSend,
     P::Error: MaybeSend,
 {
     #[cfg(feature = "parallel")]
@@ -979,6 +1009,11 @@ where
                 };
                 probe.set_scalar(j, xj + h);
                 problem.residual_into(probe, residual)?;
+                assert_eq!(
+                    residual.vec_len(),
+                    m,
+                    "finite-difference output length changed"
+                );
                 let mut col = residual.clone();
                 probe.set_scalar(j, xj);
                 for i in 0..m {
@@ -1040,16 +1075,17 @@ pub fn central_difference_jacobian<P, V>(
     fixed_step: Option<f64>,
 ) -> Result<<V as DenseMatrixFromFn>::Matrix, P::Error>
 where
-    P: Residual<Param = V, Output = V> + MaybeSync,
+    P: Residual<Param = V> + MaybeSync,
     V: Clone
         + VectorLen
         + VectorIndex
         + DenseMatrixFromFn
         + MaybeSync
         + MaybeSend,
+    P::Output: Clone + VectorLen + VectorIndex + MaybeSync + MaybeSend,
     P::Error: MaybeSend,
 {
-    let mut out = V::dense_from_fn(0, 0, |_, _| unreachable!());
+    let mut out = V::dense_from_fn(0, x.vec_len(), |_, _| unreachable!());
     central_difference_jacobian_into(
         problem,
         x,
@@ -1066,17 +1102,18 @@ fn central_difference_jacobian_into<P, V>(
     x: &V,
     function_precision: f64,
     fixed_step: Option<f64>,
-    base: Option<&V>,
+    base: Option<&P::Output>,
     out: &mut <V as DenseMatrixFromFn>::Matrix,
 ) -> Result<(), P::Error>
 where
-    P: Residual<Param = V, Output = V> + MaybeSync,
+    P: Residual<Param = V> + MaybeSync,
     V: Clone
         + VectorLen
         + VectorIndex
         + DenseMatrixFromFn
         + MaybeSync
         + MaybeSend,
+    P::Output: Clone + VectorLen + VectorIndex + MaybeSync + MaybeSend,
     P::Error: MaybeSend,
 {
     #[cfg(feature = "parallel")]
@@ -1084,12 +1121,10 @@ where
         let n = x.vec_len();
         if n == 0 {
             // With no probes, only a base evaluation can reveal the output shape.
-            let mut residual = x.clone();
             let m = if let Some(base) = base {
                 base.vec_len()
             } else {
-                problem.residual_into(x, &mut residual)?;
-                residual.vec_len()
+                residual_base(problem, x)?.vec_len()
             };
             V::dense_from_fn_into(m, 0, |_, _| unreachable!(), out);
             return Ok(());
@@ -1097,15 +1132,14 @@ where
         let scale = function_precision.max(f64::EPSILON).cbrt();
         let columns = try_map_range_with(
             n,
-            || (x.clone(), base.unwrap_or(x).clone()),
+            || (x.clone(), base.cloned().or_else(P::Output::residual_buffer)),
             |(probe, residual), j| {
                 let xj = x.get_scalar(j);
                 let h = nr_step(xj, scale, fixed_step);
                 probe.set_scalar(j, xj + h);
-                problem.residual_into(probe, residual)?;
-                let mut col = residual.clone();
+                let mut col = residual_probe(problem, probe, residual)?.clone();
                 probe.set_scalar(j, xj - h);
-                problem.residual_into(probe, residual)?;
+                let residual = residual_probe(problem, probe, residual)?;
                 probe.set_scalar(j, xj);
                 let m = col.vec_len();
                 assert_eq!(
@@ -1135,12 +1169,10 @@ where
         let n = x.vec_len();
         if n == 0 {
             // With no probes, only a base evaluation can reveal the output shape.
-            let mut residual = x.clone();
             let m = if let Some(base) = base {
                 base.vec_len()
             } else {
-                problem.residual_into(x, &mut residual)?;
-                residual.vec_len()
+                residual_base(problem, x)?.vec_len()
             };
             V::dense_from_fn_into(m, 0, |_, _| unreachable!(), out);
             return Ok(());
@@ -1148,16 +1180,16 @@ where
         let scale = function_precision.max(f64::EPSILON).cbrt();
         let columns = jacobian_block(
             n,
-            || (x.clone(), base.unwrap_or(x).clone()),
+            || (x.clone(), base.cloned().or_else(P::Output::residual_buffer)),
             |(probe, residual), j, block| {
                 let xj = x.get_scalar(j);
                 let h = nr_step(xj, scale, fixed_step);
                 probe.set_scalar(j, xj + h);
-                problem.residual_into(probe, residual)?;
-                let m = residual.vec_len();
-                let col = block.push_column(m, |i| residual.get_scalar(i));
+                let positive = residual_probe(problem, probe, residual)?;
+                let m = positive.vec_len();
+                let col = block.push_column(m, |i| positive.get_scalar(i));
                 probe.set_scalar(j, xj - h);
-                problem.residual_into(probe, residual)?;
+                let residual = residual_probe(problem, probe, residual)?;
                 probe.set_scalar(j, xj);
                 assert_eq!(
                     residual.vec_len(),
@@ -1174,6 +1206,34 @@ where
         columns.write_into::<V>(m, n, out);
         Ok(())
     }
+}
+
+fn residual_base<P: Residual>(
+    problem: &P,
+    x: &P::Param,
+) -> Result<P::Output, P::Error>
+where
+    P::Output: VectorLen,
+{
+    if let Some(mut out) = P::Output::residual_buffer() {
+        problem.residual_into(x, &mut out)?;
+        Ok(out)
+    } else {
+        problem.residual(x)
+    }
+}
+
+fn residual_probe<'a, P: Residual>(
+    problem: &P,
+    x: &P::Param,
+    scratch: &'a mut Option<P::Output>,
+) -> Result<&'a P::Output, P::Error> {
+    if let Some(out) = scratch {
+        problem.residual_into(x, out)?;
+    } else {
+        *scratch = Some(problem.residual(x)?);
+    }
+    Ok(scratch.as_ref().unwrap())
 }
 
 struct HessianTriangle {
@@ -1228,7 +1288,7 @@ where
     V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + MaybeSync,
     P::Error: MaybeSend,
 {
-    let mut out = V::dense_from_fn(0, 0, |_, _| unreachable!());
+    let mut out = V::dense_from_fn(0, x.vec_len(), |_, _| unreachable!());
     central_difference_hessian_into(
         problem,
         x,
@@ -1338,7 +1398,7 @@ where
     V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + MaybeSync,
     P::Error: MaybeSend,
 {
-    let mut out = V::dense_from_fn(0, 0, |_, _| unreachable!());
+    let mut out = V::dense_from_fn(0, x.vec_len(), |_, _| unreachable!());
     forward_difference_hessian_into(
         problem,
         x,

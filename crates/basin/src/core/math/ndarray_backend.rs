@@ -103,6 +103,10 @@ impl<F: Scalar> VectorLen for Array1<F> {
     fn vec_len(&self) -> usize {
         self.len()
     }
+
+    fn residual_buffer() -> Option<Self> {
+        Some(Self::from_vec(Vec::new()))
+    }
 }
 
 // Matrix-vector ops (the only `linalg`-tier traits ndarray implements). They

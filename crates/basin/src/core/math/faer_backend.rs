@@ -86,6 +86,10 @@ impl<F: Scalar> VectorLen for Col<F> {
     fn vec_len(&self) -> usize {
         self.nrows()
     }
+
+    fn residual_buffer() -> Option<Self> {
+        Some(Self::from_fn(0, |_| unreachable!()))
+    }
 }
 
 impl<F: Scalar> VectorIndex<F> for Col<F> {

@@ -394,15 +394,10 @@ pub trait MatrixFromDiagonal<V> {
 
 /// Maps a vector backend to its canonical dense matrix type and builds a
 /// matrix of that type from a per-entry closure. Implemented on the
-/// *vector* type so that finite-difference differentiation
-/// ([`crate::core::numdiff`]) can synthesize a `Jacobian`/`Hessian`
-/// matrix from a problem whose only typed handle is the parameter vector
-/// `V`, with **one** generic impl rather than a per-backend blanket impl
-/// (two `impl<P> Jacobian for FiniteDiff<P> where P: Residual<Param = …>`
-/// blocks would collide under coherence: both have the head
-/// `impl<P> … for FiniteDiff<P>`, and Rust does not use the associated-type
-/// values of `where`-bounds to prove disjointness). Routing the matrix-type
-/// choice through `V::Matrix` keeps the impl single-headed.
+/// *vector* type so that finite differences can select the Jacobian or
+/// Hessian matrix from the parameter backend. The Jacobian can have a
+/// different number of rows and columns when the residual type or length
+/// differs from the parameter's.
 ///
 /// # Contract
 ///
@@ -415,7 +410,9 @@ pub trait MatrixFromDiagonal<V> {
 /// # Backends
 ///
 /// Implemented for `Vec<F>` (`Matrix = DenseMatrix<F>`), nalgebra
-/// `DVector<F>` (`DMatrix<F>`), ndarray `Array1<F>` (`Array2<F>`), and
+/// `DVector<F>` (`DMatrix<F>`) and `SVector<F, N>`
+/// (`OMatrix<F, Dyn, Const<N>>`, which requires `cols == N`), ndarray
+/// `Array1<F>` (`Array2<F>`), and
 /// faer `Col<F>` (`Mat<F>`), with `F = f32` or `f64`. Optional backends
 /// require their corresponding features. All implementations are pure Rust.
 pub trait DenseMatrixFromFn<F = f64>: Sized {
