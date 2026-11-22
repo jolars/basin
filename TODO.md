@@ -98,6 +98,18 @@ numerical work against analytic cases and reference implementations.
 
 ### Follow-up candidates
 
+- [ ] **Expand Moré–Thuente trials that round to the starting point.** When
+  the initial trial leaves the parameter unchanged in floating-point
+  arithmetic, try a larger step if the step bounds allow it. Preserve
+  bound and evaluation limits. Regress with BFGS on
+  `f(x) = 0.5 * 1e-19 * x^2` from `x = 1e12` with target `1e-8`.
+  The unit trial currently leaves the point unchanged and BFGS reports
+  cost convergence at `50000`.
+- [ ] **Reuse the accepted line-search evaluation in BFGS.** Consume the
+  objective and gradient returned by `next_with_evaluation` when available.
+  Keep the existing evaluation path for searches that return only a step.
+  Use `f(x) = 0.5 * x^2` from `x = 1` to verify callback counts and check
+  that BFGS reaches the minimum without evaluating the accepted point twice.
 - [x] **Investigate central-difference Jacobian overhead.** Compared matched
   stencils against Navette's Jacobian builder, following the [integration
   review](https://github.com/opticsWolf/Navette/pull/3#issuecomment-6431966233).
