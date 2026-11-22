@@ -358,6 +358,59 @@ production solvers.
 
 ## General design
 
+### Fixed-size backends
+
+Follow up on `1072fb0` and `20f7d9a`. Small native `f64` probes with
+nalgebra 0.35 showed the largest end-to-end savings for BFGS and nonlinear CG,
+with smaller gains for Nelder–Mead and both LM routes. The rectangular
+least-squares tests already cover fixed parameter and residual lengths.
+
+- [ ] **Keep fixed-size Cholesky scratch inline.** The `SMatrix` SPD solve
+  currently packs the matrix into a `Vec` and calls the dynamic kernel. On
+  matched SPD inputs at dimensions 2, 6, and 16, a native nalgebra prototype
+  reduced allocation requests from 4–8 to zero. The 2×2 median went from 57
+  to 21 ns in the kernel probe. Preserve the generic scalar bound and the
+  lower-triangle and positive-definiteness contracts. Recheck the kernel
+  and full solves for Gauss–Newton, normal-equation LM, bounded LM, and
+  the Dogleg and More–Sorensen trust-region strategies.
+- [ ] **Support runtime-length residuals with fixed nalgebra parameters.**
+  Complete the products and pivoted QR for `OMatrix<F, Dyn, Const<N>>`
+  with `DVector<F>` residuals, keeping the parameters and Gram matrix fixed.
+  Trust-region reflective already accepts this combination via
+  `MatrixIndex`. Add the in-place products for linear constraints using
+  the same matrix type. Cover analytic and numerical Jacobians, both
+  precisions where supported, and type inference for existing callers.
+- [ ] **Allow square fixed-size finite-difference Hessians.** `FiniteDiff`
+  currently uses the Jacobian's dynamic-row matrix type for Hessians.
+  That matrix works with Steihaug, while Dogleg and More–Sorensen need
+  square factorization capabilities. Add a way to request a square Hessian
+  while preserving the existing Jacobian output and constructor inference.
+- [ ] **Extend unbounded finite differences to `f32`.** `FiniteDiff` is
+  currently `f64`-only. Reuse the scalar-generic first-derivative machinery
+  from `BoundedFiniteDiff` where the stencil rules agree, and verify
+  precision defaults and probe counts.
+- [ ] **Document and benchmark existing fixed-size solver paths.** Show a
+  small fixed-size problem through the normal executor API. Add matched
+  dynamic and fixed cases to the
+  [solver](crates/basin/benches/solver_backends.rs) and
+  [LM backend](crates/basin/benches/lm_backends.rs) benchmarks. Check
+  numerical results and evaluation counts, and measure allocations
+  separately from timings.
+- [ ] **Support native arrays in the vector math tier.** Implement the
+  vector traits for `[F; N]` and exercise vector-only solvers with
+  `f32` and `f64` without an optional linear algebra backend. Evaluate a
+  nested-array matrix companion when there is a dense-solve use case.
+  ndarray and faer can borrow inline buffers through views for kernels
+  that can use caller-owned storage. Their owned types use heap storage.
+- [ ] **Profile the remaining small dense solver workspaces.** Fixed-size
+  pivoted QR and symmetric eigen still use heap scratch, and
+  trust-region reflective builds a dynamic SVD workspace. Measure phase by
+  phase before changing storage. For CMA-ES, compare eigen kernels on
+  identical covariances because the eigensolver can change the seeded
+  trajectory. Profile internal work separately from parameter storage in
+  SLSQP and the Powell solvers, where active sets and model sizes can vary
+  at runtime.
+
 ### Finite-difference performance
 
 Source review of `core/numdiff.rs` and its child modules on 2026-10-27. These
