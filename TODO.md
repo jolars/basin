@@ -49,10 +49,11 @@ numerical work against analytic cases and reference implementations.
 - [x] **Integrate fixed-size types with finite-difference Jacobians.** Let
   `FiniteDiff` and `BoundedFiniteDiff` accept distinct parameter and
   residual types. For fixed-size nalgebra parameters, use a matrix with
-  dynamic rows and fixed columns. Verify that the least-squares drivers consume
-  those Jacobians with fixed-size parameters. Test analytic and numerical
-  rectangular fits for `f32` and `f64` where supported, and check all four
-  nalgebra releases individually and with their features enabled together.
+  dynamic rows and fixed columns. Verify that the least-squares drivers
+  consume those Jacobians with fixed-size parameters. Test analytic and
+  numerical rectangular fits for `f32` and `f64` where supported, and check
+  all four nalgebra releases individually and with their features enabled
+  together.
 - [x] **Add full trust-region-reflective least squares.** Added
   `TrustRegionReflective` with Coleman-Li scaling, an explicit radius,
   reflected-step selection, a rank-aware dense SVD solve, and
@@ -759,6 +760,15 @@ desired backend features.
 Planned breaking changes. Preserve Basin 3.x APIs and defaults until the major
 release, and document the migration for each change.
 
+- [ ] **Split Serde support from Postcard checkpoint files.** Make `serde`
+  enable serialization traits so callers can choose their own codec. Add an
+  opt-in `checkpoint-postcard` feature that enables `serde` and exposes the
+  built-in Postcard readers and writers on native targets. Keep
+  `ExactCheckpoint`, `CheckpointSink`, and in-memory resumption available
+  without serialization features. Document the Cargo feature migration and
+  the version checks for resuming exact checkpoints. Verify that a run
+  resumed from a Postcard file matches an uninterrupted run and that the
+  default WASM build still works.
 - [ ] **Make evaluation buffer reuse automatic.** Replace the compatible opt-in
   evaluation storage on solvers and the robust least-squares adapter with
   typed storage by default. Public type parameters and their `Send`, `Sync`,
