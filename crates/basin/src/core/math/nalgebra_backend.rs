@@ -354,12 +354,43 @@ impl<F: Scalar, const N: usize> LinearSolveSpd<SVector<F, N>>
         &self,
         b: &SVector<F, N>,
     ) -> Result<SVector<F, N>, LinearSolveError> {
-        let rows = (0..N)
-            .flat_map(|i| (0..N).map(move |j| self[(i, j)]))
-            .collect::<Vec<_>>();
-        super::dense_chol::cholesky_solve_spd(&rows, N, b.as_slice())
-            .map(|x| SVector::from_column_slice(&x))
-            .ok_or(LinearSolveError::NotPositiveDefinite)
+        // Factor the lower triangle of the inline copy in place. Keep the
+        // pivot test and summation order of the shared dense Cholesky kernel.
+        let mut l = *self;
+        for i in 0..N {
+            for j in 0..=i {
+                let mut pivot = l[(i, j)];
+                for k in 0..j {
+                    pivot = pivot - l[(i, k)] * l[(j, k)];
+                }
+                l[(i, j)] = if i == j {
+                    if pivot <= F::zero() {
+                        return Err(LinearSolveError::NotPositiveDefinite);
+                    }
+                    pivot.sqrt()
+                } else {
+                    pivot / l[(j, j)]
+                };
+            }
+        }
+
+        // Reuse the inline right-hand side for both triangular solves.
+        let mut x = *b;
+        for i in 0..N {
+            let mut value = x[i];
+            for k in 0..i {
+                value = value - l[(i, k)] * x[k];
+            }
+            x[i] = value / l[(i, i)];
+        }
+        for i in (0..N).rev() {
+            let mut value = x[i];
+            for k in (i + 1)..N {
+                value = value - l[(k, i)] * x[k];
+            }
+            x[i] = value / l[(i, i)];
+        }
+        Ok(x)
     }
 }
 
@@ -1266,6 +1297,32 @@ mod tests {
         assert!(approx_eq(g[(0, 1)], 14.0, 1e-12));
         assert!(approx_eq(g[(1, 0)], 14.0, 1e-12));
         assert!(approx_eq(g[(1, 1)], 20.0, 1e-12));
+    }
+
+    #[test]
+    fn fixed_spd_uses_only_the_lower_triangle() {
+        let a = SMatrix::<f32, 2, 2>::new(4.0, f32::NAN, 2.0, 5.0);
+        let b = SVector::<f32, 2>::new(8.0, 12.0);
+        assert_eq!(a.solve_spd(&b), Ok(SVector::<f32, 2>::new(1.0, 2.0)));
+    }
+
+    #[test]
+    fn fixed_spd_rejects_zero_and_negative_pivots() {
+        let b = SVector::<f64, 2>::new(1.0, 1.0);
+        for diagonal in [1.0, 0.0] {
+            let a = SMatrix::<f64, 2, 2>::new(1.0, 0.0, 1.0, diagonal);
+            assert_eq!(
+                a.solve_spd(&b),
+                Err(LinearSolveError::NotPositiveDefinite)
+            );
+        }
+    }
+
+    #[test]
+    fn fixed_spd_accepts_empty_system() {
+        let a = SMatrix::<f64, 0, 0>::zeros();
+        let b = SVector::<f64, 0>::zeros();
+        assert_eq!(a.solve_spd(&b), Ok(b));
     }
 
     #[test]

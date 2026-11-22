@@ -365,14 +365,13 @@ nalgebra 0.35 showed the largest end-to-end savings for BFGS and nonlinear CG,
 with smaller gains for Nelder–Mead and both LM routes. The rectangular
 least-squares tests already cover fixed parameter and residual lengths.
 
-- [ ] **Keep fixed-size Cholesky scratch inline.** The `SMatrix` SPD solve
-  currently packs the matrix into a `Vec` and calls the dynamic kernel. On
-  matched SPD inputs at dimensions 2, 6, and 16, a native nalgebra prototype
-  reduced allocation requests from 4–8 to zero. The 2×2 median went from 57
-  to 21 ns in the kernel probe. Preserve the generic scalar bound and the
-  lower-triangle and positive-definiteness contracts. Recheck the kernel
-  and full solves for Gauss–Newton, normal-equation LM, bounded LM, and
-  the Dogleg and More–Sorensen trust-region strategies.
+- [x] **Keep fixed-size Cholesky scratch inline.** The `SMatrix` SPD solve
+  factors an inline matrix copy and reuses an inline copy of the right-hand
+  side for both triangular solves. It preserves the generic scalar bound,
+  lower-triangle semantics, and pivot test. Matched `f64` probes with nalgebra
+  0.35 measured zero allocation requests at dimensions 2, 6, and 16. Gauss–Newton,
+  normal-equation LM, bounded LM, Dogleg, and More–Sorensen converged with the
+  same parameters and evaluation counts on the fixed rectangular test problem.
 - [ ] **Support runtime-length residuals with fixed nalgebra parameters.**
   Complete the products and pivoted QR for `OMatrix<F, Dyn, Const<N>>`
   with `DVector<F>` residuals, keeping the parameters and Gram matrix fixed.

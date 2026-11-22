@@ -982,7 +982,7 @@ macro_rules! fixed_rectangular_fits {
             BoundedFiniteDiff, BoundedLevenbergMarquardt, BoxBounds,
             Constrained, ConstraintSet, Dogleg, Executor, GaussNewton,
             HuberLoss, Jacobian, LevenbergMarquardt, LevenbergMarquardtQr,
-            Method, Residual, RobustLeastSquares, TrustRegion, TrustRegionReflective,
+            Method, MoreSorensen, Residual, RobustLeastSquares, TrustRegion, TrustRegionReflective,
         };
         use std::convert::Infallible;
 
@@ -1066,6 +1066,10 @@ macro_rules! fixed_rectangular_fits {
                         .with_evaluation_buffers()
                 );
                 solve!($problem, TrustRegion::least_squares_with_gram(Dogleg));
+                solve!(
+                    $problem,
+                    TrustRegion::least_squares_with_gram(MoreSorensen::new())
+                );
             }};
         }
 
