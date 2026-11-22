@@ -39,7 +39,10 @@
 /// available), `nalgebra::DMatrix<f64>` (`V = DVector<f64>`),
 /// `faer::Mat<f64>` (`V = faer::Col<f64>`), and `ndarray::Array2<f64>`
 /// (`V = Array1<f64>`), each behind its backend feature where
-/// applicable.
+/// applicable. For nalgebra `OMatrix<F, Dyn, Const<N>>` and
+/// `SVector<F, N>`, use [`MatVecInto`] to write runtime-length results.
+/// [`MatTransposeVec`] accepts `DVector<F>` with this matrix and returns
+/// `SVector<F, N>`.
 pub trait MatVec<V, Y = V> {
     /// Compute `A x`, allocating a fresh `V` of length `self.nrows()`.
     fn matvec(&self, x: &V) -> Y;
@@ -84,7 +87,8 @@ pub trait MatTransposeVec<V, R = V> {
 /// counterparts, the default `Vec<f64>` backend over
 /// [`DenseMatrix`](super::DenseMatrix), and `ndarray::Array2<f64>`, the
 /// latter via a pure-Rust row-outer-product accumulation, wasm-clean with no
-/// BLAS/LAPACK.
+/// BLAS/LAPACK. Nalgebra matrices with `N` fixed columns produce an
+/// `SMatrix<F, N, N>` Gram matrix, including when the row count is dynamic.
 pub trait GramMatrix<G = Self> {
     /// Compute `Aᵀ A` and return the freshly allocated SPD matrix.
     fn gram(&self) -> G;
@@ -146,7 +150,9 @@ pub trait LinearSolveSpd<V> {
 ///
 /// `DenseMatrix<F>`/`Vec<F>`, nalgebra `DMatrix<F>`/`DVector<F>`, ndarray
 /// `Array2<F>`/`Array1<F>`, and faer `Mat<F>`/`Col<F>`, including `f32` and
-/// `f64`. All implementations are pure Rust. Neither sparse backend implements
+/// `f64`. Nalgebra also supports `OMatrix<F, Dyn, Const<N>>` with a
+/// `DVector<F>` right-hand side and an `SVector<F, N>` solution.
+/// All implementations are pure Rust. Neither sparse backend implements
 /// this capability: nalgebra-sparse has no QR, and faer's sparse QR uses a
 /// fill-reducing permutation rather than numerical column pivoting.
 pub trait FactorizePivotedQr<V, F: super::Scalar = f64, R = V> {

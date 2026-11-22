@@ -180,6 +180,8 @@ pub struct BarrierInnerDiagnostics<F: Scalar = f64> {
 /// Supports `Vec<f32>` and `Vec<f64>` with
 /// [`DenseMatrix`](crate::core::math::DenseMatrix), nalgebra `DVector`/`DMatrix`,
 /// ndarray `Array1`/`Array2`, and faer `Col`/`Mat`, with either scalar type.
+/// Nalgebra `SVector<F, N>` parameters can use `OMatrix<F, Dyn, Const<N>>`
+/// linear blocks with `DVector<F>` right-hand sides.
 /// The outer method needs [`crate::MatVecInto`] and [`crate::MatTransposeVecInto`], with no linear
 /// solve. Its vector bounds are [`ScaledAdd`], [`NegInPlace`], [`VectorIndex`],
 /// [`VectorLen`], [`NormSquared`], [`NormInfinity`], and [`Clone`]. A custom inner solver can

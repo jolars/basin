@@ -121,6 +121,8 @@ use step::{Model, interior, number, update_radius};
 /// Fixed-size nalgebra fits can use `SVector<F, N>` parameters and
 /// `SVector<F, M>` residuals with an analytic `SMatrix<F, M, N>` or a
 /// finite-difference Jacobian with dynamic rows and `N` fixed columns.
+/// With `DVector<F>` residuals, use `OMatrix<F, Dyn, Const<N>>` for
+/// either analytic or finite-difference Jacobians.
 ///
 /// `Vec<F>`/`DenseMatrix<F>`, nalgebra `DVector<F>`/`DMatrix<F>`, ndarray
 /// `Array1<F>`/`Array2<F>`, and faer `Col<F>`/`Mat<F>`, for `f32` and `f64`.

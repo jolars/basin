@@ -37,7 +37,7 @@ use crate::core::problem::{CostFunction, Gradient, Jacobian, Residual};
 /// `Vec<F>`, nalgebra `DVector<F>`, ndarray `Array1<F>`, and faer `Col<F>`,
 /// for `F = f64` or `f32`. Jacobians use each vector's [`DenseMatrixFromFn`]
 /// matrix type. For fixed-size nalgebra parameters `SVector<F, N>`, the
-/// residual may be `SVector<F, M>` and the Jacobian is an
+/// residual may be `SVector<F, M>` or `DVector<F>` and the Jacobian is an
 /// `OMatrix<F, Dyn, Const<N>>`.
 /// The constraint trait's `Matrix` must match the parameter backend's matrix.
 ///

@@ -169,7 +169,9 @@ use init::fold_constraints;
 /// backend release and `F = f64` or `f32`. Vectors need [`Clone`], [`VectorLen`],
 /// and indexing; constraint matrices need [`crate::MatTransposeVecInto`]. Model algebra
 /// uses pure-Rust `Vec<F>` storage, with no BLAS/LAPACK dependency. Choose radii
-/// appropriate to the scalar precision.
+/// appropriate to the scalar precision. Nalgebra `SVector<F, N>` parameters
+/// can use `OMatrix<F, Dyn, Const<N>>` linear blocks with `DVector<F>`
+/// right-hand sides.
 ///
 /// # References
 ///

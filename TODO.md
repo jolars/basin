@@ -372,13 +372,12 @@ least-squares tests already cover fixed parameter and residual lengths.
   0.35 measured zero allocation requests at dimensions 2, 6, and 16. Gauss–Newton,
   normal-equation LM, bounded LM, Dogleg, and More–Sorensen converged with the
   same parameters and evaluation counts on the fixed rectangular test problem.
-- [ ] **Support runtime-length residuals with fixed nalgebra parameters.**
-  Complete the products and pivoted QR for `OMatrix<F, Dyn, Const<N>>`
-  with `DVector<F>` residuals, keeping the parameters and Gram matrix fixed.
-  Trust-region reflective already accepts this combination via
-  `MatrixIndex`. Add the in-place products for linear constraints using
-  the same matrix type. Cover analytic and numerical Jacobians, both
-  precisions where supported, and type inference for existing callers.
+- [x] **Support runtime-length residuals with fixed nalgebra parameters.**
+  Fixed-column Jacobians support transpose products and pivoted QR with
+  `DVector<F>` residuals, while parameters and Gram matrices stay fixed.
+  Use `MatVecInto` for runtime-length forward products. Both in-place
+  products support linear constraints. Tests cover analytic and numerical
+  Jacobians across all supported nalgebra versions and precisions.
 - [ ] **Allow square fixed-size finite-difference Hessians.** `FiniteDiff`
   currently uses the Jacobian's dynamic-row matrix type for Hessians.
   That matrix works with Steihaug, while Dogleg and More–Sorensen need

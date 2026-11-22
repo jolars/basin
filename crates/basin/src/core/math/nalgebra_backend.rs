@@ -219,6 +219,20 @@ impl<F: Scalar, const R: usize, const C: usize>
     }
 }
 
+impl<F: Scalar, const C: usize> MatTransposeVec<SVector<F, C>, DVector<F>>
+    for FixedColumns<F, C>
+{
+    fn mat_transpose_vec(&self, x: &DVector<F>) -> SVector<F, C> {
+        let mut out = SVector::zeros();
+        super::MatTransposeVecInto::mat_transpose_vec_into(
+            self,
+            x.as_slice(),
+            &mut out,
+        );
+        out
+    }
+}
+
 impl<F: Scalar, D: Dim, S: Storage<F, D, Const<C>>, const C: usize>
     GramMatrix<SMatrix<F, C, C>> for Matrix<F, D, Const<C>, S>
 {
@@ -267,6 +281,24 @@ impl<F: Scalar, const R: usize, const C: usize>
             .flat_map(|i| (0..C).map(move |j| self[(i, j)]))
             .collect();
         super::dense_qr::factorize(R, C, rows, b.as_slice())
+            .map(FixedQrFactorization)
+    }
+}
+
+impl<F: Scalar, const C: usize>
+    super::FactorizePivotedQr<SVector<F, C>, F, DVector<F>>
+    for FixedColumns<F, C>
+{
+    type Factorization = FixedQrFactorization<F, C>;
+
+    fn factorize_pivoted_qr(
+        &self,
+        b: &DVector<F>,
+    ) -> Result<Self::Factorization, super::QrSolveError> {
+        let rows = (0..self.nrows())
+            .flat_map(|i| (0..C).map(move |j| self[(i, j)]))
+            .collect();
+        super::dense_qr::factorize(self.nrows(), C, rows, b.as_slice())
             .map(FixedQrFactorization)
     }
 }
@@ -1254,6 +1286,36 @@ where
         assert_eq!(output.vec_len(), C);
         for j in 0..C {
             output[j] = (0..R).map(|i| self[(i, j)] * input[i]).sum();
+        }
+    }
+}
+
+impl<V, F, const C: usize> super::MatVecInto<V, F> for FixedColumns<F, C>
+where
+    V: super::VectorLen + std::ops::Index<usize, Output = F>,
+    F: Scalar,
+{
+    fn matvec_into(&self, input: &V, output: &mut [F]) {
+        assert_eq!(input.vec_len(), C);
+        assert_eq!(output.len(), self.nrows());
+        for (i, value) in output.iter_mut().enumerate() {
+            *value = (0..C).map(|j| self[(i, j)] * input[j]).sum();
+        }
+    }
+}
+
+impl<V, F, const C: usize> super::MatTransposeVecInto<V, F>
+    for FixedColumns<F, C>
+where
+    V: super::VectorLen + std::ops::IndexMut<usize, Output = F>,
+    F: Scalar,
+{
+    fn mat_transpose_vec_into(&self, input: &[F], output: &mut V) {
+        assert_eq!(input.len(), self.nrows());
+        assert_eq!(output.vec_len(), C);
+        for j in 0..C {
+            output[j] =
+                (0..self.nrows()).map(|i| self[(i, j)] * input[i]).sum();
         }
     }
 }

@@ -117,7 +117,7 @@ pub enum Method {
 /// available for `Vec<f64>`/`DenseMatrix`, nalgebra `DVector<f64>`/`DMatrix`,
 /// ndarray `Array1<f64>`/`Array2`, and faer `Col<f64>`/`Mat`. Nalgebra
 /// `SVector<f64, N>` parameters use `OMatrix<f64, Dyn, Const<N>>` and may
-/// be paired with `SVector<f64, M>` residuals. The Jacobian row count comes
+/// be paired with `SVector<f64, M>` or `DVector<f64>` residuals. The Jacobian row count comes
 /// from the residual length.
 /// [`crate::ConstraintJacobian`] uses the parameter backend's dense matrix,
 /// independently of the linear block matrices. Use [`BoundedFiniteDiff`] for `f32` first derivatives.

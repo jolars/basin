@@ -221,7 +221,9 @@ finding uses a direct callback API and a separate result type.
   a `CostFunction` and a canonical set of bounds and linear blocks, folded into
   `A x ≤ b`. Uses `PointState`
   with `f32` and `f64` on every supported dense backend release; constraint
-  matrices require `MatrixShape`, `MatrixFinite`, and `MatTransposeVecInto`. Infeasible starts relax the constraints.
+  matrices require `MatrixShape`, `MatrixFinite`, and `MatTransposeVecInto`.
+  Nalgebra `SVector<F, N>` parameters can use `OMatrix<F, Dyn, Const<N>>`
+  linear blocks with `DVector<F>` right-hand sides. Infeasible starts relax the constraints.
   Implements Powell
   (2015), ported from PRIMA v0.7.2.
   [Read the LINCOA guide](derivative-free/lincoa/).
@@ -295,9 +297,10 @@ for the safeguarded curvature formula, following Triggs et al. (1999),
 _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
 
 All five solvers below support nalgebra `SVector<F, N>` parameters with
-`SVector<F, M>` residuals for `f32` and `f64`. Use an analytic
-`SMatrix<F, M, N>` Jacobian or a numerical Jacobian with dynamic rows and
-`N` fixed columns from `BoundedFiniteDiff` or, for `f64`, `FiniteDiff`.
+either `SVector<F, M>` or `DVector<F>` residuals for `f32` and `f64`.
+Analytic Jacobians can use `SMatrix<F, M, N>` with fixed residuals or
+`OMatrix<F, Dyn, Const<N>>` with either residual type. `BoundedFiniteDiff`
+and, for `f64`, `FiniteDiff` produce the dynamic-row Jacobian.
 For Gauss–Newton and the Cholesky routes of LM and bounded LM, use
 `new_with_gram` when the Jacobian and the `SMatrix<F, N, N>` Gram matrix have
 different types.
@@ -532,7 +535,9 @@ constraints:
   Publishes `PointState` with the original objective inside the strict feasible
   domain and a rejection cost of positive infinity outside it. Incumbents
   contain only strictly feasible points. Supports all four dense backends
-  with `f32` or `f64`; custom inner solvers can require additional capabilities.
+  with `f32` or `f64`. Nalgebra `SVector<F, N>` parameters can use
+  `OMatrix<F, Dyn, Const<N>>` linear blocks with `DVector<F>` right-hand sides.
+  Custom inner solvers can require additional capabilities.
   [Read the barrier method guide](general-constrained/barrier-method/).
 - **<span id="augmented-lagrangian-method"></span>[`AugmentedLagrangianMethod`](https://docs.rs/basin/latest/basin/solver/augmented_lagrangian_method/struct.AugmentedLagrangianMethod.html)**:
   quadratic penalty plus multiplier updates for linear equality constraints
