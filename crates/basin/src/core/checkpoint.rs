@@ -22,6 +22,59 @@ use crate::core::problem::EvalCounts;
 /// keeps the solver and state together with the authoritative counts and
 /// requires neither `Clone` nor serialization. A checkpoint does not retain
 /// the problem, execution policy, or termination reason.
+///
+/// # Application-managed serialization
+///
+/// With the `serde` feature, serialize the checkpoint with a Serde codec of
+/// your choice. Choose a codec that preserves all values your solver and state
+/// can contain, including non-finite floats if applicable.
+///
+/// When storing the bytes, record and check the format version, exact Basin
+/// version, and concrete solver and state types before decoding. Basin's
+/// built-in `read_exact_checkpoint` performs these checks for its own file
+/// format. Supply the same problem and reapply the execution policy on resume.
+#[cfg_attr(
+    feature = "serde",
+    doc = r#"
+This example uses `serde_json` as an application dependency and starts with
+finite values.
+
+```
+use basin::{CostFunction, ExactCheckpoint, Executor, NelderMead, SimplexProgress, State};
+use std::convert::Infallible;
+
+struct Sphere;
+impl CostFunction for Sphere {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
+        Ok(x.iter().map(|v| v * v).sum())
+    }
+}
+
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
+let mut stepper = Executor::from_start(Sphere, NelderMead::new(), vec![2.0, 1.0])
+    .max_iter(10)
+    .into_stepper()?;
+stepper.step()?;
+let checkpoint = stepper.into_checkpoint().unwrap();
+assert_eq!(checkpoint.state().iter(), 1);
+
+let bytes = serde_json::to_vec(&checkpoint)?;
+let restored: ExactCheckpoint<NelderMead<Vec<f64>>, SimplexProgress<Vec<f64>>> =
+    serde_json::from_slice(&bytes)?;
+assert_eq!(restored.state().iter(), 1);
+let result = Executor::resume_from_checkpoint(Sphere, restored)
+    .max_iter(10)
+    .run()?;
+assert_eq!(result.iter(), 10);
+# Ok(())
+# }
+```
+"#
+)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct ExactCheckpoint<So, S> {
