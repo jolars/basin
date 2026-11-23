@@ -1,12 +1,13 @@
 use basin::{
     Bfgs, BoundedCmaEs, BoundedCmaInject, BoundedLevenbergMarquardt, BoxBounds,
-    CauchyPoint, CmaEs, CmaInject, Constrained, ConstraintSet, CostFunction,
-    Dogleg, Executor, FactorizePivotedQr, FiniteDiff, GaussNewton, Gradient,
-    GramMatrix, HuberLoss, Jacobian, Lbfgs, LevenbergMarquardt,
-    LevenbergMarquardtQr, LinearSolveError, LinearSolveSpd, MaLsChCma,
-    MatTransposeVec, MatVec, Method, MoreSorensen, PopulationProgress,
-    QrSolveError, RegularizedQrSolve, Residual, RobustLeastSquares, Scalar,
-    SymmetricEigen, TrustRegion,
+    CauchyPoint, CmaEs, CmaInject, Constant, Constrained, ConstraintSet,
+    CostFunction, Dogleg, Executor, FactorizePivotedQr, FiniteDiff,
+    GaussNewton, Gradient, GramMatrix, HuberLoss, Jacobian, Lbfgs,
+    LevenbergMarquardt, LevenbergMarquardtQr, LinearSolveError, LinearSolveSpd,
+    MaLsChCma, MatTransposeVec, MatVec, MatrixIndex, MatrixShape, Method,
+    MoreSorensen, PopulationProgress, QrSolveError, RegularizedQrSolve,
+    Residual, RobustLeastSquares, Scalar, SymmetricEigen, TrustRegion,
+    TrustRegionReflective,
 };
 use rand_distr::{Distribution, StandardNormal};
 use std::convert::Infallible;
@@ -85,6 +86,7 @@ fn least_squares<F: Scalar + Send + Sync>() {
                 .run()
                 .unwrap();
             check_point(result.param(), $expected, tolerance);
+            result
         }};
     }
     check!(Fit(target[0]), GaussNewton::new_with_gram(), target);
@@ -134,6 +136,44 @@ fn least_squares<F: Scalar + Send + Sync>() {
         target
     );
     check!(Fit(target[0]), Bfgs::new(), target);
+    let analytic_endpoint = check!(
+        bounded(n(2.0)),
+        TrustRegionReflective::new(),
+        [F::one(), target[1]]
+    );
+    let finite_endpoint = check!(
+        FiniteDiff::new_with_scalar(bounded(target[0]))
+            .with_array_jacobian::<3>(),
+        TrustRegionReflective::new(),
+        target
+    );
+    for &value in analytic_endpoint
+        .param()
+        .iter()
+        .chain(finite_endpoint.param())
+    {
+        assert!(value >= -F::one() && value <= F::one());
+    }
+}
+
+fn seeded_bfgs<F: Scalar>() {
+    let target = [n::<F>(0.25), n(0.5)];
+    let seed = [[n(0.5), F::zero()], [F::zero(), n(0.25)]];
+    let solver = || Bfgs::with_line_search(Constant(F::one()));
+    macro_rules! check {
+        ($solver:expr) => {{
+            let result =
+                Executor::from_start(Fit(target[0]), $solver, [F::zero(); 2])
+                    .max_iter(1)
+                    .run()
+                    .unwrap();
+            assert_eq!(result.param(), &target);
+        }};
+    }
+    check!(solver().with_initial_inverse_hessian(seed));
+    check!(solver().with_initial_inverse_hessian_initializer(
+        |_: &[F; 2], _: &[F; 2]| seed
+    ));
 }
 
 fn trust_region<F: Scalar + Send + Sync>() {
@@ -196,6 +236,7 @@ where
 #[test]
 fn f32_solvers() {
     least_squares::<f32>();
+    seeded_bfgs::<f32>();
     trust_region::<f32>();
     population::<f32>();
 }
@@ -203,6 +244,7 @@ fn f32_solvers() {
 #[test]
 fn f64_solvers() {
     least_squares::<f64>();
+    seeded_bfgs::<f64>();
     trust_region::<f64>();
     population::<f64>();
 }
@@ -243,6 +285,31 @@ fn array_jacobian_checks_the_declared_residual_length() {
     let finite =
         FiniteDiff::new(DynamicResidual::<2>(3)).with_array_jacobian::<2>();
     let _ = finite.jacobian(&[1.0, 2.0]);
+}
+
+#[test]
+fn matrix_entry_access() {
+    let matrix = [[1.0_f32, 2.0, 3.0], [4.0, 5.0, 6.0]];
+    assert_eq!(matrix.matrix_rows(), 2);
+    assert_eq!(matrix.matrix_cols(), 3);
+    assert_eq!(matrix.matrix_entry(0, 1), 2.0);
+    assert_eq!(matrix.matrix_entry(1, 0), 4.0);
+    let no_rows: [[f64; 3]; 0] = [];
+    let no_columns: [[f64; 0]; 2] = [[], []];
+    assert_eq!((no_rows.matrix_rows(), no_rows.matrix_cols()), (0, 3));
+    assert_eq!((no_columns.matrix_rows(), no_columns.matrix_cols()), (2, 0));
+}
+
+#[test]
+#[should_panic(expected = "index out of bounds")]
+fn matrix_entry_rejects_invalid_row() {
+    [[1.0_f64, 2.0]].matrix_entry(1, 0);
+}
+
+#[test]
+#[should_panic(expected = "index out of bounds")]
+fn matrix_entry_rejects_invalid_column() {
+    [[1.0_f64, 2.0]].matrix_entry(0, 2);
 }
 
 #[test]

@@ -149,6 +149,10 @@ Supported dense pairs are `Vec<F>`/`DenseMatrix<F>`,
 `faer::Col<F>`/`Mat<F>`, with `F = f32` or `f64`. The default `Vec` path needs
 no BLAS/LAPACK provider.
 
+Native arrays use `[F; N]` parameters and `[F; M]` residuals with an analytic
+`[[F; N]; M]` Jacobian or one built by `FiniteDiff::with_array_jacobian::<M>()`.
+Both `f32` and `f64` work without optional backend features.
+
 All backends share the internal dense SVD kernel through entry access. Sparse
 Jacobians are unsupported. Use `Executor::run_with_solver` to retain the solver
 and inspect native convergence diagnostics, including whether an all-fixed

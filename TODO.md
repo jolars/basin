@@ -391,7 +391,7 @@ tests already cover fixed parameter and residual lengths.
 - [x] **Build finite-difference Jacobians for native arrays.**
   `FiniteDiff::with_array_jacobian::<M>()` builds a `[[F; N]; M]` Jacobian
   from a residual function with `[F; N]` parameters.
-- [ ] **Add matrix entry access for native arrays.** Implement `MatrixIndex` for
+- [x] **Add matrix entry access for native arrays.** Implement `MatrixIndex` for
   nested arrays so trust-region reflective can accept array Jacobians and
   BFGS can accept array-backed initial inverse Hessians.
 - [ ] **Profile the remaining small dense solver workspaces.** Fixed-size

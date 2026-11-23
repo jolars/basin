@@ -150,7 +150,8 @@ inspect `inverse_hessian()`.
 You can supply another strategy through `Bfgs::with_line_search(search)`.
 Choose a strategy that provides the curvature conditions the update needs.
 
-Supported parameter types are `Vec<F>`, `nalgebra::DVector<F>`,
+Supported parameter types are `[F; N]` (with `[[F; N]; N]` inverse Hessians),
+`Vec<F>`, `nalgebra::DVector<F>`, `nalgebra::SVector<F, N>`,
 `ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`. The default
 model uses matrix-vector products and rank-one updates without a factorization
 or a BLAS/LAPACK provider. Fixed initial matrices additionally require cloning

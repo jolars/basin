@@ -462,11 +462,12 @@ pub trait SquareMatrixFromFn<F: super::Scalar = f64>: Sized {
 
 /// Read the shape and individual entries of a dense matrix.
 ///
-/// Available for [`super::DenseMatrix`], nalgebra `DMatrix`, ndarray
-/// `Array2`, and faer `Mat`, for `f64` and `f32`. Entries must be read in
-/// constant time and use mathematical row/column indices, independently of
-/// storage order. Out-of-range indices panic. SLSQP uses this capability to
-/// copy constraint Jacobians into its scalar-generic factorization workspace.
+/// Available for native arrays `[[F; C]; R]`, [`super::DenseMatrix`], nalgebra
+/// `DMatrix`, ndarray `Array2`, and faer `Mat`, for `f64` and `f32`. Entries must
+/// be read in constant time and use mathematical row and column indices,
+/// independently of storage order. Out-of-range indices panic.
+/// SLSQP uses this capability to copy constraint Jacobians into its
+/// scalar-generic factorization workspace.
 pub trait MatrixIndex<F = f64>: MatrixShape {
     /// Read entry `(row, col)`.
     fn matrix_entry(&self, row: usize, col: usize) -> F;

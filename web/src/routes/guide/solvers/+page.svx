@@ -124,8 +124,8 @@ finding uses a direct callback API and a separate result type.
 - **<span id="bfgs"></span>[`Bfgs`](https://docs.rs/basin/latest/basin/solver/bfgs/struct.Bfgs.html)**:
   dense quasi-Newton with a full inverse-Hessian approximation (Nocedal &
   Wright, 2006). Supports all four dense backends with `f32` or `f64`,
-  including fixed-size nalgebra `SVector` and `SMatrix`. The default initializer
-  also supports plain arrays.
+  including fixed-size nalgebra `SVector` and `SMatrix`. Native arrays also
+  support default and custom initial inverse Hessians.
   Optional fixed initial matrices require cloning and entry access; closure
   initializers require entry access. Named initializers enforce their own
   seed contracts. [Read the BFGS guide](quasi-newton/bfgs/).
@@ -352,7 +352,8 @@ different types.
 - **<span id="trust-region-reflective"></span>[`TrustRegionReflective`](https://docs.rs/basin/latest/basin/solver/trust_region_reflective/struct.TrustRegionReflective.html)**:
   dense trust-region-reflective least squares with an explicit radius, reflected
   steps, a rank-aware SVD solve, and fixed-parameter elimination. Supports all
-  four dense backends in pure Rust, including `f32` and `f64`. Branch, Coleman &
+  four dense backends and native arrays in pure Rust with `f32` or `f64`.
+  Branch, Coleman &
   Li (1999), “A Subspace, Interior, and Conjugate Gradient Method for Large-Scale
   Bound-Constrained Minimization Problems,” _SIAM Journal on Scientific
   Computing_ 21(1), 1–23

@@ -118,6 +118,11 @@ use step::{Model, interior, number, update_radius};
 ///
 /// # Backends
 ///
+/// Native arrays support `[F; N]` parameters and `[F; M]` residuals with
+/// analytic `[[F; N]; M]` Jacobians or Jacobians from
+/// [`FiniteDiff::with_array_jacobian`](crate::FiniteDiff::with_array_jacobian),
+/// for both `f32` and `f64` without optional features.
+///
 /// Fixed-size nalgebra fits can use `SVector<F, N>` parameters and
 /// `SVector<F, M>` residuals with an analytic `SMatrix<F, M, N>` or a
 /// finite-difference Jacobian with dynamic rows and `N` fixed columns.

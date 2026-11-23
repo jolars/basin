@@ -4,9 +4,9 @@ use super::{
     AddDiagonalVectorInPlace, DenseBackend, FactorizePivotedQr,
     GeneralRankOneUpdate, GramMatrix, LinearSolveError, LinearSolveSpd,
     MatDiagonal, MatTransposeVec, MatVec, MatrixFinite, MatrixFromDiagonal,
-    MatrixIdentity, MaxDiagonal, QrFactorization, QrSolveError, RankOneUpdate,
-    RegularizedQrSolve, Scalar, ScaleInPlace, ScaleRowsInPlace,
-    SquareMatrixFromFn, SymmetricEigen, SymmetricEigenError,
+    MatrixIdentity, MatrixIndex, MatrixShape, MaxDiagonal, QrFactorization,
+    QrSolveError, RankOneUpdate, RegularizedQrSolve, Scalar, ScaleInPlace,
+    ScaleRowsInPlace, SquareMatrixFromFn, SymmetricEigen, SymmetricEigenError,
 };
 use std::array::from_fn;
 
@@ -60,6 +60,22 @@ impl<F: Scalar, const R: usize, const C: usize> GramMatrix<[[F; C]; C]>
 {
     fn gram(&self) -> [[F; C]; C] {
         from_fn(|i| from_fn(|j| self.iter().map(|row| row[i] * row[j]).sum()))
+    }
+}
+
+impl<F: Scalar, const R: usize, const C: usize> MatrixShape for [[F; C]; R] {
+    fn matrix_rows(&self) -> usize {
+        R
+    }
+
+    fn matrix_cols(&self) -> usize {
+        C
+    }
+}
+
+impl<F: Scalar, const R: usize, const C: usize> MatrixIndex<F> for [[F; C]; R] {
+    fn matrix_entry(&self, row: usize, col: usize) -> F {
+        self[row][col]
     }
 }
 
