@@ -411,9 +411,9 @@ tests already cover fixed parameter and residual lengths.
   nested arrays with BFGS, Cholesky and pivoted-QR least squares, trust-region
   methods, and CMA-ES without optional features. QR and eigendecomposition
   use heap scratch.
-- [ ] **Build finite-difference Jacobians for native arrays.** Let callers
-  specify the residual dimension `M` so Basin can build a `[[F; N]; M]`
-  Jacobian from a residual function.
+- [x] **Build finite-difference Jacobians for native arrays.**
+  `FiniteDiff::with_array_jacobian::<M>()` builds a `[[F; N]; M]` Jacobian
+  from a residual function with `[F; N]` parameters.
 - [ ] **Add matrix entry access for native arrays.** Implement `MatrixIndex`
   for nested arrays so trust-region reflective can accept array Jacobians and
   BFGS can accept array-backed initial inverse Hessians.

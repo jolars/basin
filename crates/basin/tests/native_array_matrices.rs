@@ -4,9 +4,9 @@ use basin::{
     Dogleg, Executor, FactorizePivotedQr, FiniteDiff, GaussNewton, Gradient,
     GramMatrix, HuberLoss, Jacobian, Lbfgs, LevenbergMarquardt,
     LevenbergMarquardtQr, LinearSolveError, LinearSolveSpd, MaLsChCma,
-    MatTransposeVec, MatVec, MoreSorensen, PopulationProgress, QrSolveError,
-    RegularizedQrSolve, Residual, RobustLeastSquares, Scalar, SymmetricEigen,
-    TrustRegion,
+    MatTransposeVec, MatVec, Method, MoreSorensen, PopulationProgress,
+    QrSolveError, RegularizedQrSolve, Residual, RobustLeastSquares, Scalar,
+    SymmetricEigen, TrustRegion,
 };
 use rand_distr::{Distribution, StandardNormal};
 use std::convert::Infallible;
@@ -74,7 +74,7 @@ fn bounded<F: Scalar>(target: F) -> BoundedFit<F> {
     )
 }
 
-fn least_squares<F: Scalar>() {
+fn least_squares<F: Scalar + Send + Sync>() {
     let start = [F::zero(); 2];
     let target = [n(0.25), n(0.5)];
     let tolerance = n(0.002);
@@ -90,6 +90,29 @@ fn least_squares<F: Scalar>() {
     check!(Fit(target[0]), GaussNewton::new_with_gram(), target);
     check!(Fit(target[0]), LevenbergMarquardt::new_with_gram(), target);
     check!(Fit(target[0]), LevenbergMarquardtQr::new(), target);
+    let analytic = Fit(target[0]).jacobian(&start).unwrap();
+    for method in [Method::Forward, Method::Central] {
+        let finite = FiniteDiff::new_with_scalar(Fit(target[0]))
+            .with_array_jacobian::<3>()
+            .jacobian_method(method);
+        let mut jac = [[F::zero(); 2]; 3];
+        finite.jacobian_into(&start, &mut jac).unwrap();
+        for (actual, expected) in jac.iter().zip(analytic) {
+            check_point(actual, expected, tolerance);
+        }
+        assert_eq!(finite.jacobian(&start).unwrap(), jac);
+        let (residual, fused) = finite.residual_and_jacobian(&start).unwrap();
+        assert_eq!(residual, Fit(target[0]).residual(&start).unwrap());
+        assert_eq!(fused, jac);
+        let (mut residual_out, mut jac_out) =
+            ([F::zero(); 3], [[F::zero(); 2]; 3]);
+        finite
+            .residual_and_jacobian_into(&start, &mut residual_out, &mut jac_out)
+            .unwrap();
+        assert_eq!(residual_out, residual);
+        assert_eq!(jac_out, jac);
+        check!(finite, LevenbergMarquardtQr::new(), target);
+    }
     check!(
         Fit(target[0]),
         TrustRegion::least_squares_with_gram(Dogleg),
@@ -182,6 +205,44 @@ fn f64_solvers() {
     least_squares::<f64>();
     trust_region::<f64>();
     population::<f64>();
+}
+
+struct DynamicResidual<const N: usize>(usize);
+
+impl<const N: usize> Residual for DynamicResidual<N> {
+    type Param = [f64; N];
+    type Output = Vec<f64>;
+    type Error = Infallible;
+
+    fn residual(&self, _: &Self::Param) -> Result<Self::Output, Self::Error> {
+        Ok(vec![1.0; self.0])
+    }
+}
+
+#[test]
+fn array_jacobian_supports_empty_dimensions() {
+    for method in [Method::Forward, Method::Central] {
+        let no_params = FiniteDiff::new(DynamicResidual::<0>(2))
+            .with_array_jacobian::<2>()
+            .jacobian_method(method);
+        assert_eq!(no_params.jacobian(&[]).unwrap(), [[], []]);
+
+        let no_residuals = FiniteDiff::new(DynamicResidual::<2>(0))
+            .with_array_jacobian::<0>()
+            .jacobian_method(method);
+        let expected: [[f64; 2]; 0] = [];
+        assert_eq!(no_residuals.jacobian(&[1.0, 2.0]).unwrap(), expected);
+    }
+}
+
+#[test]
+#[should_panic(
+    expected = "finite-difference residual length does not match the array Jacobian row count"
+)]
+fn array_jacobian_checks_the_declared_residual_length() {
+    let finite =
+        FiniteDiff::new(DynamicResidual::<2>(3)).with_array_jacobian::<2>();
+    let _ = finite.jacobian(&[1.0, 2.0]);
 }
 
 #[test]

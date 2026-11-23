@@ -179,7 +179,7 @@ impl<P, F: Scalar> BoundedFiniteDiff<P, F> {
         }
     }
 }
-impl<P, const SQUARE: bool, F: Scalar> FiniteDiff<P, SQUARE, F> {
+impl<P, const SQUARE: bool, F: Scalar, J> FiniteDiff<P, SQUARE, F, J> {
     /// Transfer first-derivative settings into a [`BoundedFiniteDiff`].
     /// The resulting adapter supports gradients and Jacobians only. Hessian
     /// settings have no effect on its first derivatives.

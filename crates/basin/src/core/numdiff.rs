@@ -132,7 +132,9 @@ impl Method {
 /// ndarray `Array1<F>`/`Array2`, and faer `Col<F>`/`Mat` with `F` equal
 /// to `f32` or `f64`. Nalgebra `SVector<F, N>` parameters use
 /// `OMatrix<F, Dyn, Const<N>>` and may be paired with `SVector<F, M>` or
-/// `DVector<F>` residuals. The Jacobian row count comes from the residual length. Use [`FiniteDiff::with_square_hessian`] for a
+/// `DVector<F>` residuals. The Jacobian row count comes from the residual length.
+/// Use [`FiniteDiff::with_array_jacobian`] to set the row count for native array
+/// parameters. Use [`FiniteDiff::with_square_hessian`] for a
 /// square fixed-size Hessian.
 /// [`crate::ConstraintJacobian`] uses the parameter backend's dense matrix,
 /// independently of the linear block matrices.
@@ -181,7 +183,8 @@ impl Method {
 /// assert!(result.cost() < 1e-10);
 /// ```
 #[derive(Debug, Clone, Copy)]
-pub struct FiniteDiff<P, const SQUARE: bool = false, F: Scalar = f64> {
+pub struct FiniteDiff<P, const SQUARE: bool = false, F: Scalar = f64, J = ()> {
+    jacobian: std::marker::PhantomData<fn() -> J>,
     problem: P,
     gradient_method: Method,
     jacobian_method: Method,
@@ -204,6 +207,7 @@ impl<P, F: Scalar> FiniteDiff<P, false, F> {
     pub fn new_with_scalar(problem: P) -> Self {
         Self {
             problem,
+            jacobian: std::marker::PhantomData,
             gradient_method: Method::Central,
             jacobian_method: Method::Forward,
             hessian_method: Method::Central,
@@ -211,7 +215,9 @@ impl<P, F: Scalar> FiniteDiff<P, false, F> {
             fixed_step: None,
         }
     }
+}
 
+impl<P, F: Scalar, J> FiniteDiff<P, false, F, J> {
     /// Use the parameter backend's square matrix for the Hessian.
     ///
     /// For native arrays `[F; N]`, the Hessian is `[[F; N]; N]`.
@@ -242,13 +248,43 @@ impl<P, F: Scalar> FiniteDiff<P, false, F> {
     /// assert!(result.cost() < 1e-12);
     /// # }
     /// ```
-    pub fn with_square_hessian(self) -> FiniteDiff<P, true, F>
+    pub fn with_square_hessian(self) -> FiniteDiff<P, true, F, J>
     where
         P: CostFunction<Output = F>,
         P::Param: DenseBackend<F, Matrix: SquareMatrixFromFn<F>>,
     {
+        self.with_shape()
+    }
+}
+
+impl<P, const SQUARE: bool, F: Scalar, J, const N: usize>
+    FiniteDiff<P, SQUARE, F, J>
+where
+    P: Residual<Param = [F; N]>,
+{
+    /// Use a row-major `[[F; N]; M]` Jacobian with native array parameters.
+    ///
+    /// Specify the residual dimension `M`. The parameter dimension `N` is
+    /// inferred from the problem. Residuals may use any supported vector type,
+    /// including `[F; M]` or `Vec<F>`.
+    ///
+    /// # Panics
+    ///
+    /// Evaluating the Jacobian panics if the residual length differs from `M`.
+    pub fn with_array_jacobian<const M: usize>(
+        self,
+    ) -> FiniteDiff<P, SQUARE, F, [[F; N]; M]> {
+        self.with_shape()
+    }
+}
+
+impl<P, const SQUARE: bool, F: Scalar, J> FiniteDiff<P, SQUARE, F, J> {
+    fn with_shape<const NEW_SQUARE: bool, NewJ>(
+        self,
+    ) -> FiniteDiff<P, NEW_SQUARE, F, NewJ> {
         FiniteDiff {
             problem: self.problem,
+            jacobian: std::marker::PhantomData,
             gradient_method: self.gradient_method,
             jacobian_method: self.jacobian_method,
             hessian_method: self.hessian_method,
@@ -256,9 +292,7 @@ impl<P, F: Scalar> FiniteDiff<P, false, F> {
             fixed_step: self.fixed_step,
         }
     }
-}
 
-impl<P, const SQUARE: bool, F: Scalar> FiniteDiff<P, SQUARE, F> {
     /// Set the stencil used for the gradient (default [`Method::Central`]).
     pub fn gradient_method(mut self, method: Method) -> Self {
         self.gradient_method = method;
@@ -308,8 +342,8 @@ impl<P, const SQUARE: bool, F: Scalar> FiniteDiff<P, SQUARE, F> {
 
 // Delegated function-value traits.
 
-impl<P: CostFunction, const SQUARE: bool, F: Scalar> CostFunction
-    for FiniteDiff<P, SQUARE, F>
+impl<P: CostFunction, const SQUARE: bool, F: Scalar, J> CostFunction
+    for FiniteDiff<P, SQUARE, F, J>
 {
     type Param = P::Param;
     type Output = P::Output;
@@ -319,8 +353,8 @@ impl<P: CostFunction, const SQUARE: bool, F: Scalar> CostFunction
     }
 }
 
-impl<P: Residual, const SQUARE: bool, F: Scalar> Residual
-    for FiniteDiff<P, SQUARE, F>
+impl<P: Residual, const SQUARE: bool, F: Scalar, J> Residual
+    for FiniteDiff<P, SQUARE, F, J>
 {
     type Param = P::Param;
     type Output = P::Output;
@@ -347,8 +381,8 @@ impl<P: Residual, const SQUARE: bool, F: Scalar> Residual
 
 // Synthesized derivative traits.
 
-impl<P, V, const SQUARE: bool, F: Scalar + MaybeSend + MaybeSync> Gradient
-    for FiniteDiff<P, SQUARE, F>
+impl<P, V, const SQUARE: bool, F: Scalar + MaybeSend + MaybeSync, J> Gradient
+    for FiniteDiff<P, SQUARE, F, J>
 where
     P: CostFunction<Param = V, Output = F> + MaybeSync,
     V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
@@ -431,23 +465,7 @@ where
         param: &V,
         out: &mut Self::Jacobian,
     ) -> Result<(), P::Error> {
-        match self.jacobian_method {
-            Method::Forward => forward_difference_jacobian_into(
-                &self.problem,
-                param,
-                self.function_precision,
-                self.fixed_step,
-                out,
-            ),
-            Method::Central => central_difference_jacobian_into(
-                &self.problem,
-                param,
-                self.function_precision,
-                self.fixed_step,
-                None,
-                out,
-            ),
-        }
+        self.fill_jacobian::<V>(param, None, out)
     }
 
     fn residual_and_jacobian(
@@ -457,7 +475,7 @@ where
         let res = residual_base(&self.problem, param)?;
         let mut jac =
             V::dense_from_fn(0, param.vec_len(), |_, _| unreachable!());
-        self.jacobian_with_base_into(param, &res, &mut jac)?;
+        self.fill_jacobian::<V>(param, Some(&res), &mut jac)?;
         Ok((res, jac))
     }
 
@@ -468,46 +486,120 @@ where
         jac: &mut Self::Jacobian,
     ) -> Result<(), P::Error> {
         self.residual_into(param, res)?;
-        self.jacobian_with_base_into(param, res, jac)
+        self.fill_jacobian::<V>(param, Some(res), jac)
     }
 }
 
-impl<P, V, const SQUARE: bool, F: Scalar + MaybeSend + MaybeSync>
-    FiniteDiff<P, SQUARE, F>
+struct ArrayJacobian<const N: usize, const M: usize>;
+
+impl<F: Scalar, const N: usize, const M: usize> DenseMatrixFromFn<F>
+    for ArrayJacobian<N, M>
+{
+    type Matrix = [[F; N]; M];
+
+    fn dense_from_fn<G: FnMut(usize, usize) -> F>(
+        rows: usize,
+        cols: usize,
+        mut entry: G,
+    ) -> Self::Matrix {
+        assert_eq!(
+            rows, M,
+            "finite-difference residual length does not match the array Jacobian row count"
+        );
+        debug_assert_eq!(cols, N);
+        std::array::from_fn(|i| std::array::from_fn(|j| entry(i, j)))
+    }
+}
+
+impl<P, const SQUARE: bool, F, const N: usize, const M: usize> Jacobian
+    for FiniteDiff<P, SQUARE, F, [[F; N]; M]>
 where
-    P: Residual<Param = V> + MaybeSync,
-    V: Clone
-        + VectorLen
-        + VectorIndex<F>
-        + DenseMatrixFromFn<F>
-        + MaybeSync
-        + MaybeSend,
+    F: Scalar + MaybeSend + MaybeSync,
+    P: Residual<Param = [F; N]> + MaybeSync,
     P::Output: Clone + VectorLen + VectorIndex<F> + MaybeSync + MaybeSend,
     P::Error: MaybeSend,
 {
-    fn jacobian_with_base_into(
+    type Jacobian = [[F; N]; M];
+
+    fn jacobian(&self, param: &[F; N]) -> Result<Self::Jacobian, P::Error> {
+        let mut out = [[F::zero(); N]; M];
+        self.jacobian_into(param, &mut out)?;
+        Ok(out)
+    }
+
+    fn jacobian_into(
+        &self,
+        param: &[F; N],
+        out: &mut Self::Jacobian,
+    ) -> Result<(), P::Error> {
+        self.fill_jacobian::<ArrayJacobian<N, M>>(param, None, out)
+    }
+
+    fn residual_and_jacobian(
+        &self,
+        param: &[F; N],
+    ) -> Result<(P::Output, Self::Jacobian), P::Error> {
+        let res = residual_base(&self.problem, param)?;
+        let mut jac = [[F::zero(); N]; M];
+        self.fill_jacobian::<ArrayJacobian<N, M>>(param, Some(&res), &mut jac)?;
+        Ok((res, jac))
+    }
+
+    fn residual_and_jacobian_into(
+        &self,
+        param: &[F; N],
+        res: &mut P::Output,
+        jac: &mut Self::Jacobian,
+    ) -> Result<(), P::Error> {
+        self.residual_into(param, res)?;
+        self.fill_jacobian::<ArrayJacobian<N, M>>(param, Some(res), jac)
+    }
+}
+
+impl<P, V, const SQUARE: bool, F: Scalar + MaybeSend + MaybeSync, J>
+    FiniteDiff<P, SQUARE, F, J>
+where
+    P: Residual<Param = V> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex<F> + MaybeSync + MaybeSend,
+    P::Output: Clone + VectorLen + VectorIndex<F> + MaybeSync + MaybeSend,
+    P::Error: MaybeSend,
+{
+    fn fill_jacobian<W: DenseMatrixFromFn<F>>(
         &self,
         param: &V,
-        res: &P::Output,
-        jac: &mut V::Matrix,
+        base: Option<&P::Output>,
+        jac: &mut W::Matrix,
     ) -> Result<(), P::Error> {
-        match self.jacobian_method {
-            Method::Forward => forward_difference_jacobian_with_base_into(
-                &self.problem,
-                param,
-                self.function_precision,
-                self.fixed_step,
-                res,
-                jac,
-            ),
-            Method::Central => central_difference_jacobian_into(
-                &self.problem,
-                param,
-                self.function_precision,
-                self.fixed_step,
-                Some(res),
-                jac,
-            ),
+        match (self.jacobian_method, base) {
+            (Method::Forward, None) => {
+                forward_difference_jacobian_into::<_, _, _, W>(
+                    &self.problem,
+                    param,
+                    self.function_precision,
+                    self.fixed_step,
+                    jac,
+                )
+            }
+            (Method::Forward, Some(res)) => {
+                forward_difference_jacobian_with_base_into::<_, _, _, W>(
+                    &self.problem,
+                    param,
+                    self.function_precision,
+                    self.fixed_step,
+                    res,
+                    jac,
+                )
+            }
+            (Method::Central, base) => {
+                central_difference_jacobian_into::<_, _, _, W>(
+                    &self.problem,
+                    param,
+                    self.function_precision,
+                    self.fixed_step,
+                    base,
+                    jac,
+                )
+            }
         }
     }
 }
@@ -557,8 +649,8 @@ impl<F: Scalar, V: DenseBackend<F, Matrix: SquareMatrixFromFn<F>>>
     }
 }
 
-impl<P, V, M, const SQUARE: bool, F: Scalar + MaybeSend + MaybeSync> Hessian
-    for FiniteDiff<P, SQUARE, F>
+impl<P, V, M, const SQUARE: bool, F: Scalar + MaybeSend + MaybeSync, J> Hessian
+    for FiniteDiff<P, SQUARE, F, J>
 where
     P: CostFunction<Param = V, Output = F> + MaybeSync,
     V: Clone
@@ -620,8 +712,8 @@ where
     }
 }
 
-impl<P, V, const SQUARE: bool, F: Scalar + MaybeSend + MaybeSync>
-    FiniteDiff<P, SQUARE, F>
+impl<P, V, const SQUARE: bool, F: Scalar + MaybeSend + MaybeSync, J>
+    FiniteDiff<P, SQUARE, F, J>
 where
     P: CostFunction<Param = V, Output = F> + MaybeSync,
     V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
@@ -660,8 +752,8 @@ where
     }
 }
 
-impl<P, V, const SQUARE: bool, F: Scalar + MaybeSend + MaybeSync> HessianProduct
-    for FiniteDiff<P, SQUARE, F>
+impl<P, V, const SQUARE: bool, F: Scalar + MaybeSend + MaybeSync, J>
+    HessianProduct for FiniteDiff<P, SQUARE, F, J>
 where
     P: CostFunction<Param = V, Output = F> + MaybeSync,
     V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
@@ -708,8 +800,8 @@ where
     }
 }
 
-impl<P, V, const SQUARE: bool, F: Scalar + MaybeSend + MaybeSync>
-    FiniteDiff<P, SQUARE, F>
+impl<P, V, const SQUARE: bool, F: Scalar + MaybeSend + MaybeSync, J>
+    FiniteDiff<P, SQUARE, F, J>
 where
     P: CostFunction<Param = V, Output = F> + MaybeSync,
     V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
@@ -972,7 +1064,7 @@ where
     P::Error: MaybeSend,
 {
     let mut out = V::dense_from_fn(0, x.vec_len(), |_, _| unreachable!());
-    forward_difference_jacobian_into(
+    forward_difference_jacobian_into::<_, _, _, V>(
         problem,
         x,
         function_precision,
@@ -982,26 +1074,26 @@ where
     Ok(out)
 }
 
-fn forward_difference_jacobian_into<P, V, F: Scalar + MaybeSend + MaybeSync>(
+fn forward_difference_jacobian_into<
+    P,
+    V,
+    F: Scalar + MaybeSend + MaybeSync,
+    W: DenseMatrixFromFn<F>,
+>(
     problem: &P,
     x: &V,
     function_precision: F,
     fixed_step: Option<F>,
-    out: &mut <V as DenseMatrixFromFn<F>>::Matrix,
+    out: &mut W::Matrix,
 ) -> Result<(), P::Error>
 where
     P: Residual<Param = V> + MaybeSync,
-    V: Clone
-        + VectorLen
-        + VectorIndex<F>
-        + DenseMatrixFromFn<F>
-        + MaybeSync
-        + MaybeSend,
+    V: Clone + VectorLen + VectorIndex<F> + MaybeSync + MaybeSend,
     P::Output: Clone + VectorLen + VectorIndex<F> + MaybeSync + MaybeSend,
     P::Error: MaybeSend,
 {
     let r0 = residual_base(problem, x)?;
-    forward_difference_jacobian_with_base_into(
+    forward_difference_jacobian_with_base_into::<_, _, _, W>(
         problem,
         x,
         function_precision,
@@ -1090,22 +1182,18 @@ fn forward_difference_jacobian_with_base_into<
     P,
     V,
     F: Scalar + MaybeSend + MaybeSync,
+    W: DenseMatrixFromFn<F>,
 >(
     problem: &P,
     x: &V,
     function_precision: F,
     fixed_step: Option<F>,
     r0: &P::Output,
-    out: &mut <V as DenseMatrixFromFn<F>>::Matrix,
+    out: &mut W::Matrix,
 ) -> Result<(), P::Error>
 where
     P: Residual<Param = V> + MaybeSync,
-    V: Clone
-        + VectorLen
-        + VectorIndex<F>
-        + DenseMatrixFromFn<F>
-        + MaybeSync
-        + MaybeSend,
+    V: Clone + VectorLen + VectorIndex<F> + MaybeSync + MaybeSend,
     P::Output: Clone + VectorLen + VectorIndex<F> + MaybeSync + MaybeSend,
     P::Error: MaybeSend,
 {
@@ -1138,7 +1226,7 @@ where
                 Ok(col)
             },
         )?;
-        V::dense_from_fn_into(m, n, |i, j| columns[j].get_scalar(i), out);
+        W::dense_from_fn_into(m, n, |i, j| columns[j].get_scalar(i), out);
         return Ok(());
     }
     {
@@ -1164,7 +1252,7 @@ where
                 Ok(())
             },
         )?;
-        columns.write_into::<V>(m, n, out);
+        columns.write_into::<W>(m, n, out);
         Ok(())
     }
 }
@@ -1192,7 +1280,7 @@ where
     P::Error: MaybeSend,
 {
     let mut out = V::dense_from_fn(0, x.vec_len(), |_, _| unreachable!());
-    central_difference_jacobian_into(
+    central_difference_jacobian_into::<_, _, _, V>(
         problem,
         x,
         function_precision,
@@ -1203,22 +1291,22 @@ where
     Ok(out)
 }
 
-fn central_difference_jacobian_into<P, V, F: Scalar + MaybeSend + MaybeSync>(
+fn central_difference_jacobian_into<
+    P,
+    V,
+    F: Scalar + MaybeSend + MaybeSync,
+    W: DenseMatrixFromFn<F>,
+>(
     problem: &P,
     x: &V,
     function_precision: F,
     fixed_step: Option<F>,
     base: Option<&P::Output>,
-    out: &mut <V as DenseMatrixFromFn<F>>::Matrix,
+    out: &mut W::Matrix,
 ) -> Result<(), P::Error>
 where
     P: Residual<Param = V> + MaybeSync,
-    V: Clone
-        + VectorLen
-        + VectorIndex<F>
-        + DenseMatrixFromFn<F>
-        + MaybeSync
-        + MaybeSend,
+    V: Clone + VectorLen + VectorIndex<F> + MaybeSync + MaybeSend,
     P::Output: Clone + VectorLen + VectorIndex<F> + MaybeSync + MaybeSend,
     P::Error: MaybeSend,
 {
@@ -1233,7 +1321,7 @@ where
             } else {
                 residual_base(problem, x)?.vec_len()
             };
-            V::dense_from_fn_into(m, 0, |_, _| unreachable!(), out);
+            W::dense_from_fn_into(m, 0, |_, _| unreachable!(), out);
             return Ok(());
         }
         let columns = try_map_range_with(
@@ -1268,7 +1356,7 @@ where
             columns.iter().all(|col| col.vec_len() == m),
             "finite-difference output length changed"
         );
-        V::dense_from_fn_into(m, n, |i, j| columns[j].get_scalar(i), out);
+        W::dense_from_fn_into(m, n, |i, j| columns[j].get_scalar(i), out);
         return Ok(());
     }
     {
@@ -1280,7 +1368,7 @@ where
             } else {
                 residual_base(problem, x)?.vec_len()
             };
-            V::dense_from_fn_into(m, 0, |_, _| unreachable!(), out);
+            W::dense_from_fn_into(m, 0, |_, _| unreachable!(), out);
             return Ok(());
         }
         let columns = jacobian_block(
@@ -1309,7 +1397,7 @@ where
             },
         )?;
         let m = base.map_or_else(|| columns.rows.unwrap(), VectorLen::vec_len);
-        columns.write_into::<V>(m, n, out);
+        columns.write_into::<W>(m, n, out);
         Ok(())
     }
 }
@@ -1961,8 +2049,8 @@ pub use check::{
     DerivativeComparison, DerivativeSource,
 };
 
-impl<P, const SQUARE: bool, F: Scalar> crate::Constraints
-    for FiniteDiff<P, SQUARE, F>
+impl<P, const SQUARE: bool, F: Scalar, J> crate::Constraints
+    for FiniteDiff<P, SQUARE, F, J>
 where
     P: crate::Constraints,
 {
@@ -1974,8 +2062,8 @@ where
     }
 }
 
-impl<P, const SQUARE: bool, F: Scalar> crate::NonlinearEqualityValues
-    for FiniteDiff<P, SQUARE, F>
+impl<P, const SQUARE: bool, F: Scalar, J> crate::NonlinearEqualityValues
+    for FiniteDiff<P, SQUARE, F, J>
 where
     P: crate::NonlinearEqualityValues,
 {
@@ -1990,8 +2078,8 @@ where
     }
 }
 
-impl<P, const SQUARE: bool, F: Scalar> crate::NonlinearInequalityValues
-    for FiniteDiff<P, SQUARE, F>
+impl<P, const SQUARE: bool, F: Scalar, J> crate::NonlinearInequalityValues
+    for FiniteDiff<P, SQUARE, F, J>
 where
     P: crate::NonlinearInequalityValues,
 {
@@ -2006,8 +2094,8 @@ where
     }
 }
 
-impl<P, V, const SQUARE: bool, F: Scalar + MaybeSend + MaybeSync>
-    crate::ConstraintJacobian for FiniteDiff<P, SQUARE, F>
+impl<P, V, const SQUARE: bool, F: Scalar + MaybeSend + MaybeSync, J>
+    crate::ConstraintJacobian for FiniteDiff<P, SQUARE, F, J>
 where
     P: CostFunction<Param = V, Output = F> + MaybeSync,
     P: crate::Constraints,
