@@ -1,5 +1,26 @@
 # Changelog
 
+## [3.5.0](https://github.com/jolars/basin/compare/v3.4.0...v3.5.0) (2026-11-23)
+
+### Features
+
+- support native arrays in vector solvers ([`8a3d8cb`](https://github.com/jolars/basin/commit/8a3d8cb70e5aeabfaf0e206d1058dbb3672ec19a))
+- support `f32` in unbounded finite differences ([`18fb3da`](https://github.com/jolars/basin/commit/18fb3da99bd660b97014fd9e8014aa7b80c242f7))
+- support square finite-difference Hessians ([`8397bc8`](https://github.com/jolars/basin/commit/8397bc84c4ea0fe8f0c8de504b3694115afd5472))
+- support runtime-length residuals with fixed nalgebra parameters ([`c615710`](https://github.com/jolars/basin/commit/c615710c42a0818ea50f59b41091d98da0098ec5))
+- support rectangular least squares with fixed-size nalgebra vectors ([`20f7d9a`](https://github.com/jolars/basin/commit/20f7d9accece1f02715d84500dbe945e8e2288d0))
+- support fixed-size nalgebra types in dense solvers ([`1072fb0`](https://github.com/jolars/basin/commit/1072fb051972c35a2a7139a077b43505974c7118))
+
+### Bug Fixes
+
+- expand rounded-away More-Thuente trials ([`6434dc7`](https://github.com/jolars/basin/commit/6434dc7d45cc969c841563de0d64e5eacabd9488))
+
+### Performance Improvements
+
+- reuse accepted line-search evaluations in BFGS ([`976ee06`](https://github.com/jolars/basin/commit/976ee062fe1507ebed951c4c07556e7a8ef5328c))
+- keep fixed-size nalgebra Cholesky scratch inline ([`e27289a`](https://github.com/jolars/basin/commit/e27289a3f59ee35b145e7f39be1857b436dee7c8))
+- speed up nonlinear conjugate gradient ([`13fc45a`](https://github.com/jolars/basin/commit/13fc45a0cd71f806a20771fb5462862810a80a27))
+
 ## [3.4.0](https://github.com/jolars/basin/compare/v3.3.0...v3.4.0) (2026-11-19)
 
 ### Features
