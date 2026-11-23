@@ -1224,6 +1224,95 @@ macro_rules! nalgebra_checks {
             }
 
             #[test]
+            fn fixed_finite_difference_hessians() {
+                use basin::{CostFunction, Dogleg, Executor, FiniteDiff, Hessian, Jacobian,
+                    Method, MoreSorensen, Residual, TrustRegion};
+                use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+
+                struct Quadratic<const N: usize> {
+                    calls: AtomicUsize,
+                    fail: bool,
+                }
+
+                impl<const N: usize> CostFunction for Quadratic<N> {
+                    type Param = backend::SVector<f64, N>;
+                    type Output = f64;
+                    type Error = &'static str;
+
+                    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+                        self.calls.fetch_add(1, Relaxed);
+                        if self.fail && x[0] > 0.0 && x[1] > 0.0 {
+                            return Err("mixed probe");
+                        }
+                        Ok(x.norm_squared() + x.iter().sum::<f64>().powi(2))
+                    }
+                }
+
+                impl Residual for Quadratic<2> {
+                    type Param = backend::SVector<f64, 2>;
+                    type Output = backend::DVector<f64>;
+                    type Error = &'static str;
+
+                    fn residual(&self, x: &Self::Param) -> Result<Self::Output, Self::Error> {
+                        Ok(backend::DVector::from_vec(vec![x[0], x[1], x[0] + x[1]]))
+                    }
+                }
+
+                type Matrix = backend::SMatrix<f64, 2, 2>;
+                type DynamicRows = backend::OMatrix<f64, backend::Dyn, backend::Const<2>>;
+                let problem = || Quadratic::<2> { calls: AtomicUsize::new(0), fail: false };
+                let x = backend::SVector::<f64, 2>::new(1.0, -2.0);
+                let expected = Matrix::new(4.0, 2.0, 2.0, 4.0);
+                for (method, probes) in [(Method::Forward, 6), (Method::Central, 9)] {
+                    let default = FiniteDiff::new(problem()).hessian_method(method).with_step(0.125);
+                    let square = FiniteDiff::new(problem()).hessian_method(method).with_step(0.125)
+                        .with_square_hessian();
+                    let old: DynamicRows = default.hessian(&x).unwrap();
+                    let actual: Matrix = square.hessian(&x).unwrap();
+                    assert_eq!(actual, expected);
+                    assert_eq!(actual.as_slice(), old.as_slice());
+                    assert_eq!(square.get_ref().calls.swap(0, Relaxed), probes);
+                    let mut out = Matrix::repeat(f64::NAN);
+                    square.hessian_into(&x, &mut out).unwrap();
+                    assert_eq!(out, expected);
+                    assert_eq!(square.get_ref().calls.swap(0, Relaxed), probes);
+                    let (cost, mut grad, hessian) = square.cost_and_gradient_and_hessian(&x).unwrap();
+                    assert_eq!(hessian, expected);
+                    assert_eq!(square.get_ref().calls.swap(0, Relaxed), probes + 4);
+                    out.fill(f64::NAN);
+                    assert_eq!(square.cost_and_gradient_and_hessian_into(&x, &mut grad, &mut out).unwrap(), cost);
+                    assert_eq!(out, expected);
+                    assert_eq!(square.get_ref().calls.load(Relaxed), probes + 4);
+
+                    let jac: DynamicRows = square.jacobian(&x).unwrap();
+                    assert_eq!(jac.shape(), (3, 2));
+                    let failing = FiniteDiff::new(Quadratic { fail: true, ..problem() })
+                        .with_square_hessian().hessian_method(method);
+                    assert_eq!(failing.hessian_into(&backend::SVector::zeros(), &mut out), Err("mixed probe"));
+                    assert_eq!(out, expected);
+
+                    let empty = FiniteDiff::new(Quadratic::<0> { calls: AtomicUsize::new(0), fail: false })
+                        .with_square_hessian().hessian_method(method);
+                    let h: backend::SMatrix<f64, 0, 0> = empty.hessian(&backend::SVector::zeros()).unwrap();
+                    assert_eq!(h.shape(), (0, 0));
+                    assert_eq!(empty.get_ref().calls.load(Relaxed), 1);
+                }
+
+                macro_rules! solve {
+                    ($strategy:expr) => {
+                        let result = Executor::from_start(
+                            FiniteDiff::new(problem()).with_square_hessian(),
+                            TrustRegion::with_subproblem($strategy).with_evaluation_buffers(),
+                            x,
+                        ).max_iter(30).run().unwrap();
+                        assert!(result.cost() < 1e-12);
+                    };
+                }
+                solve!(Dogleg);
+                solve!(MoreSorensen::new());
+            }
+
+            #[test]
             fn fixed_rectangular_f32_fits() {
                 fixed_rectangular_fits!(fixed, 3, f32);
             }

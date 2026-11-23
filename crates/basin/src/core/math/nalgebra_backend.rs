@@ -178,6 +178,15 @@ impl<F: Scalar, const N: usize> super::DenseBackend<F> for SVector<F, N> {
     type Matrix = SMatrix<F, N, N>;
 }
 
+impl<F: Scalar, const N: usize> super::SquareMatrixFromFn<F>
+    for SMatrix<F, N, N>
+{
+    fn square_from_fn(n: usize, entry: impl FnMut(usize, usize) -> F) -> Self {
+        assert_eq!(n, N, "Hessian dimension must match the fixed matrix");
+        Self::from_fn(entry)
+    }
+}
+
 impl<F: Scalar, const N: usize> MatrixIdentity for SMatrix<F, N, N> {
     fn identity(n: usize) -> Self {
         assert_eq!(n, N, "identity dimension does not match the fixed matrix");

@@ -374,7 +374,7 @@ pub use linalg::{
     LinearSolveLstsq, LinearSolveSpd, MatTransposeVec, MatTransposeVecInto,
     MatVec, MatVecInto, MatrixFinite, MatrixFromDiagonal, MatrixIdentity,
     MatrixIndex, MatrixShape, MaxDiagonal, QrSolveError, RegularizedQrSolve,
-    ScaleRowsInPlace, SymmetricEigen, SymmetricEigenError,
+    ScaleRowsInPlace, SquareMatrixFromFn, SymmetricEigen, SymmetricEigenError,
 };
 pub use sample::{SampleStandardNormal, SampleUniformBox};
 

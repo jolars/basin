@@ -368,8 +368,8 @@ pub use crate::core::math::{
     MatrixFinite, MatrixFromDiagonal, MatrixIdentity, MatrixIndex, MatrixShape,
     MaxDiagonal, NegInPlace, NormInfinity, NormSquared, QrFactorization,
     QrSolveError, RegularizedQrSolve, SampleStandardNormal, SampleUniformBox,
-    Scalar, ScaleInPlace, ScaleRowsInPlace, ScaledAdd, SymmetricEigen,
-    SymmetricEigenError, VectorIndex, VectorLen,
+    Scalar, ScaleInPlace, ScaleRowsInPlace, ScaledAdd, SquareMatrixFromFn,
+    SymmetricEigen, SymmetricEigenError, VectorIndex, VectorLen,
 };
 pub use crate::core::numdiff::{
     BoundedFiniteDiff, DerivativeCheckError, DerivativeCheckReport,

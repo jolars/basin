@@ -390,11 +390,9 @@ least-squares tests already cover fixed parameter and residual lengths.
   Use `MatVecInto` for runtime-length forward products. Both in-place
   products support linear constraints. Tests cover analytic and numerical
   Jacobians across all supported nalgebra versions and precisions.
-- [ ] **Allow square fixed-size finite-difference Hessians.** `FiniteDiff`
-  currently uses the Jacobian's dynamic-row matrix type for Hessians.
-  That matrix works with Steihaug, while Dogleg and More–Sorensen need
-  square factorization capabilities. Add a way to request a square Hessian
-  while preserving the existing Jacobian output and constructor inference.
+- [x] **Allow square fixed-size finite-difference Hessians.**
+  `FiniteDiff::with_square_hessian` selects an `SMatrix` for fixed nalgebra
+  parameters while preserving the default Hessian and Jacobian types.
 - [ ] **Extend unbounded finite differences to `f32`.** `FiniteDiff` is
   currently `f64`-only. Reuse the scalar-generic first-derivative machinery
   from `BoundedFiniteDiff` where the stencil rules agree, and verify
@@ -823,6 +821,11 @@ desired backend features.
 Planned breaking changes. Preserve Basin 3.x APIs and defaults until the major
 release, and document the migration for each change.
 
+- [ ] **Make square finite-difference Hessians the default.** Have
+  `FiniteDiff::new` infer the square matrix from the parameter backend while
+  keeping Jacobian rows tied to the residual or constraint count. Document
+  the migration for callers that name or store the dynamic-row Hessian and
+  for custom backends that provide Hessian construction.
 - [ ] **Split Serde support from Postcard checkpoint files.** Make `serde`
   enable serialization traits so callers can choose their own codec. Add an
   opt-in `checkpoint-postcard` feature that enables `serde` and exposes the
