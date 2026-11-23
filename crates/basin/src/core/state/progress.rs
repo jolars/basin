@@ -244,6 +244,10 @@ impl<V, F: Scalar> PointState<V, F> {
         self.progress.replace(param, cost, ());
     }
 
+    pub(crate) fn set_current_cost(&mut self, cost: F) {
+        self.progress.evaluated = Some((cost, ()));
+    }
+
     pub(crate) fn replace_from(&mut self, param: &V, cost: F)
     where
         V: Clone,

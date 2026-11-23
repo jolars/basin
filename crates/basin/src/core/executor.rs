@@ -492,7 +492,14 @@ where
         if let Some(report) = &self.finished {
             return Ok(StepOutcome::Stopped(report.clone()));
         }
-        let starting_iter = self.state().iter();
+        self.step_active::<true>()
+    }
+
+    fn step_active<const RETAIN_REPORT: bool>(
+        &mut self,
+    ) -> Result<StepOutcome<S::Float>, So::Error> {
+        let notify = !self.checkpoints.is_empty() || !self.observers.is_empty();
+        let starting_iter = notify.then(|| self.state().iter());
         let outcome = if self
             .cancellation_token
             .as_ref()
@@ -514,6 +521,9 @@ where
         };
         match &outcome {
             StepOutcome::Continue => {
+                let Some(starting_iter) = starting_iter else {
+                    return Ok(outcome);
+                };
                 let state = self
                     .state
                     .as_ref()
@@ -542,7 +552,12 @@ where
                 }
             }
             StepOutcome::Stopped(reason) => {
-                self.finished = Some(reason.clone());
+                if RETAIN_REPORT {
+                    self.finished = Some(reason.clone());
+                }
+                if !notify {
+                    return Ok(outcome);
+                }
                 let state =
                     self.state.as_ref().expect("state slot is Some on Stopped");
                 for (checkpoint, _mode) in self.checkpoints.iter_mut() {
@@ -590,16 +605,23 @@ where
     pub fn run_to_end_with_solver(
         mut self,
     ) -> Result<OptimizationResultWithSolver<S, So>, So::Error> {
-        loop {
-            if let StepOutcome::Stopped(reason) = self.step()? {
-                return Ok(OptimizationResultWithSolver::new(
-                    self.state.take().expect("state slot is Some on stop"),
-                    self.solver,
-                    *self.problem.counts(),
-                    reason,
-                ));
+        let reason = if let Some(reason) = self.finished.take() {
+            reason
+        } else {
+            loop {
+                if let StepOutcome::Stopped(reason) =
+                    self.step_active::<false>()?
+                {
+                    break reason;
+                }
             }
-        }
+        };
+        Ok(OptimizationResultWithSolver::new(
+            self.state.take().expect("state slot is Some on stop"),
+            self.solver,
+            *self.problem.counts(),
+            reason,
+        ))
     }
 
     /// Consume the stepper into a checkpoint at its current boundary.
@@ -692,7 +714,9 @@ where
 {
     let state = state_slot.as_ref().expect("cannot step after a hard error");
     if let Some(termination) = control
-        .check(state, &problem.counts().delta_since(baseline))
+        .check(state, {
+            problem.counts().gradient_evals - baseline.gradient_evals
+        })
         .or_else(|| solver.check_convergence(problem, state))
     {
         return Ok(StepOutcome::Stopped(TerminationReport::new(

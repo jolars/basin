@@ -827,6 +827,18 @@ release, and document the migration for each change.
   Audit how composed solvers handle inner runs without an incumbent, and
   review the `State` trait's incumbent readers separately before removing
   them.
+- [ ] **Prototype in-place executor state.** Benchmark the small
+  Levenberg–Marquardt and unbounded L-BFGS workloads from
+  [#140](https://github.com/jolars/basin/issues/140). Compare the current driver
+  with a prototype that keeps state in the executor and passes `&mut S` to
+  `Solver::next_iter`, which returns only the step outcome. On callback error,
+  invalidate the run so callers cannot observe or checkpoint partial progress.
+  Verify publication, evaluation counts, and stopping evidence with a
+  standalone solver, a composed solver, and exact checkpoint resumption.
+  Preserve incumbent counts and LM's numerical safeguards. Adopt the breaking
+  signature only if the prototype measurably reduces small-solve overhead
+  and simplifies the driver. If revisiting the stepping API, consider
+  borrowing the stop report from `step()` and moving it into the final result.
 - [ ] **Make square finite-difference Hessians the default.** Have
   `FiniteDiff::new` infer the square matrix from the parameter backend while
   keeping Jacobian rows tied to the residual or constraint count. Document

@@ -22,7 +22,8 @@ mod tests;
 type Stop<S> = Box<dyn FnMut(&S) -> Option<Termination<<S as State>::Float>>>;
 
 struct RawBudgets<S> {
-    limits: [Option<u64>; 7],
+    limits: [u64; EvaluationKind::ALL.len()],
+    configured: u8,
     counts: fn(&S) -> &EvalCounts,
 }
 
@@ -218,10 +219,12 @@ impl<S: State> RunControl<S> {
         S: RawEvaluationState,
     {
         let raw = self.raw.get_or_insert(RawBudgets {
-            limits: [None; 7],
+            limits: [0; EvaluationKind::ALL.len()],
+            configured: 0,
             counts: S::raw_counts,
         });
-        raw.limits[kind as usize] = Some(limit);
+        raw.limits[kind as usize] = limit;
+        raw.configured |= 1 << kind as usize;
         self
     }
 
@@ -383,7 +386,7 @@ impl<S: State> RunControl<S> {
     pub(crate) fn check(
         &mut self,
         state: &S,
-        counts: &EvalCounts,
+        gradient_evals: u64,
     ) -> Option<Termination<<S as State>::Float>>
     where
         S: State,
@@ -403,21 +406,27 @@ impl<S: State> RunControl<S> {
                 limit,
             });
         }
-        if let Some(limit) =
-            self.limits.gradient.filter(|&n| counts.gradient_evals >= n)
+        if let Some(limit) = self
+            .limits
+            .gradient
+            .filter(|&limit| gradient_evals >= limit)
         {
             limits.push(ExecutionLimit::GradientEvaluations {
-                observed: counts.gradient_evals,
+                observed: gradient_evals,
                 limit,
             });
         }
         if let Some(raw) = &self.raw {
             let counts = (raw.counts)(state);
-            for kind in EvaluationKind::ALL {
+            // Visit configured budgets in evaluation-kind order.
+            let mut configured = raw.configured;
+            while configured != 0 {
+                let index = configured.trailing_zeros() as usize;
+                configured &= configured - 1;
+                let kind = EvaluationKind::ALL[index];
                 let observed = kind.count(counts);
-                if let Some(limit) =
-                    raw.limits[kind as usize].filter(|&limit| observed >= limit)
-                {
+                let limit = raw.limits[index];
+                if observed >= limit {
                     limits.push(ExecutionLimit::Evaluations {
                         kind,
                         observed,

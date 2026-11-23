@@ -1,6 +1,4 @@
-use crate::core::math::{
-    ComponentZip, NormInfinity, NormSquared, Scalar, ScaleInPlace,
-};
+use crate::core::math::{ComponentZip, NormInfinity, Scalar};
 
 pub(super) fn guarded_progress<F: Scalar>(
     progress: crate::Termination<F>,
@@ -110,11 +108,7 @@ pub(super) fn orthogonality_converged<V, F, R>(
 where
     F: Scalar,
     V: NormInfinity<F> + ComponentZip<F>,
-    R: Clone
-        + NormInfinity<F>
-        + NormSquared<F>
-        + ScaleInPlace<F>
-        + ComponentZip<F>,
+    R: NormInfinity<F> + ComponentZip<F>,
 {
     let gradient = g.norm_infinity();
     let Some((rscale, rnorm)) = norm_parts(r) else {
@@ -183,7 +177,7 @@ where
 pub(super) fn relative_step_converged<V, F>(h: &V, x: &V, tol: F) -> bool
 where
     F: Scalar,
-    V: Clone + NormInfinity<F> + NormSquared<F> + ScaleInPlace<F>,
+    V: NormInfinity<F> + ComponentZip<F>,
 {
     let (Some((hscale, hnorm)), Some((xscale, xnorm))) =
         (norm_parts(h), norm_parts(x))
@@ -271,26 +265,37 @@ where
 fn norm_parts<V, F>(v: &V) -> Option<(F, F)>
 where
     F: Scalar,
-    V: Clone + NormInfinity<F> + NormSquared<F> + ScaleInPlace<F>,
+    V: NormInfinity<F> + ComponentZip<F>,
 {
     let scale = v.norm_infinity();
     if !scale.is_finite() {
         return None;
     }
     if scale == F::zero() {
-        return Some((F::zero(), F::zero()));
+        return all_finite(v).then_some((scale, F::zero()));
     }
-    let mut normalized = v.clone();
     let reciprocal = F::one() / scale;
-    if reciprocal.is_finite() {
-        normalized.scale_in_place(reciprocal);
+    // The reciprocal of a subnormal scale may overflow. Scaling twice
+    // by the reciprocal square root keeps every intermediate finite.
+    let twice = !reciprocal.is_finite();
+    let factor = if twice {
+        F::one() / scale.sqrt()
     } else {
-        // The reciprocal of a subnormal scale may not fit, but these factors do.
-        let factor = F::one() / scale.sqrt();
-        normalized.scale_in_place(factor);
-        normalized.scale_in_place(factor);
-    }
-    Some((scale, normalized.norm_squared().sqrt()))
+        reciprocal
+    };
+    let mut sum = F::zero();
+    let finite = v.all_zip(v, |value, _| {
+        if !value.is_finite() {
+            return false;
+        }
+        let mut scaled = value * factor;
+        if twice {
+            scaled = scaled * factor;
+        }
+        sum = sum + scaled * scaled;
+        true
+    });
+    finite.then(|| (scale, sum.sqrt()))
 }
 
 // Compare nonnegative finite products without overflowing or rounding a tiny
@@ -315,7 +320,7 @@ pub(super) fn step_evidence<V, F>(
 ) -> crate::ConvergenceEvidence<F>
 where
     F: Scalar,
-    V: Clone + NormInfinity<F> + NormSquared<F> + ScaleInPlace<F>,
+    V: NormInfinity<F> + ComponentZip<F>,
 {
     try_step_evidence(h, x, tolerance)
         .expect("a passing predicate has finite evidence")
@@ -328,7 +333,7 @@ pub(super) fn try_step_evidence<V, F>(
 ) -> Option<crate::ConvergenceEvidence<F>>
 where
     F: Scalar,
-    V: Clone + NormInfinity<F> + NormSquared<F> + ScaleInPlace<F>,
+    V: NormInfinity<F> + ComponentZip<F>,
 {
     let (hs, hn) = norm_parts(h)?;
     let (xs, xn) = norm_parts(x)?;
@@ -401,11 +406,7 @@ pub(super) fn orthogonality_evidence<V, F, R>(
 where
     F: Scalar,
     V: NormInfinity<F> + ComponentZip<F>,
-    R: Clone
-        + NormInfinity<F>
-        + NormSquared<F>
-        + ScaleInPlace<F>
-        + ComponentZip<F>,
+    R: NormInfinity<F> + ComponentZip<F>,
 {
     try_orthogonality_evidence(g, d, r, robust_cost, tolerance)
         .expect("a passing predicate has finite evidence")
@@ -421,11 +422,7 @@ pub(super) fn try_orthogonality_evidence<V, F, R>(
 where
     F: Scalar,
     V: NormInfinity<F> + ComponentZip<F>,
-    R: Clone
-        + NormInfinity<F>
-        + NormSquared<F>
-        + ScaleInPlace<F>
-        + ComponentZip<F>,
+    R: NormInfinity<F> + ComponentZip<F>,
 {
     let (scale, norm) = if let Some(cost) = robust_cost {
         if !cost.is_finite() || cost < F::zero() {

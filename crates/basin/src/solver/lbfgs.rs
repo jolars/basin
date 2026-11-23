@@ -1519,7 +1519,7 @@ where
 
         if dr > self.epsilon * ddum.abs() {
             // Build s = stp · d and y = g_new − g_old as V-typed
-            // vectors, then push. `append_pair` re-runs the s·y > 0
+            // vectors, then push. The history re-runs the s·y > 0
             // check as a final safeguard and refreshes `theta`.
             let mut s_v = d_v;
             {
@@ -1535,7 +1535,7 @@ where
                     y_slice[i] = g_new_slice[i] - y_slice[i];
                 }
             }
-            history.append_pair(s_v, y_v);
+            history.append_unbounded_pair(s_v, y_v);
         } else {
             history.direction_buffer = Some(d_v);
             history.gradient_buffer = Some(g_v);

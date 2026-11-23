@@ -771,8 +771,7 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
             residual,
             jacobian,
         )?;
-        state.replace(
-            state.param().clone(),
+        state.set_current_cost(
             problem.cost(&r, |r| F::from_f64(0.5).unwrap() * r.norm_squared()),
         );
         let Some((model_r, j)) = problem.model(&r, j) else {

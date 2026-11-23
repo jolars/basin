@@ -318,8 +318,8 @@ fn all_exhausted_budgets_are_reported_before_numerical_checks() {
         vec![1.],
     )
     .max_iter(0)
-    .max_evaluations(EvaluationKind::Cost, 1)
     .max_evaluations(EvaluationKind::Gradient, 0)
+    .max_evaluations(EvaluationKind::Cost, 1)
     .run()
     .unwrap();
     assert_eq!(

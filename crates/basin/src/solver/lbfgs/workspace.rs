@@ -189,6 +189,20 @@ impl<V, F: Scalar> History<V, F> {
     where
         V: Dot<F> + AsFloatSlice<F>,
     {
+        self.append::<true>(s, y)
+    }
+
+    pub(super) fn append_unbounded_pair(&mut self, s: V, y: V) -> bool
+    where
+        V: Dot<F> + AsFloatSlice<F>,
+    {
+        self.append::<false>(s, y)
+    }
+
+    fn append<const COMPACT: bool>(&mut self, s: V, y: V) -> bool
+    where
+        V: Dot<F> + AsFloatSlice<F>,
+    {
         let sy_dot = s.dot(&y);
         let yy_dot = y.dot(&y);
         if !(sy_dot > F::zero() && sy_dot.is_finite() && yy_dot.is_finite()) {
@@ -202,41 +216,45 @@ impl<V, F: Scalar> History<V, F> {
         if self.ws.len() == m {
             self.direction_buffer = Some(self.ws.remove(0));
             self.gradient_buffer = Some(self.wy.remove(0));
-            // Shift the leading `(m-1) × (m-1)` block of sy and ss
-            // up-and-left by one row+column. Use a forward sweep:
-            // each (i, j) only reads from (i+1, j+1) which we haven't
-            // written yet.
-            for i in 0..m - 1 {
-                for j in 0..m - 1 {
-                    self.sy[i * m + j] = self.sy[(i + 1) * m + (j + 1)];
-                    self.ss[i * m + j] = self.ss[(i + 1) * m + (j + 1)];
+            if COMPACT {
+                // Shift the live squares up and left. The forward sweep only
+                // reads from a row that has yet to be written.
+                for i in 0..m - 1 {
+                    for j in 0..m - 1 {
+                        self.sy[i * m + j] = self.sy[(i + 1) * m + j + 1];
+                        self.ss[i * m + j] = self.ss[(i + 1) * m + j + 1];
+                    }
                 }
-            }
-            // Zero the now-vacated last row and last column.
-            for i in 0..m {
-                self.sy[i * m + (m - 1)] = F::zero();
-                self.sy[(m - 1) * m + i] = F::zero();
-                self.ss[i * m + (m - 1)] = F::zero();
-                self.ss[(m - 1) * m + i] = F::zero();
+                for i in 0..m {
+                    self.sy[i * m + m - 1] = F::zero();
+                    self.sy[(m - 1) * m + i] = F::zero();
+                    self.ss[i * m + m - 1] = F::zero();
+                    self.ss[(m - 1) * m + i] = F::zero();
+                }
+            } else {
+                for i in 0..m - 1 {
+                    self.sy[i * (m + 1)] = self.sy[(i + 1) * (m + 1)];
+                }
             }
         }
 
-        // The compact form uses only the lower triangle of SᵀY, and
-        // the two-loop recursion uses only its diagonal. Computing the
-        // upper triangle would add an unused dot product per history pair.
         let new_idx = self.ws.len();
-        newest_products(
-            s.as_float_slice(),
-            &self.ws,
-            &self.wy,
-            &mut self.sy[new_idx * m..new_idx * m + new_idx],
-            &mut self.ss[new_idx * m..new_idx * m + new_idx],
-        );
-        for i in 0..new_idx {
-            self.ss[i * m + new_idx] = self.ss[new_idx * m + i];
+        if COMPACT {
+            newest_products(
+                s.as_float_slice(),
+                &self.ws,
+                &self.wy,
+                &mut self.sy[new_idx * m..new_idx * m + new_idx],
+                &mut self.ss[new_idx * m..new_idx * m + new_idx],
+            );
+            for i in 0..new_idx {
+                self.ss[i * m + new_idx] = self.ss[new_idx * m + i];
+            }
+            self.ss[new_idx * (m + 1)] = s.dot(&s);
         }
-        self.sy[new_idx * m + new_idx] = sy_dot;
-        self.ss[new_idx * m + new_idx] = s.dot(&s);
+        // The unbounded two-loop recursion only reads the SᵀY diagonal.
+        // Keep its indices so previously serialized histories still work.
+        self.sy[new_idx * (m + 1)] = sy_dot;
 
         self.theta = yy_dot / sy_dot;
 
@@ -255,6 +273,32 @@ impl<V, F: Scalar> History<V, F> {
 #[allow(clippy::identity_op, clippy::erasing_op)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unbounded_updates_preserve_the_compact_history_diagonal() {
+        for capacity in [1, 3] {
+            let mut compact = History::new(capacity);
+            let mut unbounded = History::new(capacity);
+            for step in 1..=2 * capacity + 1 {
+                let s = vec![step as f64, -1.0];
+                let y = vec![1.0, -(step as f64)];
+                assert!(compact.append_pair(s.clone(), y.clone()));
+                // Start from a populated compact layout, as in an older
+                // unbounded checkpoint.
+                if step <= capacity {
+                    assert!(unbounded.append_pair(s, y));
+                } else {
+                    assert!(unbounded.append_unbounded_pair(s, y));
+                }
+                assert_eq!(compact.theta, unbounded.theta);
+                assert_eq!(compact.ws, unbounded.ws);
+                assert_eq!(compact.wy, unbounded.wy);
+                for index in (0..compact.col()).map(|i| i * (capacity + 1)) {
+                    assert_eq!(compact.sy[index], unbounded.sy[index]);
+                }
+            }
+        }
+    }
 
     fn check_history_products<F: Scalar>(scales: &[F]) {
         for &scale in scales {
