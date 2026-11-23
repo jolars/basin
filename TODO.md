@@ -98,13 +98,12 @@ numerical work against analytic cases and reference implementations.
 
 ### Follow-up candidates
 
-- [ ] **Expand Moré–Thuente trials that round to the starting point.** When
-  the initial trial leaves the parameter unchanged in floating-point
-  arithmetic, try a larger step if the step bounds allow it. Preserve
-  bound and evaluation limits. Regress with BFGS on
-  `f(x) = 0.5 * 1e-19 * x^2` from `x = 1e12` with target `1e-8`.
-  The unit trial currently leaves the point unchanged and BFGS reports
-  cost convergence at `50000`.
+- [ ] **Expand Moré–Thuente trials that round to the starting point.** When the
+  initial trial leaves the parameter unchanged in floating-point arithmetic,
+  try a larger step if the step bounds allow it. Preserve bound and
+  evaluation limits. Regress with BFGS on `f(x) = 0.5 * 1e-19 * x^2` from
+  `x = 1e12` with target `1e-8`. The unit trial currently leaves the point
+  unchanged and BFGS reports cost convergence at `50000`.
 - [ ] **Reuse the accepted line-search evaluation in BFGS.** Consume the
   objective and gradient returned by `next_with_evaluation` when available.
   Keep the existing evaluation path for searches that return only a step.
@@ -372,52 +371,45 @@ production solvers.
 
 ### Fixed-size backends
 
-Follow up on `1072fb0` and `20f7d9a`. Small native `f64` probes with
-nalgebra 0.35 showed the largest end-to-end savings for BFGS and nonlinear CG,
-with smaller gains for Nelder–Mead and both LM routes. The rectangular
-least-squares tests already cover fixed parameter and residual lengths.
+Follow up on `1072fb0` and `20f7d9a`. Small native `f64` probes with nalgebra
+0.35 showed the largest end-to-end savings for BFGS and nonlinear CG, with
+smaller gains for Nelder–Mead and both LM routes. The rectangular least-squares
+tests already cover fixed parameter and residual lengths.
 
 - [x] **Keep fixed-size Cholesky scratch inline.** The `SMatrix` SPD solve
   factors an inline matrix copy and reuses an inline copy of the right-hand
   side for both triangular solves. It preserves the generic scalar bound,
-  lower-triangle semantics, and pivot test. Matched `f64` probes with nalgebra
-  0.35 measured zero allocation requests at dimensions 2, 6, and 16. Gauss–Newton,
-  normal-equation LM, bounded LM, Dogleg, and More–Sorensen converged with the
-  same parameters and evaluation counts on the fixed rectangular test problem.
+  lower-triangle semantics, and pivot test. Matched `f64` probes with
+  nalgebra 0.35 measured zero allocation requests at dimensions 2, 6, and 16.
+  Gauss–Newton, normal-equation LM, bounded LM, Dogleg, and More–Sorensen
+  converged with the same parameters and evaluation counts on the fixed
+  rectangular test problem.
 - [x] **Support runtime-length residuals with fixed nalgebra parameters.**
   Fixed-column Jacobians support transpose products and pivoted QR with
-  `DVector<F>` residuals, while parameters and Gram matrices stay fixed.
-  Use `MatVecInto` for runtime-length forward products. Both in-place
-  products support linear constraints. Tests cover analytic and numerical
-  Jacobians across all supported nalgebra versions and precisions.
+  `DVector<F>` residuals, while parameters and Gram matrices stay fixed. Use
+  `MatVecInto` for runtime-length forward products. Both in-place products
+  support linear constraints. Tests cover analytic and numerical Jacobians
+  across all supported nalgebra versions and precisions.
 - [x] **Allow square fixed-size finite-difference Hessians.**
   `FiniteDiff::with_square_hessian` selects an `SMatrix` for fixed nalgebra
   parameters while preserving the default Hessian and Jacobian types.
-- [x] **Extend unbounded finite differences to `f32`.** `FiniteDiff`
-  shares gradient evaluation and step-size calculations with
-  `BoundedFiniteDiff` where their stencils agree. Tests verify scalar
-  precision defaults, probe counts, and derivatives across the dense backends.
-- [ ] **Document and benchmark existing fixed-size solver paths.** Show a
-  small fixed-size problem through the normal executor API. Add matched
-  dynamic and fixed cases to the
-  [solver](crates/basin/benches/solver_backends.rs) and
-  [LM backend](crates/basin/benches/lm_backends.rs) benchmarks. Check
-  numerical results and evaluation counts, and measure allocations
-  separately from timings.
-- [ ] **Support native arrays in the vector math tier.** Implement the
-  vector traits for `[F; N]` and exercise vector-only solvers with
-  `f32` and `f64` without an optional linear algebra backend. Evaluate a
-  nested-array matrix companion when there is a dense-solve use case.
-  ndarray and faer can borrow inline buffers through views for kernels
-  that can use caller-owned storage. Their owned types use heap storage.
+- [x] **Extend unbounded finite differences to `f32`.** `FiniteDiff` shares
+  gradient evaluation and step-size calculations with `BoundedFiniteDiff`
+  where their stencils agree. Tests verify scalar precision defaults, probe
+  counts, and derivatives across the dense backends.
+- [ ] **Support native arrays in the vector math tier.** Implement the vector
+  traits for `[F; N]` and exercise vector-only solvers with `f32` and `f64`
+  without an optional linear algebra backend. Evaluate a nested-array matrix
+  companion when there is a dense-solve use case. ndarray and faer can
+  borrow inline buffers through views for kernels that can use caller-owned
+  storage. Their owned types use heap storage.
 - [ ] **Profile the remaining small dense solver workspaces.** Fixed-size
-  pivoted QR and symmetric eigen still use heap scratch, and
-  trust-region reflective builds a dynamic SVD workspace. Measure phase by
-  phase before changing storage. For CMA-ES, compare eigen kernels on
-  identical covariances because the eigensolver can change the seeded
-  trajectory. Profile internal work separately from parameter storage in
-  SLSQP and the Powell solvers, where active sets and model sizes can vary
-  at runtime.
+  pivoted QR and symmetric eigen still use heap scratch, and trust-region
+  reflective builds a dynamic SVD workspace. Measure phase by phase before
+  changing storage. For CMA-ES, compare eigen kernels on identical
+  covariances because the eigensolver can change the seeded trajectory.
+  Profile internal work separately from parameter storage in SLSQP and the
+  Powell solvers, where active sets and model sizes can vary at runtime.
 
 ### Finite-difference performance
 
