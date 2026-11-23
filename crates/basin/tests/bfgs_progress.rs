@@ -249,3 +249,94 @@ fn serialized_checkpoint_preserves_model_and_trajectory() {
         expected.solver.inverse_hessian()
     );
 }
+
+struct ScaledQuadratic;
+
+impl CostFunction for ScaledQuadratic {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Vec<f64>) -> Result<f64, Infallible> {
+        Ok(0.5 * 1e-19 * x[0] * x[0])
+    }
+}
+
+impl Gradient for ScaledQuadratic {
+    type Gradient = Vec<f64>;
+
+    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, Infallible> {
+        Ok(vec![1e-19 * x[0]])
+    }
+}
+
+#[test]
+fn more_thuente_expands_rounded_away_bfgs_step() {
+    use basin::{MoreThuente, TerminationCode};
+
+    let target = 1e-8;
+    let result = Executor::from_start(
+        ScaledQuadratic,
+        Bfgs::with_line_search(MoreThuente::new())
+            .with_absolute_cost_change_tolerance(target),
+        vec![1e12],
+    )
+    .max_iter(20)
+    .target_objective(target)
+    .run()
+    .unwrap();
+
+    assert_eq!(result.report.code(), TerminationCode::TargetCost);
+    assert!(result.cost() <= target);
+}
+
+#[test]
+fn more_thuente_rounded_trials_respect_step_and_evaluation_limits() {
+    use basin::line_search::more_thuente::diagnostics::SearchExit;
+    use basin::{LineSearch, LineSearchBounds, LineSearchOutcome, MoreThuente};
+
+    let x = vec![1e12];
+    let f = ScaledQuadratic.cost(&x).unwrap();
+    let g = ScaledQuadratic.gradient(&x).unwrap();
+    let d = vec![-g[0]];
+    for (cap, maxfev, evaluations, exit, step) in [
+        (1024.0, 1, 1, SearchExit::Warning, 1024.0),
+        (512.0, 1, 0, SearchExit::Warning, 0.0),
+        (1024.0, 0, 0, SearchExit::Exhausted, 0.0),
+    ] {
+        for configured_cap in [false, true] {
+            let mut p = basin::Problem::new(ScaledQuadratic);
+            let mut search = MoreThuente::new()
+                .stpmax(if configured_cap { cap } else { 1e10 })
+                .maxfev(maxfev)
+                .with_trial_diagnostics(true);
+            let result = search
+                .next_with_bounds(
+                    &mut p,
+                    &x,
+                    f,
+                    &g,
+                    &d,
+                    LineSearchBounds::new(
+                        1.0,
+                        if configured_cap { 1e10 } else { cap },
+                    ),
+                )
+                .unwrap();
+
+            assert_eq!(result.outcome, LineSearchOutcome::Step(step));
+            assert_eq!(search.search_exit(), Some(exit));
+            assert_eq!(search.selected_step(), Some(step));
+            assert_eq!(p.counts().cost_evals, evaluations);
+            assert_eq!(p.counts().gradient_evals, evaluations);
+            assert_eq!(search.trial_observations().len() as u64, evaluations);
+            if let Some(evaluation) = result.evaluation {
+                assert_eq!(evaluations, 1);
+                assert_ne!(evaluation.param, x);
+                assert_eq!(search.trial_observations()[0].step, cap);
+            } else {
+                assert_eq!(evaluations, 0);
+            }
+        }
+    }
+}

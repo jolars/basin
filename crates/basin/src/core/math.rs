@@ -79,6 +79,17 @@ impl<F> Scalar for F where
 pub trait ScaledAdd<S = f64> {
     /// Add `scalar · other` into `self` in place.
     fn scaled_add(&mut self, scalar: S, other: &Self);
+
+    /// Apply the scaled addition and report whether any component changed.
+    /// Returns `None` when the backend does not track component changes.
+    fn scaled_add_with_change(
+        &mut self,
+        scalar: S,
+        other: &Self,
+    ) -> Option<bool> {
+        self.scaled_add(scalar, other);
+        None
+    }
 }
 
 /// Squared and unsquared Euclidean norms.

@@ -21,6 +21,20 @@ impl<F: Scalar, const N: usize> ScaledAdd<F> for [F; N] {
             *x = *x + scalar * *y;
         }
     }
+
+    fn scaled_add_with_change(
+        &mut self,
+        scalar: F,
+        other: &Self,
+    ) -> Option<bool> {
+        let mut changed = false;
+        for (x, y) in self.iter_mut().zip(other.iter()) {
+            let next = *x + scalar * *y;
+            changed |= next != *x;
+            *x = next;
+        }
+        Some(changed)
+    }
 }
 
 impl<F: Scalar, const N: usize> NormSquared<F> for [F; N] {

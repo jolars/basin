@@ -8,7 +8,7 @@ use crate::{EvalCounts, Scalar};
 pub enum SearchExit {
     /// Both native Wolfe comparisons passed.
     Wolfe,
-    /// One or more warning comparisons passed.
+    /// A native warning fired or the step bounds prevented any parameter movement.
     Warning,
     /// The evaluation loop exhausted its configured cap.
     Exhausted,

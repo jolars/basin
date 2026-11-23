@@ -13,6 +13,17 @@ impl ScaledAdd for f64 {
     fn scaled_add(&mut self, scalar: f64, other: &Self) {
         *self += scalar * other;
     }
+
+    fn scaled_add_with_change(
+        &mut self,
+        scalar: f64,
+        other: &Self,
+    ) -> Option<bool> {
+        let next = *self + scalar * other;
+        let changed = next != *self;
+        *self = next;
+        Some(changed)
+    }
 }
 
 impl NormSquared for f64 {

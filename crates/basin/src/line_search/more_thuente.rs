@@ -75,7 +75,9 @@ pub struct MoreThuente<F = f64> {
     /// `xtol`-warning if the bracket has collapsed to relative size
     /// `≤ xtol`. Default `0.1` (Fortran `lnsrlb` constant).
     pub xtol: F,
-    /// Initial trial step. Default `1.0` (the quasi-Newton unit step).
+    /// Initial trial step. The search grows it within the step bounds if
+    /// the backend detects that the update leaves the parameter unchanged.
+    /// Default `1.0` (the quasi-Newton unit step).
     pub alpha_init: F,
     /// Hard lower bound on the step. Default `0.0`.
     pub stpmin: F,
@@ -237,6 +239,27 @@ impl<F: Scalar> MoreThuente<F> {
             return Ok(LineSearchResult::new(LineSearchOutcome::Step(zero)));
         }
 
+        if self.maxfev == 0 {
+            trace.record_exit(SearchExit::Exhausted, Some(zero));
+            return Ok(LineSearchResult::new(LineSearchOutcome::Step(zero)));
+        }
+
+        // Skip steps that round to the starting point before evaluating.
+        let mut stp = self.alpha_init;
+        let mut trial = param.clone();
+        let expansion_limit = self.stpmax.min(F::max_value());
+        while trial.scaled_add_with_change(stp, direction) == Some(false) {
+            let expanded = (stp + stp).min(expansion_limit);
+            if expanded <= stp {
+                trace.record_exit(SearchExit::Warning, Some(zero));
+                return Ok(LineSearchResult::new(LineSearchOutcome::Step(
+                    zero,
+                )));
+            }
+            stp = expanded;
+            trial.clone_from(param);
+        }
+
         // Initialization (Fortran lines 3514–3541).
         let mut brackt = false;
         let mut stage: u8 = 1;
@@ -251,18 +274,15 @@ impl<F: Scalar> MoreThuente<F> {
         let mut fy = finit;
         let mut gy = ginit;
         let mut stmin = zero;
-        let mut stmax = self.alpha_init + xtrapu * self.alpha_init;
-
-        let mut stp = self.alpha_init;
+        let mut stmax = stp + xtrapu * stp;
 
         let mut gradient_buffer = None;
-        let mut trial = param.clone();
         for iteration in 0..self.maxfev {
             // Evaluate f(stp), g(stp): Fortran `task = 'FG'` callback.
             if iteration > 0 {
                 trial.clone_from(param);
+                trial.scaled_add(stp, direction);
             }
-            trial.scaled_add(stp, direction);
             let counts_before = *problem.counts();
             let result = problem
                 .cost_and_gradient_reusing(&trial, gradient_buffer.take());

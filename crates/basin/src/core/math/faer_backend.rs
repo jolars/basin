@@ -35,6 +35,23 @@ impl<F: Scalar> ScaledAdd<F> for Col<F> {
         faer::zip!(self.as_mut(), other.as_ref())
             .for_each(|faer::unzip!(x, y)| *x = *x + scalar * *y);
     }
+
+    fn scaled_add_with_change(
+        &mut self,
+        scalar: F,
+        other: &Self,
+    ) -> Option<bool> {
+        let mut changed = false;
+        assert_eq!(self.nrows(), other.nrows(), "scaled_add: shape mismatch");
+        faer::zip!(self.as_mut(), other.as_ref()).for_each(
+            |faer::unzip!(x, y)| {
+                let next = *x + scalar * *y;
+                changed |= next != *x;
+                *x = next;
+            },
+        );
+        Some(changed)
+    }
 }
 
 impl<F: Scalar> NormSquared<F> for Col<F> {

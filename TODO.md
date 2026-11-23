@@ -98,12 +98,10 @@ numerical work against analytic cases and reference implementations.
 
 ### Follow-up candidates
 
-- [ ] **Expand Moré–Thuente trials that round to the starting point.** When the
-  initial trial leaves the parameter unchanged in floating-point arithmetic,
-  try a larger step if the step bounds allow it. Preserve bound and
-  evaluation limits. Regress with BFGS on `f(x) = 0.5 * 1e-19 * x^2` from
-  `x = 1e12` with target `1e-8`. The unit trial currently leaves the point
-  unchanged and BFGS reports cost convergence at `50000`.
+- [x] **Expand Moré–Thuente trials that round to the starting point.** The line
+  search grows the initial step within both step bounds and skips callbacks
+  for trials that leave the parameter unchanged. BFGS now reaches the
+  `1e-8` objective target on `f(x) = 0.5 * 1e-19 * x^2` from `x = 1e12`.
 - [ ] **Reuse the accepted line-search evaluation in BFGS.** Consume the
   objective and gradient returned by `next_with_evaluation` when available.
   Keep the existing evaluation path for searches that return only a step.

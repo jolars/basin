@@ -30,6 +30,21 @@ where
         assert_eq!(self.shape(), other.shape(), "scaled_add: shape mismatch");
         self.zip_mut_with(other, |x, y| *x = *x + scalar * *y);
     }
+
+    fn scaled_add_with_change(
+        &mut self,
+        scalar: F,
+        other: &Self,
+    ) -> Option<bool> {
+        let mut changed = false;
+        assert_eq!(self.shape(), other.shape(), "scaled_add: shape mismatch");
+        self.zip_mut_with(other, |x, y| {
+            let next = *x + scalar * *y;
+            changed |= next != *x;
+            *x = next;
+        });
+        Some(changed)
+    }
 }
 
 impl<F, S, D> NormSquared<F> for ArrayBase<S, D>

@@ -42,6 +42,21 @@ where
         assert_eq!(self.shape(), other.shape(), "scaled_add: shape mismatch");
         self.zip_apply(other, |x, y| *x = *x + scalar * y);
     }
+
+    fn scaled_add_with_change(
+        &mut self,
+        scalar: F,
+        other: &Self,
+    ) -> Option<bool> {
+        let mut changed = false;
+        assert_eq!(self.shape(), other.shape(), "scaled_add: shape mismatch");
+        self.zip_apply(other, |x, y| {
+            let next = *x + scalar * y;
+            changed |= next != *x;
+            *x = next;
+        });
+        Some(changed)
+    }
 }
 
 impl<F, R, C, S> NormSquared<F> for Matrix<F, R, C, S>

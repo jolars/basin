@@ -22,6 +22,21 @@ impl<F: Scalar> ScaledAdd<F> for Vec<F> {
             *x = *x + scalar * *y;
         }
     }
+
+    fn scaled_add_with_change(
+        &mut self,
+        scalar: F,
+        other: &Self,
+    ) -> Option<bool> {
+        let mut changed = false;
+        assert_eq!(self.len(), other.len(), "scaled_add: length mismatch");
+        for (x, y) in self.iter_mut().zip(other.iter()) {
+            let next = *x + scalar * *y;
+            changed |= next != *x;
+            *x = next;
+        }
+        Some(changed)
+    }
 }
 
 impl<F: Scalar> NormSquared<F> for Vec<F> {
