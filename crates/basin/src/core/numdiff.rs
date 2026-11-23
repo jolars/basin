@@ -28,8 +28,8 @@
 //! - **Gradient** and **Hessian** use Numerical-Recipes-style adaptive
 //!   steps `hⱼ = scale · max(|xⱼ|, 1)`, with `scale = eps_f^{1/3}` (central
 //!   gradient), `eps_f^{1/2}` (forward gradient), or `eps_f^{1/4}` (Hessian),
-//!   where `eps_f = function_precision.max(f64::EPSILON)` is the assumed
-//!   relative accuracy of the function. The step is re-rounded so `xⱼ + hⱼ`
+//!   where `eps_f = function_precision.max(F::epsilon())` is the assumed
+//!   relative accuracy of the function, with `F` the scalar type. The step is re-rounded so `xⱼ + hⱼ`
 //!   is exactly representable.
 //! - **Forward Jacobian** reproduces MINPACK `fdjac2` exactly:
 //!   `eps = sqrt(eps_f)`, `hⱼ = eps · |xⱼ|`, and `hⱼ = eps` when `xⱼ = 0`.
@@ -57,7 +57,7 @@
 //!   function's [`Error`](CostFunction::Error). If the inner `cost` /
 //!   `residual` returns `Err`, the derivative call returns the same `Err`:
 //!   no swallowing, no partial result. A point where the inner function
-//!   *soft-rejects* (`Ok(f64::INFINITY)`) poisons the derivative with `±∞`
+//!   *soft-rejects* (returning positive infinity) poisons the derivative with `±∞`
 //!   rather than aborting; keeping probes inside the strict domain
 //!   is the caller's responsibility. Use [`FiniteDiff::with_bounds`] or
 //!   [`BoundedFiniteDiff`] for gradients and Jacobians that respect box bounds.
@@ -104,11 +104,22 @@ pub enum Method {
     Central,
 }
 
+impl Method {
+    fn first_derivative_scale<F: Scalar>(self, precision: F) -> F {
+        let precision = precision.max(F::epsilon());
+        match self {
+            Self::Forward => precision.sqrt(),
+            Self::Central => precision.cbrt(),
+        }
+    }
+}
+
 /// Wraps a problem to synthesize its derivatives by finite differences.
 ///
-/// Construct with [`FiniteDiff::new`] (central gradient and Hessian, forward
-/// Jacobian; see the [module docs](self)) and adjust with the builder
-/// methods. The wrapper delegates [`CostFunction`]/[`Residual`] /
+/// Construct with [`FiniteDiff::new`] for `f64` or use
+/// `FiniteDiff::<_, false, f32>::new_with_scalar(problem)` for `f32`.
+/// The default stencils are central for gradients and Hessians and
+/// forward for Jacobians. See the [module docs](self) for step rules. The wrapper delegates [`CostFunction`]/[`Residual`] /
 /// all constraint traits to the inner problem and implements [`Gradient`],
 /// [`Jacobian`], [`crate::ConstraintJacobian`], and [`Hessian`] via finite differences.
 ///
@@ -117,14 +128,14 @@ pub enum Method {
 /// [`Gradient`] and [`HessianProduct`] are backend-generic (any `V: Clone +
 /// VectorLen + VectorIndex`; no matrix type is involved). [`Jacobian`] and
 /// the default [`Hessian`] additionally require `V: DenseMatrixFromFn`, so they are
-/// available for `Vec<f64>`/`DenseMatrix`, nalgebra `DVector<f64>`/`DMatrix`,
-/// ndarray `Array1<f64>`/`Array2`, and faer `Col<f64>`/`Mat`. Nalgebra
-/// `SVector<f64, N>` parameters use `OMatrix<f64, Dyn, Const<N>>` and may
-/// be paired with `SVector<f64, M>` or `DVector<f64>` residuals. The Jacobian row count comes
-/// from the residual length. Use [`FiniteDiff::with_square_hessian`] for a
+/// available for `Vec<F>`/`DenseMatrix`, nalgebra `DVector<F>`/`DMatrix`,
+/// ndarray `Array1<F>`/`Array2`, and faer `Col<F>`/`Mat` with `F` equal
+/// to `f32` or `f64`. Nalgebra `SVector<F, N>` parameters use
+/// `OMatrix<F, Dyn, Const<N>>` and may be paired with `SVector<F, M>` or
+/// `DVector<F>` residuals. The Jacobian row count comes from the residual length. Use [`FiniteDiff::with_square_hessian`] for a
 /// square fixed-size Hessian.
 /// [`crate::ConstraintJacobian`] uses the parameter backend's dense matrix,
-/// independently of the linear block matrices. Use [`BoundedFiniteDiff`] for `f32` first derivatives.
+/// independently of the linear block matrices.
 ///
 /// # Solver stopping tolerances
 ///
@@ -170,13 +181,13 @@ pub enum Method {
 /// assert!(result.cost() < 1e-10);
 /// ```
 #[derive(Debug, Clone, Copy)]
-pub struct FiniteDiff<P, const SQUARE: bool = false> {
+pub struct FiniteDiff<P, const SQUARE: bool = false, F: Scalar = f64> {
     problem: P,
     gradient_method: Method,
     jacobian_method: Method,
     hessian_method: Method,
-    function_precision: f64,
-    fixed_step: Option<f64>,
+    function_precision: F,
+    fixed_step: Option<F>,
 }
 
 impl<P> FiniteDiff<P> {
@@ -184,20 +195,27 @@ impl<P> FiniteDiff<P> {
     /// and Hessian, forward-difference (MINPACK `fdjac2`) Jacobian,
     /// `function_precision = f64::EPSILON`, adaptive step sizes.
     pub fn new(problem: P) -> Self {
+        Self::new_with_scalar(problem)
+    }
+}
+
+impl<P, F: Scalar> FiniteDiff<P, false, F> {
+    /// Wrap a problem with the default stencils and machine epsilon for `F`.
+    pub fn new_with_scalar(problem: P) -> Self {
         Self {
             problem,
             gradient_method: Method::Central,
             jacobian_method: Method::Forward,
             hessian_method: Method::Central,
-            function_precision: f64::EPSILON,
+            function_precision: F::epsilon(),
             fixed_step: None,
         }
     }
 
     /// Use the parameter backend's square matrix for the Hessian.
     ///
-    /// For nalgebra `SVector<f64, N>`, the Hessian is an
-    /// `SMatrix<f64, N, N>`, suitable for [`crate::Dogleg`] and
+    /// For nalgebra `SVector<F, N>`, the Hessian is an
+    /// `SMatrix<F, N, N>`, suitable for [`crate::Dogleg`] and
     /// [`crate::MoreSorensen`]. Jacobian types are independent of this option.
     ///
     /// ```
@@ -223,10 +241,10 @@ impl<P> FiniteDiff<P> {
     /// assert!(result.cost() < 1e-12);
     /// # }
     /// ```
-    pub fn with_square_hessian(self) -> FiniteDiff<P, true>
+    pub fn with_square_hessian(self) -> FiniteDiff<P, true, F>
     where
-        P: CostFunction<Output = f64>,
-        P::Param: DenseBackend<Matrix: SquareMatrixFromFn>,
+        P: CostFunction<Output = F>,
+        P::Param: DenseBackend<F, Matrix: SquareMatrixFromFn<F>>,
     {
         FiniteDiff {
             problem: self.problem,
@@ -239,7 +257,7 @@ impl<P> FiniteDiff<P> {
     }
 }
 
-impl<P, const SQUARE: bool> FiniteDiff<P, SQUARE> {
+impl<P, const SQUARE: bool, F: Scalar> FiniteDiff<P, SQUARE, F> {
     /// Set the stencil used for the gradient (default [`Method::Central`]).
     pub fn gradient_method(mut self, method: Method) -> Self {
         self.gradient_method = method;
@@ -261,8 +279,9 @@ impl<P, const SQUARE: bool> FiniteDiff<P, SQUARE> {
 
     /// Set the assumed relative accuracy of the wrapped function (MINPACK's
     /// `epsfcn`). Larger values widen the step, which helps when the
-    /// function is noisy. Floored at `f64::EPSILON`. Default `f64::EPSILON`.
-    pub fn function_precision(mut self, epsfcn: f64) -> Self {
+    /// function is noisy. Defaults to the machine epsilon of `F`, which also
+    /// serves as the lower bound.
+    pub fn function_precision(mut self, epsfcn: F) -> Self {
         self.function_precision = epsfcn;
         self
     }
@@ -270,7 +289,7 @@ impl<P, const SQUARE: bool> FiniteDiff<P, SQUARE> {
     /// Override the adaptive step rule with a fixed absolute step `h` used
     /// for *every* coordinate. Escape hatch; most callers should leave the
     /// adaptive `|xⱼ|`-scaled rule in place.
-    pub fn with_step(mut self, h: f64) -> Self {
+    pub fn with_step(mut self, h: F) -> Self {
         self.fixed_step = Some(h);
         self
     }
@@ -288,8 +307,8 @@ impl<P, const SQUARE: bool> FiniteDiff<P, SQUARE> {
 
 // Delegated function-value traits.
 
-impl<P: CostFunction, const SQUARE: bool> CostFunction
-    for FiniteDiff<P, SQUARE>
+impl<P: CostFunction, const SQUARE: bool, F: Scalar> CostFunction
+    for FiniteDiff<P, SQUARE, F>
 {
     type Param = P::Param;
     type Output = P::Output;
@@ -299,7 +318,9 @@ impl<P: CostFunction, const SQUARE: bool> CostFunction
     }
 }
 
-impl<P: Residual, const SQUARE: bool> Residual for FiniteDiff<P, SQUARE> {
+impl<P: Residual, const SQUARE: bool, F: Scalar> Residual
+    for FiniteDiff<P, SQUARE, F>
+{
     type Param = P::Param;
     type Output = P::Output;
     type Error = P::Error;
@@ -325,28 +346,18 @@ impl<P: Residual, const SQUARE: bool> Residual for FiniteDiff<P, SQUARE> {
 
 // Synthesized derivative traits.
 
-impl<P, V, const SQUARE: bool> Gradient for FiniteDiff<P, SQUARE>
+impl<P, V, const SQUARE: bool, F: Scalar + MaybeSend + MaybeSync> Gradient
+    for FiniteDiff<P, SQUARE, F>
 where
-    P: CostFunction<Param = V, Output = f64> + MaybeSync,
-    V: Clone + VectorLen + VectorIndex + MaybeSync,
+    P: CostFunction<Param = V, Output = F> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
     <P as CostFunction>::Error: MaybeSend,
 {
     type Gradient = V;
     fn gradient(&self, param: &V) -> Result<V, P::Error> {
-        match self.gradient_method {
-            Method::Forward => forward_difference_gradient(
-                &self.problem,
-                param,
-                self.function_precision,
-                self.fixed_step,
-            ),
-            Method::Central => central_difference_gradient(
-                &self.problem,
-                param,
-                self.function_precision,
-                self.fixed_step,
-            ),
-        }
+        let mut out = param.clone();
+        self.gradient_into(param, &mut out)?;
+        Ok(out)
     }
     fn gradient_into(&self, param: &V, out: &mut V) -> Result<(), P::Error> {
         match self.gradient_method {
@@ -367,7 +378,7 @@ where
         }
     }
 
-    fn cost_and_gradient(&self, param: &V) -> Result<(f64, V), P::Error> {
+    fn cost_and_gradient(&self, param: &V) -> Result<(F, V), P::Error> {
         let mut grad = param.clone();
         let cost = self.cost_and_gradient_into(param, &mut grad)?;
         Ok((cost, grad))
@@ -377,7 +388,7 @@ where
         &self,
         param: &V,
         grad: &mut V,
-    ) -> Result<f64, P::Error> {
+    ) -> Result<F, P::Error> {
         let cost = self.cost(param)?;
         match self.gradient_method {
             Method::Forward => forward_difference_gradient_with_base_into(
@@ -394,34 +405,25 @@ where
     }
 }
 
-impl<P, V, const SQUARE: bool> Jacobian for FiniteDiff<P, SQUARE>
+impl<P, V, const SQUARE: bool, F: Scalar + MaybeSend + MaybeSync> Jacobian
+    for FiniteDiff<P, SQUARE, F>
 where
     P: Residual<Param = V> + MaybeSync,
     V: Clone
         + VectorLen
-        + VectorIndex
-        + DenseMatrixFromFn
+        + VectorIndex<F>
+        + DenseMatrixFromFn<F>
         + MaybeSync
         + MaybeSend,
-    P::Output: Clone + VectorLen + VectorIndex + MaybeSync + MaybeSend,
+    P::Output: Clone + VectorLen + VectorIndex<F> + MaybeSync + MaybeSend,
     P::Error: MaybeSend,
 {
-    type Jacobian = <V as DenseMatrixFromFn>::Matrix;
+    type Jacobian = <V as DenseMatrixFromFn<F>>::Matrix;
     fn jacobian(&self, param: &V) -> Result<Self::Jacobian, P::Error> {
-        match self.jacobian_method {
-            Method::Forward => forward_difference_jacobian(
-                &self.problem,
-                param,
-                self.function_precision,
-                self.fixed_step,
-            ),
-            Method::Central => central_difference_jacobian(
-                &self.problem,
-                param,
-                self.function_precision,
-                self.fixed_step,
-            ),
-        }
+        let mut out =
+            V::dense_from_fn(0, param.vec_len(), |_, _| unreachable!());
+        self.jacobian_into(param, &mut out)?;
+        Ok(out)
     }
     fn jacobian_into(
         &self,
@@ -469,16 +471,17 @@ where
     }
 }
 
-impl<P, V, const SQUARE: bool> FiniteDiff<P, SQUARE>
+impl<P, V, const SQUARE: bool, F: Scalar + MaybeSend + MaybeSync>
+    FiniteDiff<P, SQUARE, F>
 where
     P: Residual<Param = V> + MaybeSync,
     V: Clone
         + VectorLen
-        + VectorIndex
-        + DenseMatrixFromFn
+        + VectorIndex<F>
+        + DenseMatrixFromFn<F>
         + MaybeSync
         + MaybeSend,
-    P::Output: Clone + VectorLen + VectorIndex + MaybeSync + MaybeSend,
+    P::Output: Clone + VectorLen + VectorIndex<F> + MaybeSync + MaybeSend,
     P::Error: MaybeSend,
 {
     fn jacobian_with_base_into(
@@ -508,56 +511,59 @@ where
     }
 }
 
-trait HessianOutput<const SQUARE: bool> {
+trait HessianOutput<const SQUARE: bool, F: Scalar> {
     type Matrix;
 
-    fn build(n: usize, entry: impl FnMut(usize, usize) -> f64) -> Self::Matrix;
+    fn build(n: usize, entry: impl FnMut(usize, usize) -> F) -> Self::Matrix;
     fn fill(
         n: usize,
-        entry: impl FnMut(usize, usize) -> f64,
+        entry: impl FnMut(usize, usize) -> F,
         out: &mut Self::Matrix,
     );
 }
 
-impl<V: DenseMatrixFromFn> HessianOutput<false> for V {
+impl<F: Scalar, V: DenseMatrixFromFn<F>> HessianOutput<false, F> for V {
     type Matrix = V::Matrix;
 
-    fn build(n: usize, entry: impl FnMut(usize, usize) -> f64) -> Self::Matrix {
+    fn build(n: usize, entry: impl FnMut(usize, usize) -> F) -> Self::Matrix {
         V::dense_from_fn(n, n, entry)
     }
 
     fn fill(
         n: usize,
-        entry: impl FnMut(usize, usize) -> f64,
+        entry: impl FnMut(usize, usize) -> F,
         out: &mut Self::Matrix,
     ) {
         V::dense_from_fn_into(n, n, entry, out);
     }
 }
 
-impl<V: DenseBackend<Matrix: SquareMatrixFromFn>> HessianOutput<true> for V {
+impl<F: Scalar, V: DenseBackend<F, Matrix: SquareMatrixFromFn<F>>>
+    HessianOutput<true, F> for V
+{
     type Matrix = V::Matrix;
 
-    fn build(n: usize, entry: impl FnMut(usize, usize) -> f64) -> Self::Matrix {
+    fn build(n: usize, entry: impl FnMut(usize, usize) -> F) -> Self::Matrix {
         V::Matrix::square_from_fn(n, entry)
     }
 
     fn fill(
         n: usize,
-        entry: impl FnMut(usize, usize) -> f64,
+        entry: impl FnMut(usize, usize) -> F,
         out: &mut Self::Matrix,
     ) {
         *out = Self::build(n, entry);
     }
 }
 
-impl<P, V, M, const SQUARE: bool> Hessian for FiniteDiff<P, SQUARE>
+impl<P, V, M, const SQUARE: bool, F: Scalar + MaybeSend + MaybeSync> Hessian
+    for FiniteDiff<P, SQUARE, F>
 where
-    P: CostFunction<Param = V, Output = f64> + MaybeSync,
+    P: CostFunction<Param = V, Output = F> + MaybeSync,
     V: Clone
         + VectorLen
-        + VectorIndex
-        + HessianOutput<SQUARE, Matrix = M>
+        + VectorIndex<F>
+        + HessianOutput<SQUARE, F, Matrix = M>
         + MaybeSync,
     P::Error: MaybeSend,
 {
@@ -584,7 +590,7 @@ where
     fn cost_and_gradient_and_hessian(
         &self,
         param: &V,
-    ) -> Result<(f64, V, M), P::Error> {
+    ) -> Result<(F, V, M), P::Error> {
         let (cost, grad) = self.cost_and_gradient(param)?;
         let hess =
             self.evaluate_hessian(param, Some(cost), |triangle, values| {
@@ -600,7 +606,7 @@ where
         param: &V,
         grad: &mut V,
         out: &mut M,
-    ) -> Result<f64, P::Error> {
+    ) -> Result<F, P::Error> {
         let cost = self.cost_and_gradient_into(param, grad)?;
         self.evaluate_hessian(param, Some(cost), |triangle, values| {
             V::fill(
@@ -613,17 +619,18 @@ where
     }
 }
 
-impl<P, V, const SQUARE: bool> FiniteDiff<P, SQUARE>
+impl<P, V, const SQUARE: bool, F: Scalar + MaybeSend + MaybeSync>
+    FiniteDiff<P, SQUARE, F>
 where
-    P: CostFunction<Param = V, Output = f64> + MaybeSync,
-    V: Clone + VectorLen + VectorIndex + MaybeSync,
+    P: CostFunction<Param = V, Output = F> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
     P::Error: MaybeSend,
 {
     fn evaluate_hessian<R>(
         &self,
         param: &V,
-        base: Option<f64>,
-        publish: impl FnOnce(&HessianTriangle, &[f64]) -> R,
+        base: Option<F>,
+        publish: impl FnOnce(&HessianTriangle, &[F]) -> R,
     ) -> Result<R, P::Error> {
         match self.hessian_method {
             Method::Forward => forward_hessian(
@@ -652,10 +659,11 @@ where
     }
 }
 
-impl<P, V, const SQUARE: bool> HessianProduct for FiniteDiff<P, SQUARE>
+impl<P, V, const SQUARE: bool, F: Scalar + MaybeSend + MaybeSync> HessianProduct
+    for FiniteDiff<P, SQUARE, F>
 where
-    P: CostFunction<Param = V, Output = f64> + MaybeSync,
-    V: Clone + VectorLen + VectorIndex + MaybeSync,
+    P: CostFunction<Param = V, Output = F> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
     <P as CostFunction>::Error: MaybeSend,
 {
     /// Hessian-vector product by differencing this wrapper's own
@@ -668,22 +676,9 @@ where
     /// evaluations per product). Cost here is 2 synthesized gradients:
     /// `~4n` cost evaluations with the central/central default.
     fn hessian_product(&self, param: &V, v: &V) -> Result<V, P::Error> {
-        match self.hessian_method {
-            Method::Forward => forward_difference_hessian_product(
-                self,
-                param,
-                v,
-                self.function_precision,
-                self.fixed_step,
-            ),
-            Method::Central => central_difference_hessian_product(
-                self,
-                param,
-                v,
-                self.function_precision,
-                self.fixed_step,
-            ),
-        }
+        let mut out = param.clone();
+        self.hessian_product_into(param, v, &mut out)?;
+        Ok(out)
     }
     fn hessian_product_into(
         &self,
@@ -712,10 +707,11 @@ where
     }
 }
 
-impl<P, V, const SQUARE: bool> FiniteDiff<P, SQUARE>
+impl<P, V, const SQUARE: bool, F: Scalar + MaybeSend + MaybeSync>
+    FiniteDiff<P, SQUARE, F>
 where
-    P: CostFunction<Param = V, Output = f64> + MaybeSync,
-    V: Clone + VectorLen + VectorIndex + MaybeSync,
+    P: CostFunction<Param = V, Output = F> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
     P::Error: MaybeSend,
 {
     /// Evaluate a Hessian-vector product with caller-owned probe and gradient
@@ -753,13 +749,18 @@ where
 /// Numerical-Recipes adaptive step `scale · max(|xⱼ|, 1)`, re-rounded so
 /// `xⱼ + h` is exactly representable (removes a rounding error in the
 /// denominator). `fixed_step`, when set, overrides the rule.
-fn nr_step(xj: f64, scale: f64, fixed_step: Option<f64>) -> f64 {
+fn nr_step<F: Scalar>(xj: F, scale: F, fixed_step: Option<F>) -> F {
     if let Some(h) = fixed_step {
         return h;
     }
-    let h = scale * xj.abs().max(1.0);
+    let h = scale * xj.abs().max(F::one());
     let reround = (xj + h) - xj;
-    if reround == 0.0 { h } else { reround }
+    if reround == F::zero() { h } else { reround }
+}
+
+fn minpack_step<F: Scalar>(value: F, scale: F) -> F {
+    let h = scale * value.abs();
+    if h == F::zero() { scale } else { h }
 }
 
 // Free functions: the tested numerics core, reused by the wrapper.
@@ -841,19 +842,19 @@ where
     Ok(())
 }
 
-fn central_difference_gradient_into<P, V>(
+fn central_difference_gradient_into<P, V, F: Scalar + MaybeSend + MaybeSync>(
     problem: &P,
     x: &V,
-    function_precision: f64,
-    fixed_step: Option<f64>,
+    function_precision: F,
+    fixed_step: Option<F>,
     out: &mut V,
 ) -> Result<(), P::Error>
 where
-    P: CostFunction<Param = V, Output = f64> + MaybeSync,
-    V: Clone + VectorLen + VectorIndex + MaybeSync,
+    P: CostFunction<Param = V, Output = F> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
     P::Error: MaybeSend,
 {
-    let scale = function_precision.max(f64::EPSILON).cbrt();
+    let scale = Method::Central.first_derivative_scale(function_precision);
     // Each task perturbs coordinate `j` of its own probe buffer, evaluates,
     // and resets it, so the buffer stays equal to `x` between indices.
     gradient_from_probes_into(x, out, |probe, j| {
@@ -864,7 +865,7 @@ where
         probe.set_scalar(j, xj - h);
         let fm = problem.cost(probe)?;
         probe.set_scalar(j, xj);
-        Ok((fp - fm) / (2.0 * h))
+        Ok((fp - fm) / ((F::one() + F::one()) * h))
     })
 }
 
@@ -895,16 +896,16 @@ where
     Ok(out)
 }
 
-fn forward_difference_gradient_into<P, V>(
+fn forward_difference_gradient_into<P, V, F: Scalar + MaybeSend + MaybeSync>(
     problem: &P,
     x: &V,
-    function_precision: f64,
-    fixed_step: Option<f64>,
+    function_precision: F,
+    fixed_step: Option<F>,
     out: &mut V,
 ) -> Result<(), P::Error>
 where
-    P: CostFunction<Param = V, Output = f64> + MaybeSync,
-    V: Clone + VectorLen + VectorIndex + MaybeSync,
+    P: CostFunction<Param = V, Output = F> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
     P::Error: MaybeSend,
 {
     let f0 = problem.cost(x)?;
@@ -918,20 +919,24 @@ where
     )
 }
 
-fn forward_difference_gradient_with_base_into<P, V>(
+fn forward_difference_gradient_with_base_into<
+    P,
+    V,
+    F: Scalar + MaybeSend + MaybeSync,
+>(
     problem: &P,
     x: &V,
-    function_precision: f64,
-    fixed_step: Option<f64>,
-    f0: f64,
+    function_precision: F,
+    fixed_step: Option<F>,
+    f0: F,
     out: &mut V,
 ) -> Result<(), P::Error>
 where
-    P: CostFunction<Param = V, Output = f64> + MaybeSync,
-    V: Clone + VectorLen + VectorIndex + MaybeSync,
+    P: CostFunction<Param = V, Output = F> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
     P::Error: MaybeSend,
 {
-    let scale = function_precision.max(f64::EPSILON).sqrt();
+    let scale = Method::Forward.first_derivative_scale(function_precision);
     gradient_from_probes_into(x, out, |probe, j| {
         let xj = x.get_scalar(j);
         let h = nr_step(xj, scale, fixed_step);
@@ -976,22 +981,22 @@ where
     Ok(out)
 }
 
-fn forward_difference_jacobian_into<P, V>(
+fn forward_difference_jacobian_into<P, V, F: Scalar + MaybeSend + MaybeSync>(
     problem: &P,
     x: &V,
-    function_precision: f64,
-    fixed_step: Option<f64>,
-    out: &mut <V as DenseMatrixFromFn>::Matrix,
+    function_precision: F,
+    fixed_step: Option<F>,
+    out: &mut <V as DenseMatrixFromFn<F>>::Matrix,
 ) -> Result<(), P::Error>
 where
     P: Residual<Param = V> + MaybeSync,
     V: Clone
         + VectorLen
-        + VectorIndex
-        + DenseMatrixFromFn
+        + VectorIndex<F>
+        + DenseMatrixFromFn<F>
         + MaybeSync
         + MaybeSend,
-    P::Output: Clone + VectorLen + VectorIndex + MaybeSync + MaybeSend,
+    P::Output: Clone + VectorLen + VectorIndex<F> + MaybeSync + MaybeSend,
     P::Error: MaybeSend,
 {
     let r0 = residual_base(problem, x)?;
@@ -1008,18 +1013,18 @@ where
 // Stage sequential Jacobians in padded scalar storage instead of cloning a
 // backend vector per column. Parallel block staging regressed measured cases;
 // retain the existing parallel kernels until their scheduling is improved.
-struct JacobianBlock {
+struct JacobianBlock<F> {
     rows: Option<usize>,
     columns: usize,
-    values: Vec<f64>,
+    values: Vec<F>,
 }
 
-impl JacobianBlock {
+impl<F: Scalar> JacobianBlock<F> {
     fn push_column(
         &mut self,
         rows: usize,
-        value: impl FnMut(usize) -> f64,
-    ) -> &mut [f64] {
+        value: impl FnMut(usize) -> F,
+    ) -> &mut [F] {
         if let Some(expected) = self.rows {
             assert_eq!(
                 rows, expected,
@@ -1039,12 +1044,12 @@ impl JacobianBlock {
         self.values.extend((0..rows).map(value));
         // Break power-of-two strides when row-major backends read across columns.
         if rows != 0 {
-            self.values.push(0.0);
+            self.values.push(F::zero());
         }
         &mut self.values[start..start + rows]
     }
 
-    fn write_into<V: DenseMatrixFromFn>(
+    fn write_into<V: DenseMatrixFromFn<F>>(
         self,
         rows: usize,
         columns: usize,
@@ -1063,11 +1068,11 @@ impl JacobianBlock {
     }
 }
 
-fn jacobian_block<S, E>(
+fn jacobian_block<S, E, F>(
     n: usize,
     init: impl FnOnce() -> S,
-    evaluate: impl Fn(&mut S, usize, &mut JacobianBlock) -> Result<(), E>,
-) -> Result<JacobianBlock, E> {
+    evaluate: impl Fn(&mut S, usize, &mut JacobianBlock<F>) -> Result<(), E>,
+) -> Result<JacobianBlock<F>, E> {
     let mut scratch = init();
     let mut result = JacobianBlock {
         rows: None,
@@ -1080,42 +1085,40 @@ fn jacobian_block<S, E>(
     Ok(result)
 }
 
-fn forward_difference_jacobian_with_base_into<P, V>(
+fn forward_difference_jacobian_with_base_into<
+    P,
+    V,
+    F: Scalar + MaybeSend + MaybeSync,
+>(
     problem: &P,
     x: &V,
-    function_precision: f64,
-    fixed_step: Option<f64>,
+    function_precision: F,
+    fixed_step: Option<F>,
     r0: &P::Output,
-    out: &mut <V as DenseMatrixFromFn>::Matrix,
+    out: &mut <V as DenseMatrixFromFn<F>>::Matrix,
 ) -> Result<(), P::Error>
 where
     P: Residual<Param = V> + MaybeSync,
     V: Clone
         + VectorLen
-        + VectorIndex
-        + DenseMatrixFromFn
+        + VectorIndex<F>
+        + DenseMatrixFromFn<F>
         + MaybeSync
         + MaybeSend,
-    P::Output: Clone + VectorLen + VectorIndex + MaybeSync + MaybeSend,
+    P::Output: Clone + VectorLen + VectorIndex<F> + MaybeSync + MaybeSend,
     P::Error: MaybeSend,
 {
+    let eps = Method::Forward.first_derivative_scale(function_precision);
     #[cfg(feature = "parallel")]
     if rayon::current_num_threads() > 1 {
         let n = x.vec_len();
         let m = r0.vec_len();
-        let eps = function_precision.max(f64::EPSILON).sqrt();
         let columns = try_map_range_with(
             n,
             || (x.clone(), r0.clone()),
             |(probe, residual), j| {
                 let xj = x.get_scalar(j);
-                let h = match fixed_step {
-                    Some(h) => h,
-                    None => {
-                        let h = eps * xj.abs();
-                        if h == 0.0 { eps } else { h }
-                    }
-                };
+                let h = fixed_step.unwrap_or_else(|| minpack_step(xj, eps));
                 probe.set_scalar(j, xj + h);
                 problem.residual_into(probe, residual)?;
                 assert_eq!(
@@ -1140,19 +1143,12 @@ where
     {
         let n = x.vec_len();
         let m = r0.vec_len();
-        let eps = function_precision.max(f64::EPSILON).sqrt();
         let columns = jacobian_block(
             n,
             || (x.clone(), r0.clone()),
             |(probe, residual), j, block| {
                 let xj = x.get_scalar(j);
-                let h = match fixed_step {
-                    Some(h) => h,
-                    None => {
-                        let h = eps * xj.abs();
-                        if h == 0.0 { eps } else { h }
-                    }
-                };
+                let h = fixed_step.unwrap_or_else(|| minpack_step(xj, eps));
                 probe.set_scalar(j, xj + h);
                 problem.residual_into(probe, residual)?;
                 assert_eq!(
@@ -1206,25 +1202,26 @@ where
     Ok(out)
 }
 
-fn central_difference_jacobian_into<P, V>(
+fn central_difference_jacobian_into<P, V, F: Scalar + MaybeSend + MaybeSync>(
     problem: &P,
     x: &V,
-    function_precision: f64,
-    fixed_step: Option<f64>,
+    function_precision: F,
+    fixed_step: Option<F>,
     base: Option<&P::Output>,
-    out: &mut <V as DenseMatrixFromFn>::Matrix,
+    out: &mut <V as DenseMatrixFromFn<F>>::Matrix,
 ) -> Result<(), P::Error>
 where
     P: Residual<Param = V> + MaybeSync,
     V: Clone
         + VectorLen
-        + VectorIndex
-        + DenseMatrixFromFn
+        + VectorIndex<F>
+        + DenseMatrixFromFn<F>
         + MaybeSync
         + MaybeSend,
-    P::Output: Clone + VectorLen + VectorIndex + MaybeSync + MaybeSend,
+    P::Output: Clone + VectorLen + VectorIndex<F> + MaybeSync + MaybeSend,
     P::Error: MaybeSend,
 {
+    let scale = Method::Central.first_derivative_scale(function_precision);
     #[cfg(feature = "parallel")]
     if rayon::current_num_threads() > 1 {
         let n = x.vec_len();
@@ -1238,7 +1235,6 @@ where
             V::dense_from_fn_into(m, 0, |_, _| unreachable!(), out);
             return Ok(());
         }
-        let scale = function_precision.max(f64::EPSILON).cbrt();
         let columns = try_map_range_with(
             n,
             || (x.clone(), base.cloned().or_else(P::Output::residual_buffer)),
@@ -1260,7 +1256,7 @@ where
                     col.set_scalar(
                         i,
                         (col.get_scalar(i) - residual.get_scalar(i))
-                            / (2.0 * h),
+                            / ((F::one() + F::one()) * h),
                     );
                 }
                 Ok(col)
@@ -1286,7 +1282,6 @@ where
             V::dense_from_fn_into(m, 0, |_, _| unreachable!(), out);
             return Ok(());
         }
-        let scale = function_precision.max(f64::EPSILON).cbrt();
         let columns = jacobian_block(
             n,
             || (x.clone(), base.cloned().or_else(P::Output::residual_buffer)),
@@ -1306,7 +1301,8 @@ where
                     "finite-difference output length changed"
                 );
                 for (i, value) in col.iter_mut().enumerate() {
-                    *value = (*value - residual.get_scalar(i)) / (2.0 * h);
+                    *value = (*value - residual.get_scalar(i))
+                        / ((F::one() + F::one()) * h);
                 }
                 Ok(())
             },
@@ -1412,22 +1408,25 @@ where
     )
 }
 
-fn central_hessian<P, V, R>(
+fn central_hessian<P, V, F: Scalar + MaybeSend + MaybeSync, R>(
     problem: &P,
     x: &V,
-    function_precision: f64,
-    fixed_step: Option<f64>,
-    f0: f64,
-    publish: impl FnOnce(&HessianTriangle, &[f64]) -> R,
+    function_precision: F,
+    fixed_step: Option<F>,
+    f0: F,
+    publish: impl FnOnce(&HessianTriangle, &[F]) -> R,
 ) -> Result<R, P::Error>
 where
-    P: CostFunction<Param = V, Output = f64> + MaybeSync,
-    V: Clone + VectorLen + VectorIndex + MaybeSync,
+    P: CostFunction<Param = V, Output = F> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
     P::Error: MaybeSend,
 {
     let n = x.vec_len();
-    let scale = function_precision.max(f64::EPSILON).powf(0.25);
-    let h: Vec<f64> = (0..n)
+    let two = F::one() + F::one();
+    let scale = function_precision
+        .max(F::epsilon())
+        .powf(F::from_f64(0.25).unwrap());
+    let h: Vec<F> = (0..n)
         .map(|j| nr_step(x.get_scalar(j), scale, fixed_step))
         .collect();
     // Row offsets avoid storing a pair of indices for every packed entry.
@@ -1444,7 +1443,7 @@ where
                 probe.set_scalar(i, xi - h[i]);
                 let fm = problem.cost(probe)?;
                 probe.set_scalar(i, xi);
-                Ok((fp - 2.0 * f0 + fm) / (h[i] * h[i]))
+                Ok((fp - two * f0 + fm) / (h[i] * h[i]))
             } else {
                 let xj = x.get_scalar(j);
                 probe.set_scalar(i, xi + h[i]);
@@ -1458,7 +1457,7 @@ where
                 let fmp = problem.cost(probe)?;
                 probe.set_scalar(i, xi);
                 probe.set_scalar(j, xj);
-                Ok((fpp - fpm - fmp + fmm) / (4.0 * h[i] * h[j]))
+                Ok((fpp - fpm - fmp + fmm) / ((two + two) * h[i] * h[j]))
             }
         },
     )?;
@@ -1496,17 +1495,17 @@ where
     )
 }
 
-fn forward_hessian<P, V, R>(
+fn forward_hessian<P, V, F: Scalar + MaybeSend + MaybeSync, R>(
     problem: &P,
     x: &V,
-    function_precision: f64,
-    fixed_step: Option<f64>,
-    base: Option<f64>,
-    publish: impl FnOnce(&HessianTriangle, &[f64]) -> R,
+    function_precision: F,
+    fixed_step: Option<F>,
+    base: Option<F>,
+    publish: impl FnOnce(&HessianTriangle, &[F]) -> R,
 ) -> Result<R, P::Error>
 where
-    P: CostFunction<Param = V, Output = f64> + MaybeSync,
-    V: Clone + VectorLen + VectorIndex + MaybeSync,
+    P: CostFunction<Param = V, Output = F> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
     P::Error: MaybeSend,
 {
     let n = x.vec_len();
@@ -1516,8 +1515,10 @@ where
         }
         return Ok(publish(&HessianTriangle::new(0), &[]));
     }
-    let scale = function_precision.max(f64::EPSILON).powf(0.25);
-    let h: Vec<f64> = (0..n)
+    let scale = function_precision
+        .max(F::epsilon())
+        .powf(F::from_f64(0.25).unwrap());
+    let h: Vec<F> = (0..n)
         .map(|j| nr_step(x.get_scalar(j), scale, fixed_step))
         .collect();
     let triangle = HessianTriangle::new(n);
@@ -1543,7 +1544,7 @@ where
             let (i, j) = triangle.coordinates(index - pair_start, row);
             let xi = x.get_scalar(i);
             let cross = if i == j {
-                probe.set_scalar(i, xi + 2.0 * h[i]);
+                probe.set_scalar(i, xi + (F::one() + F::one()) * h[i]);
                 let c = problem.cost(probe)?;
                 probe.set_scalar(i, xi);
                 c
@@ -1573,20 +1574,20 @@ where
 
 /// Euclidean norm via the scalar accessors; shared by the
 /// Hessian-vector-product step rules.
-fn vec_norm<V: VectorLen + VectorIndex>(x: &V) -> f64 {
+fn vec_norm<F: Scalar, V: VectorLen + VectorIndex<F>>(x: &V) -> F {
     (0..x.vec_len())
         .map(|j| {
             let xj = x.get_scalar(j);
             xj * xj
         })
-        .sum::<f64>()
+        .sum::<F>()
         .sqrt()
 }
 
-fn probe_along_into<V: VectorLen + VectorIndex>(
+fn probe_along_into<F: Scalar, V: VectorLen + VectorIndex<F>>(
     x: &V,
     v: &V,
-    h: f64,
+    h: F,
     probe: &mut V,
 ) {
     for j in 0..x.vec_len() {
@@ -1594,7 +1595,11 @@ fn probe_along_into<V: VectorLen + VectorIndex>(
     }
 }
 
-fn probe_along<V: Clone + VectorLen + VectorIndex>(x: &V, v: &V, h: f64) -> V {
+fn probe_along<F: Scalar, V: Clone + VectorLen + VectorIndex<F>>(
+    x: &V,
+    v: &V,
+    h: F,
+) -> V {
     let mut probe = x.clone();
     probe_along_into(x, v, h, &mut probe);
     probe
@@ -1675,13 +1680,13 @@ impl<V> HessianProductScratch<V> {
     }
 }
 
-struct HessianProductOptions {
+struct HessianProductOptions<F> {
     method: Method,
-    function_precision: f64,
-    fixed_step: Option<f64>,
+    function_precision: F,
+    fixed_step: Option<F>,
 }
 
-impl<V: Clone + VectorLen + VectorIndex> HessianProductScratch<V> {
+impl<V: Clone + VectorLen> HessianProductScratch<V> {
     /// Evaluate [`forward_difference_hessian_product`] into `out`, reusing
     /// probe and temporary-gradient storage. Step sizes, zero directions, and
     /// callback counts follow the free function's contract.
@@ -1695,6 +1700,7 @@ impl<V: Clone + VectorLen + VectorIndex> HessianProductScratch<V> {
         out: &mut V,
     ) -> Result<(), P::Error>
     where
+        V: VectorIndex,
         P: Gradient<Param = V, Gradient = V, Output = f64>,
     {
         self.difference_into(
@@ -1724,6 +1730,7 @@ impl<V: Clone + VectorLen + VectorIndex> HessianProductScratch<V> {
         out: &mut V,
     ) -> Result<(), P::Error>
     where
+        V: VectorIndex,
         P: Gradient<Param = V, Gradient = V, Output = f64>,
     {
         self.difference_into(
@@ -1739,34 +1746,33 @@ impl<V: Clone + VectorLen + VectorIndex> HessianProductScratch<V> {
         )
     }
 
-    fn difference_into<P>(
+    fn difference_into<P, F: Scalar>(
         &mut self,
         problem: &P,
         x: &V,
         v: &V,
-        options: HessianProductOptions,
+        options: HessianProductOptions<F>,
         out: &mut V,
     ) -> Result<(), P::Error>
     where
-        P: Gradient<Param = V, Gradient = V, Output = f64>,
+        V: VectorIndex<F>,
+        P: Gradient<Param = V, Gradient = V, Output = F>,
     {
         if out.vec_len() != v.vec_len() {
             *out = v.clone();
         }
         let v_norm = vec_norm(v);
-        if v_norm == 0.0 {
+        if v_norm == F::zero() {
             for j in 0..out.vec_len() {
-                out.set_scalar(j, 0.0);
+                out.set_scalar(j, F::zero());
             }
             return Ok(());
         }
         let h = options.fixed_step.unwrap_or_else(|| {
-            let eps = options.function_precision.max(f64::EPSILON);
-            let scale = match options.method {
-                Method::Forward => eps.sqrt(),
-                Method::Central => eps.cbrt(),
-            };
-            scale * vec_norm(x).max(1.0) / v_norm
+            let scale = options
+                .method
+                .first_derivative_scale(options.function_precision);
+            scale * vec_norm(x).max(F::one()) / v_norm
         });
         let (probe, gradient) =
             self.buffers.get_or_insert_with(|| (x.clone(), x.clone()));
@@ -1799,7 +1805,7 @@ impl<V: Clone + VectorLen + VectorIndex> HessianProductScratch<V> {
                     out.set_scalar(
                         j,
                         (out.get_scalar(j) - gradient.get_scalar(j))
-                            / (2.0 * h),
+                            / ((F::one() + F::one()) * h),
                     );
                 }
             }
@@ -1848,33 +1854,34 @@ where
     Ok(out)
 }
 
-fn forward_difference_hessian_product_into<P, V>(
+fn forward_difference_hessian_product_into<P, V, F: Scalar>(
     problem: &P,
     x: &V,
     v: &V,
-    function_precision: f64,
-    fixed_step: Option<f64>,
+    function_precision: F,
+    fixed_step: Option<F>,
     out: &mut V,
 ) -> Result<(), <P as CostFunction>::Error>
 where
-    P: Gradient<Param = V, Gradient = V, Output = f64>,
-    V: Clone + VectorLen + VectorIndex,
+    P: Gradient<Param = V, Gradient = V, Output = F>,
+    V: Clone + VectorLen + VectorIndex<F>,
 {
     if out.vec_len() != v.vec_len() {
         *out = v.clone();
     }
     let v_norm = vec_norm(v);
-    if v_norm == 0.0 {
+    if v_norm == F::zero() {
         for j in 0..out.vec_len() {
-            out.set_scalar(j, 0.0);
+            out.set_scalar(j, F::zero());
         }
         return Ok(());
     }
     let h = match fixed_step {
         Some(h) => h,
         None => {
-            let eps = function_precision.max(f64::EPSILON);
-            eps.sqrt() * vec_norm(x).max(1.0) / v_norm
+            Method::Forward.first_derivative_scale(function_precision)
+                * vec_norm(x).max(F::one())
+                / v_norm
         }
     };
     let mut g0 = x.clone();
@@ -1919,24 +1926,27 @@ where
     Ok(out)
 }
 
-fn central_difference_hessian_product_into<P, V>(
+fn central_difference_hessian_product_into<P, V, F: Scalar>(
     problem: &P,
     x: &V,
     v: &V,
-    function_precision: f64,
-    fixed_step: Option<f64>,
+    function_precision: F,
+    fixed_step: Option<F>,
     out: &mut V,
 ) -> Result<(), <P as CostFunction>::Error>
 where
-    P: Gradient<Param = V, Gradient = V, Output = f64>,
-    V: Clone + VectorLen + VectorIndex,
+    P: Gradient<Param = V, Gradient = V, Output = F>,
+    V: Clone + VectorLen + VectorIndex<F>,
 {
-    HessianProductScratch::new().central_into(
+    HessianProductScratch::new().difference_into(
         problem,
         x,
         v,
-        function_precision,
-        fixed_step,
+        HessianProductOptions {
+            method: Method::Central,
+            function_precision,
+            fixed_step,
+        },
         out,
     )
 }
@@ -1950,7 +1960,8 @@ pub use check::{
     DerivativeComparison, DerivativeSource,
 };
 
-impl<P, const SQUARE: bool> crate::Constraints for FiniteDiff<P, SQUARE>
+impl<P, const SQUARE: bool, F: Scalar> crate::Constraints
+    for FiniteDiff<P, SQUARE, F>
 where
     P: crate::Constraints,
 {
@@ -1962,8 +1973,8 @@ where
     }
 }
 
-impl<P, const SQUARE: bool> crate::NonlinearEqualityValues
-    for FiniteDiff<P, SQUARE>
+impl<P, const SQUARE: bool, F: Scalar> crate::NonlinearEqualityValues
+    for FiniteDiff<P, SQUARE, F>
 where
     P: crate::NonlinearEqualityValues,
 {
@@ -1978,8 +1989,8 @@ where
     }
 }
 
-impl<P, const SQUARE: bool> crate::NonlinearInequalityValues
-    for FiniteDiff<P, SQUARE>
+impl<P, const SQUARE: bool, F: Scalar> crate::NonlinearInequalityValues
+    for FiniteDiff<P, SQUARE, F>
 where
     P: crate::NonlinearInequalityValues,
 {
@@ -1994,21 +2005,17 @@ where
     }
 }
 
-impl<P, V, const SQUARE: bool> crate::ConstraintJacobian
-    for FiniteDiff<P, SQUARE>
+impl<P, V, const SQUARE: bool, F: Scalar + MaybeSend + MaybeSync>
+    crate::ConstraintJacobian for FiniteDiff<P, SQUARE, F>
 where
-    P: CostFunction<Param = V, Output = f64> + MaybeSync,
+    P: CostFunction<Param = V, Output = F> + MaybeSync,
     P: crate::Constraints,
-    P::Set: crate::core::constraint::evaluation::NonlinearSet<P, V, f64>,
-    V: Clone
-        + VectorLen
-        + VectorIndex<f64>
-        + DenseMatrixFromFn<f64>
-        + MaybeSync,
+    P::Set: crate::core::constraint::evaluation::NonlinearSet<P, V, F>,
+    V: Clone + VectorLen + VectorIndex<F> + DenseMatrixFromFn<F> + MaybeSync,
     P::Error: MaybeSend,
 {
     type Param = V;
-    type Jacobian = <V as DenseMatrixFromFn<f64>>::Matrix;
+    type Jacobian = <V as DenseMatrixFromFn<F>>::Matrix;
     type Error = P::Error;
     fn constraint_jacobian(
         &self,

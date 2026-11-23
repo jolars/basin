@@ -393,10 +393,10 @@ least-squares tests already cover fixed parameter and residual lengths.
 - [x] **Allow square fixed-size finite-difference Hessians.**
   `FiniteDiff::with_square_hessian` selects an `SMatrix` for fixed nalgebra
   parameters while preserving the default Hessian and Jacobian types.
-- [ ] **Extend unbounded finite differences to `f32`.** `FiniteDiff` is
-  currently `f64`-only. Reuse the scalar-generic first-derivative machinery
-  from `BoundedFiniteDiff` where the stencil rules agree, and verify
-  precision defaults and probe counts.
+- [x] **Extend unbounded finite differences to `f32`.** `FiniteDiff`
+  shares gradient evaluation and step-size calculations with
+  `BoundedFiniteDiff` where their stencils agree. Tests verify scalar
+  precision defaults, probe counts, and derivatives across the dense backends.
 - [ ] **Document and benchmark existing fixed-size solver paths.** Show a
   small fixed-size problem through the normal executor API. Add matched
   dynamic and fixed cases to the

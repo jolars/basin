@@ -1,6 +1,6 @@
 //! Shared first-derivative probes with explicit domain bounds.
 
-use super::{FiniteDiff, Method, gradient_from_probes_into};
+use super::{FiniteDiff, Method, gradient_from_probes_into, minpack_step};
 use crate::core::math::{DenseMatrixFromFn, Scalar, VectorIndex, VectorLen};
 use crate::core::parallel::{MaybeSend, MaybeSync, try_map_range_with};
 use crate::core::problem::{CostFunction, Gradient, Jacobian, Residual};
@@ -179,15 +179,15 @@ impl<P, F: Scalar> BoundedFiniteDiff<P, F> {
         }
     }
 }
-impl<P, const SQUARE: bool> FiniteDiff<P, SQUARE> {
+impl<P, const SQUARE: bool, F: Scalar> FiniteDiff<P, SQUARE, F> {
     /// Transfer first-derivative settings into a [`BoundedFiniteDiff`].
     /// The resulting adapter supports gradients and Jacobians only. Hessian
     /// settings have no effect on its first derivatives.
-    pub fn with_bounds<V: VectorLen + VectorIndex>(
+    pub fn with_bounds<V: VectorLen + VectorIndex<F>>(
         self,
         lower: V,
         upper: V,
-    ) -> BoundedFiniteDiff<P> {
+    ) -> BoundedFiniteDiff<P, F> {
         let mut result = BoundedFiniteDiff::new(self.problem, lower, upper)
             .gradient_method(self.gradient_method)
             .jacobian_method(self.jacobian_method)
@@ -232,19 +232,13 @@ pub(super) struct Options<F> {
 
 impl<F: Scalar> Options<F> {
     fn scale(&self) -> F {
-        let precision = self.precision.max(F::epsilon());
-        if matches!(self.method, Method::Forward) {
-            precision.sqrt()
-        } else {
-            precision.cbrt()
-        }
+        self.method.first_derivative_scale(self.precision)
     }
 
     fn probes(&self, value: F, scale: F, lo: F, hi: F) -> (F, Option<F>) {
         let mut h = self.step.unwrap_or_else(|| {
             if self.minpack && matches!(self.method, Method::Forward) {
-                let h = scale * value.abs();
-                if h == F::zero() { scale } else { h }
+                minpack_step(value, scale)
             } else {
                 scale * value.abs().max(F::one())
             }
