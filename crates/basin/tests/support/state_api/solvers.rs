@@ -238,14 +238,14 @@ where
         problem: &mut Problem<P>,
         mut state: FirstOrderState<V, F>,
     ) -> Result<basin::SolverStep<FirstOrderState<V, F>>, P::Error> {
-        let (mut x, cost, gradient) = state.take_current().unwrap();
+        let (x, cost, gradient) = state.take_current().unwrap();
         let matrix = self.matrix.as_mut().unwrap();
         let mut direction = matrix.matvec(&gradient);
         direction.neg_in_place();
-        let alpha = match self
+        let search_result = self
             .search
-            .next_with_outcome(problem, &x, cost, &gradient, &direction)?
-        {
+            .next_with_evaluation(problem, &x, cost, &gradient, &direction)?;
+        let alpha = match search_result.outcome {
             LineSearchOutcome::Step(alpha) => alpha,
             _ => {
                 state.replace(x, cost, gradient).unwrap();
@@ -270,8 +270,15 @@ where
         }
         let mut s = direction;
         s.scale_in_place(alpha);
-        x.scaled_add(F::one(), &s);
-        let (cost_new, gradient_new) = problem.cost_and_gradient(&x)?;
+        let (x, cost_new, gradient_new) =
+            if let Some(evaluation) = search_result.evaluation {
+                (evaluation.param, evaluation.cost, evaluation.gradient)
+            } else {
+                let mut x = x;
+                x.scaled_add(F::one(), &s);
+                let (cost, gradient) = problem.cost_and_gradient(&x)?;
+                (x, cost, gradient)
+            };
         let mut y = gradient_new.clone();
         y.scaled_add(-F::one(), &gradient);
         let sy = s.dot(&y);

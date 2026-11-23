@@ -340,3 +340,64 @@ fn more_thuente_rounded_trials_respect_step_and_evaluation_limits() {
         }
     }
 }
+
+#[derive(Default)]
+struct UnitQuadratic {
+    cost_points: std::cell::RefCell<Vec<f64>>,
+    gradient_points: std::cell::RefCell<Vec<f64>>,
+}
+
+impl CostFunction for &UnitQuadratic {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Vec<f64>) -> Result<f64, Infallible> {
+        self.cost_points.borrow_mut().push(x[0]);
+        Ok(0.5 * x[0] * x[0])
+    }
+}
+
+impl Gradient for &UnitQuadratic {
+    type Gradient = Vec<f64>;
+
+    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, Infallible> {
+        self.gradient_points.borrow_mut().push(x[0]);
+        Ok(x.clone())
+    }
+}
+
+fn assert_single_bfgs_evaluation_per_point(
+    search: impl for<'a> basin::LineSearch<
+        &'a UnitQuadratic,
+        Vec<f64>,
+        f64,
+        Error = Infallible,
+    >,
+) {
+    let problem = UnitQuadratic::default();
+    let result = Executor::from_start(
+        &problem,
+        Bfgs::with_line_search(search).with_absolute_gradient_tolerance(1e-12),
+        vec![1.0],
+    )
+    .max_iter(2)
+    .run()
+    .unwrap();
+
+    assert_eq!(result.state.param(), &vec![0.0]);
+    assert_eq!(result.cost(), 0.0);
+    assert_eq!(*problem.cost_points.borrow(), [1.0, 0.0]);
+    assert_eq!(*problem.gradient_points.borrow(), [1.0, 0.0]);
+}
+
+#[test]
+fn bfgs_reuses_the_accepted_line_search_evaluation() {
+    assert_single_bfgs_evaluation_per_point(Wolfe::new());
+    assert_single_bfgs_evaluation_per_point(basin::MoreThuente::new());
+}
+
+#[test]
+fn bfgs_evaluates_the_accepted_point_for_step_only_searches() {
+    assert_single_bfgs_evaluation_per_point(basin::Constant(1.0));
+}

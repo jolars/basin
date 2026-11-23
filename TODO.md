@@ -102,11 +102,11 @@ numerical work against analytic cases and reference implementations.
   search grows the initial step within both step bounds and skips callbacks
   for trials that leave the parameter unchanged. BFGS now reaches the
   `1e-8` objective target on `f(x) = 0.5 * 1e-19 * x^2` from `x = 1e12`.
-- [ ] **Reuse the accepted line-search evaluation in BFGS.** Consume the
-  objective and gradient returned by `next_with_evaluation` when available.
-  Keep the existing evaluation path for searches that return only a step.
-  Use `f(x) = 0.5 * x^2` from `x = 1` to verify callback counts and check
-  that BFGS reaches the minimum without evaluating the accepted point twice.
+- [x] **Reuse the accepted line-search evaluation in BFGS.** BFGS consumes the
+  point, objective, and gradient returned by `next_with_evaluation` when
+  available and evaluates the point itself for step-only searches. On
+  `f(x) = 0.5 * x^2` from `x = 1`, both paths reach the minimum with one
+  objective call and one gradient call at each point.
 - [x] **Investigate central-difference Jacobian overhead.** Compared matched
   stencils against Navette's Jacobian builder, following the [integration
   review](https://github.com/opticsWolf/Navette/pull/3#issuecomment-6431966233).

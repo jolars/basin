@@ -292,7 +292,6 @@ where
     ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
         let (param, cost_old, g) =
             state.current().expect("BFGS requires initialized progress");
-        let mut param = param.clone();
         let h = self
             .inverse_hessian
             .as_mut()
@@ -303,10 +302,10 @@ where
         let mut direction = (*h).matvec(g);
         direction.neg_in_place();
 
-        let alpha = match self
+        let search_result = self
             .line_search
-            .next_with_outcome(problem, &param, cost_old, g, &direction)?
-        {
+            .next_with_evaluation(problem, param, cost_old, g, &direction)?;
+        let alpha = match search_result.outcome {
             LineSearchOutcome::Step(alpha) => alpha,
             LineSearchOutcome::Failed => {
                 return Ok(crate::SolverStep::from((
@@ -335,16 +334,22 @@ where
             )));
         }
 
-        // s = α d, x ← x + s.
+        // s = α d.
         let mut s = direction;
         s.scale_in_place(alpha);
-        param.scaled_add(F::one(), &s);
 
-        // Fused cost+grad at the new iterate: one fused call gives both
-        // values consumed below (BFGS update reads g_new; state caches
-        // cost_new at the bottom of the iter).
-        let (cost_new, g_new) = problem
-            .cost_and_gradient_reusing(&param, self.gradient_buffer.take())?;
+        let (param, cost_new, g_new) =
+            if let Some(evaluation) = search_result.evaluation {
+                (evaluation.param, evaluation.cost, evaluation.gradient)
+            } else {
+                let mut param = param.clone();
+                param.scaled_add(F::one(), &s);
+                let (cost, gradient) = problem.cost_and_gradient_reusing(
+                    &param,
+                    self.gradient_buffer.take(),
+                )?;
+                (param, cost, gradient)
+            };
 
         // y = g_new − g.
         let mut y = g_new.clone();
