@@ -40,6 +40,18 @@ impl<F> AsFloatSliceMut<F> for Vec<F> {
     }
 }
 
+impl<F, const N: usize> AsFloatSlice<F> for [F; N] {
+    fn as_float_slice(&self) -> &[F] {
+        self
+    }
+}
+
+impl<F, const N: usize> AsFloatSliceMut<F> for [F; N] {
+    fn as_float_slice_mut(&mut self) -> &mut [F] {
+        self
+    }
+}
+
 #[cfg(feature = "nalgebra_all")]
 mod nalgebra_slices {
     use super::*;

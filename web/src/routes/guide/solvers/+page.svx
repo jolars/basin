@@ -645,7 +645,10 @@ bracketing routines.
 ## Backends and constraints
 
 All vector-based solvers support the four dense backends: `Vec`, nalgebra,
-ndarray, and faer. Scalar algorithms need no linear-algebra backend. Each
+ndarray, and faer. Native arrays `[F; N]` also work with vector-only solvers.
+Gradient descent, projected gradient descent, Nelder–Mead, L-BFGS, L-BFGS-B,
+and random search are tested with both `f32` and `f64` arrays.
+Scalar algorithms need no linear-algebra backend. Each
 solver's **Backends** section on [docs.rs](https://docs.rs/basin) describes its
 supported scalar types, sparse support, and any additional requirements.
 

@@ -95,7 +95,7 @@ use crate::core::state::SimplexProgress;
 ///
 /// # Backends
 ///
-/// Supports `Vec<F>`, nalgebra `DVector<F>`, ndarray `Array1<F>`, and faer
+/// Supports `[F; N]`, `Vec<F>`, nalgebra `DVector<F>`, ndarray `Array1<F>`, and faer
 /// `Col<F>`, with `F = f32` or `f64`. Requires [`Clone`], [`VectorLen`],
 /// [`VectorIndex`], [`ScaleInPlace`], and [`ScaledAdd`]. The projected variant
 /// also requires [`ClampInPlace`]. Default point seeding uses

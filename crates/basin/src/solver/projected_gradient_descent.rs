@@ -71,7 +71,7 @@ use crate::line_search::{Constant, LineSearch, LineSearchOutcome};
 /// Backend-generic; works with any `V` implementing
 /// [`ScaledAdd<F>`](crate::core::math::ScaledAdd) +
 /// [`NegInPlace`] + [`ClampInPlace`] + [`VectorLen`] + `Clone`. Supports
-/// `Vec<F>`, `nalgebra::DVector<F>` (feature `nalgebra`),
+/// `[F; N]`, `Vec<F>`, `nalgebra::DVector<F>` (feature `nalgebra`),
 /// `ndarray::Array1<F>` (feature `ndarray`), and `faer::Col<F>` (feature
 /// `faer`) for both `f32` and `f64`. The problem must implement
 /// [`BoxBounds`](crate::BoxBounds).

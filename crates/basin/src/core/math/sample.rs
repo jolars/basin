@@ -26,14 +26,10 @@ use super::{Scalar, VectorLen};
 ///   coordinate (via the shared `assert_finite_box` helper), rather than
 ///   letting `rand`'s internal `NonFinite` rejection surface as an
 ///   opaque dependency unwrap.
-/// - **Implementor must:** call
-///   `Rng::random_range` once per component
-///   on the inclusive range `lower[i]..=upper[i]`, and return a freshly
-///   allocated value of length `lower.len()`. Sampling is component-
-///   independent: the same `(rng, lower, upper)` produces the same
-///   draws across backends only modulo iteration order.
-/// - **Implementor must:** advance `rng` by exactly `n` `f64` draws so
-///   that reproducibility is well-defined for fixed-seed RNGs.
+/// - **Implementor must:** call `Rng::random_range` once per component in
+///   coordinate order on the inclusive range `lower[i]..=upper[i]`, and
+///   return a fresh value of the same length. Backends using the same scalar
+///   type and bounds produce the same samples from identical RNG state.
 ///
 /// Bound semantics match `rand::distr::Uniform::new_inclusive`:
 /// `lower[i] == upper[i]` deterministically returns that value.
@@ -85,13 +81,9 @@ where
 ///
 /// - **Caller must:** pass a `template` whose length equals the desired
 ///   sample length. The contents are not read; only the shape matters.
-/// - **Implementor must:** sample each component independently from
-///   `rand_distr::StandardNormal` and return a freshly allocated value
-///   of the same length as `template`.
-/// - **Implementor must:** advance `rng` by exactly the number of `f64`
-///   draws that `rand_distr::StandardNormal` performs per component, so
-///   that reproducibility is well-defined for fixed-seed RNGs across
-///   backends modulo iteration order.
+/// - **Implementor must:** draw once per component in coordinate order with
+///   `rand_distr::StandardNormal`. Return a fresh value of the same length
+///   as `template`.
 pub trait SampleStandardNormal: Sized {
     /// Sample a fresh value with each component drawn from `N(0, 1)`.
     /// `template` provides the shape (`len`); its values are unused.

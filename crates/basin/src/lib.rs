@@ -175,8 +175,10 @@
 //!
 //! # Backends
 //!
-//! Parameters and linear algebra are generic over the backend. `Vec<f64>` needs
-//! no features. Each external backend has exact version features and a moving
+//! Parameters and linear algebra are generic over the backend. `Vec<F>` and
+//! native arrays `[F; N]` work with compatible vector-only solvers without
+//! backend features, for `f32` and `f64`. Dense solvers require matrix
+//! capabilities. Each external backend has exact version features and a moving
 //! alias:
 //!
 //! | Backend  | Exact features                            | Moving alias |

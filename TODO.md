@@ -397,12 +397,12 @@ tests already cover fixed parameter and residual lengths.
   gradient evaluation and step-size calculations with `BoundedFiniteDiff`
   where their stencils agree. Tests verify scalar precision defaults, probe
   counts, and derivatives across the dense backends.
-- [ ] **Support native arrays in the vector math tier.** Implement the vector
-  traits for `[F; N]` and exercise vector-only solvers with `f32` and `f64`
-  without an optional linear algebra backend. Evaluate a nested-array matrix
-  companion when there is a dense-solve use case. ndarray and faer can
-  borrow inline buffers through views for kernels that can use caller-owned
-  storage. Their owned types use heap storage.
+- [x] **Support native arrays in the vector math tier.** The vector
+  traits support `[F; N]`. Tests exercise vector-only solvers with `f32` and
+  `f64` without an optional linear algebra backend.
+- [ ] **Evaluate a nested-array matrix when a dense-solve use case arises.**
+  ndarray and faer can borrow inline buffers through views for kernels that
+  accept caller-owned storage. Their owned types use heap storage.
 - [ ] **Profile the remaining small dense solver workspaces.** Fixed-size
   pivoted QR and symmetric eigen still use heap scratch, and trust-region
   reflective builds a dynamic SVD workspace. Measure phase by phase before

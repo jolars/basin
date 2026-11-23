@@ -204,7 +204,7 @@ use self::subsm::subsm;
 ///
 /// Generic over any parameter type implementing
 /// [`AsFloatSliceMut<F>`] + [`Clone`] + [`Dot<F>`] +
-/// [`ScaledAdd<F>`] + [`VectorLen`]. Built-in impls cover `Vec<F>`,
+/// [`ScaledAdd<F>`] + [`VectorLen`]. Built-in impls cover `[F; N]`, `Vec<F>`,
 /// `nalgebra::DVector<F>` (feature `nalgebra`), `faer::Col<F>`
 /// (feature `faer`), and `ndarray::Array1<F>` (feature `ndarray`).
 /// Parameters must have contiguous storage; strided ndarray views are unsupported.

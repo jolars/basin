@@ -303,6 +303,7 @@ pub trait VectorIndex<F = f64> {
     fn set_scalar(&mut self, i: usize, value: F);
 }
 
+mod array;
 mod cl_scaling;
 mod clamp;
 mod dense;

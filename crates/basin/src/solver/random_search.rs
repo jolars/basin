@@ -70,7 +70,7 @@ use crate::solver::cma_es::sort_population_ascending;
 ///
 /// # Backends
 ///
-/// `Vec<F>`, nalgebra `DVector<F>`, ndarray `Array1<F>`, and faer `Col<F>`,
+/// `[F; N]`, `Vec<F>`, nalgebra `DVector<F>`, ndarray `Array1<F>`, and faer `Col<F>`,
 /// for all supported releases with `F = f32` or `f64`. Requires
 /// [`SampleUniformBox`], [`VectorLen`], `Index<usize, Output = F>`,
 /// `IndexMut<usize, Output = F>`, and `Clone`. No matrix operations are needed.

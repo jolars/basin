@@ -126,7 +126,7 @@ impl Method {
 /// # Backends
 ///
 /// [`Gradient`] and [`HessianProduct`] are backend-generic (any `V: Clone +
-/// VectorLen + VectorIndex`; no matrix type is involved). [`Jacobian`] and
+/// VectorLen + VectorIndex`, including native arrays `[F; N]`). [`Jacobian`] and
 /// the default [`Hessian`] additionally require `V: DenseMatrixFromFn`, so they are
 /// available for `Vec<F>`/`DenseMatrix`, nalgebra `DVector<F>`/`DMatrix`,
 /// ndarray `Array1<F>`/`Array2`, and faer `Col<F>`/`Mat` with `F` equal
