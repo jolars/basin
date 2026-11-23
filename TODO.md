@@ -411,8 +411,15 @@ tests already cover fixed parameter and residual lengths.
   nested arrays with BFGS, Cholesky and pivoted-QR least squares, trust-region
   methods, and CMA-ES without optional features. QR and eigendecomposition
   use heap scratch.
+- [ ] **Build finite-difference Jacobians for native arrays.** Let callers
+  specify the residual dimension `M` so Basin can build a `[[F; N]; M]`
+  Jacobian from a residual function.
+- [ ] **Add matrix entry access for native arrays.** Implement `MatrixIndex`
+  for nested arrays so trust-region reflective can accept array Jacobians and
+  BFGS can accept array-backed initial inverse Hessians.
 - [ ] **Profile the remaining small dense solver workspaces.** Fixed-size
-  pivoted QR and symmetric eigen still use heap scratch, and trust-region
+  pivoted QR and symmetric eigen still use heap scratch with both native
+  arrays and nalgebra, and trust-region
   reflective builds a dynamic SVD workspace. Measure phase by phase before
   changing storage. For CMA-ES, compare eigen kernels on identical
   covariances because the eigensolver can change the seeded trajectory.
