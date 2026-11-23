@@ -32,6 +32,41 @@ impl Gradient for Sphere {
 }
 
 #[test]
+fn executor_results_expose_checked_incumbents() {
+    let run =
+        |x| Executor::from_start(Sphere, Bfgs::new(), vec![x]).max_iter(0);
+    let expected_limit =
+        basin::Termination::Limit(vec![basin::ExecutionLimit::Iterations {
+            observed: 0,
+            limit: 0,
+        }]);
+
+    // The squared objective overflows while the gradient stays finite.
+    let result = run(1e200).run().unwrap();
+    assert_eq!(result.report.termination, expected_limit);
+    assert_eq!(result.cost(), f64::INFINITY);
+    assert!(result.incumbent_record().is_none());
+
+    let result = run(1e200).run_with_solver().unwrap();
+    assert_eq!(result.report.termination, expected_limit);
+    assert_eq!(result.cost(), f64::INFINITY);
+    assert!(result.incumbent_record().is_none());
+
+    let result = run(2.0).run().unwrap();
+    let with_solver = run(2.0).run_with_solver().unwrap();
+    for incumbent in [result.incumbent_record(), with_solver.incumbent_record()]
+    {
+        let incumbent = incumbent.unwrap();
+        assert_eq!(incumbent.param.as_slice(), &[2.0]);
+        assert_eq!(incumbent.cost, 4.0);
+        assert_eq!(incumbent.iter, 0);
+        assert_eq!(incumbent.counts, &result.counts);
+        assert_eq!(incumbent.counts.cost_evals, 1);
+        assert_eq!(incumbent.counts.gradient_evals, 1);
+    }
+}
+
+#[test]
 fn model_lives_on_solver_and_fresh_reuse_resets_dimension_and_progress() {
     let result = Executor::from_start(Sphere, Bfgs::new(), vec![3.0, 2.0])
         .max_iter(1)

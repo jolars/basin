@@ -54,7 +54,9 @@ use crate::core::observer::{
 use crate::core::problem::{EvalCounts, Problem};
 use crate::core::run_control::RunControl;
 use crate::core::solver::Solver;
-use crate::core::state::{CountsMirror, ExactResumeState, State};
+use crate::core::state::{
+    CountsMirror, ExactResumeState, IncumbentRef, IncumbentState, State,
+};
 use crate::core::termination::{
     ApplicationStop, Termination, TerminationReport, TerminationStage,
 };
@@ -165,13 +167,26 @@ impl<S: State> OptimizationResult<S> {
         self.state.cost_evals()
     }
 
-    /// Best iterate observed during the run: the lowest-cost point
-    /// the executor ever saw. For sorted-simplex/sorted-population
-    /// states this coincides with [`param`](Self::param); for non-
-    /// monotone single-iterate runs (Brent's probes, future SA) the
-    /// two diverge.
+    /// Best iterate under the state's incumbent-selection rule.
+    ///
+    /// # Panics
+    ///
+    /// Panics on shared progress states when no incumbent has been selected.
+    /// Use [`incumbent_record`](Self::incumbent_record) to check availability.
     pub fn best_param(&self) -> &S::Param {
         self.state.best_param()
+    }
+
+    /// Borrow the selected incumbent and its publication metadata.
+    ///
+    /// Returns `None` if the state has selected no incumbent.
+    pub fn incumbent_record(
+        &self,
+    ) -> Option<IncumbentRef<'_, S::Param, S::Float>>
+    where
+        S: IncumbentState,
+    {
+        self.state.incumbent_record()
     }
 
     /// Cost at [`best_param`](Self::best_param).
@@ -291,9 +306,26 @@ impl<S: State, So> OptimizationResultWithSolver<S, So> {
         self.state.cost_evals()
     }
 
-    /// Best iterate under the state's incumbent-selection semantics.
+    /// Best iterate under the state's incumbent-selection rule.
+    ///
+    /// # Panics
+    ///
+    /// Panics on shared progress states when no incumbent has been selected.
+    /// Use [`incumbent_record`](Self::incumbent_record) to check availability.
     pub fn best_param(&self) -> &S::Param {
         self.state.best_param()
+    }
+
+    /// Borrow the selected incumbent and its publication metadata.
+    ///
+    /// Returns `None` if the state has selected no incumbent.
+    pub fn incumbent_record(
+        &self,
+    ) -> Option<IncumbentRef<'_, S::Param, S::Float>>
+    where
+        S: IncumbentState,
+    {
+        self.state.incumbent_record()
     }
 
     /// Cost at [`best_param`](Self::best_param).

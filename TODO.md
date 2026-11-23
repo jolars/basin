@@ -367,6 +367,15 @@ production solvers.
 
 ## General design
 
+### Executor results
+
+- [x] **Expose checked access to the incumbent.** A successful BFGS run with
+  `max_iter(0)` can return without an incumbent when the starting objective
+  is `+∞`. Calling `best_param()` on that result panics. Document the panic
+  condition and add a checked accessor on executor results backed by
+  `IncumbentState::incumbent_record()`. Add a regression test for a run that
+  returns without an incumbent.
+
 ### Fixed-size backends
 
 Follow up on `1072fb0` and `20f7d9a`. Small native `f64` probes with nalgebra
@@ -811,6 +820,12 @@ desired backend features.
 Planned breaking changes. Preserve Basin 3.x APIs and defaults until the major
 release, and document the migration for each change.
 
+- [ ] **Use checked incumbent records on executor results.** Replace
+  `best_param()`, `best_cost()`, `best_iter()`, and `best_cost_evals()` on both
+  result types with `incumbent_record()`. Document how callers handle a missing
+  incumbent and migrate to the record's raw publication counts. Audit how
+  composed solvers handle inner runs without an incumbent, and review the
+  `State` trait's incumbent readers separately before removing them.
 - [ ] **Make square finite-difference Hessians the default.** Have
   `FiniteDiff::new` infer the square matrix from the parameter backend while
   keeping Jacobian rows tied to the residual or constraint count. Document
