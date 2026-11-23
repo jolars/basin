@@ -100,8 +100,8 @@ numerical work against analytic cases and reference implementations.
 
 - [x] **Expand Moré–Thuente trials that round to the starting point.** The line
   search grows the initial step within both step bounds and skips callbacks
-  for trials that leave the parameter unchanged. BFGS now reaches the
-  `1e-8` objective target on `f(x) = 0.5 * 1e-19 * x^2` from `x = 1e12`.
+  for trials that leave the parameter unchanged. BFGS now reaches the `1e-8`
+  objective target on `f(x) = 0.5 * 1e-19 * x^2` from `x = 1e12`.
 - [x] **Reuse the accepted line-search evaluation in BFGS.** BFGS consumes the
   point, objective, and gradient returned by `next_with_evaluation` when
   available and evaluates the point itself for step-only searches. On
@@ -404,9 +404,9 @@ tests already cover fixed parameter and residual lengths.
   gradient evaluation and step-size calculations with `BoundedFiniteDiff`
   where their stencils agree. Tests verify scalar precision defaults, probe
   counts, and derivatives across the dense backends.
-- [x] **Support native arrays in the vector math tier.** The vector
-  traits support `[F; N]`. Tests exercise vector-only solvers with `f32` and
-  `f64` without an optional linear algebra backend.
+- [x] **Support native arrays in the vector math tier.** The vector traits
+  support `[F; N]`. Tests exercise vector-only solvers with `f32` and `f64`
+  without an optional linear algebra backend.
 - [ ] **Evaluate a nested-array matrix when a dense-solve use case arises.**
   ndarray and faer can borrow inline buffers through views for kernels that
   accept caller-owned storage. Their owned types use heap storage.
@@ -821,11 +821,12 @@ Planned breaking changes. Preserve Basin 3.x APIs and defaults until the major
 release, and document the migration for each change.
 
 - [ ] **Use checked incumbent records on executor results.** Replace
-  `best_param()`, `best_cost()`, `best_iter()`, and `best_cost_evals()` on both
-  result types with `incumbent_record()`. Document how callers handle a missing
-  incumbent and migrate to the record's raw publication counts. Audit how
-  composed solvers handle inner runs without an incumbent, and review the
-  `State` trait's incumbent readers separately before removing them.
+  `best_param()`, `best_cost()`, `best_iter()`, and `best_cost_evals()` on
+  both result types with `incumbent_record()`. Document how callers handle a
+  missing incumbent and migrate to the record's raw publication counts.
+  Audit how composed solvers handle inner runs without an incumbent, and
+  review the `State` trait's incumbent readers separately before removing
+  them.
 - [ ] **Make square finite-difference Hessians the default.** Have
   `FiniteDiff::new` infer the square matrix from the parameter backend while
   keeping Jacobian rows tied to the residual or constraint count. Document
