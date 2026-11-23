@@ -246,29 +246,6 @@ compatibility and numerical behavior still need verification.
 
 ### Measurement and publication prerequisites
 
-- [ ] **Extend competitor results beyond objective-versus-time traces.** Record
-  package and native-library versions or commits, algorithm variants,
-  dimensions, starts, settings, thread counts, and timing boundaries. Give
-  each configuration a stable case ID; the current solver/problem key cannot
-  distinguish dimensions or starts. Include initialization consistently and
-  report repeated solve timings separately from instrumented traces. Record
-  actual objective, derivative, residual, and constraint calls, termination,
-  independent solution checks, and budget overruns. Basin's iteration limits
-  and NLopt's evaluation limits do not establish equal work. For constrained
-  curves, track the best feasible objective and violation separately; an
-  infeasible trial with a low cost must not look like a successful solve.
-- [ ] **Broaden workloads and summarize reliability.** Keep a few readable
-  convergence examples, then add time and evaluations to common accuracy and
-  feasibility targets, success rates, and performance profiles across cases.
-  Retain failures. Reuse NIST's certified values and both starts for
-  fitting; add active-bound, rank-deficient, ill-conditioned, nonsmooth, and
-  multimodal cases from existing fixtures. Sweep dimensions appropriate to
-  each method and use multiple starts. For stochastic solvers, use a
-  recorded seed set and uncertainty intervals; equal seed integers across
-  different RNGs do not imply identical random draws. Start with serial runs
-  and record backend versions, BLAS providers, and any unavoidable adapter
-  work.
-
 ### First additions
 
 - [x] **Publish the existing LM and COBYLA comparisons.** The competitor page
@@ -407,24 +384,24 @@ tests already cover fixed parameter and residual lengths.
 - [x] **Support native arrays in the vector math tier.** The vector traits
   support `[F; N]`. Tests exercise vector-only solvers with `f32` and `f64`
   without an optional linear algebra backend.
-- [x] **Support native arrays in the dense matrix tier.** Use row-major
-  nested arrays with BFGS, Cholesky and pivoted-QR least squares, trust-region
+- [x] **Support native arrays in the dense matrix tier.** Use row-major nested
+  arrays with BFGS, Cholesky and pivoted-QR least squares, trust-region
   methods, and CMA-ES without optional features. QR and eigendecomposition
   use heap scratch.
 - [x] **Build finite-difference Jacobians for native arrays.**
   `FiniteDiff::with_array_jacobian::<M>()` builds a `[[F; N]; M]` Jacobian
   from a residual function with `[F; N]` parameters.
-- [ ] **Add matrix entry access for native arrays.** Implement `MatrixIndex`
-  for nested arrays so trust-region reflective can accept array Jacobians and
+- [ ] **Add matrix entry access for native arrays.** Implement `MatrixIndex` for
+  nested arrays so trust-region reflective can accept array Jacobians and
   BFGS can accept array-backed initial inverse Hessians.
 - [ ] **Profile the remaining small dense solver workspaces.** Fixed-size
   pivoted QR and symmetric eigen still use heap scratch with both native
-  arrays and nalgebra, and trust-region
-  reflective builds a dynamic SVD workspace. Measure phase by phase before
-  changing storage. For CMA-ES, compare eigen kernels on identical
-  covariances because the eigensolver can change the seeded trajectory.
-  Profile internal work separately from parameter storage in SLSQP and the
-  Powell solvers, where active sets and model sizes can vary at runtime.
+  arrays and nalgebra, and trust-region reflective builds a dynamic SVD
+  workspace. Measure phase by phase before changing storage. For CMA-ES,
+  compare eigen kernels on identical covariances because the eigensolver can
+  change the seeded trajectory. Profile internal work separately from
+  parameter storage in SLSQP and the Powell solvers, where active sets and
+  model sizes can vary at runtime.
 
 ### Finite-difference performance
 
@@ -837,16 +814,17 @@ release, and document the migration for each change.
   them.
 - [ ] **Prototype in-place executor state.** Benchmark the small
   Levenberg–Marquardt and unbounded L-BFGS workloads from
-  [#140](https://github.com/jolars/basin/issues/140). Compare the current driver
-  with a prototype that keeps state in the executor and passes `&mut S` to
-  `Solver::next_iter`, which returns only the step outcome. On callback error,
-  invalidate the run so callers cannot observe or checkpoint partial progress.
-  Verify publication, evaluation counts, and stopping evidence with a
-  standalone solver, a composed solver, and exact checkpoint resumption.
-  Preserve incumbent counts and LM's numerical safeguards. Adopt the breaking
-  signature only if the prototype measurably reduces small-solve overhead
-  and simplifies the driver. If revisiting the stepping API, consider
-  borrowing the stop report from `step()` and moving it into the final result.
+  [#140](https://github.com/jolars/basin/issues/140). Compare the current
+  driver with a prototype that keeps state in the executor and passes
+  `&mut S` to `Solver::next_iter`, which returns only the step outcome. On
+  callback error, invalidate the run so callers cannot observe or checkpoint
+  partial progress. Verify publication, evaluation counts, and stopping
+  evidence with a standalone solver, a composed solver, and exact checkpoint
+  resumption. Preserve incumbent counts and LM's numerical safeguards. Adopt
+  the breaking signature only if the prototype measurably reduces
+  small-solve overhead and simplifies the driver. If revisiting the stepping
+  API, consider borrowing the stop report from `step()` and moving it into
+  the final result.
 - [ ] **Make square finite-difference Hessians the default.** Have
   `FiniteDiff::new` infer the square matrix from the parameter backend while
   keeping Jacobian rows tied to the residual or constraint count. Document
