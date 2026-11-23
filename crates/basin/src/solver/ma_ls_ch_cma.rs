@@ -26,6 +26,9 @@ use crate::solver::ma_ls_ch::MaLsCh;
 ///
 /// # Backends
 ///
+/// Native arrays use `[F; N]` parameters and `[[F; N]; N]` covariance for
+/// `f32` and `f64`. Eigendecomposition uses heap scratch.
+///
 /// Same dense coverage and matrix capabilities as [`CmaEs`]: `Vec<F>` with
 /// [`DenseMatrix`](crate::DenseMatrix), nalgebra `DVector<F>`, ndarray `Array1<F>`,
 /// and faer `Col<F>`, for `F = f32` or `f64`. Publishes shared

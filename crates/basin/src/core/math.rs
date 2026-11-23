@@ -315,6 +315,7 @@ pub trait VectorIndex<F = f64> {
 }
 
 mod array;
+mod array_matrix;
 mod cl_scaling;
 mod clamp;
 mod dense;

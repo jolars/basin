@@ -353,6 +353,12 @@ where
 ///
 /// # Backends
 ///
+/// Native arrays support `[F; N]` parameters with a `[[F; N]; N]` Hessian
+/// for every matrix strategy. For least squares with a supplied rectangular
+/// `[[F; N]; M]` Jacobian and `[F; M]` residuals, use
+/// [`Self::least_squares_with_gram`]. Both precisions work without optional
+/// features. More–Sorensen uses heap scratch for eigendecomposition.
+///
 /// The solver itself needs `Clone`, [`VectorLen`], [`ScaledAdd`], and
 /// [`NormSquared`] on the parameter vector, plus a [`Hessian`] impl in the
 /// default [`ExactHessian`] mode. There, the effective backend coverage is

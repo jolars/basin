@@ -124,7 +124,8 @@ finding uses a direct callback API and a separate result type.
 - **<span id="bfgs"></span>[`Bfgs`](https://docs.rs/basin/latest/basin/solver/bfgs/struct.Bfgs.html)**:
   dense quasi-Newton with a full inverse-Hessian approximation (Nocedal &
   Wright, 2006). Supports all four dense backends with `f32` or `f64`,
-  including fixed-size nalgebra `SVector` and `SMatrix`.
+  including fixed-size nalgebra `SVector` and `SMatrix`. The default initializer
+  also supports plain arrays.
   Optional fixed initial matrices require cloning and entry access; closure
   initializers require entry access. Named initializers enforce their own
   seed contracts. [Read the BFGS guide](quasi-newton/bfgs/).
@@ -276,6 +277,9 @@ finding uses a direct callback API and a separate result type.
   parameters and residuals of different lengths. Use
   `TrustRegion::least_squares_with_gram(Dogleg)` when the Jacobian and Gram
   matrix types differ.
+  Plain arrays support every matrix strategy with a square nested-array
+  Hessian, including through `FiniteDiff::with_square_hessian()`. For a
+  rectangular array Jacobian, use `least_squares_with_gram()`.
   With ndarray, exact-Hessian mode requires a supplied `Array2` Hessian because
   `FiniteDiff` cannot construct one. Its matrix-free Hessian-vector products
   work on every backend. All modes publish `FirstOrderState` and support
@@ -295,6 +299,11 @@ backends and also exposes the objective to general optimizers. See the
 [loss API and model](https://docs.rs/basin/latest/basin/core/least_squares/index.html)
 for the safeguarded curvature formula, following Triggs et al. (1999),
 _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
+
+Gauss–Newton, both Cholesky LM solvers, and pivoted-QR LM support `[F; N]`
+parameters and `[F; M]` residuals with a supplied row-major `[[F; N]; M]`
+Jacobian in both precisions. For a rectangular Jacobian, use `new_with_gram()`
+with the Cholesky solvers. Pivoted QR uses heap scratch.
 
 All five solvers below support nalgebra `SVector<F, N>` parameters with
 either `SVector<F, M>` or `DVector<F>` residuals for `f32` and `f64`.
@@ -401,7 +410,7 @@ different types.
   (the `pycma` default). Publishes `PopulationProgress` with an evaluated mean;
   distributions and penalty history live on the solver. The bounded variant
   publishes repaired points and raw costs, retaining penalized rankings in its
-  model. All four dense backends support `f32` and `f64`.
+  model. Supports plain arrays and the other dense backends in both precisions.
   [Read the CMA-ES guide](global-and-stochastic/cma-es/) and
   [the bounded CMA-ES guide](global-and-stochastic/bounded-cma-es/).
 - **<span id="de"></span>[`De`](https://docs.rs/basin/latest/basin/solver/de/struct.De.html)**:
@@ -464,8 +473,8 @@ solvers that enforce the same box can be supplied directly.
   CMA-ES with per-generation local polishing of the best individuals,
   re-injected via Hansen's (2011) injection mechanism. Publishes
   `PopulationProgress` and preserves all six evaluation categories. All four
-  dense backends support `f32` and `f64` with a compatible inner solver;
-  custom inners can narrow that support.
+  dense backends and plain arrays support `f32` and `f64` with a compatible
+  inner solver.
   Read the [CMA injection](memetic/cma-inject/) and
   [bounded CMA injection](memetic/bounded-cma-inject/) guides.
 - **<span id="de-inject"></span>[`DeInject`](https://docs.rs/basin/latest/basin/solver/de_inject/struct.DeInject.html)**:
@@ -485,7 +494,7 @@ solvers that enforce the same box can be supplied directly.
   *Memetic algorithms for continuous optimisation based on local search chains*,
   Evolutionary Computation 18(1), 27–63 (DOI 10.1162/evco.2010.18.1.18102). Publishes `PopulationProgress`; the solver owns
   retained chains, their eligibility history, and RNG. Supports all four dense
-  backends with `f32` and `f64`, using CMA-ES's matrix capabilities. Requires
+  backends and plain arrays with `f32` and `f64`. Requires
   `SamplingBounds` on an unconstrained objective, or `SamplingDomain::new(problem)`
   for an existing box-only objective. Local chains and accepted points may leave
   the sampling box.

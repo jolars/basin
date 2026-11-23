@@ -3,6 +3,8 @@
 //! `CONTRIBUTING.md` tenet 5: most of these operations are carried only by
 //! backends that can implement them honestly. All four dense backends provide
 //! pure-Rust Gram, Cholesky, symmetric eigenvalue, and pivoted-QR operations.
+//! Native arrays provide row-major matrix products, Gram matrices, Cholesky,
+//! pivoted QR, and symmetric eigendecomposition with `f32` and `f64`.
 //! Sparse capabilities are narrower and are documented on each trait.
 //!
 //! The op set covers what Gauss-Newton needs at minimum, plus a
@@ -449,7 +451,8 @@ pub trait DenseMatrixFromFn<F = f64>: Sized {
 
 /// Constructs a square matrix from its entries.
 ///
-/// Available for nalgebra `SMatrix<F, N, N>` with `F = f32` or `f64`.
+/// Available for `[[F; N]; N]` and nalgebra `SMatrix<F, N, N>` with
+/// `F = f32` or `f64`.
 pub trait SquareMatrixFromFn<F: super::Scalar = f64>: Sized {
     /// Build an `n × n` matrix, calling `entry` once per element in
     /// backend-defined order. Fixed-size matrices require `n` to match their

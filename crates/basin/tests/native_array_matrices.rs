@@ -1,0 +1,240 @@
+use basin::{
+    Bfgs, BoundedCmaEs, BoundedCmaInject, BoundedLevenbergMarquardt, BoxBounds,
+    CauchyPoint, CmaEs, CmaInject, Constrained, ConstraintSet, CostFunction,
+    Dogleg, Executor, FactorizePivotedQr, FiniteDiff, GaussNewton, Gradient,
+    GramMatrix, HuberLoss, Jacobian, Lbfgs, LevenbergMarquardt,
+    LevenbergMarquardtQr, LinearSolveError, LinearSolveSpd, MaLsChCma,
+    MatTransposeVec, MatVec, MoreSorensen, PopulationProgress, QrSolveError,
+    RegularizedQrSolve, Residual, RobustLeastSquares, Scalar, SymmetricEigen,
+    TrustRegion,
+};
+use rand_distr::{Distribution, StandardNormal};
+use std::convert::Infallible;
+
+fn n<F: Scalar>(x: f64) -> F {
+    F::from_f64(x).unwrap()
+}
+
+struct Fit<F>(F);
+
+impl<F: Scalar> Residual for Fit<F> {
+    type Param = [F; 2];
+    type Output = [F; 3];
+    type Error = Infallible;
+
+    fn residual(&self, x: &Self::Param) -> Result<Self::Output, Infallible> {
+        Ok([x[0] - self.0, n::<F>(2.0) * (x[1] - n(0.5)), n(0.25)])
+    }
+}
+
+impl<F: Scalar> Jacobian for Fit<F> {
+    type Jacobian = [[F; 2]; 3];
+
+    fn jacobian(&self, _: &Self::Param) -> Result<Self::Jacobian, Infallible> {
+        Ok([[F::one(), F::zero()], [F::zero(), n(2.0)], [F::zero(); 2]])
+    }
+}
+
+impl<F: Scalar> CostFunction for Fit<F> {
+    type Param = [F; 2];
+    type Output = F;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<F, Infallible> {
+        Ok((x[0] - self.0).powi(2) + n::<F>(2.0) * (x[1] - n(0.5)).powi(2))
+    }
+}
+
+impl<F: Scalar> Gradient for Fit<F> {
+    type Gradient = [F; 2];
+
+    fn gradient(&self, x: &Self::Param) -> Result<Self::Gradient, Infallible> {
+        Ok([n::<F>(2.0) * (x[0] - self.0), n::<F>(4.0) * (x[1] - n(0.5))])
+    }
+}
+
+fn check_point<F: Scalar>(actual: &[F; 2], expected: [F; 2], tolerance: F) {
+    for (&actual, expected) in actual.iter().zip(expected) {
+        assert!(
+            (actual - expected).abs() <= tolerance,
+            "{actual:?} vs {expected:?}"
+        );
+    }
+}
+
+type BoundedFit<F> = Constrained<Fit<F>, ConstraintSet<BoxBounds<[F; 2]>>>;
+
+fn bounded<F: Scalar>(target: F) -> BoundedFit<F> {
+    Constrained::new(
+        Fit(target),
+        ConstraintSet::new().with_bounds(BoxBounds::new(
+            Some([n(-1.0); 2]),
+            Some([F::one(); 2]),
+        )),
+    )
+}
+
+fn least_squares<F: Scalar>() {
+    let start = [F::zero(); 2];
+    let target = [n(0.25), n(0.5)];
+    let tolerance = n(0.002);
+    macro_rules! check {
+        ($problem:expr, $solver:expr, $expected:expr) => {{
+            let result = Executor::from_start($problem, $solver, start)
+                .max_iter(100)
+                .run()
+                .unwrap();
+            check_point(result.param(), $expected, tolerance);
+        }};
+    }
+    check!(Fit(target[0]), GaussNewton::new_with_gram(), target);
+    check!(Fit(target[0]), LevenbergMarquardt::new_with_gram(), target);
+    check!(Fit(target[0]), LevenbergMarquardtQr::new(), target);
+    check!(
+        Fit(target[0]),
+        TrustRegion::least_squares_with_gram(Dogleg),
+        target
+    );
+    check!(
+        Fit(target[0]),
+        TrustRegion::least_squares_with_gram(MoreSorensen::default()),
+        target
+    );
+    check!(
+        bounded(n(2.0)),
+        BoundedLevenbergMarquardt::new_with_gram(),
+        [F::one(), target[1]]
+    );
+    check!(
+        RobustLeastSquares::new(Fit(target[0]), HuberLoss).with_scale(n(0.1)),
+        LevenbergMarquardtQr::new(),
+        target
+    );
+    check!(Fit(target[0]), Bfgs::new(), target);
+}
+
+fn trust_region<F: Scalar + Send + Sync>() {
+    let target = [n::<F>(0.25), n(0.5)];
+    let problem =
+        || FiniteDiff::new_with_scalar(Fit(target[0])).with_square_hessian();
+    let start = [F::zero(); 2];
+    macro_rules! check {
+        ($solver:expr) => {{
+            let result = Executor::from_start(problem(), $solver, start)
+                .max_iter(100)
+                .run()
+                .unwrap();
+            check_point(result.param(), target, n(0.002));
+        }};
+    }
+    check!(TrustRegion::with_subproblem(basin::Steihaug::new()));
+    check!(TrustRegion::with_subproblem(CauchyPoint));
+    check!(TrustRegion::with_subproblem(Dogleg));
+    check!(TrustRegion::with_subproblem(MoreSorensen::default()));
+}
+
+fn population<F: Scalar + Send + Sync + rand_distr::uniform::SampleUniform>()
+where
+    StandardNormal: Distribution<F>,
+{
+    let target = [n::<F>(0.25), n(0.5)];
+    let cma = || CmaEs::<[F; 2], [[F; 2]; 2], F>::new(42, n(0.4));
+    let bounded_cma =
+        || BoundedCmaEs::<[F; 2], [[F; 2]; 2], F>::new(42, n(0.4));
+    macro_rules! check {
+        ($problem:expr, $solver:expr) => {{
+            let result = Executor::new(
+                $problem,
+                $solver,
+                PopulationProgress::from_point([F::zero(); 2]),
+            )
+            .max_iter(100)
+            .run()
+            .unwrap();
+            check_point(result.param(), target, n(0.03));
+        }};
+    }
+    check!(Fit(target[0]), cma());
+    check!(bounded(target[0]), bounded_cma());
+    check!(
+        Fit(target[0]),
+        CmaInject::with_inner_solver(cma(), LevenbergMarquardtQr::new())
+    );
+    check!(
+        bounded(target[0]),
+        BoundedCmaInject::with_inner_solver(bounded_cma(), Lbfgs::new())
+    );
+    check!(
+        basin::SamplingDomain::new(bounded(target[0])),
+        MaLsChCma::<[F; 2], [[F; 2]; 2], F>::new(42)
+    );
+}
+
+#[test]
+fn f32_solvers() {
+    least_squares::<f32>();
+    trust_region::<f32>();
+    population::<f32>();
+}
+
+#[test]
+fn f64_solvers() {
+    least_squares::<f64>();
+    trust_region::<f64>();
+    population::<f64>();
+}
+
+#[test]
+fn matrix_operations() {
+    let a = [[1.0_f64, 2.0], [3.0, 4.0], [0.0, 1.0]];
+    assert_eq!(a.matvec(&[2.0, 3.0]), [8.0, 18.0, 3.0]);
+    assert_eq!(a.mat_transpose_vec(&[1.0, 2.0, 3.0]), [7.0, 13.0]);
+    assert_eq!(a.gram(), [[10.0, 14.0], [14.0, 21.0]]);
+    let spd = [[4.0, f64::NAN], [1.0, 3.0]];
+    check_point(
+        &spd.solve_spd(&[1.0, 2.0]).unwrap(),
+        [1.0 / 11.0, 7.0 / 11.0],
+        1e-14,
+    );
+    for bad in [[[1.0, 1.0], [1.0, 1.0]], [[1.0, 2.0], [2.0, 1.0]]] {
+        assert_eq!(
+            bad.solve_spd(&[1.0, 2.0]),
+            Err(LinearSolveError::NotPositiveDefinite)
+        );
+    }
+
+    let qr = a.factorize_pivoted_qr(&[8.0, 18.0, 3.0]).unwrap();
+    check_point(
+        &qr.solve_regularized(0.0, &[1.0; 2], None).unwrap(),
+        [2.0, 3.0],
+        1e-12,
+    );
+    let deficient = [[1.0_f64, 2.0], [2.0, 4.0]]
+        .factorize_pivoted_qr(&[1.0, 2.0])
+        .unwrap();
+    assert_eq!(
+        deficient.solve_regularized(0.0, &[1.0; 2], None),
+        Err(QrSolveError::RankDeficient)
+    );
+    assert!(matches!(
+        a.factorize_pivoted_qr(&[0.0, f64::NAN, 0.0]),
+        Err(QrSolveError::NonFinite)
+    ));
+
+    assert!([[f64::NAN]].try_eigh().is_err());
+    let (vectors, values) = spd.try_eigh().unwrap();
+    let symmetric = [[4.0, 1.0], [1.0, 3.0]];
+    for (j, value) in values.into_iter().enumerate() {
+        let column = [vectors[0][j], vectors[1][j]];
+        check_point(
+            &symmetric.matvec(&column),
+            column.map(|v| v * value),
+            1e-13,
+        );
+    }
+    for (actual, expected) in
+        vectors.gram().iter().zip([[1.0, 0.0], [0.0, 1.0]])
+    {
+        check_point(actual, expected, 1e-13);
+    }
+}

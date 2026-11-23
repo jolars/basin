@@ -138,6 +138,10 @@ use super::least_squares_diagnostics::{
 ///
 /// # Backends
 ///
+/// Native arrays support `[F; N]` parameters and `[F; M]` residuals with a
+/// supplied row-major `[[F; N]; M]` Jacobian, for `f32` and `f64` without
+/// optional features. Use [`Self::new_with_gram`] for a rectangular Jacobian.
+///
 /// Fixed-size nalgebra fits can use `SVector<F, N>` parameters and
 /// `SVector<F, M>` residuals with an analytic `SMatrix<F, M, N>` or a
 /// finite-difference Jacobian with dynamic rows and `N` fixed columns.

@@ -117,6 +117,9 @@ use super::cma_es::{
 ///
 /// # Backends
 ///
+/// Native arrays use `[F; N]` parameters and `[[F; N]; N]` covariance for
+/// `f32` and `f64`. Eigendecomposition uses heap scratch.
+///
 /// `Vec<F>` with [`DenseMatrix`](crate::DenseMatrix), nalgebra `DVector<F>`
 /// with `DMatrix<F>`, ndarray `Array1<F>` with `Array2<F>`, and faer `Col<F>`
 /// with `Mat<F>`, for `F = f32` or `f64`. Requires [`CmaEs`](super::cma_es::CmaEs)'s

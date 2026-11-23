@@ -407,9 +407,10 @@ tests already cover fixed parameter and residual lengths.
 - [x] **Support native arrays in the vector math tier.** The vector traits
   support `[F; N]`. Tests exercise vector-only solvers with `f32` and `f64`
   without an optional linear algebra backend.
-- [ ] **Evaluate a nested-array matrix when a dense-solve use case arises.**
-  ndarray and faer can borrow inline buffers through views for kernels that
-  accept caller-owned storage. Their owned types use heap storage.
+- [x] **Support native arrays in the dense matrix tier.** Use row-major
+  nested arrays with BFGS, Cholesky and pivoted-QR least squares, trust-region
+  methods, and CMA-ES without optional features. QR and eigendecomposition
+  use heap scratch.
 - [ ] **Profile the remaining small dense solver workspaces.** Fixed-size
   pivoted QR and symmetric eigen still use heap scratch, and trust-region
   reflective builds a dynamic SVD workspace. Measure phase by phase before

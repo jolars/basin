@@ -42,51 +42,51 @@ pub(super) fn cholesky_solve_spd<F: Scalar>(
     );
     debug_assert_eq!(b.len(), n, "cholesky_solve_spd: expected a length-n rhs");
 
-    let zero = F::zero();
+    let mut l = a.to_vec();
+    let mut x = b.to_vec();
+    cholesky_solve_spd_in_place(&mut l, &mut x)?;
+    Some(x)
+}
 
-    // Factor: L is lower-triangular, row-major. L[i][j] for j ≤ i; the strict
-    // upper triangle stays zero.
-    let mut l = vec![zero; n * n];
+/// Factor the lower triangle in place and overwrite the RHS with the solution.
+pub(super) fn cholesky_solve_spd_in_place<F: Scalar>(
+    l: &mut [F],
+    x: &mut [F],
+) -> Option<()> {
+    let n = x.len();
+    debug_assert_eq!(l.len(), n * n);
     for i in 0..n {
         for j in 0..=i {
-            // s ← A[i][j] − Σ_{k<j} L[i][k] · L[j][k]
-            let mut s = a[i * n + j];
+            let mut pivot = l[i * n + j];
             for k in 0..j {
-                s = s - l[i * n + k] * l[j * n + k];
+                pivot = pivot - l[i * n + k] * l[j * n + k];
             }
-            if i == j {
-                // A non-positive pivot means `A` is not positive definite.
-                if s <= zero {
+            l[i * n + j] = if i == j {
+                if pivot <= F::zero() {
                     return None;
                 }
-                l[i * n + i] = s.sqrt();
+                pivot.sqrt()
             } else {
-                l[i * n + j] = s / l[j * n + j];
-            }
+                pivot / l[j * n + j]
+            };
         }
     }
 
-    // Forward solve L y = b (overwrite into `y`).
-    let mut y = vec![zero; n];
     for i in 0..n {
-        let mut s = b[i];
+        let mut value = x[i];
         for k in 0..i {
-            s = s - l[i * n + k] * y[k];
+            value = value - l[i * n + k] * x[k];
         }
-        y[i] = s / l[i * n + i];
+        x[i] = value / l[i * n + i];
     }
-
-    // Back solve Lᵀ x = y (overwrite into `x`).
-    let mut x = vec![zero; n];
     for i in (0..n).rev() {
-        let mut s = y[i];
+        let mut value = x[i];
         for k in (i + 1)..n {
-            s = s - l[k * n + i] * x[k];
+            value = value - l[k * n + i] * x[k];
         }
-        x[i] = s / l[i * n + i];
+        x[i] = value / l[i * n + i];
     }
-
-    Some(x)
+    Some(())
 }
 
 #[cfg(test)]

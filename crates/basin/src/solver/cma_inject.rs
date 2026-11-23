@@ -294,6 +294,9 @@ where
 ///
 /// # Backends
 ///
+/// Native arrays use `[F; N]` parameters and `[[F; N]; N]` covariance for
+/// `f32` and `f64`. Eigendecomposition uses heap scratch.
+///
 /// Same coverage as [`CmaEs`]: `Vec<F>` for `F = f32` or `f64` (via
 /// [`DenseMatrix`](crate::DenseMatrix)), nalgebra, ndarray, and faer. The
 /// matrix capabilities are those of [`CmaEs`], and the

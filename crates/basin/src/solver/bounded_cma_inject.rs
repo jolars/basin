@@ -56,6 +56,9 @@ use crate::solver::cma_inject::{MemeticInner, default_c_y};
 ///
 /// # Backends
 ///
+/// Native arrays use `[F; N]` parameters and `[[F; N]; N]` covariance for
+/// `f32` and `f64`. Eigendecomposition uses heap scratch.
+///
 /// Same coverage as [`BoundedCmaEs`]: the default `Vec<F>` (`F = f32` or `f64`) (via
 /// [`DenseMatrix`](crate::DenseMatrix)), nalgebra, ndarray, and faer. The
 /// matrix bound is [`SymmetricEigen`], which every backend satisfies, and the

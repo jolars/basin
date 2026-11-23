@@ -214,6 +214,7 @@ impl<P, F: Scalar> FiniteDiff<P, false, F> {
 
     /// Use the parameter backend's square matrix for the Hessian.
     ///
+    /// For native arrays `[F; N]`, the Hessian is `[[F; N]; N]`.
     /// For nalgebra `SVector<F, N>`, the Hessian is an
     /// `SMatrix<F, N, N>`, suitable for [`crate::Dogleg`] and
     /// [`crate::MoreSorensen`]. Jacobian types are independent of this option.

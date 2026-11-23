@@ -43,7 +43,8 @@ use crate::core::math::{
 ///
 /// # Backends
 ///
-/// Supported parameter and Hessian pairs are `Vec<F>` with
+/// Supported parameter and Hessian pairs include `[F; N]` with
+/// `[[F; N]; N]` and `Vec<F>` with
 /// [`DenseMatrix`](crate::core::math::DenseMatrix), nalgebra `DVector<F>` with
 /// `DMatrix<F>`, ndarray `Array1<F>` with `Array2<F>`, and faer `Col<F>` with
 /// `Mat<F>`. Each pair supplies
