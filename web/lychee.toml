@@ -10,6 +10,10 @@ max_concurrency = 8
 max_retries = 2
 timeout = 20
 
+# Validate GitHub file links against the raw content endpoint because the
+# rendered pages intermittently return HTTP 503 to the link checker.
+remap = ['^https://github\.com/([^/]+/[^/]+)/blob/ https://raw.githubusercontent.com/$1/']
+
 # This GSL manual page repeatedly times out or resets connections, even with
 # serialized requests and a custom User-Agent. Exclude only this page so its
 # availability cannot block website builds.
