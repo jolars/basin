@@ -20,7 +20,8 @@ use super::sample::{
 use super::{
     ClampInPlace, ComponentDivAssign, ComponentMaxAssign, ComponentMulAssign,
     ComponentZip, Dot, FloorZerosInPlace, NegInPlace, NormInfinity,
-    NormSquared, ScaleInPlace, ScaledAdd, VectorIndex, VectorLen,
+    NormSquared, ScaleInPlace, ScaledAdd, ScaledAddOutcome, VectorIndex,
+    VectorLen,
 };
 
 // `F: Scalar` (basin's alias) bundles `Float + FromPrimitive + Sum + Debug +
@@ -38,6 +39,23 @@ where
     fn scaled_add(&mut self, scalar: F, other: &Self) {
         assert_eq!(self.shape(), other.shape(), "scaled_add: shape mismatch");
         self.zip_apply(other, |x, y| *x = *x + scalar * y);
+    }
+
+    fn scaled_add_with_change(
+        &mut self,
+        scalar: F,
+        other: &Self,
+    ) -> ScaledAddOutcome {
+        let mut changed = false;
+        let mut finite = true;
+        assert_eq!(self.shape(), other.shape(), "scaled_add: shape mismatch");
+        self.zip_apply(other, |x, y| {
+            let next = *x + scalar * y;
+            changed |= next != *x;
+            finite &= next.is_finite();
+            *x = next;
+        });
+        ScaledAddOutcome::from_components(changed, finite)
     }
 }
 

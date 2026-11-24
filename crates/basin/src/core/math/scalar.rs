@@ -1,4 +1,6 @@
-use super::{Dot, NegInPlace, NormInfinity, NormSquared, ScaledAdd};
+use super::{
+    Dot, NegInPlace, NormInfinity, NormSquared, ScaledAdd, ScaledAddOutcome,
+};
 
 // These scalar-element impls treat `f64` itself as the parameter or vector
 // type, used by 1-D solvers that work directly on a scalar `x: f64`.
@@ -12,6 +14,17 @@ use super::{Dot, NegInPlace, NormInfinity, NormSquared, ScaledAdd};
 impl ScaledAdd for f64 {
     fn scaled_add(&mut self, scalar: f64, other: &Self) {
         *self += scalar * other;
+    }
+
+    fn scaled_add_with_change(
+        &mut self,
+        scalar: f64,
+        other: &Self,
+    ) -> ScaledAddOutcome {
+        let next = *self + scalar * other;
+        let changed = next != *self;
+        *self = next;
+        ScaledAddOutcome::from_components(changed, next.is_finite())
     }
 }
 
