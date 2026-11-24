@@ -278,7 +278,19 @@ where
         } else {
             -tol1
         };
-        let u = s.x + step;
+        // The minimum step can reach an endpoint before the bracket meets
+        // the width tolerance. Bisect toward that endpoint to keep shrinking
+        // the bracket without replaying its endpoint.
+        let mut u = s.x + step;
+        if u <= s.a || u >= s.b {
+            let endpoint = u.max(s.a).min(s.b);
+            s.e = endpoint - s.x;
+            u = half * s.x + half * endpoint;
+            s.d = u - s.x;
+        }
+        if u == s.x || u <= s.a || u >= s.b {
+            return Ok((state, Some(TerminationReason::NumericalNoProgress)));
+        }
         let (fu, du) = problem.cost_and_gradient(&u)?;
 
         if fu <= s.fx {
