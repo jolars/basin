@@ -4,8 +4,8 @@
 # binary; pnpm blocks dependency build scripts by default and fails the
 # install unless they're explicitly approved here.
 allowBuilds:
-  esbuild: true
-  workerd: true
+    esbuild: true
+    workerd: true
 
 # Don't auto-run a deps-status `pnpm install` before every `pnpm run <script>`.
 # That implicit install re-evaluates the supply-chain freshness gate
@@ -13,3 +13,7 @@ allowBuilds:
 # bump makes `pnpm dev` / `pnpm run build` fail until the package ages out.
 # Installs stay explicit (`pnpm install`), where the gate still applies.
 verifyDepsBeforeRun: false
+
+# https://github.com/advisories/GHSA-xjj6-f33q-929c
+overrides:
+    "undici@>=7.18.0 <7.30.1": ^7.30.1
