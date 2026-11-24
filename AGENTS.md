@@ -179,3 +179,12 @@ equivalent `line_search/<module>/...`. Root-module struct links fail. Aliases
 link to the defining type—for example, both `Lbfgs` and `Lbfgsb` link to
 `solver/lbfgs/struct.Lbfgs.html`. A new solver may legitimately be absent from
 `/latest/` until the next release.
+
+## Performance investigations
+
+Use the [benchmark protocol](crates/basin/benches/benchmarking.md) to choose
+the harness and compare equivalent accuracy or work. Pin the numeric backend
+and preserve evaluation counts, stopping policy, and failure records. See the
+[profiling guide](crates/basin/benches/profiling.md) for the profiling build.
+Use the direct benchmark harness for investigations. The `task bench:*`
+commands also regenerate published website data.

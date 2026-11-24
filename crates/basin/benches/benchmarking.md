@@ -142,3 +142,55 @@ Rayon and BLAS thread settings. For parallel scaling, use the existing
 size in separate processes; do not pin a multicore run to one CPU. Report
 single-thread latency separately from parallel throughput. Native results do not
 establish browser/WASM performance; measure the requested runtime.
+
+## Establish the comparison
+
+Keep the user's solver, variant, workload, and reference. If none is specified,
+choose a representative existing case and state the choice. For a regression,
+compare against a known earlier revision.
+
+Before choosing kernel optimizations for an implementation comparison, establish
+whether the competitor uses the same algorithm variant. If it differs, retain
+the user's competitor as the practical performance target and identify a
+matching reference for implementation-cost comparisons. Prefer author-maintained
+reference code or an established library implementing the same variant. Record
+versions or commits and material differences; use primary documentation or
+source to resolve ambiguous reference semantics.
+
+When whole-solver trajectories differ, start the implementation comparison with
+kernels on identical inputs. If no matching reference is available, document
+that limitation and use matched before/after work to support implementation
+speedups without attributing the whole competitor gap to implementation
+overhead.
+
+Before timing, run each contestant once and record:
+
+- Problem dimensions, data, starting point, scalar type, bounds, and
+  constraints. Check constraint signs, residual scaling, and whether the
+  reported objective is a sum of squares or half that sum.
+- Algorithm settings: line search, memory size, initial simplex or population,
+  trust-region radii, scaling, restart rules, and random seeds as applicable.
+- Actual stopping conditions, including implicit solver stops, adapter tolerance
+  floors, and the meaning of each budget. Equal tolerance values or iteration
+  caps do not establish equal work across libraries.
+- Returned objective, feasibility, gradient or residual norm when relevant,
+  termination reason, iterations, and objective, derivative, and constraint
+  evaluations. Validate the returned point independently outside the timer.
+  Distinguish current and best-so-far state, and count verification calls
+  separately. Budget exhaustion alone does not establish convergence;
+  distinguish budget-limited output from verified success and invalid non-finite
+  results.
+
+Choose the measurement that answers the question:
+
+- **Implementation cost:** matched work, such as a kernel on identical inputs or
+  the same solver steps. Verify evaluation counts and numerical results; equal
+  iterations alone can hide different line-search or inner-solver work.
+- **Solver effectiveness:** time and evaluations to a common accuracy and
+  feasibility target, or quality achieved within a common budget. Retain failed
+  cases and success rates. Use paired seeds and multiple starts when stochastic
+  variation matters. Convergence traces help explain differing trajectories.
+
+Use both views when fewer evaluations could explain the speed difference. For
+non-solver components, establish equivalent outputs and the relevant work unit
+instead of imposing solver convergence criteria.

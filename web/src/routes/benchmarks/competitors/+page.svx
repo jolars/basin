@@ -396,9 +396,9 @@ machine. Results use source revision
 From the repository root:
 
 ```sh
-compute run -- cargo build --locked -p competitor-bench --release --features lbfgsb-reference --bin trace
-compute bench --reason "Refresh competitor convergence traces" -- bash -c './target/release/trace > target/competitor-traces.json'
-compute run -- pnpm --dir web collect:competitors
+cargo build --locked -p competitor-bench --release --features lbfgsb-reference --bin trace
+bash -c './target/release/trace > target/competitor-traces.json'
+pnpm --dir web collect:competitors
 ```
 
 The optional `lbfgsb-reference` feature requires a C compiler and libclang,
@@ -409,7 +409,7 @@ and doubling until both medians reach 20 ms. The published dimension remains
 fixed between benchmark refreshes.
 
 To verify both CMA-ES problems with the published seed and refresh period, run
-`compute bench --reason "Verify active CMA-ES" -- cargo run --locked --release -p competitor-bench --bin verify_cmaes`.
+`cargo run --locked --release -p competitor-bench --bin verify_cmaes`.
 Append `-- --untraced` to disable intermediate trace recording. The verifier
 reports timing ranges across repetitions, objective counts, and target checks.
 To generate only the CMA-ES traces, pass `--cmaes` to the prebuilt `trace` binary.
