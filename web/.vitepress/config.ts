@@ -125,22 +125,26 @@ export default defineConfig({
                 { text: "Introduction", items: sidebar(DOCS_LINKS) },
                 { text: "Benchmarks", items: sidebar(BENCHMARK_LINKS) },
                 {
-                    text: "Development",
+                    text: "Migration guides",
+                    collapsed: true,
                     items: [
                         {
-                            text: "Migration guides",
-                            collapsed: true,
-                            items: [
-                                {
-                                    text: "Migrating to Basin 2.0",
-                                    link: "/guide/migrating-to-v2/",
-                                },
-                                {
-                                    text: "Migrating to Basin 3.0",
-                                    link: "/guide/migrating-to-v3/",
-                                },
-                            ],
+                            text: "Migrating from Argmin",
+                            link: "/guide/migrating-from-argmin/",
                         },
+                        {
+                            text: "Migrating to Basin 3.0",
+                            link: "/guide/migrating-to-v3/",
+                        },
+                        {
+                            text: "Migrating to Basin 2.0",
+                            link: "/guide/migrating-to-v2/",
+                        },
+                    ],
+                },
+                {
+                    text: "Development",
+                    items: [
                         { text: "Changelog", link: "/guide/changelog/" },
                         {
                             text: "Contributing to Basin",

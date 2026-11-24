@@ -9,7 +9,6 @@
 
 - [Overview](https://basin.rs/guide/): how the problem, solver, state, and executor pieces fit together
 - [Getting started](https://basin.rs/guide/getting-started/): install, backend features, and a first solve
-- [Migrating from Argmin](https://basin.rs/guide/migrating-from-argmin/): map Argmin 0.11 problem traits, solvers, errors, bounds, observers, and backends to Basin
 
 ## Solvers
 
@@ -63,10 +62,22 @@
 - [Halley root finding](https://basin.rs/guide/solvers/root-finding/halley/): first and second derivatives, separate and combined callbacks, safeguards, and Rust examples
 - [TOMS 748 root finding](https://basin.rs/guide/solvers/root-finding/toms748/): derivative-free interpolation cycles, bracket contraction, evaluation counts, and a Rust example
 
+## Benchmarks
+
+- [Smooth unconstrained optimization](https://basin.rs/guide/benchmarks/smooth-unconstrained/)
+- [Constrained optimization](https://basin.rs/guide/benchmarks/constrained/)
+- [Derivative-free and global search](https://basin.rs/guide/benchmarks/derivative-free-and-global/)
+- [Nonlinear least squares](https://basin.rs/guide/benchmarks/least-squares/)
+- [Backends](https://basin.rs/guide/benchmarks/backends/)
+
+## Migration guides
+
+- [Migrating from Argmin](https://basin.rs/guide/migrating-from-argmin/): map Argmin 0.11 problem traits, solvers, errors, bounds, observers, and backends to Basin
+- [Migrating to Basin 3.0](https://basin.rs/guide/migrating-to-v3/): upgrade to optional constraint declarations and standalone objective and residual traits
+- [Migrating to Basin 2.0](https://basin.rs/guide/migrating-to-v2/): upgrade from Basin 1.x, including constraints, states, termination reports, solver settings, and checkpoints
+
 ## Development
 
-- [Migrating to Basin 2.0](https://basin.rs/guide/migrating-to-v2/): upgrade from Basin 1.x, including constraints, states, termination reports, solver settings, and checkpoints
-- [Migrating to Basin 3.0](https://basin.rs/guide/migrating-to-v3/): upgrade to optional constraint declarations and standalone objective and residual traits
 - [Changelog](https://basin.rs/guide/changelog/): release notes and changes
 - [Contributing to Basin](https://basin.rs/guide/contributing/): development, verification, and release workflows
 
@@ -75,14 +86,6 @@
 - [API documentation (docs.rs)](https://docs.rs/basin): full, authoritative API reference
 - [crates.io](https://crates.io/crates/basin): published releases
 - [Source (GitHub)](https://github.com/jolars/basin): repository, issues, and changelog
-
-## Benchmarks
-
-- [Smooth unconstrained optimization](https://basin.rs/guide/benchmarks/smooth-unconstrained/)
-- [Constrained optimization](https://basin.rs/guide/benchmarks/constrained/)
-- [Derivative-free and global search](https://basin.rs/guide/benchmarks/derivative-free-and-global/)
-- [Nonlinear least squares](https://basin.rs/guide/benchmarks/least-squares/)
-- [Backends](https://basin.rs/guide/benchmarks/backends/)
 
 ## Visualizer
 
