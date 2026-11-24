@@ -1,0 +1,606 @@
+diff --git a/crates/basin/src/core/convergence.rs b/crates/basin/src/core/convergence.rs
+index b7ba7bc..905c41c 100644
+--- a/crates/basin/src/core/convergence.rs
++++ b/crates/basin/src/core/convergence.rs
+@@ -775,6 +775,18 @@ where
+         self.cost.invalidate_cache();
+         Ok(step)
+     }
++    const STEPS_IN_PLACE: bool = So::STEPS_IN_PLACE;
++
++    fn next_iter_in_place(
++        &mut self,
++        problem: &mut Problem<P>,
++        state: &mut S,
++    ) -> Result<crate::core::solver::StepDecision<S::Float>, Self::Error> {
++        let decision = self.solver.next_iter_in_place(problem, state)?;
++        self.step.invalidate_cache();
++        self.cost.invalidate_cache();
++        Ok(decision)
++    }
+     fn terminate(&self, state: &S) -> Option<Termination<S::Float>> {
+         self.solver.terminate(state)
+     }
+diff --git a/crates/basin/src/core/executor.rs b/crates/basin/src/core/executor.rs
+index e661674..660e059 100644
+--- a/crates/basin/src/core/executor.rs
++++ b/crates/basin/src/core/executor.rs
+@@ -725,19 +725,34 @@ where
+             state.iter(),
+         )));
+     }
+-    let SolverStep {
+-        state: mut next,
+-        completed,
+-        termination,
+-    } = solver.next_iter(problem, state_slot.take().unwrap())?;
+-    control.validate(&next);
++    let (completed, termination) = if So::STEPS_IN_PLACE {
++        let decision = match solver
++            .next_iter_in_place(problem, state_slot.as_mut().unwrap())
++        {
++            Ok(decision) => decision,
++            Err(error) => {
++                *state_slot = None;
++                return Err(error);
++            }
++        };
++        (decision.completed, decision.termination)
++    } else {
++        let SolverStep {
++            state,
++            completed,
++            termination,
++        } = solver.next_iter(problem, state_slot.take().unwrap())?;
++        *state_slot = Some(state);
++        (completed, termination)
++    };
++    let next = state_slot.as_mut().unwrap();
++    control.validate(next);
+     next.mirror(&problem.counts().delta_since(baseline));
+     if completed {
+         next.increment_iter();
+     }
+     next.update_best();
+     let iteration = next.iter();
+-    *state_slot = Some(next);
+     Ok(match termination {
+         Some(termination) => StepOutcome::Stopped(TerminationReport::new(
+             termination,
+diff --git a/crates/basin/src/core/solver.rs b/crates/basin/src/core/solver.rs
+index c972709..e8f3c5d 100644
+--- a/crates/basin/src/core/solver.rs
++++ b/crates/basin/src/core/solver.rs
+@@ -4,6 +4,7 @@
+ //! [`executor`](crate::core::executor) module for the canonical iteration
+ //! ordering.
+
++use crate::core::math::Scalar;
+ use crate::core::problem::Problem;
+ use crate::core::state::State;
+ use crate::core::termination::Termination;
+@@ -87,6 +88,38 @@ impl<S: State> From<(S, Option<Termination<S::Float>>)> for SolverStep<S> {
+     }
+ }
+
++/// Experimental step outcome without ownership of the state.
++#[doc(hidden)]
++pub struct StepDecision<F: Scalar> {
++    pub completed: bool,
++    pub termination: Option<Termination<F>>,
++}
++
++impl<F: Scalar> StepDecision<F> {
++    pub fn new(completed: bool, termination: Option<Termination<F>>) -> Self {
++        Self {
++            completed,
++            termination,
++        }
++    }
++
++    pub fn completed() -> Self {
++        Self::new(true, None)
++    }
++
++    pub fn stopped(termination: Termination<F>) -> Self {
++        Self::new(false, Some(termination))
++    }
++
++    pub fn completed_with_termination(termination: Termination<F>) -> Self {
++        Self::new(true, Some(termination))
++    }
++
++    pub fn with_state<S: State<Float = F>>(self, state: S) -> SolverStep<S> {
++        SolverStep::new(state, self.completed, self.termination)
++    }
++}
++
+ /// A concrete optimization algorithm. Implementations carry the
+ /// solver's configuration and any internal scratch state; the iterate
+ /// itself lives in `S: State`.
+@@ -214,6 +247,22 @@ pub trait Solver<P, S: State> {
+         state: S,
+     ) -> Result<SolverStep<S>, Self::Error>;
+
++    // Keep unported solvers on the original driver path. This dispatch is
++    // resolved when the experiment is monomorphized for a concrete solver.
++    #[doc(hidden)]
++    const STEPS_IN_PLACE: bool = false;
++
++    /// Experimental borrowed-state path. On Err, the driver drops the state
++    /// before it can be observed or checkpointed, retaining Problem counts.
++    #[doc(hidden)]
++    fn next_iter_in_place(
++        &mut self,
++        _problem: &mut Problem<P>,
++        _state: &mut S,
++    ) -> Result<StepDecision<S::Float>, Self::Error> {
++        unreachable!("solver did not implement the in-place experiment")
++    }
++
+     /// Reset per-run convergence history without changing algorithm state.
+     ///
+     /// Called before initialization for fresh runs and state-only resumes.
+diff --git a/crates/basin/src/solver/lbfgs.rs b/crates/basin/src/solver/lbfgs.rs
+index 09b691a..92193e6 100644
+--- a/crates/basin/src/solver/lbfgs.rs
++++ b/crates/basin/src/solver/lbfgs.rs
+@@ -56,7 +56,7 @@ use self::workspace::{History, LbfgsbWork};
+ use crate::core::constraint::evaluation::BoxProblem;
+ use crate::core::math::{Dot, Scalar, ScaledAdd, VectorLen};
+ use crate::core::problem::{CostFunction, Gradient, Problem};
+-use crate::core::solver::Solver;
++use crate::core::solver::{Solver, StepDecision};
+ use crate::core::state::{FirstOrderState, State};
+ use crate::core::termination::Termination;
+ use crate::line_search::{
+@@ -1355,6 +1355,17 @@ where
+         problem: &mut Problem<P>,
+         mut state: FirstOrderState<V, F>,
+     ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
++        let decision = self.next_iter_in_place(problem, &mut state)?;
++        Ok(decision.with_state(state))
++    }
++
++    const STEPS_IN_PLACE: bool = true;
++
++    fn next_iter_in_place(
++        &mut self,
++        problem: &mut Problem<P>,
++        state: &mut FirstOrderState<V, F>,
++    ) -> Result<StepDecision<F>, Self::Error> {
+         let (f_old, g_v) = state
+             .take_evaluation()
+             .expect("L-BFGS requires initialized progress");
+@@ -1362,12 +1373,9 @@ where
+             state
+                 .set_evaluation(f_old, g_v)
+                 .expect("gradient dimension differs from parameter");
+-            return Ok(crate::SolverStep::stopped(
+-                state,
+-                Termination::numerical_failure(
+-                    "L-BFGS requires a finite point, cost, and gradient.",
+-                ),
+-            ));
++            return Ok(StepDecision::stopped(Termination::numerical_failure(
++                "L-BFGS requires a finite point, cost, and gradient.",
++            )));
+         }
+         let history = self
+             .history
+@@ -1472,11 +1480,8 @@ where
+             state
+                 .set_evaluation(f_old, g_v)
+                 .expect("gradient dimension differs from parameter");
+-            return Ok(crate::SolverStep::from((
+-                state,
+-                Some(Termination::numerical_failure(
+-                    "L-BFGS line search returned no finite positive step.",
+-                )),
++            return Ok(StepDecision::stopped(Termination::numerical_failure(
++                "L-BFGS line search returned no finite positive step.",
+             )));
+         }
+
+@@ -1496,12 +1501,9 @@ where
+             state
+                 .set_evaluation(f_old, g_v)
+                 .expect("gradient dimension differs from parameter");
+-            return Ok(crate::SolverStep::stopped(
+-                state,
+-                Termination::numerical_failure(
+-                    "L-BFGS line search returned a nonfinite evaluation.",
+-                ),
+-            ));
++            return Ok(StepDecision::stopped(Termination::numerical_failure(
++                "L-BFGS line search returned a nonfinite evaluation.",
++            )));
+         }
+
+         // Curvature-conditioned limited-memory update. Matches Fortran
+@@ -1543,7 +1545,7 @@ where
+         state
+             .replace(param_new, f_new, g_new)
+             .expect("gradient dimension differs from parameter");
+-        Ok(crate::SolverStep::from((state, None)))
++        Ok(StepDecision::completed())
+     }
+ }
+
+diff --git a/crates/basin/src/solver/levenberg_marquardt.rs b/crates/basin/src/solver/levenberg_marquardt.rs
+index 99e0305..9ccc497 100644
+--- a/crates/basin/src/solver/levenberg_marquardt.rs
++++ b/crates/basin/src/solver/levenberg_marquardt.rs
+@@ -14,7 +14,7 @@ use crate::core::problem::Problem;
+ use crate::core::problem::buffers::BufferStorage;
+ #[cfg(test)]
+ use crate::core::problem::{Jacobian, Residual};
+-use crate::core::solver::Solver;
++use crate::core::solver::{Solver, StepDecision};
+ use crate::core::state::{PointState, State};
+ use crate::core::termination::Termination;
+
+@@ -708,8 +708,19 @@ where
+     fn next_iter(
+         &mut self,
+         problem: &mut Problem<P>,
+-        state: PointState<V, F>,
++        mut state: PointState<V, F>,
+     ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
++        let decision = self.next_iter_in_place(problem, &mut state)?;
++        Ok(decision.with_state(state))
++    }
++
++    const STEPS_IN_PLACE: bool = true;
++
++    fn next_iter_in_place(
++        &mut self,
++        problem: &mut Problem<P>,
++        state: &mut PointState<V, F>,
++    ) -> Result<StepDecision<F>, Self::Error> {
+         let mut buffer = self.jacobian_buffer.take();
+         let result = self.next_iter_model::<_, M, NormalEquations<G>>(
+             problem,
+@@ -818,10 +829,10 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
+     fn next_iter_model<E, M, Model>(
+         &mut self,
+         problem: &mut E,
+-        mut state: PointState<V, F>,
++        state: &mut PointState<V, F>,
+         rank_tolerance: Option<F>,
+         jacobian_buffer: &mut Option<M>,
+-    ) -> LmStep<V, F, E::Error>
++    ) -> LmStep<F, E::Error>
+     where
+         E: Evaluation<V, M, F, R>,
+         R: NormSquared<F>
+@@ -856,11 +867,8 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
+                     "invalid_initial_model",
+                 );
+             }
+-            return Ok(crate::SolverStep::from((
+-                state,
+-                Some(Termination::numerical_failure(
+-                    "LM initialization produced an invalid residual model.",
+-                )),
++            return Ok(StepDecision::stopped(Termination::numerical_failure(
++                "LM initialization produced an invalid residual model.",
+             )));
+         }
+         let r = match self.r_cache.take() {
+@@ -882,12 +890,11 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
+                             "invalid_residual_model",
+                         );
+                     }
+-                    return Ok(crate::SolverStep::from((
+-                        state,
+-                        Some(Termination::numerical_failure(
++                    return Ok(StepDecision::stopped(
++                        Termination::numerical_failure(
+                             "The least-squares objective cannot produce a valid local model.",
+-                        )),
+-                    )));
++                        ),
++                    ));
+                 };
+                 let model = (
+                     Model::prepare(&j, model_r.as_ref().unwrap_or(&r)),
+@@ -911,12 +918,11 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
+                 self.model_cache = Some(Err(error));
+                 self.r_cache = Some(r);
+                 self.jtr_cache = Some(g);
+-                return Ok(crate::SolverStep::from((
+-                    state,
+-                    Some(Termination::numerical_failure(
++                return Ok(StepDecision::stopped(
++                    Termination::numerical_failure(
+                         "LM model factorization failed.",
+-                    )),
+-                )));
++                    ),
++                ));
+             }
+         };
+         // Squaring a finite gradient can overflow even when the QR step is valid.
+@@ -943,11 +949,8 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
+             self.model_cache = Some(Ok(a));
+             self.r_cache = Some(r);
+             self.jtr_cache = Some(g);
+-            return Ok(crate::SolverStep::from((
+-                state,
+-                Some(Termination::numerical_failure(
+-                    "The residual, objective, or gradient is non-finite.",
+-                )),
++            return Ok(StepDecision::stopped(Termination::numerical_failure(
++                "The residual, objective, or gradient is non-finite.",
+             )));
+         }
+         let diag_cur = Model::diagonal(&a);
+@@ -1048,7 +1051,7 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
+             self.r_cache = Some(r);
+             self.model_cache = Some(Ok(a));
+             self.jtr_cache = Some(g);
+-            return Ok(crate::SolverStep::from((state, Some(termination))));
++            return Ok(StepDecision::stopped(termination));
+         }
+
+         // Moré's monotone scaling keeps the damped Gram positive definite.
+@@ -1193,12 +1196,11 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
+                 self.r_cache = Some(r);
+                 self.model_cache = Some(Ok(a));
+                 self.jtr_cache = Some(g);
+-                return Ok(crate::SolverStep::from((
+-                    state,
+-                    Some(Termination::numerical_failure(
++                return Ok(StepDecision::stopped(
++                    Termination::numerical_failure(
+                         "LM could not solve the damped model within its retry limit.",
+-                    )),
+-                )));
++                    ),
++                ));
+             }
+         };
+
+@@ -1410,14 +1412,11 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
+                                 "invalid_retained_model",
+                             );
+                         }
+-                        return Ok(
+-                            crate::SolverStep::completed_with_termination(
+-                                state,
+-                                Termination::numerical_failure(
+-                                    "The retained least-squares point has an invalid local model.",
+-                                ),
++                        return Ok(StepDecision::completed_with_termination(
++                            Termination::numerical_failure(
++                                "The retained least-squares point has an invalid local model.",
+                             ),
+-                        );
++                        ));
+                     };
+                     self.jtr_cache = Some(j.mat_transpose_vec(
+                         model_r.as_ref().unwrap_or(retained_r),
+@@ -1442,8 +1441,7 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
+                             "invalid_retained_model",
+                         );
+                     }
+-                    return Ok(crate::SolverStep::completed_with_termination(
+-                        state,
++                    return Ok(StepDecision::completed_with_termination(
+                         Termination::numerical_failure(
+                             "The retained least-squares point has an invalid gradient or model.",
+                         ),
+@@ -1533,26 +1531,20 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
+                 self.native_convergence
+                     .push(NativeConvergenceTest::RelativeTrustRadius);
+             }
+-            return Ok(crate::SolverStep::completed_with_termination(
+-                state,
+-                termination,
+-            ));
++            return Ok(StepDecision::completed_with_termination(termination));
+         }
+
+         if numerical_no_progress {
+-            return Ok(crate::SolverStep::from((
+-                state,
+-                Some(Termination::numerical_stall(
+-                    "A finite rejected LM trial changes no parameter in floating-point arithmetic.",
+-                )),
++            return Ok(StepDecision::stopped(Termination::numerical_stall(
++                "A finite rejected LM trial changes no parameter in floating-point arithmetic.",
+             )));
+         }
+
+-        Ok(crate::SolverStep::from((state, None)))
++        Ok(StepDecision::completed())
+     }
+ }
+
+-type LmStep<V, F, E> = Result<crate::SolverStep<PointState<V, F>>, E>;
++type LmStep<F, E> = Result<StepDecision<F>, E>;
+
+ #[derive(PartialEq)]
+ enum ModelSolveError {
+@@ -1974,8 +1966,19 @@ where
+     fn next_iter(
+         &mut self,
+         problem: &mut Problem<P>,
+-        state: PointState<V, F>,
++        mut state: PointState<V, F>,
+     ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
++        let decision = self.next_iter_in_place(problem, &mut state)?;
++        Ok(decision.with_state(state))
++    }
++
++    const STEPS_IN_PLACE: bool = true;
++
++    fn next_iter_in_place(
++        &mut self,
++        problem: &mut Problem<P>,
++        state: &mut PointState<V, F>,
++    ) -> Result<StepDecision<F>, Self::Error> {
+         self.workspace.with_buffers(|_, buffer| {
+             self.inner.next_iter_model::<_, M, PivotedQr>(
+                 problem,
+diff --git a/crates/basin/tests/owned_execution.rs b/crates/basin/tests/owned_execution.rs
+index 6066ce7..53ed9d2 100644
+--- a/crates/basin/tests/owned_execution.rs
++++ b/crates/basin/tests/owned_execution.rs
+@@ -176,19 +176,30 @@ impl Solver<Quadratic, OwnedState> for OwnedSolver {
+         problem: &mut Problem<Quadratic>,
+         mut state: OwnedState,
+     ) -> Result<basin::SolverStep<OwnedState>, Self::Error> {
++        let decision = self.next_iter_in_place(problem, &mut state)?;
++        Ok(decision.with_state(state))
++    }
++
++    const STEPS_IN_PLACE: bool = true;
++
++    fn next_iter_in_place(
++        &mut self,
++        problem: &mut Problem<Quadratic>,
++        state: &mut OwnedState,
++    ) -> Result<basin::core::solver::StepDecision<f64>, Self::Error> {
+         self.steps += 1;
+         self.workspace[0] += 1;
+         *state.point *= 0.5;
+         state.cost = problem.cost_and_gradient_and_hessian(state.param())?.0;
+         problem.residual_and_jacobian(state.param())?;
+         problem.hessian_product(state.param(), &1.0)?;
+-        Ok(basin::SolverStep::from((
+-            state,
++        Ok(basin::core::solver::StepDecision::new(
++            !self.stop_mid_step,
+             self.stop_mid_step
+                 .then_some(basin::Termination::Application(
+                     basin::ApplicationStop::new("user_requested"),
+                 )),
+-        )))
++        ))
+     }
+ }
+
+diff --git a/crates/basin/tests/shared_progress.rs b/crates/basin/tests/shared_progress.rs
+index 1dd2fda..31db23c 100644
+--- a/crates/basin/tests/shared_progress.rs
++++ b/crates/basin/tests/shared_progress.rs
+@@ -435,6 +435,17 @@ impl Solver<FallibleIdentity, PointState<f64>> for Probe {
+         problem: &mut Problem<FallibleIdentity>,
+         mut state: PointState<f64>,
+     ) -> Result<basin::SolverStep<PointState<f64>>, Self::Error> {
++        let decision = self.next_iter_in_place(problem, &mut state)?;
++        Ok(decision.with_state(state))
++    }
++
++    const STEPS_IN_PLACE: bool = true;
++
++    fn next_iter_in_place(
++        &mut self,
++        problem: &mut Problem<FallibleIdentity>,
++        state: &mut PointState<f64>,
++    ) -> Result<basin::core::solver::StepDecision<f64>, Self::Error> {
+         state.replace(-2.0, problem.cost(&-2.0)?);
+         // Unpublished probes still count, including the failing one.
+         problem.cost(&-10.0)?;
+@@ -442,12 +453,11 @@ impl Solver<FallibleIdentity, PointState<f64>> for Probe {
+         if self.hard_error {
+             return Err(error);
+         }
+-        Ok(basin::SolverStep::from((
+-            state,
+-            Some(basin::Termination::numerical_failure(
++        Ok(basin::core::solver::StepDecision::stopped(
++            basin::Termination::numerical_failure(
+                 "External solver reported a numerical failure.",
+-            )),
+-        )))
++            ),
++        ))
+     }
+ }
+
+@@ -483,6 +493,18 @@ fn hard_error_cannot_yield_a_checkpoint_of_partial_progress() {
+     assert!(stepper.into_checkpoint().is_none());
+ }
+
++#[test]
++fn failed_inner_step_keeps_attempts_on_the_shared_problem() {
++    let mut problem = Problem::new(FallibleIdentity);
++    problem.cost(&3.0).unwrap();
++    let mut inner = basin::InnerExecutor::new(Probe { hard_error: true });
++    assert!(matches!(
++        inner.run(&mut problem, PointState::new(2.0)),
++        Err("failed probe")
++    ));
++    assert_eq!(problem.counts().cost_evals, 5);
++}
++
+ #[test]
+ fn nonfinite_cost_does_not_choose_a_termination_reason() {
+     for seed in [f64::INFINITY, f64::NEG_INFINITY, f64::NAN] {
+diff --git a/crates/basin/tests/termination_reports.rs b/crates/basin/tests/termination_reports.rs
+index 39c8c8e..0e39f88 100644
+--- a/crates/basin/tests/termination_reports.rs
++++ b/crates/basin/tests/termination_reports.rs
+@@ -451,15 +451,22 @@ impl Solver<Fit, PointState<Vec<f64>>> for PartialThenComplete {
+         p: &mut Problem<Fit>,
+         mut s: PointState<Vec<f64>>,
+     ) -> Result<SolverStep<PointState<Vec<f64>>>, Self::Error> {
++        let decision = self.next_iter_in_place(p, &mut s)?;
++        Ok(decision.with_state(s))
++    }
++
++    const STEPS_IN_PLACE: bool = true;
++
++    fn next_iter_in_place(
++        &mut self,
++        p: &mut Problem<Fit>,
++        s: &mut PointState<Vec<f64>>,
++    ) -> Result<basin::core::solver::StepDecision<f64>, Self::Error> {
+         let x = vec![if self.0 { 1. } else { 2. }];
+         s.replace(x.clone(), p.cost(&x)?);
+         let completed = self.0;
+         self.0 = true;
+-        Ok(if completed {
+-            SolverStep::completed(s)
+-        } else {
+-            SolverStep::partial(s)
+-        })
++        Ok(basin::core::solver::StepDecision::new(completed, None))
+     }
+ }
+
+@@ -469,7 +476,7 @@ fn continuing_partial_steps_publish_work_without_iteration_observation() {
+     let output = iterations.clone();
+     let mut stepper = Executor::new(
+         Fit,
+-        ForwardSteps(PartialThenComplete(false)),
++        PartialThenComplete(false),
+         PointState::new(vec![3.]),
+     )
+     .observe_solver(
+@@ -489,6 +496,22 @@ fn continuing_partial_steps_publish_work_without_iteration_observation() {
+     assert_eq!(stepper.state().iter(), 0);
+     assert_eq!(stepper.counts().cost_evals, 2);
+     assert!(iterations.borrow().is_empty());
++    assert_eq!(stepper.state().best_counts(), Some(stepper.counts()));
++    let saved = stepper.into_checkpoint().unwrap();
++    let output = iterations.clone();
++    let mut stepper = Executor::resume_from_checkpoint(Fit, saved)
++        .observe_solver(
++            move |s, _, event| {
++                if matches!(event, ObservationEvent::Iter) {
++                    output.borrow_mut().push(s.iter());
++                }
++            },
++            ObserverMode::Always,
++        )
++        .max_iter(1)
++        .into_stepper()
++        .unwrap();
++    assert_eq!(stepper.counts().cost_evals, 2);
+     assert_eq!(stepper.step().unwrap(), StepOutcome::Continue);
+     assert_eq!(stepper.state().best_param(), &vec![1.]);
+     assert_eq!(stepper.state().iter(), 1);

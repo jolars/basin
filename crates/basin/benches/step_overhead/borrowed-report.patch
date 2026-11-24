@@ -1,0 +1,91 @@
+diff --git a/crates/basin/src/core/executor.rs b/crates/basin/src/core/executor.rs
+index e661674..5945172 100644
+--- a/crates/basin/src/core/executor.rs
++++ b/crates/basin/src/core/executor.rs
+@@ -495,6 +495,21 @@ where
+         self.step_active::<true>()
+     }
+
++    /// Experimental manual step that borrows the stored termination report.
++    /// `None` means execution can continue. See [Self::step] for lifecycle
++    /// and hard-error behavior.
++    #[doc(hidden)]
++    pub fn step_borrowed(
++        &mut self,
++    ) -> Result<Option<&TerminationReport<S::Float>>, So::Error> {
++        if self.finished.is_none() {
++            if let StepOutcome::Stopped(report) = self.step_active::<false>()? {
++                self.finished = Some(report);
++            }
++        }
++        Ok(self.finished.as_ref())
++    }
++
+     fn step_active<const RETAIN_REPORT: bool>(
+         &mut self,
+     ) -> Result<StepOutcome<S::Float>, So::Error> {
+diff --git a/crates/basin/tests/owned_execution.rs b/crates/basin/tests/owned_execution.rs
+index 6066ce7..c391506 100644
+--- a/crates/basin/tests/owned_execution.rs
++++ b/crates/basin/tests/owned_execution.rs
+@@ -414,7 +414,7 @@ fn hard_errors_do_not_publish_a_checkpoint_or_final_callbacks() {
+     .checkpoint_with(Recorder(Rc::clone(&log)), ObserverMode::Always)
+     .into_stepper()
+     .unwrap();
+-    assert_eq!(stepper.step(), Err("evaluation failed"));
++    assert_eq!(stepper.step_borrowed(), Err("evaluation failed"));
+     assert_eq!(stepper.counts().cost_evals, 2);
+     assert_eq!(stepper.finished(), None);
+     assert!(stepper.into_checkpoint().is_none());
+diff --git a/crates/basin/tests/termination_reports.rs b/crates/basin/tests/termination_reports.rs
+index 39c8c8e..19a1cba 100644
+--- a/crates/basin/tests/termination_reports.rs
++++ b/crates/basin/tests/termination_reports.rs
+@@ -310,6 +310,47 @@ fn completion_controls_iteration_observation_and_final_report_is_sticky() {
+     }
+ }
+
++#[test]
++fn borrowed_stop_report_is_stored_and_moved_once() {
++    let finals = Rc::new(RefCell::new(0));
++    let output = finals.clone();
++    let mut stepper = Executor::new(
++        Fit,
++        LevenbergMarquardtQr::<Vec<f64>, DenseMatrix>::new(),
++        PointState::new(vec![1.]),
++    )
++    .observe_solver(
++        move |_, _, event| {
++            if matches!(event, ObservationEvent::Final(_)) {
++                *output.borrow_mut() += 1;
++            }
++        },
++        ObserverMode::Always,
++    )
++    .into_stepper()
++    .unwrap();
++    let report = stepper.step_borrowed().unwrap().unwrap();
++    let report_address = std::ptr::from_ref(report);
++    let Termination::Converged(convergence) = &report.termination else {
++        panic!("expected convergence");
++    };
++    let allocation = convergence.criteria().as_ptr();
++    assert_eq!(
++        std::ptr::from_ref(stepper.finished().unwrap()),
++        report_address
++    );
++    assert_eq!(
++        std::ptr::from_ref(stepper.step_borrowed().unwrap().unwrap()),
++        report_address,
++    );
++    let result = stepper.run_to_end().unwrap();
++    let Termination::Converged(convergence) = &result.report.termination else {
++        panic!("expected convergence");
++    };
++    assert_eq!(convergence.criteria().as_ptr(), allocation);
++    assert_eq!(*finals.borrow(), 1);
++}
++
+ #[test]
+ fn all_exhausted_budgets_are_reported_before_numerical_checks() {
+     let result = Executor::from_start(

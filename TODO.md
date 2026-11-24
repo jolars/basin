@@ -47,15 +47,15 @@ for 4.0.0.
   compatibility feature while keeping the native file APIs available under
   `serde`. Deprecate state-only `Executor::resume` and document migration to
   `resume_from_checkpoint`.
-- [ ] **Measure in-place stepping and borrowed stop reports.** Use the small
+- [x] **Measure in-place stepping and borrowed stop reports.** The
+  [step-overhead experiment](crates/basin/benches/step_overhead/README.md)
+  compares both changes separately against `main` on the small
   Levenberg–Marquardt and unbounded L-BFGS workloads from
-  [#140](https://github.com/jolars/basin/issues/140) against current `main`.
-  Measure passing `&mut S` to `Solver::next_iter` separately from borrowing
-  the stop report on manual steps. Check standalone and composed runs,
-  initialization stops, continuing partial steps, and exact resume. Verify
-  that a hard callback error preserves attempted counts and invalidates the
-  run before it can publish or checkpoint partial progress. Preserve
-  incumbent counts and LM's numerical safeguards.
+  [#140](https://github.com/jolars/basin/issues/140).
+  It checks standalone and composed runs, initialization stops, continuing
+  partial steps, exact resume, incumbent counts, and LM's numerical safeguards.
+  The driver keeps attempted counts when a callback fails and discards the
+  partial state before publication or checkpointing.
 - [ ] **Use competitor comparisons to test diagnostics.** Prioritize
   [constrained SLSQP against NLopt and bounded least squares against
   `rmpfit`](#first-additions). Check which feasibility, stationarity, and
