@@ -1,0 +1,8 @@
+[package]
+name = "basin-evaluation-local"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+basin = { path = "../../../..", default-features = false }

@@ -1,0 +1,10 @@
+[package]
+name = "basin-evaluation-application"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+basin = { path = "../../../..", default-features = false }
+basin-evaluation-local = { path = "../local" }
+basin-evaluation-threaded = { path = "../threaded" }

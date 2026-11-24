@@ -22,12 +22,12 @@ for 4.0.0.
   and exact checkpoints. Finite-difference probes stay outside request counts.
   Tests cover typed scratch reuse with residual-only and operator-only robust
   problems, a custom Jacobian, and overlapping callbacks.
-- [ ] **Prototype explicit serial and threaded evaluation.** Add a downstream
-  fixture where one dependency enables `parallel` and another uses a local
-  callback. Test both execution paths, including finite differences and
-  population evaluation. Check whether callers can move a configured run to
-  a worker while preserving support for local hooks. Use the explicit
-  threaded path to evaluate parallel Hessian-vector products.
+- [x] **Prototype explicit serial and threaded evaluation.** The
+  [downstream fixture](crates/basin/tests/fixtures/evaluation_unification)
+  runs local finite differences and population evaluation after feature
+  unification enables `parallel`. A configured factory crosses threads before
+  creating the executor and its local hooks. Forward and central
+  Hessian-vector products exercise overlapping gradient calls.
 - [ ] **Test line searches with objectives defined only inside their bounds.**
   Exercise custom strategies that return just a step, retain an accepted
   evaluation, or report a soft failure. Prototype an opt-in projected Armijo

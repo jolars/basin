@@ -33,6 +33,7 @@ jobs:
           crates/basin/tests/support/nalgebra_factorizations.rs
           crates/basin/tests/fixtures/backend_unification/check.rs
       - run: cargo fmt --manifest-path crates/basin/tests/fixtures/backend_unification/Cargo.toml --all -- --check
+      - run: cargo fmt --manifest-path crates/basin/tests/fixtures/evaluation_unification/Cargo.toml --all -- --check
 
   clippy:
     name: clippy
@@ -181,6 +182,17 @@ jobs:
       - run: cargo test --manifest-path crates/basin/tests/fixtures/backend_unification/Cargo.toml -p basin-backend-newer
       - run: cargo run --manifest-path crates/basin/tests/fixtures/backend_unification/Cargo.toml -p basin-backend-application
       - run: python3 crates/basin/tests/fixtures/backend_unification/check_features.py
+
+  evaluation-unification:
+    name: downstream evaluation feature unification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/basin/tests/fixtures/evaluation_unification
+      - run: cargo test --manifest-path crates/basin/tests/fixtures/evaluation_unification/Cargo.toml -p basin-evaluation-local
+      - run: cargo test --manifest-path crates/basin/tests/fixtures/evaluation_unification/Cargo.toml --workspace
 
   wasm:
     name: wasm build (${{ matrix.features }})
