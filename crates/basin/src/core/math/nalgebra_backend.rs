@@ -944,6 +944,20 @@ impl<F: Scalar> DenseMatrixFromFn<F> for DVector<F> {
     }
 }
 
+impl<F: Scalar> super::SquareMatrixFromFn<F> for DMatrix<F> {
+    fn square_from_fn(n: usize, entry: impl FnMut(usize, usize) -> F) -> Self {
+        DVector::dense_from_fn(n, n, entry)
+    }
+
+    fn square_from_fn_into(
+        n: usize,
+        entry: impl FnMut(usize, usize) -> F,
+        out: &mut Self,
+    ) {
+        DVector::dense_from_fn_into(n, n, entry, out);
+    }
+}
+
 // Pure-Rust symmetric eigendecomposition (default), generic over every
 // `F: RealField`. Swapped for the LAPACK impl below under `nalgebra-lapack`;
 // the two are mutually exclusive (`#[cfg]`).

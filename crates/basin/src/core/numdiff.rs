@@ -116,8 +116,8 @@ impl Method {
 
 /// Wraps a problem to synthesize its derivatives by finite differences.
 ///
-/// Construct with [`FiniteDiff::new`] for `f64` or use
-/// `FiniteDiff::<_, false, f32>::new_with_scalar(problem)` for `f32`.
+/// Construct with [`FiniteDiff::new`] for `f64` or
+/// [`FiniteDiff::new_with_scalar`] to infer the scalar from derivative usage.
 /// The default stencils are central for gradients and Hessians and
 /// forward for Jacobians. See the [module docs](self) for step rules. The wrapper delegates [`CostFunction`]/[`Residual`] /
 /// all constraint traits to the inner problem and implements [`Gradient`],
@@ -134,10 +134,13 @@ impl Method {
 /// `OMatrix<F, Dyn, Const<N>>` and may be paired with `SVector<F, M>` or
 /// `DVector<F>` residuals. The Jacobian row count comes from the residual length.
 /// Use [`FiniteDiff::with_array_jacobian`] to set the row count for native array
-/// parameters. Use [`FiniteDiff::with_square_hessian`] for a
-/// square fixed-size Hessian.
+/// parameters. Use [`FiniteDiff::with_square_hessian`] to select the matrix
+/// associated with the parameter vector by [`DenseBackend`], or
+/// [`FiniteDiff::with_dense_hessian`] to explicitly select the
+/// [`DenseMatrixFromFn`] matrix used by default.
 /// [`crate::ConstraintJacobian`] uses the parameter backend's dense matrix,
-/// independently of the linear block matrices.
+/// with one row per nonlinear constraint, independently of the linear block
+/// matrices.
 ///
 /// # Solver stopping tolerances
 ///
@@ -220,6 +223,9 @@ impl<P, F: Scalar> FiniteDiff<P, false, F> {
 impl<P, F: Scalar, J> FiniteDiff<P, false, F, J> {
     /// Use the parameter backend's square matrix for the Hessian.
     ///
+    /// Dynamic backends use `DenseMatrix` for `Vec`, `DMatrix` for nalgebra
+    /// `DVector`, `Array2` for ndarray `Array1`, and `Mat` for faer `Col`.
+    /// In-place Hessian evaluation reuses storage when the shape matches.
     /// For native arrays `[F; N]`, the Hessian is `[[F; N]; N]`.
     /// For nalgebra `SVector<F, N>`, the Hessian is an
     /// `SMatrix<F, N, N>`, suitable for [`crate::Dogleg`] and
@@ -279,6 +285,16 @@ where
 }
 
 impl<P, const SQUARE: bool, F: Scalar, J> FiniteDiff<P, SQUARE, F, J> {
+    /// Use the matrix associated with the parameter vector by
+    /// [`DenseMatrixFromFn`] for the Hessian.
+    ///
+    /// This explicitly selects the default representation for Basin 3.x.
+    /// Custom backends can supply this Hessian through [`DenseMatrixFromFn`].
+    /// The Jacobian selection and finite-difference settings carry over.
+    pub fn with_dense_hessian(self) -> FiniteDiff<P, false, F, J> {
+        self.with_shape()
+    }
+
     fn with_shape<const NEW_SQUARE: bool, NewJ>(
         self,
     ) -> FiniteDiff<P, NEW_SQUARE, F, NewJ> {
@@ -645,7 +661,7 @@ impl<F: Scalar, V: DenseBackend<F, Matrix: SquareMatrixFromFn<F>>>
         entry: impl FnMut(usize, usize) -> F,
         out: &mut Self::Matrix,
     ) {
-        *out = Self::build(n, entry);
+        V::Matrix::square_from_fn_into(n, entry, out);
     }
 }
 

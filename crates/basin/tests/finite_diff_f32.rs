@@ -157,6 +157,59 @@ fn vec_f32() {
     check_backend(vec![0.0_f32; 2]);
 }
 
+#[test]
+fn custom_dense_hessian_infers_scalar() {
+    #[derive(Clone)]
+    struct CustomVector([f32; 2]);
+
+    impl VectorLen for CustomVector {
+        fn vec_len(&self) -> usize {
+            self.0.len()
+        }
+    }
+
+    impl VectorIndex<f32> for CustomVector {
+        fn get_scalar(&self, i: usize) -> f32 {
+            self.0[i]
+        }
+
+        fn set_scalar(&mut self, i: usize, value: f32) {
+            self.0[i] = value;
+        }
+    }
+
+    impl DenseMatrixFromFn<f32> for CustomVector {
+        type Matrix = Vec<Vec<f32>>;
+
+        fn dense_from_fn<G: FnMut(usize, usize) -> f32>(
+            rows: usize,
+            cols: usize,
+            mut entry: G,
+        ) -> Self::Matrix {
+            (0..rows)
+                .map(|i| (0..cols).map(|j| entry(i, j)).collect())
+                .collect()
+        }
+    }
+
+    let x = CustomVector([0.0, 0.5]);
+    let problem = || Quadratic {
+        residual: x.clone(),
+        costs: AtomicUsize::new(0),
+        residuals: AtomicUsize::new(0),
+    };
+    let default = FiniteDiff::new_with_scalar(problem()).with_step(0.125);
+    let explicit = FiniteDiff::new_with_scalar(problem())
+        .with_step(0.125)
+        .with_dense_hessian();
+    let expected = vec![vec![2.0, 1.0], vec![1.0, 4.0]];
+    assert_eq!(default.hessian(&x).unwrap(), expected);
+    assert_eq!(explicit.hessian(&x).unwrap(), expected);
+    let mut out = vec![];
+    explicit.hessian_into(&x, &mut out).unwrap();
+    assert_eq!(out, expected);
+}
+
 #[cfg(feature = "nalgebra")]
 #[test]
 fn nalgebra_f32() {
@@ -278,7 +331,9 @@ fn f32_nonlinear_constraint_jacobian() {
             },
             ConstraintSet::new().with_nonlinear_inequalities(1),
         );
-        let fd = FiniteDiff::new_with_scalar(problem).jacobian_method(method);
+        let fd = FiniteDiff::new_with_scalar(problem)
+            .with_square_hessian()
+            .jacobian_method(method);
         let jac = fd.constraint_jacobian(&vec![0.0, 0.5]).unwrap();
         assert_eq!((jac.matrix_rows(), jac.matrix_cols()), (1, 2));
         assert!((jac.get(0, 0) - 1.0).abs() < 0.002);

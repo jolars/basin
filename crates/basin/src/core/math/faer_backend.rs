@@ -499,6 +499,20 @@ impl<F: Scalar> DenseMatrixFromFn<F> for Col<F> {
     }
 }
 
+impl<F: Scalar> super::SquareMatrixFromFn<F> for Mat<F> {
+    fn square_from_fn(n: usize, entry: impl FnMut(usize, usize) -> F) -> Self {
+        Col::dense_from_fn(n, n, entry)
+    }
+
+    fn square_from_fn_into(
+        n: usize,
+        entry: impl FnMut(usize, usize) -> F,
+        out: &mut Self,
+    ) {
+        Col::dense_from_fn_into(n, n, entry, out);
+    }
+}
+
 impl<F> SymmetricEigen<Col<F>> for Mat<F>
 where
     F: Scalar + faer_traits::ComplexField<Real = F>,

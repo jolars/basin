@@ -745,6 +745,22 @@ impl<F: Scalar> super::DenseMatrixFromFn<F> for Array1<F> {
         }
     }
 }
+impl<F: Scalar> super::SquareMatrixFromFn<F> for Array2<F> {
+    fn square_from_fn(n: usize, entry: impl FnMut(usize, usize) -> F) -> Self {
+        <Array1<F> as super::DenseMatrixFromFn<F>>::dense_from_fn(n, n, entry)
+    }
+
+    fn square_from_fn_into(
+        n: usize,
+        entry: impl FnMut(usize, usize) -> F,
+        out: &mut Self,
+    ) {
+        <Array1<F> as super::DenseMatrixFromFn<F>>::dense_from_fn_into(
+            n, n, entry, out,
+        );
+    }
+}
+
 impl<F: Scalar> super::ScaleRowsInPlace<F> for Array2<F> {
     fn scale_rows_in_place(&mut self, factors: &[F]) {
         assert_eq!(self.nrows(), factors.len(), "row scale shape mismatch");

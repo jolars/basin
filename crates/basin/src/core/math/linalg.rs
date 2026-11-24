@@ -451,13 +451,27 @@ pub trait DenseMatrixFromFn<F = f64>: Sized {
 
 /// Constructs a square matrix from its entries.
 ///
-/// Available for `[[F; N]; N]` and nalgebra `SMatrix<F, N, N>` with
-/// `F = f32` or `f64`.
+/// Available for `[[F; N]; N]`, [`super::DenseMatrix`], nalgebra `SMatrix`
+/// and `DMatrix`, ndarray `Array2`, and faer `Mat`, with `F = f32` or `f64`.
 pub trait SquareMatrixFromFn<F: super::Scalar = f64>: Sized {
     /// Build an `n × n` matrix, calling `entry` once per element in
     /// backend-defined order. Fixed-size matrices require `n` to match their
     /// dimension.
     fn square_from_fn(n: usize, entry: impl FnMut(usize, usize) -> F) -> Self;
+
+    /// Fill an `n × n` output, replacing its previous contents and shape.
+    ///
+    /// Calls `entry` once per element in backend-defined order. Fixed-size
+    /// matrices require `n` to match their dimension. The default assigns a
+    /// fresh matrix, and built-in dynamic matrices reuse storage when the
+    /// shape matches.
+    fn square_from_fn_into(
+        n: usize,
+        entry: impl FnMut(usize, usize) -> F,
+        out: &mut Self,
+    ) {
+        *out = Self::square_from_fn(n, entry);
+    }
 }
 
 /// Read the shape and individual entries of a dense matrix.

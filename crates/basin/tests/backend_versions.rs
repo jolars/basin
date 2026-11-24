@@ -2,6 +2,8 @@
 
 #[path = "support/bfgs_initial_inverse_hessian.rs"]
 mod bfgs_initial_inverse_hessian;
+#[path = "support/square_hessians.rs"]
+mod square_hessians;
 
 #[cfg(feature = "ndarray_v0_16")]
 #[test]
@@ -21,10 +23,11 @@ macro_rules! dense_checks {
     ($vector:ty, $matrix:ty, $scalar:ty, $make:expr) => {
         dense_checks!($vector, $matrix, $scalar, $make, dynamic)
     };
-    (@seed dynamic, $v:ty, $f:ty, $make:expr) => {
-        crate::bfgs_initial_inverse_hessian::check::<$v, $f>($make)
-    };
-    (@seed fixed, $v:ty, $f:ty, $make:expr) => {};
+    (@dynamic_checks dynamic, $v:ty, $f:ty, $make:expr) => {{
+        crate::bfgs_initial_inverse_hessian::check::<$v, $f>($make);
+        crate::square_hessians::check::<$v, $f>($make);
+    }};
+    (@dynamic_checks fixed, $v:ty, $f:ty, $make:expr) => {};
     (@matrix_shapes dynamic) => {
         [(0, 0), (3, 2), (3, 2), (1, 4), (0, 2)]
     };
@@ -542,7 +545,7 @@ impl Quadratic  {
         .run()
         .unwrap();
         assert!(seeded.cost() < 128.0 * F::EPSILON);
-        dense_checks!(@seed $storage, V, F, make);
+        dense_checks!(@dynamic_checks $storage, V, F, make);
         let lbfgs = Executor::new(
             boxed(problem()),
             Lbfgs::<_, F>::with_line_search(basin::MoreThuente::<F>::new())
@@ -1286,6 +1289,8 @@ macro_rules! nalgebra_checks {
 
                     let jac: DynamicRows = square.jacobian(&x).unwrap();
                     assert_eq!(jac.shape(), (3, 2));
+                    let explicit: DynamicRows = square.with_dense_hessian().hessian(&x).unwrap();
+                    assert_eq!(explicit, old);
                     let failing = FiniteDiff::new(Quadratic { fail: true, ..problem() })
                         .with_square_hessian().hessian_method(method);
                     assert_eq!(failing.hessian_into(&backend::SVector::zeros(), &mut out), Err("mixed probe"));

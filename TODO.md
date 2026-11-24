@@ -31,11 +31,11 @@ for 4.0.0.
 - [x] **Test line searches with objectives defined only inside their bounds.**
   The [line-search API prototype](#line-search-api-prototype) exercises custom
   bounded strategies and projected Armijo through the executor.
-- [ ] **Prepare the square Hessian default.** Add square matrix construction and
-  reusable output for dynamic backends. Test owned and in-place Hessians,
-  `f32` constructor inference, and rectangular Jacobians. Keep an explicit
-  construction path for custom backends that supply the current Hessian
-  type.
+- [x] **Prepare the square Hessian default.** `FiniteDiff::with_square_hessian`
+  supports reusable output on dynamic backends. Tests cover owned and in-place
+  Hessians, `f32` constructor inference, and rectangular Jacobians. Custom
+  backends can select the Hessian supplied by `DenseMatrixFromFn` with
+  `FiniteDiff::with_dense_hessian`.
 - [ ] **Test CMA-ES refresh policies.** Add a fixed refresh-period option to
   bounded CMA-ES and its wrappers. Extend the [CMA-ES comparison
   harness](crates/competitor-bench/src/bin/verify_cmaes.rs) to compare fixed

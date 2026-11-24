@@ -203,6 +203,20 @@ impl<F: Scalar> DenseMatrix<F> {
     }
 }
 
+impl<F: Scalar> super::SquareMatrixFromFn<F> for DenseMatrix<F> {
+    fn square_from_fn(n: usize, entry: impl FnMut(usize, usize) -> F) -> Self {
+        Self::from_fn(n, n, entry)
+    }
+
+    fn square_from_fn_into(
+        n: usize,
+        entry: impl FnMut(usize, usize) -> F,
+        out: &mut Self,
+    ) {
+        out.fill_from_fn(n, n, entry);
+    }
+}
+
 impl<F: Scalar> MatVec<Vec<F>> for DenseMatrix<F> {
     fn matvec(&self, x: &Vec<F>) -> Vec<F> {
         assert_eq!(
@@ -498,6 +512,31 @@ where
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn in_place_square_construction_reuses_storage() {
+        use crate::SquareMatrixFromFn;
+
+        fn check<F: Scalar>() {
+            let mut out = DenseMatrix::<F>::square_from_fn(2, |_, _| F::nan());
+            let allocation = out.data.as_ptr();
+            DenseMatrix::square_from_fn_into(
+                2,
+                |i, j| F::from_usize(2 * i + j).unwrap(),
+                &mut out,
+            );
+            assert_eq!(out.data.as_ptr(), allocation);
+            assert_eq!(
+                out.data,
+                (0..4)
+                    .map(|i| F::from_usize(i).unwrap())
+                    .collect::<Vec<_>>()
+            );
+        }
+
+        check::<f32>();
+        check::<f64>();
+    }
+
     #[test]
     fn in_place_construction_reuses_storage_in_both_precisions() {
         fn check<F: super::Scalar>() {

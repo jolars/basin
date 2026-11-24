@@ -11,10 +11,10 @@ mod backend_aliases;
 fn check<V, F>(address: impl Fn(&V::Matrix) -> usize)
 where
     V: basin::DenseMatrixFromFn<F>,
-    V::Matrix: basin::MatrixIndex<F>,
+    V::Matrix: basin::MatrixIndex<F> + basin::SquareMatrixFromFn<F>,
     F: basin::Scalar,
 {
-    use basin::{MatrixIndex, MatrixShape};
+    use basin::{MatrixIndex, MatrixShape, SquareMatrixFromFn};
     let mut out = V::dense_from_fn(1, 1, |_, _| F::nan());
     for (rows, cols) in [(2, 3), (3, 2), (0, 2), (4, 1)] {
         V::dense_from_fn_into(rows, cols, |_, _| F::nan(), &mut out);
@@ -41,6 +41,29 @@ where
                     );
                 }
             }
+        }
+    }
+
+    let mut square = V::Matrix::square_from_fn(2, |_, _| F::nan());
+    let allocation = address(&square);
+    let mut calls = 0;
+    V::Matrix::square_from_fn_into(
+        2,
+        |i, j| {
+            calls += 1;
+            F::from_usize(2 * i + j).unwrap()
+        },
+        &mut square,
+    );
+    assert_eq!(calls, 4);
+    assert_eq!(address(&square), allocation);
+    assert_eq!((square.matrix_rows(), square.matrix_cols()), (2, 2));
+    for i in 0..2 {
+        for j in 0..2 {
+            assert_eq!(
+                square.matrix_entry(i, j),
+                F::from_usize(2 * i + j).unwrap()
+            );
         }
     }
 }
