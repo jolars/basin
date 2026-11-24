@@ -76,7 +76,6 @@
 ## Optional
 
 - [Benchmarks](https://basin.rs/benchmarks/): how to read the solver, library, and backend comparisons
-- [Comparing solvers](https://basin.rs/benchmarks/solvers/): convergence from shared starting points under a time budget
 - [Comparing libraries](https://basin.rs/benchmarks/competitors/): solver-by-solver comparisons with setup, interpretation, and methodology
 - [Choosing a backend](https://basin.rs/benchmarks/backends/): measured scaling for vector methods, dense matrices, and sparse least squares
 - [Visualizer](https://basin.rs/visualizer/): interactive in-browser solver visualization (WASM)

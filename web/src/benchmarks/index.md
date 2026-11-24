@@ -1,29 +1,14 @@
 ---
 
 "title": "Benchmarks – Basin"
-"description": "Read Basin's benchmark results: compare optimization algorithms, competing libraries, and linear-algebra backends, with explanations of the measurements and their limits."
+"description": "Read Basin's benchmark results: compare competing libraries and linear-algebra backends, with explanations of the measurements and their limits."
 ---
-
-<script setup lang="ts">
-</script>
 
 # Benchmarks
 
-The benchmark suite looks at three choices you make when solving an optimization
-problem: the algorithm, its implementation, and the linear-algebra backend. Each
-comparison answers a different question. These guides explain the setup, walk
-through the results, and describe the limits of each measurement.
-
-## Comparing solvers
-
-**Which algorithm makes useful progress on my kind of problem?** The [solver
-comparisons](./solvers/) run Basin's optimizers from shared starting points and
-plot the objective gap against elapsed time. They show both the speed of
-convergence and the effect of the starting point.
-
-Start here when choosing between algorithms. Read the results alongside the
-[solver selection guide](../guide/solvers/), which covers derivative
-requirements, constraints, and problem structure.
+The benchmark suite compares Basin with other optimization libraries and
+measures how linear-algebra backends affect solve time. These guides explain
+the setup, results, and limits of each comparison.
 
 ## Comparing libraries
 

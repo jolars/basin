@@ -10,7 +10,6 @@ export type DocsNavItem = NavLink | { label: string; children: DocsNavItem[] };
 /** Sidebar links for the benchmark guides. */
 export const BENCHMARK_LINKS: NavLink[] = [
     { label: "Overview", href: "benchmarks/" },
-    { label: "Comparing solvers", href: "benchmarks/solvers/" },
     { label: "Comparing libraries", href: "benchmarks/competitors/" },
     { label: "Choosing a backend", href: "benchmarks/backends/" },
 ];

@@ -223,24 +223,6 @@ tasks:
       - cargo run --locked -p competitor-bench --release --features lbfgsb-reference --bin trace > target/competitor-traces.json
       - cd web && pnpm collect:competitors
 
-  bench:solvers:
-    desc: "Run the solver-axis comparison and refresh the /benchmarks/solvers data."
-    summary: >
-      Runs the `solver_compare` harness — basin's five general optimizers
-      (GD / Nelder-Mead / BFGS / L-BFGS / CMA-ES) on Rosenbrock n=2 from six
-      curated starting points, each capped on a 20 ms wall-clock budget and
-      stopped early on reaching suboptimality 1e-10. Traces are downsampled to
-      a log-spaced time grid in the harness, then wrapped with run metadata
-      into web/src/lib/data/solver-benchmarks.json, which the
-      /benchmarks/solvers page imports.
-
-      Timing-sensitive: run on an otherwise-idle machine and commit the
-      regenerated JSON. Deliberately not wired into CI — shared runners are too
-      noisy for trustworthy timings.
-    cmds:
-      - cargo run -p competitor-bench --release --bin solver_compare > target/solver-traces.json
-      - cd web && pnpm collect:solvers
-
   paper:build:
     desc: "Build the JOSS paper (paper/paper.pdf) with the Open Journals inara image."
     summary: >

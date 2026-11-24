@@ -18,7 +18,7 @@ measure the time for a complete solve as the number of parameters $n$ grows.
 The cases below progress from vector operations to dense matrices and sparse
 factorizations. Read the spread between backends within each figure. Different
 figures use different algorithms and problems, so their times do not compare
-solver quality. For that question, see [comparing solvers](../solvers/).
+solver quality.
 
 These results were measured on {{ data.generatedAt }}. Absent lines describe the
 coverage of this saved run, rather than the current capabilities of a backend.

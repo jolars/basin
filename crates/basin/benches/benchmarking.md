@@ -16,7 +16,7 @@ older comments still call `competitor-bench` by its former name, `lm-bench`.
   | GD or Nelder-Mead versus argmin               | `crates/competitor-bench/benches/gd_nm.rs` and `src/bin/verify_gd_nm.rs`           |
   | Private COBYLA driver and allocation guards   | `crates/competitor-bench/benches/cobyla.rs` and `tests/cobyla_allocations.rs`      |
   | Public COBYLA versus the `cobyla` crate       | `crates/competitor-bench/benches/gd_nm.rs` and `src/bin/verify_gd_nm.rs`           |
-  | Convergence across libraries or Basin solvers | `crates/competitor-bench/src/bin/trace.rs` or `solver_compare.rs`                  |
+  | Convergence across libraries                  | `crates/competitor-bench/src/bin/trace.rs`                                         |
   | Population solver thread scaling              | `crates/competitor-bench/benches/population_scaling.rs`                            |
   | Active CMA-ES solver and eigen-kernel comparisons | `crates/competitor-bench/src/bin/verify_cmaes.rs` and `benches/cmaes.rs` in that crate |
   | Finite-difference kernels, callback work, and allocations | `crates/competitor-bench/benches/numdiff.rs`, `src/bin/verify_numdiff.rs`, and `NUMDIFF.md` in that crate |

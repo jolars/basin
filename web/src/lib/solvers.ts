@@ -64,7 +64,6 @@ export type SolverMeta = {
     kind: SolverKind;
     label: string;
     /** Short description shown in the UI. */
-    blurb: string;
     /** Solver-specific controls, rendered in order by `Controls`. */
     options: SolverOption[];
     /**
@@ -82,7 +81,6 @@ export const SOLVERS: SolverMeta[] = [
     {
         kind: SolverKind.GradientDescent,
         label: "Gradient Descent",
-        blurb: "Steepest descent with a fixed step or Armijo backtracking.",
         options: [
             {
                 id: "gdLineSearch",
@@ -110,19 +108,16 @@ export const SOLVERS: SolverMeta[] = [
     {
         kind: SolverKind.NelderMead,
         label: "Nelder–Mead (simplex, derivative-free)",
-        blurb: "Standard reflection, expansion, and contraction simplex.",
         options: [],
     },
     {
         kind: SolverKind.Mads,
         label: "MADS (mesh adaptive direct search)",
-        blurb: "Deterministic OrthoMADS poll on a shrinking mesh; converges on nonsmooth objectives.",
         options: [],
     },
     {
         kind: SolverKind.Lbfgs,
         label: "L-BFGS (limited-memory quasi-Newton)",
-        blurb: "Two-loop recursion with a Moré–Thuente line search.",
         options: [
             {
                 id: "lbfgsM",
@@ -138,7 +133,6 @@ export const SOLVERS: SolverMeta[] = [
     {
         kind: SolverKind.CmaEs,
         label: "CMA-ES (covariance matrix adaptation)",
-        blurb: "Hansen–Ostermeier evolution strategy with rank-µ + rank-1.",
         itersPerFrame: 1,
         options: [
             {
@@ -167,7 +161,6 @@ export const SOLVERS: SolverMeta[] = [
     {
         kind: SolverKind.De,
         label: "Differential Evolution",
-        blurb: "Storn–Price DE/rand/1/bin in the viewport box.",
         // ½ gen/frame ≈ 30 gens/sec. DE on Sphere finishes in ~30 gens,
         // so the cluster contraction reads as a deliberate animation rather
         // than a flash.
@@ -206,7 +199,6 @@ export const SOLVERS: SolverMeta[] = [
     {
         kind: SolverKind.RandomSearch,
         label: "Random Search (elitist 1+λ)",
-        blurb: "Uniform samples in the viewport box; keeps the best.",
         // RS resamples uniformly each generation, so the dots are just
         // noise that refreshes. Slow it way down (≈ 6 gens/sec) so each
         // cloud can be read before the next one replaces it.
@@ -227,7 +219,6 @@ export const SOLVERS: SolverMeta[] = [
     {
         kind: SolverKind.Ssga,
         label: "Steady-state GA",
-        blurb: "Real-coded GA with BLX-α crossover and BGA mutation.",
         options: [
             {
                 id: "ssgaPopSize",

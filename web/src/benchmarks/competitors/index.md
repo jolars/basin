@@ -44,8 +44,7 @@ continuing iterations after reaching the target.
 Configurations match where the APIs allow it. Line searches, stopping rules, and
 numerical safeguards can still produce different paths. These are comparisons of
 solver effectiveness, including implementation costs, rather than measurements
-of identical numerical work. For comparisons between algorithms within Basin,
-see [comparing solvers](../solvers/).
+of identical numerical work.
 
 ## Levenberg–Marquardt
 

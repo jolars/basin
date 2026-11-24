@@ -24,8 +24,7 @@
         "lint": "biome lint .",
         "check:snippets": "tsx scripts/check-snippets.ts",
         "collect:benchmarks": "tsx scripts/collect-benchmarks.ts",
-        "collect:competitors": "tsx scripts/collect-competitors.ts",
-        "collect:solvers": "tsx scripts/collect-solvers.ts"
+        "collect:competitors": "tsx scripts/collect-competitors.ts"
     },
     "devDependencies": {
         "@iconify-json/lucide": "^1.2.155",

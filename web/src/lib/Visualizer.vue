@@ -250,23 +250,6 @@ function handleOptionChange(id: string, value: string | number) {
     <section
         class="min-h-[calc(100dvh-9rem)] visualizer-container [container-type:inline-size] py-6 flex flex-col gap-6"
     >
-        <header class="flex flex-wrap items-start justify-between gap-4">
-            <div>
-                <h1 class="text-2xl md:text-3xl font-semibold tracking-tight">
-                    Solver visualizer
-                </h1>
-                <p class="text-stone-600 dark:text-stone-400 text-sm mt-1">
-                    Live wasm-driven 2D trajectories. Click on the contour to
-                    reset the start point.
-                </p>
-            </div>
-            <p
-                class="text-xs text-stone-500 dark:text-stone-500 font-mono hidden md:block self-center"
-            >
-                {{ solverMeta.blurb }}
-            </p>
-        </header>
-
         <template v-if="!wasmReady">
             <p class="text-stone-500 dark:text-stone-400">
                 Loading wasm…
