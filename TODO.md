@@ -36,7 +36,7 @@ for 4.0.0.
   Hessians, `f32` constructor inference, and rectangular Jacobians. Custom
   backends can select the Hessian supplied by `DenseMatrixFromFn` with
   `FiniteDiff::with_dense_hessian`.
-- [ ] **Test CMA-ES refresh policies.** Add a fixed refresh-period option to
+- [x] **Test CMA-ES refresh policies.** Add a fixed refresh-period option to
   bounded CMA-ES and its wrappers. Extend the [CMA-ES comparison
   harness](crates/competitor-bench/src/bin/verify_cmaes.rs) to compare fixed
   and automatic periods by time and evaluations to common objective and

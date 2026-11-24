@@ -114,6 +114,19 @@ where
         &self.cma
     }
 
+    /// Set the outer covariance eigendecomposition refresh period.
+    ///
+    /// Injection clipping uses the last refreshed eigenpairs.
+    /// See [`BoundedCmaEs::with_eigen_update_period`] for scheduling and validation.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `generations` is zero.
+    pub fn with_eigen_update_period(mut self, generations: u64) -> Self {
+        self.cma = self.cma.with_eigen_update_period(generations);
+        self
+    }
+
     /// Number of best-ranked candidates to refine and inject each
     /// generation. Default `1`.
     ///

@@ -184,7 +184,7 @@ pub struct CmaEs<V, M, F: Scalar = f64> {
     eigen_update_period: std::num::NonZeroU64,
 }
 
-fn default_eigen_update_period() -> std::num::NonZeroU64 {
+pub(super) fn default_eigen_update_period() -> std::num::NonZeroU64 {
     std::num::NonZeroU64::MIN
 }
 
@@ -1020,5 +1020,30 @@ mod zero_tolerance_tests {
             crate::TerminationCode::SolverFailed
         );
         assert_eq!(step.state, prior);
+    }
+
+    #[test]
+    fn bounded_periodic_refresh_retains_eigensolver_failure_reporting() {
+        let mut problem = Problem::new(FlatBox(vec![-1.0; 3], vec![1.0; 3]));
+        let mut solver = BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(42, 1.0)
+            .with_eigen_update_period(3);
+        let mut state = solver
+            .init(&mut problem, PopulationProgress::from_point(vec![0.0; 3]))
+            .unwrap();
+        for _ in 0..2 {
+            state = solver.next_iter(&mut problem, state).unwrap().state;
+        }
+        let before = *problem.counts();
+        let prior = state.clone();
+        solver.work.as_mut().unwrap().c =
+            DenseMatrix::from_row_slice(3, 3, &[f64::NAN; 9]);
+        let step = solver.next_iter(&mut problem, state).unwrap();
+        assert!(!step.completed);
+        assert_eq!(
+            step.termination.unwrap().code(),
+            crate::TerminationCode::SolverFailed
+        );
+        assert_eq!(step.state, prior);
+        assert_eq!(*problem.counts(), before);
     }
 }

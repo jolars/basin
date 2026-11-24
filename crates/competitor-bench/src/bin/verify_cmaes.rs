@@ -10,6 +10,17 @@ use competitor_bench::{
 
 fn main() {
     assert!(!cfg!(feature = "parallel") && !cfg!(feature = "basin-latest"));
+    if std::env::args().nth(1).as_deref() == Some("--refresh-sweep") {
+        let mut args = std::env::args().skip(2);
+        let repetitions = match args.next().as_deref() {
+            None => 3,
+            Some("--repetitions") => args.next().unwrap().parse().unwrap(),
+            Some(arg) => panic!("unknown sweep argument: {arg}"),
+        };
+        assert!(args.next().is_none(), "unexpected sweep arguments");
+        cmaes::refresh::sweep(repetitions);
+        return;
+    }
     let mut tracing = true;
     let mut config = Configuration::default();
     let mut repetitions = 11;

@@ -40,6 +40,38 @@ macro_rules! check {
             assert!(a.cost().is_finite() && a.cost() < 1e-8, "{}", a.cost());
             use basin::CostFunction;
             assert_eq!(a.cost(), Quadratic.cost(a.param()).unwrap());
+
+            let run_bounded = |period| {
+                let bounds = basin::BoxBounds::new(
+                    Some(($from)(&[-2.0; 4])),
+                    Some(($from)(&[2.0; 4])),
+                );
+                let problem = basin::Constrained::new(
+                    Quadratic,
+                    basin::ConstraintSet::new().with_bounds(bounds),
+                );
+                basin::Executor::new(
+                    problem,
+                    basin::BoundedCmaEs::<$v, $m, $f>::new(42, 0.5)
+                        .with_lambda(8)
+                        .with_eigen_update_period(period),
+                    basin::PopulationProgress::from_point(($from)(&[1.0; 4])),
+                )
+                .max_iter(12)
+                .run()
+                .unwrap()
+            };
+            let bounded = run_bounded(3);
+            assert_eq!(bounded.state, run_bounded(3).state);
+            assert_ne!(bounded.state, run_bounded(1).state);
+            assert_eq!(bounded.counts.cost_evals, 13 * 9);
+            assert_eq!(
+                bounded.cost(),
+                Quadratic.cost(bounded.param()).unwrap(),
+            );
+            for candidate in bounded.state.candidates() {
+                assert!((0..4).all(|i| (-2.0..=2.0).contains(&candidate[i])));
+            }
         }
     };
 }
@@ -109,4 +141,178 @@ mod faer {
 fn zero_period_is_rejected() {
     basin::CmaEs::<Vec<f64>, basin::DenseMatrix>::new(0, 1.0)
         .with_eigen_update_period(0);
+}
+
+struct BoxQuadratic;
+
+impl basin::CostFunction for BoxQuadratic {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = std::convert::Infallible;
+
+    fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
+        Ok((x[0] - 1.0).powi(2) + 4.0 * x[1].powi(2))
+    }
+}
+
+fn boxed_quadratic() -> impl basin::CostFunction<
+    Param = Vec<f64>,
+    Output = f64,
+    Error = std::convert::Infallible,
+> + basin::Constraints<
+    Set = basin::ConstraintSet<basin::BoxBounds<Vec<f64>>>,
+> {
+    basin::Constrained::new(
+        BoxQuadratic,
+        basin::ConstraintSet::new().with_bounds(basin::BoxBounds::new(
+            Some(vec![-3.0; 2]),
+            Some(vec![0.0, 3.0]),
+        )),
+    )
+}
+
+type Bounded = basin::BoundedCmaEs<Vec<f64>, basin::DenseMatrix>;
+
+fn bounded() -> Bounded {
+    Bounded::new(42, 0.5).with_lambda(8)
+}
+
+fn start() -> basin::PopulationProgress<Vec<f64>> {
+    basin::PopulationProgress::from_point(vec![-1.0, 2.0])
+}
+
+#[test]
+fn bounded_default_matches_explicit_period_one() {
+    let run = |solver| {
+        basin::Executor::new(boxed_quadratic(), solver, start())
+            .max_iter(12)
+            .run()
+            .unwrap()
+    };
+    let default = run(bounded());
+    let explicit = run(bounded().with_eigen_update_period(1));
+    assert_eq!(default.state, explicit.state);
+    assert_eq!(default.counts, explicit.counts);
+
+    let wrapper = || {
+        basin::BoundedCmaInject::with_inner_solver(
+            bounded(),
+            basin::NelderMead::new().projected(),
+        )
+        .with_inner_max_iter(2)
+    };
+    let run = |solver| {
+        basin::Executor::new(boxed_quadratic(), solver, start())
+            .max_iter(12)
+            .run()
+            .unwrap()
+    };
+    let default = run(wrapper());
+    let explicit = run(wrapper().with_eigen_update_period(1));
+    assert_eq!(default.state, explicit.state);
+    assert_eq!(default.counts, explicit.counts);
+    assert!(default.counts.cost_evals > 13 * 9);
+}
+
+#[test]
+#[should_panic(
+    expected = "eigen update period must be at least one generation"
+)]
+fn bounded_zero_period_is_rejected() {
+    bounded().with_eigen_update_period(0);
+}
+
+#[test]
+fn bounded_refresh_survives_checkpoint_and_restarts_on_fresh_run() {
+    let run = |solver, limit| {
+        basin::Executor::new(boxed_quadratic(), solver, start())
+            .max_iter(limit)
+            .run_with_solver()
+            .unwrap()
+    };
+    let initial = run(bounded().with_eigen_update_period(3), 0);
+    let paused = run(bounded().with_eigen_update_period(3), 2);
+    let initial_model = initial.solver.distribution().unwrap();
+    let paused_model = paused.solver.distribution().unwrap();
+    assert_eq!(
+        initial_model.principal_axis_stds,
+        paused_model.principal_axis_stds
+    );
+    assert_ne!(initial_model.covariance, paused_model.covariance);
+    let reference = run(bounded().with_eigen_update_period(3), 7);
+    assert_ne!(
+        initial_model.principal_axis_stds,
+        reference.solver.distribution().unwrap().principal_axis_stds,
+    );
+    let checkpoint = paused.into_checkpoint();
+    #[cfg(feature = "serde")]
+    let checkpoint = {
+        let bytes = postcard::to_allocvec(&checkpoint).unwrap();
+        postcard::from_bytes(&bytes).unwrap()
+    };
+    let resumed =
+        basin::Executor::resume_from_checkpoint(boxed_quadratic(), checkpoint)
+            .max_iter(7)
+            .run_with_solver()
+            .unwrap();
+    assert_eq!(reference.state, resumed.state);
+    assert_eq!(reference.counts, resumed.counts);
+    let fresh = run(resumed.solver, 2);
+    let expected = run(bounded().with_eigen_update_period(3), 2);
+    assert_eq!(fresh.state, expected.state);
+    assert_eq!(fresh.counts, expected.counts);
+}
+
+#[cfg(feature = "serde")]
+#[test]
+fn bounded_maps_missing_the_period_default_to_one() {
+    let mut serialized = serde_json::to_value(bounded()).unwrap();
+    serialized
+        .as_object_mut()
+        .unwrap()
+        .remove("eigen_update_period");
+    let restored: Bounded = serde_json::from_value(serialized).unwrap();
+    assert_eq!(
+        serde_json::to_value(restored).unwrap()["eigen_update_period"],
+        1
+    );
+}
+
+#[test]
+fn bounded_injection_retains_refresh_schedule_across_checkpoint() {
+    let run = |limit| {
+        let solver = basin::BoundedCmaInject::with_inner_solver(
+            bounded(),
+            basin::NelderMead::new().projected(),
+        )
+        .with_inner_max_iter(2)
+        .with_eigen_update_period(3);
+        basin::Executor::new(boxed_quadratic(), solver, start())
+            .max_iter(limit)
+            .run_with_solver()
+            .unwrap()
+    };
+    let baseline = run(7);
+    let checkpoint = run(2).into_checkpoint();
+    let resumed =
+        basin::Executor::resume_from_checkpoint(boxed_quadratic(), checkpoint)
+            .max_iter(7)
+            .run_with_solver()
+            .unwrap();
+    assert_eq!(baseline.state, resumed.state);
+    assert_eq!(baseline.counts, resumed.counts);
+    assert_eq!(
+        baseline
+            .solver
+            .cma()
+            .distribution()
+            .unwrap()
+            .principal_axis_stds,
+        resumed
+            .solver
+            .cma()
+            .distribution()
+            .unwrap()
+            .principal_axis_stds,
+    );
 }

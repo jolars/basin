@@ -11,6 +11,8 @@ use std::time::Instant;
 
 use basin::{CmaEs, CostFunction, Executor, PopulationProgress, StepOutcome};
 
+pub mod refresh;
+
 use crate::convergence::{Run, Summary};
 
 #[cfg(not(feature = "basin-latest"))]
@@ -84,6 +86,10 @@ struct Workload {
 
 impl Workload {
     fn new(case: Case, n: usize) -> Self {
+        Self::conditioned(case, n, 1e6)
+    }
+
+    fn conditioned(case: Case, n: usize, condition: f64) -> Self {
         assert!(n >= 2);
         // An orthonormal DCT-II fixes the dense rotation independently of seeds
         // and library-specific random-number generators.
@@ -106,7 +112,9 @@ impl Workload {
             case,
             rotation,
             weights: (0..n)
-                .map(|i| 10_f64.powf(6.0 * i as f64 / (n - 1) as f64))
+                .map(|i| {
+                    10_f64.powf(condition.log10() * i as f64 / (n - 1) as f64)
+                })
                 .collect(),
             calls: AtomicUsize::new(0),
         }

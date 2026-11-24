@@ -58,6 +58,19 @@ reported explicitly. The `cmaes` Criterion benchmark
 isolates eigendecomposition on identical covariances, including a reference
 with Basin's tolerance and iteration cap.
 
+Run the Basin-only refresh comparison in release mode:
+
+```sh
+cargo run --locked --release -p competitor-bench --bin verify_cmaes -- --refresh-sweep
+```
+
+The CSV reports a median and range for three timed solves per case and period,
+plus the actual objective calls, stop reason, and target attainment. Use
+`--repetitions N` for a different positive odd sample count. A successful row
+requires an independently checked objective and box violation within the common
+limits. Compare timings within a matched workload, solver, backend, precision,
+and seed. Identical resolved periods share one measurement.
+
 Extend a nearby harness when needed. Keep native competitors and instrumentation
 in `competitor-bench` or an isolated investigation workspace. Profile the actual
 production implementation; avoid a copied kernel that can drift from it, and do

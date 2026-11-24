@@ -218,7 +218,10 @@ where
         }};
     }
     check!(Fit(target[0]), cma());
-    check!(bounded(target[0]), bounded_cma());
+    check!(
+        bounded(target[0]),
+        bounded_cma().with_eigen_update_period(3)
+    );
     check!(
         Fit(target[0]),
         CmaInject::with_inner_solver(cma(), LevenbergMarquardtQr::new())
@@ -226,6 +229,7 @@ where
     check!(
         bounded(target[0]),
         BoundedCmaInject::with_inner_solver(bounded_cma(), Lbfgs::new())
+            .with_eigen_update_period(3)
     );
     check!(
         basin::SamplingDomain::new(bounded(target[0])),

@@ -107,7 +107,9 @@ use super::cma_es::{
 /// Fresh runs reset the distribution, penalty history, RNG, progress, and counts.
 /// Exact continuation retains the solver, progress, and counts together and
 /// skips initialization. With `serde`, the entire distribution and penalty history
-/// serialize when `V`, `M`, and `F` do. Legacy CMA state files are incompatible.
+/// serialize when `V`, `M`, and `F` do. The refresh period defaults to one when
+/// absent from map-based formats. Binary checkpoints require the matching
+/// solver layout. Legacy CMA state files are incompatible.
 ///
 /// # Reproducibility
 ///
@@ -142,6 +144,11 @@ pub struct BoundedCmaEs<V, M, F: Scalar = f64> {
     initial_stds: Option<V>,
     seed: u64,
     pub(crate) work: Option<Distribution<V, M, F>>,
+    #[cfg_attr(
+        feature = "serde",
+        serde(default = "super::cma_es::default_eigen_update_period")
+    )]
+    eigen_update_period: std::num::NonZeroU64,
 }
 
 /// Derived constants for bounded CMA-ES: the shared CMA constants plus
@@ -199,7 +206,24 @@ impl<V, M, F: Scalar> BoundedCmaEs<V, M, F> {
             initial_stds: None,
             seed,
             work: None,
+            eigen_update_period: super::cma_es::default_eigen_update_period(),
         }
+    }
+
+    /// Refresh the covariance eigendecomposition every `generations` updates.
+    ///
+    /// The default is one. Covariance and penalty adaptation run every
+    /// generation. Sampling, whitening, principal-axis diagnostics, and TolX
+    /// use the last refreshed eigenpairs. Larger periods change seeded trajectories.
+    /// Fresh initialization restarts the cadence and exact continuation retains it.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `generations` is zero.
+    pub fn with_eigen_update_period(mut self, generations: u64) -> Self {
+        self.eigen_update_period = std::num::NonZeroU64::new(generations)
+            .expect("eigen update period must be at least one generation");
+        self
     }
 
     /// Set initial per-coordinate standard deviations. `None` restores isotropy.
@@ -722,25 +746,27 @@ where
         }
         drop(std::mem::take(&mut y_sorted));
 
-        // Refresh eigendecomposition of the new C.
-        let (b_new, eigs) = match work.c.try_eigh() {
-            Ok(pair) => pair,
-            Err(_) => {
-                return Ok(crate::SolverStep::from((
-                    state,
-                    Some(Termination::numerical_failure(
-                        "Bounded CMA-ES covariance eigendecomposition failed.",
-                    )),
-                )));
+        if work.generation % self.eigen_update_period.get() == 0 {
+            // Refresh eigendecomposition of the new C.
+            let (b_new, eigs) = match work.c.try_eigh() {
+                Ok(pair) => pair,
+                Err(_) => {
+                    return Ok(crate::SolverStep::from((
+                        state,
+                        Some(Termination::numerical_failure(
+                            "Bounded CMA-ES covariance eigendecomposition failed.",
+                        )),
+                    )));
+                }
+            };
+            work.b = b_new;
+            let eig_floor = F::from_f64(1e-30).unwrap();
+            for i in 0..kc.n {
+                let lam = eigs[i].max(eig_floor);
+                let s = lam.sqrt();
+                work.d[i] = s;
+                work.d_inv[i] = one / s;
             }
-        };
-        work.b = b_new;
-        let eig_floor = F::from_f64(1e-30).unwrap();
-        for i in 0..kc.n {
-            let lam = eigs[i].max(eig_floor);
-            let s = lam.sqrt();
-            work.d[i] = s;
-            work.d_inv[i] = one / s;
         }
 
         // γ adaptation runs after the m / σ / C update so it sees the
