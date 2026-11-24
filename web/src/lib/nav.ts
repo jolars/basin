@@ -35,8 +35,8 @@ export const BENCHMARK_LINKS: DocsNavItem[] = [
 
 /** Sidebar links for the guide section. */
 export const DOCS_LINKS: NavLink[] = [
+    { label: "Overview", href: "guide/" },
     { label: "Getting started", href: "guide/getting-started/" },
-    { label: "Choosing a solver", href: "guide/solvers/" },
     { label: "Migrating from Argmin", href: "guide/migrating-from-argmin/" },
 ];
 

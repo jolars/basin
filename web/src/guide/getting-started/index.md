@@ -123,39 +123,13 @@ let result = Executor::from_start(problem, solver, x0)
     .unwrap();
 ```
 
-Optional tolerances accept a finite nonnegative scalar or `None`. Repeated
-setters replace the same test; distinct enabled tests usually combine with OR.
-Nelder–Mead's enabled simplex size and cost-spread tests combine with AND.
-Algorithm-specific defaults and safeguards still apply. Read each solver's
-rustdoc for the norm and scaling used by a test.
+Choose tolerances that fit the scale of your objective and parameters. Use
+`None` to disable an optional check. See your solver's guide for its defaults
+and how it combines enabled checks.
 
-Defaults vary by solver. In particular,
-[`NelderMead`](https://docs.rs/basin/latest/basin/solver/nelder_mead/struct.NelderMead.html#convergence)
-enables paired simplex size and cost-spread tests by default in Basin 2.0,
-including its projected variant. Absolute and relative tolerances work together
-within each test. An unchanged best vertex alone does not establish collapse,
-and collapse on a flat objective or after clipping does not establish
-stationarity. See the API reference and
-[Basin 2.0 migration guide](../migrating-to-v2/#nelder-mead-convergence-defaults) for settings,
-scaling limits, and complete opt-out. Basin 1.x retains its opt-in behavior.
-
-Choose tolerances for the scale of your objective and parameters. An absolute
-gradient threshold changes meaning when you rescale the problem. For least
-squares, the
-[`LevenbergMarquardt` convergence guide](https://docs.rs/basin/latest/basin/solver/levenberg_marquardt/struct.LevenbergMarquardt.html#convergence)
-shows how to select orthogonality and relative model-reduction tests through
-existing setters. Adding a relative check leaves any absolute check enabled
-unless you explicitly disable it with `None`.
-
-Budgets are checked after initialization and between iterations, so evaluation
-limits can be exceeded within an iteration. `result.report.termination` reports why the run
-ended. Reaching a budget or reporting a numerical stall does not establish
-convergence or rule out an accurate solution. Inspect the returned solution
-alongside the reason. For an application condition, use `stop_when(|state| ...)`,
-returning `Some(basin::ApplicationStop::new("my_stop"))` to stop or `None` to continue.
-
-Basin 2.0 removes the former `terminate_on` facility and abbreviated tolerance
-setters. See [Migrating to Basin 2.0](../migrating-to-v2/#stopping-conditions).
+Check `result.report.termination` alongside the returned point to see why the
+run ended. The executor checks budgets after initialization and between
+iterations, so a single iteration can take the run past an evaluation limit.
 
 ## Save and resume a run
 
@@ -189,5 +163,6 @@ file written by `CheckpointWriter`, load the saved state with
 
 - [Migrating from Argmin](../migrating-from-argmin/): translate an existing
   Argmin 0.11 integration.
-- [Solvers](../solvers/): pick the right algorithm and backend.
+- Use [Choosing a solver](../solvers/) to find methods that fit your problem,
+  constraints, and available derivatives.
 - Browse the full API reference on [docs.rs](https://docs.rs/basin).

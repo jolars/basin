@@ -1,8 +1,20 @@
+<script lang="ts">
+import { createHighlighterCoreSync } from "shiki/core";
+import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
+import rust from "shiki/langs/rust.mjs";
+import githubDark from "shiki/themes/github-dark.mjs";
+import githubLight from "shiki/themes/github-light.mjs";
+
+const highlighter = createHighlighterCoreSync({
+    langs: [rust],
+    themes: [githubLight, githubDark],
+    engine: createJavaScriptRegexEngine(),
+});
+</script>
+
 <script setup lang="ts">
 import { ref, computed, watchEffect, onUnmounted, useId } from "vue";
 import type { Component } from "vue";
-import Prism from "prismjs";
-import "prismjs/components/prism-rust";
 import {
     ALPHA_STEPS,
     BETA_MAX,
@@ -19,26 +31,6 @@ import {
     type RunOutput,
 } from "./codegen";
 
-// We highlight by hand (per line), so stop Prism from auto-scanning the
-// document for `language-*` blocks on load.
-Prism.manual = true;
-
-function escapeHtml(s: string): string {
-    return s.replace(/[&<>]/g, (c) =>
-        c === "&" ? "&amp;" : c === "<" ? "&lt;" : "&gt;",
-    );
-}
-
-// Highlight a single line of Rust to token-span HTML. Lines are highlighted
-// independently (no token in the generated snippet spans multiple lines),
-// which keeps the per-line structure the flash relies on. Runs on the
-// server too (Prism is isomorphic), so the prerendered HTML is highlighted.
-function highlightRust(line: string): string {
-    if (line === "") return " ";
-    const grammar = Prism.languages.rust;
-    return grammar ? Prism.highlight(line, grammar, "rust") : escapeHtml(line);
-}
-
 // The playground is server-renderable: `generateSnippet` is pure, so the
 // landing page prerenders the default snippet as real HTML. Reactivity
 // (and the clipboard copy) take over after hydration.
@@ -52,7 +44,15 @@ const code = computed(() => generateSnippet(cfg.value));
 // line structure is fixed (only literals inside fixed lines change), so a
 // positional diff lands exactly on the changed line(s).
 const lines = computed(() => code.value.replace(/\n+$/, "").split("\n"));
-const highlightedLines = computed(() => lines.value.map(highlightRust));
+const highlightedLines = computed(
+    () =>
+        highlighter.codeToTokens(lines.value.join("\n"), {
+            lang: "rust",
+            // Use the same palettes and CSS variables as VitePress code blocks.
+            themes: { light: githubLight.name, dark: githubDark.name },
+            defaultColor: false,
+        }).tokens,
+);
 
 // Indices of lines that just changed, briefly highlighted then faded out.
 let flashed = ref<Set<number>>(new Set());
@@ -276,7 +276,7 @@ function handlePick(p: { x: number; y: number }) {
 
         <div class="flex flex-col gap-4 min-w-0">
             <div
-                class="rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900 overflow-hidden [overflow-anchor:none]"
+                class="rounded-xl border border-stone-200 dark:border-stone-800 bg-[var(--vp-code-block-bg)] overflow-hidden [overflow-anchor:none]"
             >
                 <div
                     class="px-4 py-2 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between gap-3"
@@ -302,7 +302,7 @@ function handlePick(p: { x: number; y: number }) {
                     "
                 >
                     <!-- prettier-ignore -->
-                    <pre class="p-4 overflow-x-auto text-sm leading-relaxed"><code class="rust-hl font-mono"><template v-for="(html, i) in highlightedLines" :key="i"><span class="code-line" :class="{'flash': flashed.has(i)}" v-html="html"></span></template></code></pre>
+                    <pre class="p-4 overflow-x-auto text-sm leading-relaxed"><code class="vp-code font-mono"><span v-for="(tokens, i) in highlightedLines" :key="i" class="code-line" :class="{ flash: flashed.has(i) }"><span v-for="token in tokens" :key="token.offset" :style="token.htmlStyle">{{ token.content }}</span><template v-if="tokens.length === 0"> </template></span></code></pre>
                 </div>
                 <button
                     type="button"
@@ -355,59 +355,5 @@ function handlePick(p: { x: number; y: number }) {
     background-color: rgba(250, 204, 21, 0.38); /* amber-400 */
     /* Appear instantly on change; only the removal animates. */
     transition: none;
-}
-
-/* Match the GitHub Light Default and Dark Dimmed palettes used by Shiki.
-     * Tokens injected via {@html} need `:global`; the variables inherit from
-     * `.rust-hl` and follow the site's class-based dark-mode toggle. */
-.rust-hl {
-    --tok-comment: #6e7781;
-    --tok-keyword: #cf222e;
-    --tok-fn: #8250df;
-    --tok-macro: #8250df;
-    --tok-string: #0a3069;
-    --tok-number: #0550ae;
-    --tok-type: #953800;
-    --tok-fg: #1f2328;
-    color: var(--tok-fg);
-}
-:global(.dark) .rust-hl {
-    --tok-comment: #768390;
-    --tok-keyword: #f47067;
-    --tok-fn: #dcbdfb;
-    --tok-macro: #dcbdfb;
-    --tok-string: #96d0ff;
-    --tok-number: #6cb6ff;
-    --tok-type: #f69d50;
-    --tok-fg: #adbac7;
-}
-.rust-hl :deep(.token.comment) {
-    color: var(--tok-comment);
-}
-.rust-hl :deep(.token.keyword),
-.rust-hl :deep(.token.operator) {
-    color: var(--tok-keyword);
-}
-.rust-hl :deep(.token.function),
-.rust-hl :deep(.token.function-definition) {
-    color: var(--tok-fn);
-}
-.rust-hl :deep(.token.macro) {
-    color: var(--tok-macro);
-}
-.rust-hl :deep(.token.string),
-.rust-hl :deep(.token.char) {
-    color: var(--tok-string);
-}
-.rust-hl :deep(.token.number),
-.rust-hl :deep(.token.boolean) {
-    color: var(--tok-number);
-}
-.rust-hl :deep(.token.class-name),
-.rust-hl :deep(.token.namespace) {
-    color: var(--tok-type);
-}
-.rust-hl :deep(.token.punctuation) {
-    color: var(--tok-fg);
 }
 </style>

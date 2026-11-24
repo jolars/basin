@@ -41,7 +41,6 @@ export default defineConfig({
     lang: "en-US",
     sitemap: { hostname: origin },
     markdown: {
-        theme: { light: "github-light-default", dark: "github-dark-dimmed" },
         anchor: {
             slugify: (text) =>
                 text

@@ -1,8 +1,4 @@
-<script setup lang="ts">
-    import Citation from "#lib/docs/Citation.vue";
-</script>
-
-# Documentation
+# Overview
 
 **Basin** is a numerical optimization library for Rust. Solve problems with or
 without derivatives, fit models with nonlinear least squares, and handle
@@ -11,10 +7,8 @@ runs natively and in the browser. Use plain Rust vectors or your choice of
 nalgebra, ndarray, or faer.
 
 To minimize a function, implement `CostFunction`, choose a solver, and supply
-a starting point. Add derivatives when your solver needs them. The
-[solver catalog](solvers/) covers gradient-based methods, derivative-free
-search, nonlinear least squares, and global and stochastic optimization,
-including which solvers support each kind of constraint.
+a starting point. Add derivatives when your solver needs them. Use
+[Choosing a solver](solvers/) to find methods that fit your problem.
 
 Bracketed scalar equations use the separate `BrentRoot::solve` API. It accepts
 a fallible closure and returns the signed function value and final bracket
@@ -28,7 +22,7 @@ derivative-free Nelder–Mead simplex. Implement
 `Executor::from_start` build the state from your starting point.
 
 ```rust
-use basin::{CostFunction, Executor, MaxIter, NelderMead};
+use basin::{CostFunction, Executor, NelderMead};
 use std::convert::Infallible;
 
 struct Sphere;
@@ -55,9 +49,8 @@ fn main() {
 ```
 
 Nelder–Mead needs no derivatives, so `CostFunction` is the only trait to
-implement. If you want to reach for a gradient-based solver and you add a
-`Gradient` impl; the [Getting started](getting-started/) guide walks through
-that full path on the Rosenbrock function.
+implement. The [Getting started](getting-started/) guide shows how to add a
+`Gradient` implementation and solve the Rosenbrock problem.
 
 ## How the pieces fit
 
@@ -78,9 +71,8 @@ that full path on the Rosenbrock function.
 
 ## Choosing a solver
 
-A rough map from the shape of your problem to where to start. The
-[Solvers](solvers/) catalog has the full list, problem requirements, and
-algorithm references.
+Use the [solver finder](solvers/) to narrow your options. The individual
+solver guides cover requirements, settings, and references.
 
 - **Smooth objective, gradient available**: `GradientDescent` to start, then
   `Bfgs` or `Lbfgs` for faster convergence (`Lbfgs` when the dimension is
@@ -95,8 +87,8 @@ algorithm references.
 - **Constraints**: box bounds, linear (in)equalities, and nonlinear constraints
   describe the *problem*, so they live problem-side. Bounded solvers (`Lbfgsb`,
   bounded `NelderMead`, `BoundedLevenbergMarquardt`, `TrustRegionReflective`)
-  consume them directly; adapters (projection, log-barrier, augmented Lagrangian,
-  or `Cobyla`) wrap unconstrained solvers.
+  consume them directly. `Cobyla` handles linear and nonlinear constraints
+  without derivatives.
 - **Scalar equation with a sign-changing interval**: `BrentRoot` combines
   bisection, secant steps, and inverse quadratic interpolation through a direct
   root-specific API.
@@ -106,7 +98,43 @@ algorithm references.
 If you use Basin in your research, please cite the paper describing it,
 [arXiv:2608.11279](https://arxiv.org/abs/2608.11279):
 
-<Citation />
+::: code-group
+
+```text [APA]
+Larsson, J. (2026). Basin: Efficient and Extensible Numerical Optimization in Rust (arXiv:2608.11279). arXiv. https://doi.org/10.48550/arXiv.2608.11279
+```
+
+```bibtex [BibTeX]
+@misc{larsson2026basin,
+  title         = {Basin: Efficient and Extensible Numerical Optimization in {{Rust}}},
+  shorttitle    = {Basin},
+  author        = {Larsson, Johan},
+  year          = {2026},
+  month         = aug,
+  number        = {arXiv:2608.11279},
+  eprint        = {2608.11279},
+  primaryclass  = {cs.LG},
+  publisher     = {arXiv},
+  doi           = {10.48550/arXiv.2608.11279},
+  archiveprefix = {arXiv}
+}
+```
+
+```bibtex [BibLaTeX]
+@online{larsson2026basin,
+  title       = {Basin: Efficient and Extensible Numerical Optimization in {{Rust}}},
+  shorttitle  = {Basin},
+  author      = {Larsson, Johan},
+  date        = {2026-08-11},
+  eprint      = {2608.11279},
+  eprinttype  = {arXiv},
+  eprintclass = {cs.LG},
+  doi         = {10.48550/arXiv.2608.11279},
+  pubstate    = {prepublished}
+}
+```
+
+:::
 
 The repository's
 [`CITATION.cff`](https://github.com/jolars/basin/blob/main/CITATION.cff) carries
@@ -119,8 +147,7 @@ the same reference in machine-readable form.
   termination reports, solver settings, and checkpoints from Basin 1.x.
 - [Migrating from Argmin](migrating-from-argmin/): translate problem traits,
   solver configuration, errors, bounds, and observers from Argmin 0.11.
-- [Solvers](solvers/): the catalog of optimization solvers, scalar root finding,
-  and backend support.
+- [Solvers](solvers/): find a starting point and browse the individual guides.
 
 You can also watch solvers converge interactively in the
 [visualizer](../visualizer/), or browse the full API on

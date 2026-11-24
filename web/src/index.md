@@ -11,14 +11,14 @@ hero:
     alt: Optimization trajectories on the Rosenbrock function
   actions:
     - theme: brand
+      text: What is Basin?
+      link: /guide/
+    - theme: alt
       text: Get started
       link: /guide/getting-started/
     - theme: alt
       text: Open the visualizer
       link: /visualizer/
-    - theme: alt
-      text: Source code
-      link: https://github.com/jolars/basin
 features:
   - title: "A wide range of solvers"
     details: "Choose from gradient-based methods like L-BFGS, derivative-free methods like Nelder–Mead, least-squares solvers like Levenberg–Marquardt, and global methods like CMA-ES."
