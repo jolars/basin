@@ -100,7 +100,7 @@ Unfortunately, I have realized that the changes to constraints API in Basin 2.0 
 - Make constraint declarations optional. `CostFunction`, `Residual`, and constraint callbacks no longer require a declaration. Unconstrained solvers ignore declared constraints, while constrained solvers continue to validate complete sets and reject unsupported blocks.
 - Rename the `ProblemConstraints` trait to `Constraints` and the `Constraints` data container to `ConstraintSet`. Rename the associated type to `Set` and the getter to `constraints`. `Constrained::new` accepts plain objectives and uses its supplied set as the complete declaration.
 
-See the [Basin 3.0 migration guide](web/src/routes/guide/migrating-to-v3/+page.svx) for more details.
+See the [Basin 3.0 migration guide](web/src/guide/migrating-to-v3/index.md) for more details.
 
 ### Breaking changes
 
@@ -344,7 +344,7 @@ Saved runs also need attention. Basin 1.x exact checkpoints cannot be resumed in
 ## [1.3.0](https://github.com/jolars/basin/compare/v1.2.0...v1.3.0) (2026-06-24)
 
 ### Features
-- add the least-squares family to ndarray (+ Trf on Vec<f64>) ([`67b38d8`](https://github.com/jolars/basin/commit/67b38d81b5d55ee4dfbaa198acb910e561c3b181))
+- add the least-squares family to ndarray (+ Trf on `Vec<f64>`) ([`67b38d8`](https://github.com/jolars/basin/commit/67b38d81b5d55ee4dfbaa198acb910e561c3b181))
 - add Bfgs support for the ndarray backend ([`f2c50ba`](https://github.com/jolars/basin/commit/f2c50ba5b7bc5e2538f520c043b8951a678326c0))
 
 ### Bug Fixes

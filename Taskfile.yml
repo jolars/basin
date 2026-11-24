@@ -22,11 +22,11 @@ tasks:
         --html --output-dir target/coverage
 
   logo:
-    desc: "Watch the logo example; rebuild day + dark SVG/PNGs and sync to web/static on save."
+    desc: "Watch the logo example; rebuild day + dark SVG/PNGs and sync to web/src/public on save."
     summary: |
       Renders crates/basin/examples/logo.rs to images/logo.svg (day theme) and
       images/logo-dark.svg (night theme), rasterises PNGs at a few widths
-      (resvg), and copies the SVGs + PNGs into web/static/ for the web app —
+      (resvg), and copies the SVGs + PNGs into web/src/public/ for the web app —
       then watches the example and rebuilds on every save. The example traces a
       real GradientDescent run over its surface, so the river is genuine
       optimizer output.
@@ -40,7 +40,7 @@ tasks:
       tweak constants; Ctrl-C to stop. For a single build (CI, committing the
       assets) use `task logo:once`.
 
-      Outputs (in images/ and web/static/): logo{,-dark}.svg (scalable,
+      Outputs (in images/ and web/src/public/): logo{,-dark}.svg (scalable,
       transparent), logo{,-dark}.png (1024px wide), logo{,-dark}-512.png,
       logo{,-dark}-256.png. Aspect ratio is preserved; PNG rasterisation uses
       `resvg` (pinned in devenv.nix).
@@ -51,7 +51,7 @@ tasks:
       - task: logo:build
 
   logo:once:
-    desc: "Build the logo once: day + dark SVG/PNGs, synced to web/static (no watch)."
+    desc: "Build the logo once: day + dark SVG/PNGs, synced to web/src/public (no watch)."
     sources:
       - crates/basin/examples/logo.rs
     generates:
@@ -63,10 +63,10 @@ tasks:
       - images/logo-dark.png
       - images/logo-dark-512.png
       - images/logo-dark-256.png
-      - web/static/logo.svg
-      - web/static/logo.png
-      - web/static/logo-dark.svg
-      - web/static/logo-dark.png
+      - web/src/public/logo.svg
+      - web/src/public/logo.png
+      - web/src/public/logo-dark.svg
+      - web/src/public/logo-dark.png
     cmds:
       - task: logo:build
 
@@ -84,11 +84,11 @@ tasks:
       - resvg images/logo-dark.svg images/logo-dark-512.png --width 512
       - resvg images/logo-dark.svg images/logo-dark-256.png --width 256
       # 3. sync the asset set into the web app's static dir
-      - cp images/logo.svg images/logo.png images/logo-512.png images/logo-256.png web/static/
-      - cp images/logo-dark.svg images/logo-dark.png images/logo-dark-512.png images/logo-dark-256.png web/static/
+      - cp images/logo.svg images/logo.png images/logo-512.png images/logo-256.png web/src/public/
+      - cp images/logo-dark.svg images/logo-dark.png images/logo-dark-512.png images/logo-dark-256.png web/src/public/
 
   favicon:
-    desc: "Watch the favicon example; rebuild the self-adapting SVG and the PNG/ICO set and sync to web/static on save."
+    desc: "Watch the favicon example; rebuild the self-adapting SVG and the PNG/ICO set and sync to web/src/public on save."
     summary: |
       Renders crates/basin/examples/favicon.rs to images/favicon.svg — a flat,
       side-on cross-section of a 1D basin, drawn to read at 16-32 px in a browser
@@ -102,7 +102,7 @@ tasks:
       (resvg + ImageMagick): favicon-96x96.png and a 16/32/48 favicon.ico for
       browser tabs, plus apple-touch-icon.png and the maskable
       web-app-manifest-{192,512}.png on a brand-cream tile (with safe-zone
-      padding for Android's icon mask). Everything is copied into web/static/.
+      padding for Android's icon mask). Everything is copied into web/src/public/.
 
       Watch mode by default; Ctrl-C to stop. For a single build (CI, committing
       the assets) use `task favicon:once`.
@@ -113,7 +113,7 @@ tasks:
       - task: favicon:build
 
   favicon:once:
-    desc: "Build the favicon once: self-adapting SVG and the PNG/ICO raster set, synced to web/static (no watch)."
+    desc: "Build the favicon once: self-adapting SVG and the PNG/ICO raster set, synced to web/src/public (no watch)."
     sources:
       - crates/basin/examples/favicon.rs
     generates:
@@ -123,12 +123,12 @@ tasks:
       - images/apple-touch-icon.png
       - images/web-app-manifest-192x192.png
       - images/web-app-manifest-512x512.png
-      - web/static/favicon.svg
-      - web/static/favicon-96x96.png
-      - web/static/favicon.ico
-      - web/static/apple-touch-icon.png
-      - web/static/web-app-manifest-192x192.png
-      - web/static/web-app-manifest-512x512.png
+      - web/src/public/favicon.svg
+      - web/src/public/favicon-96x96.png
+      - web/src/public/favicon.ico
+      - web/src/public/apple-touch-icon.png
+      - web/src/public/web-app-manifest-192x192.png
+      - web/src/public/web-app-manifest-512x512.png
     cmds:
       - task: favicon:build
 
@@ -168,13 +168,17 @@ tasks:
       - rm -f images/favicon-raster.svg
       # 4. sync the favicon set into the web app's static dir (one self-adapting
       #    SVG — no separate favicon-dark.svg)
-      - cp images/favicon.svg images/favicon-96x96.png images/favicon.ico images/apple-touch-icon.png images/web-app-manifest-192x192.png images/web-app-manifest-512x512.png web/static/
+      - cp images/favicon.svg images/favicon-96x96.png images/favicon.ico images/apple-touch-icon.png images/web-app-manifest-192x192.png images/web-app-manifest-512x512.png web/src/public/
 
   web-dev:
-    desc: Start Svelte development server
+    desc: Start VitePress development server
     dir: web
     cmds:
-      - pnpm dev
+      - |
+        if [ -e /etc/NIXOS ]; then
+          export pnpm_config_pm_on_fail=ignore
+        fi
+        pnpm dev
 
   bench:backends:
     desc: "Run the backend-axis benchmark and refresh the /benchmarks page data."

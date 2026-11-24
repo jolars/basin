@@ -6,7 +6,13 @@
         "useIgnoreFile": true
     },
     "files": {
-        "includes": ["**", "!**/*.svelte", "!**/*.css", "!src/lib/data/*.json"]
+        "includes": [
+            "**",
+            "!**/*.vue",
+            "!**/*.css",
+            "!**/*.md",
+            "!src/lib/data/*.json"
+        ]
     },
     "formatter": {
         "enabled": true,

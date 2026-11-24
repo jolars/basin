@@ -42,3 +42,20 @@ x_{k+1} &= x_k + v_{k+1}
         `# Update\n\nBefore the step.\n\n$$\n${source}\n$$\n\nAfter the step.\n`,
     );
 });
+
+test("exports VitePress content without navigation or heading permalinks", () => {
+    const html = `<header>Navigation</header><div id="VPContent">
+        <aside>Contents</aside><main><h1 id="example">Example
+        <a class="header-anchor" href="#example">#</a></h1>
+        <div class="language-rust"><span class="lang">rust</span>
+        <pre><code><span class="line">let x = 1;</span>
+<span class="line">let y = 2;</span></code></pre></div></main>
+        <div class="VPDocFooter">Previous page</div></div>`;
+    const markdown = htmlToMarkdown(html);
+    assert.match(markdown, /^# Example\s*$/m);
+    assert.match(markdown, /let x = 1;\nlet y = 2;/);
+    assert.doesNotMatch(
+        markdown,
+        /Navigation|Contents|Previous page|\[#[^\n]*\]/,
+    );
+});

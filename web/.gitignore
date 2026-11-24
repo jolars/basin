@@ -1,5 +1,5 @@
 node_modules/
-.svelte-kit/
+.vitepress/cache/
 build/
 .vite/
 .wrangler/
@@ -9,3 +9,6 @@ build/
 # editors before the first build.
 src/lib/basin-wasm/*
 !src/lib/basin-wasm/.gitkeep
+
+.svelte-kit/
+.vitepress/.temp/

@@ -1,12 +1,12 @@
 # Website hosting
 
-Cloudflare Workers serves the prerendered SvelteKit site at <https://basin.rs/>.
+Cloudflare Workers serves the prerendered VitePress site at <https://basin.rs/>.
 `web/wrangler.jsonc` deploys `web/build/` as static assets alongside the Worker.
 The `www.basin.rs` domain redirects to the apex domain, preserving paths and
 query strings. Cloudflare canonicalizes page URLs with trailing slashes and
 serves `404.html` with a 404 status for unknown paths.
 [Static redirects](https://developers.cloudflare.com/workers/static-assets/redirects/)
-in `web/static/_redirects` preserve retired page URLs.
+in `web/src/public/_redirects` preserve retired page URLs.
 
 `pnpm build` writes an `index.md` beside each page's `index.html`, using the
 rendered `<main>` content. The Worker serves that file when a page request
@@ -26,7 +26,7 @@ pnpm preview:worker
 ```
 
 `preview:worker` runs the built site in Cloudflare's local runtime. `pnpm dev`
-still runs the Svelte development server. After building, `pnpm deploy` uploads
+still runs the VitePress development server. After building, `pnpm deploy` uploads
 the Worker and assets together; it requires Wrangler authentication or a
 `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the environment. Production
 builds must leave `BASIN_BASE_PATH` unset.

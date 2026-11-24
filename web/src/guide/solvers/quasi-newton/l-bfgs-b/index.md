@@ -1,0 +1,327 @@
+<script setup lang="ts">
+    import References from "#lib/docs/References.vue";
+</script>
+
+# L-BFGS-B
+
+L-BFGS-B is a local optimizer for smooth functions with box bounds when you can
+compute a gradient. It builds a curvature model from a short history of steps
+and gradient changes, keeping storage manageable for large problems. Its search
+accounts for the bounds so objective and gradient evaluations stay inside the
+box.
+
+[API
+reference](https://docs.rs/basin/latest/basin/solver/lbfgs/struct.Lbfgs.html)
+
+  | Property    | Requirement                                                        |
+  | ----------- | ------------------------------------------------------------------ |
+  | Objective   | A smooth scalar function                                           |
+  | Evaluations | `CostFunction` and `Gradient`                                      |
+  | Search      | Local, from one starting point                                     |
+  | Constraints | A box-only `ConstraintSet<BoxBounds<V>>` on the problem            |
+  | Parameters  | Contiguous vectors on all four dense backends, with `f32` or `f64` |
+
+## When to use it
+
+Consider L-BFGS-B when each parameter has an independent lower or upper bound
+and you want to use curvature information without storing a dense matrix. The
+algorithm combines gradient projection with a limited-memory BFGS model
+([Byrd et al., 1995](#ref-byrd-lu-nocedal-zhu-1995)).
+
+For an unconstrained problem, use [L-BFGS](../l-bfgs/) or [BFGS](../bfgs/).
+[Projected gradient descent](../../first-order/projected-gradient-descent/)
+offers a simpler method with little working storage for box bounds. For
+least-squares objectives with bounds, compare [trust-region
+reflective](../../#trust-region-reflective). Linear and nonlinear constraint
+blocks need a method that supports them, such as [SLSQP](../../#slsqp).
+
+L-BFGS-B finds a local constrained solution. Different starting points can lead
+to different minima, and noisy or nonsmooth gradients can make its curvature
+estimates unreliable.
+
+## How it works
+
+Basin projects the starting point into the box before evaluating the objective
+and gradient. Each iteration first explores the projected negative-gradient path
+to find a generalized Cauchy point. It then refines the quadratic model over
+variables that are free to move, followed by a line search that keeps the step
+feasible. This is the bound-constrained algorithm described in
+[Zhu et al. (1997)](#ref-zhu-byrd-lu-nocedal-1997), with the version 3.0
+subspace changes of [Morales and Nocedal (2011)](#ref-morales-nocedal-2011).
+This describes the default path; the optional policies below can select a
+different model or direction.
+
+After an accepted step, the solver retains the change in parameters and the
+change in gradient when they pass its curvature safeguard. At most `m` pairs
+contribute to the model. The default
+[Moré–Thuente line search](https://docs.rs/basin/latest/basin/line_search/more_thuente/struct.MoreThuente.html)
+seeks sufficient decrease and a strong Wolfe curvature condition within the
+feasible step interval ([Moré and Thuente, 1994](#ref-more-thuente-1994)). A
+single iteration can require several objective and gradient evaluations.
+
+## Example
+
+This quadratic has its unconstrained minimum at `[1.0, -2.0]`. The box moves the
+constrained minimum to `[0.5, -1.0]`, where the raw gradient is nonzero. The
+example declares bounds on the problem and uses a projected-gradient stopping
+test.
+
+<!-- compile: solver-lbfgsb -->
+```rust
+use basin::{
+    BoxBounds, ConstraintDescription, ConstraintSet, Constraints, CostFunction,
+    Executor, Gradient, Lbfgsb, Termination,
+};
+use std::convert::Infallible;
+
+struct BoundedQuadratic {
+    lower: Vec<f64>,
+    upper: Vec<f64>,
+}
+
+impl Constraints for BoundedQuadratic {
+    type Set = ConstraintSet<BoxBounds<Vec<f64>>>;
+
+    fn constraints(
+        &self,
+    ) -> <Self::Set as ConstraintDescription>::Borrowed<'_> {
+        ConstraintSet::new()
+            .with_bounds(BoxBounds::new(Some(&self.lower), Some(&self.upper)))
+    }
+}
+
+impl CostFunction for BoundedQuadratic {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok((x[0] - 1.0).powi(2) + 4.0 * (x[1] + 2.0).powi(2))
+    }
+}
+
+impl Gradient for BoundedQuadratic {
+    type Gradient = Vec<f64>;
+
+    fn gradient(&self, x: &Self::Param) -> Result<Self::Gradient, Self::Error> {
+        Ok(vec![2.0 * (x[0] - 1.0), 8.0 * (x[1] + 2.0)])
+    }
+}
+
+fn main() {
+    let problem = BoundedQuadratic {
+        lower: vec![-1.0, -1.0],
+        upper: vec![0.5, 1.0],
+    };
+    let solver = Lbfgsb::new()
+        .with_m_capacity(10)
+        .with_absolute_projected_gradient_tolerance(1e-8)
+        .with_relative_cost_reduction_tolerance(None);
+
+    let result = Executor::from_start(problem, solver, vec![-3.0, 5.0])
+        .max_iter(200)
+        .run()
+        .unwrap();
+
+    assert!(matches!(
+        result.report.termination,
+        Termination::Converged(_)
+    ));
+    assert!((result.param()[0] - 0.5).abs() < 1e-7);
+    assert!((result.param()[1] + 1.0).abs() < 1e-7);
+}
+```
+
+`Lbfgsb` is the alias for the default bounded mode of `Lbfgs`. Calling
+`Lbfgs::new()` selects the same algorithm; `.unbounded()` selects unconstrained
+L-BFGS. Initialization projects this example's seed to `[-1.0, 1.0]` before
+the first objective or gradient evaluation.
+
+## Choose a model and direction policy
+
+Start with the default when you want the reference algorithm. Configure history,
+tolerances, and the line search on `Lbfgsb` before selecting the compact-model
+wrapper. The model and projected-search wrappers support the same contiguous
+dense backends and scalar precisions. They keep bounds on the problem and
+execution budgets on the executor.
+
+| Selection | Behavior |
+| --- | --- |
+| `Lbfgsb::new()` | Reference L-BFGS-B 3.0 model and subspace arithmetic. |
+| `.with_compact_model()` | Signed columns for small dimensions and a scaled compact model otherwise, with dimension-dependent reduced solves. Selects `ModelDirection::Bounded` by default. |
+
+The
+[model wrapper](https://docs.rs/basin/latest/basin/solver/lbfgs/model_strategy/struct.ModelLbfgsb.html)
+validates its own representation and avoids constructing the reference K/T
+factors. Its equivalent model calculations can still change rounding,
+trajectories, callback counts, and stopping outcomes. Compare solution quality
+and evaluation work on your problem before choosing it for speed.
+
+The model wrapper also accepts an explicit
+[`ModelDirection`](https://docs.rs/basin/latest/basin/solver/lbfgs/model_strategy/enum.ModelDirection.html):
+
+- **`Bounded`** constructs a generalized Cauchy point and refines the model on
+  its free coordinates, retaining Basin's projected Newton/backtracking safeguard.
+- **`InteriorFirst`** tries an inverse L-BFGS step when both its start and full
+  endpoint are strictly inside the box. Otherwise it uses the bounded direction.
+  A soft line-search failure retries the bounded direction with history intact;
+  failed probes remain counted, and callback errors propagate normally.
+- **`ProjectedChord`** applies retained curvature on the current free coordinates,
+  projects the endpoint into the box, and searches along the feasible chord.
+  This selects projected L-BFGS rather than the L-BFGS-B Cauchy algorithm.
+  Basin inherits the base solver's stopping controls. Sisyfuzz's default
+  projected Armijo search projects each trial; its More–Thuente and Wolfe
+  searches instead cap the original direction at the first bound. The chord
+  policy differs from both choices.
+
+For projected L-BFGS, select the search geometry independently with
+[`with_projected_search()`](https://docs.rs/basin/latest/basin/solver/lbfgs/model_strategy/struct.ModelLbfgsb.html#method.with_projected_search).
+All choices retain the same free-coordinate curvature mechanism:
+
+| `ProjectedSearch` | Trial points and acceptance |
+| --- | --- |
+| `FeasibleRay` | Use the free-coordinate inverse direction, remove outward components at active bounds, and cap steps at the first bound reached along the ray. Use the base solver's configured bounded search, such as More–Thuente or Wolfe. |
+| `Armijo(search)` | Project each trial `x + alpha * d` into the box, using the actual displacement for sufficient decrease. Use the supplied `ProjectedArmijo` configuration. |
+| `Chord` | Project the full endpoint, then use the base solver's bounded search along the chord. |
+
+The ray and Armijo choices correspond to sisyfuzz's respective search paths.
+They remain subject to Basin's numerical safeguards and restart behavior.
+`with_projected_search()` replaces any previously selected `ModelDirection`.
+Its `Chord` option shares the `ModelDirection::ProjectedChord` geometry but uses
+the new wrapper's global curvature safeguard and actual-displacement pair updates.
+Projected Armijo returns the actual accepted point and its evaluation; it does
+not implement the straight-ray `LineSearch` contract and cannot be passed to
+`Lbfgs::with_line_search` directly. Its default configuration starts at `alpha = 1`,
+halves the step, uses `c1 = 1e-4`, and allows up to 40 trials. Its configuration
+replaces the base solver's line search for this mode.
+
+For example, select per-trial projection with combined cost/gradient evaluations:
+
+<!-- compile: solver-lbfgsb-projected-policy -->
+```rust
+use basin::{Lbfgsb, line_search::projected_armijo::ProjectedArmijo};
+use basin::solver::lbfgs::model_strategy::ProjectedSearch;
+
+fn main() {
+    let solver = Lbfgsb::<Vec<f64>>::new()
+        .with_m_capacity(10)
+        .with_absolute_projected_gradient_tolerance(1e-8)
+        .with_relative_cost_reduction_tolerance(None)
+        .with_compact_model()
+        .with_projected_search(ProjectedSearch::Armijo(
+            ProjectedArmijo::new().with_fused_evaluations(),
+        ));
+
+    assert!(solver.curvature_retention());
+}
+```
+
+Pass this solver to `Executor` with a bounded problem as in the example above.
+Without `.with_fused_evaluations()`, rejected Armijo trials request only costs;
+the gradient is requested on acceptance. Fused mode shares combined work at
+every trial, including rejections, and reuses the accepted evaluation.
+Override `Gradient::cost_and_gradient` to share intermediate work and
+`Gradient::cost_and_gradient_into` to reuse gradient storage; the default
+combined callback calls the separate methods, and the default buffer-writing
+callback delegates to that combined callback. Fused mode can be
+more expensive when gradients cost much more than objective evaluations.
+The inverse policies build derived model factors only when a bounded fallback
+needs them. They are explicit alternatives, with no general guarantee of faster
+convergence or better accuracy than the reference path.
+
+### Preserve curvature across changes at bounds
+
+Default L-BFGS-B already retains accepted full curvature pairs when the free set
+changes. The projected modes additionally restrict the inverse BFGS updates to the
+coordinates currently free to move. A pair whose restricted curvature is unsafe
+is skipped for that direction, while the original pair remains available if
+coordinates become free again. History capacity still limits retention, and
+normal numerical restarts can clear the history.
+
+`with_projected_search()` forms pairs from the actual accepted parameter and
+gradient changes. Its global curvature safeguard defaults to `1e-10` times
+the product of the step and gradient-change norms, configured on the returned
+solver with `with_relative_curvature_tolerance`. Unsafe global curvature clears
+the model; skipping an unsafe restriction leaves its raw pair intact.
+This global threshold replaces the base solver's curvature threshold. The
+free-coordinate restriction test has a separate, fixed relative threshold of
+`1e-10`; changing the global threshold does not change the restriction test.
+
+For a controlled comparison, `.with_curvature_retention(false)` clears pairs
+when the free mask changes while keeping the selected search and safeguards.
+Pairs still accumulate while the mask stays unchanged. Retention is enabled by
+default. Compare it enabled and disabled under the same
+search, tolerances and budgets to isolate its effect; faster results alone do
+not establish better accuracy.
+
+Fresh runs clear evolving history. Exact solver-and-state checkpoints preserve
+history and the selected policy; serialized checkpoints rebuild only derived
+model scratch. `ModelLbfgsb::into_inner()` discards curvature and requires a
+fresh run.
+Native compact-phase diagnostics are available on the reference path;
+the model wrapper provides selected-point diagnostics instead.
+The projected-search wrapper also preserves its previous free mask in an exact
+checkpoint, including when reset-on-change retention is selected.
+
+## Practical considerations
+
+### Use a projected stationarity test
+
+At a constrained minimum, the negative gradient can point out of the feasible
+box.
+L-BFGS-B tests the infinity norm of its bound-clipped gradient, which vanishes
+at a box-constrained stationary point. Configure it through
+`with_absolute_projected_gradient_tolerance`. The default is `1e-9` for `f64`
+and `1e-10` for `f32`; choose a threshold for your objective's scale, parameter
+units, precision, and derivative accuracy. With numerical gradients, account
+for approximation error rather than assuming the default is attainable.
+
+### Distinguish the stopping reasons
+
+For `f64`, the solver also stops when the signed cost reduction is at most
+`10 * f64::EPSILON * max(|f_previous|, |f_current|, 1)`. Configure the factor
+with `with_relative_cost_reduction_tolerance`; this check is disabled by
+default for `f32`. The example disables it explicitly so convergence depends
+on the projected-gradient test. `None` disables either configurable check,
+and zero requests an exact-zero threshold.
+
+A small cost reduction alone does not establish stationarity. Inspect the
+termination report, and keep iteration and evaluation budgets on the executor.
+
+### Start with the default history length
+
+Basin retains up to ten curvature pairs by default. `with_m_capacity(m)` changes
+this capacity for a fresh solve. Increasing it stores more information and uses
+more memory, but does not guarantee faster convergence.
+
+## Implementation
+
+The default solver ports the L-BFGS-B 3.0 Fortran implementation, including its compact
+curvature model and subspace minimization. Singular or non-positive-definite
+model factorizations cause it to clear the history and retry. It publishes the
+current point, objective, and gradient through `FirstOrderState`; the solver
+owns the curvature history and work buffers. Fresh solves clear that history
+and reset the line search; exact solver-and-state checkpoints retain them.
+
+Bounds belong to the problem through `Constraints`, using a box-only
+`ConstraintSet<BoxBounds<V>>`. The solver validates this declaration and rejects
+unsupported constraint blocks. You can supply another strategy through
+`Lbfgs::with_line_search(search)`, but it must implement bounded steps. The
+default line search preserves iteration-wise parity with the Fortran reference.
+
+The optional model and direction strategies adapt the signed-column model,
+reduced solves, InteriorFirst policy, and free-coordinate curvature handling
+from sisyfuzz 0.1.2.
+They retain Basin's lifecycle and bounded line-search contracts. These paths
+can differ from both the Fortran trajectory and sisyfuzz's numerical policies.
+
+Supported parameter types are `Vec<F>`, `nalgebra::DVector<F>`,
+`ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`. Parameter
+storage must be contiguous; strided ndarray views are unsupported. The compact
+model uses pure-Rust factorizations without a BLAS/LAPACK provider. See the API's
+[Backends
+section](https://docs.rs/basin/latest/basin/solver/lbfgs/struct.Lbfgs.html#backends)
+for the exact capability requirements.
+
+<References
+:entries='["byrd-lu-nocedal-zhu-1995", "zhu-byrd-lu-nocedal-1997", "morales-nocedal-2011", "more-thuente-1994"]' />

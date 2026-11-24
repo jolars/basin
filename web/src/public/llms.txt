@@ -1,0 +1,82 @@
+# basin
+
+> Solve optimization problems in Rust with a wide range of algorithms,
+> support for constraints, and your choice of linear-algebra library.
+> Runs natively and in the browser. Use plain Vec<f64> or opt into
+> nalgebra, ndarray, or faer.
+
+## Guide
+
+- [Overview](https://basin.rs/guide/): how the problem, solver, state, and executor pieces fit together
+- [Getting started](https://basin.rs/guide/getting-started/): install, backend features, and a first solve
+- [Migrating from Argmin](https://basin.rs/guide/migrating-from-argmin/): map Argmin 0.11 problem traits, solvers, errors, bounds, observers, and backends to Basin
+- [Choosing a solver](https://basin.rs/guide/solvers/): selection guide and full catalog grouped by algorithm family, including constraint support and scalar root finding
+- [Gradient descent](https://basin.rs/guide/solvers/first-order/gradient-descent/): fixed steps, line searches, heavy-ball momentum, and a Rust example
+- [Nonlinear conjugate gradient](https://basin.rs/guide/solvers/first-order/nonlinear-cg/): Hager–Zhang and Polak–Ribière+ updates, restarts, and a Rust example
+- [Stochastic gradient descent](https://basin.rs/guide/solvers/first-order/sgd/): mini-batch gradients, seeded sampling, momentum, cost refreshes, and a Rust example
+- [Projected gradient descent](https://basin.rs/guide/solvers/first-order/projected-gradient-descent/): problem-side box bounds, projection, stationarity tests, and a Rust example
+- [BFGS](https://basin.rs/guide/solvers/quasi-newton/bfgs/): dense inverse-Hessian models, initialization, stopping tests, and a Rust example
+- [L-BFGS](https://basin.rs/guide/solvers/quasi-newton/l-bfgs/): when to use limited-memory BFGS, a Rust example, convergence settings, backend requirements, and original references
+- [L-BFGS-B](https://basin.rs/guide/solvers/quasi-newton/l-bfgs-b/): problem-side box bounds, limited-memory curvature, stopping tests, and a Rust example
+- [Nelder–Mead](https://basin.rs/guide/solvers/derivative-free/nelder-mead/): simplex search, adaptive coefficients, box projection, stopping tests, and a Rust example
+- [MADS](https://basin.rs/guide/solvers/derivative-free/mads/): OrthoMADS polling, box and nonlinear constraints, poll-size stopping, and a Rust example
+- [NEWUOA](https://basin.rs/guide/solvers/derivative-free/newuoa/): unconstrained quadratic interpolation, trust-region radii, and a Rust example
+- [BOBYQA](https://basin.rs/guide/solvers/derivative-free/bobyqa/): quadratic interpolation with box bounds, trust-region radii, and a Rust example
+- [LINCOA](https://basin.rs/guide/solvers/derivative-free/lincoa/): quadratic models with linear constraints, feasible starts, and a Rust example
+- [COBYLA](https://basin.rs/guide/solvers/derivative-free/cobyla/): linear interpolation models, general constraints, feasibility caveats, and a Rust example
+- [Solis–Wets](https://basin.rs/guide/solvers/derivative-free/solis-wets/): seeded random local search, adaptive step sizes, stopping tests, and a Rust example
+- [Trust-region Newton](https://basin.rs/guide/solvers/trust-region/trust-region-newton/): Newton models, subproblem strategies, matrix-free products, and a Rust example
+- [Gauss–Newton](https://basin.rs/guide/solvers/nonlinear-least-squares/gauss-newton/): undamped normal equations, rank requirements, stopping tests, and a Rust example
+- [Levenberg–Marquardt](https://basin.rs/guide/solvers/nonlinear-least-squares/levenberg-marquardt/): scaled damping, trust-region and Nielsen updates, stopping tests, and a Rust example
+- [Levenberg–Marquardt QR](https://basin.rs/guide/solvers/nonlinear-least-squares/levenberg-marquardt-qr/): pivoted QR, numerical rank checks, damping choices, and a Rust example
+- [Bounded Levenberg–Marquardt](https://basin.rs/guide/solvers/nonlinear-least-squares/bounded-levenberg-marquardt/): box scaling, strictly feasible steps, sparse Jacobians, and a Rust example
+- [Trust-region reflective](https://basin.rs/guide/solvers/nonlinear-least-squares/trust-region-reflective/): box bounds, reflected steps, rank-aware dense SVD, and a Rust example
+- [DIRECT](https://basin.rs/guide/solvers/global-and-stochastic/direct/): deterministic box subdivision, normalized stopping tests, and a Rust example
+- [Globalized bounded Nelder–Mead](https://basin.rs/guide/solvers/global-and-stochastic/gbnm/): projected simplex searches, probabilistic restarts, and a Rust example
+- [Simulated annealing](https://basin.rs/guide/solvers/global-and-stochastic/simulated-annealing/): custom neighbors, Metropolis acceptance, cooling schedules, restarts, and a Rust example
+- [CMA-ES](https://basin.rs/guide/solvers/global-and-stochastic/cma-es/): covariance adaptation, step-size control, population state, and a Rust example
+- [Bounded CMA-ES](https://basin.rs/guide/solvers/global-and-stochastic/bounded-cma-es/): box repair, adaptive penalties, raw and ranked costs, and a Rust example
+- [Differential evolution](https://basin.rs/guide/solvers/global-and-stochastic/de/): mutation strategies, crossover, dithering, box bounds, and a Rust example
+- [Particle swarm](https://basin.rs/guide/solvers/global-and-stochastic/global-best-pso/): global-best updates, inertia, velocity limits, boundary policies, and a Rust example
+- [Random search](https://basin.rs/guide/solvers/global-and-stochastic/random-search/): uniform box sampling, elitist selection, seeded populations, and a Rust example
+- [Steady-state genetic algorithm](https://basin.rs/guide/solvers/global-and-stochastic/ssga/): assortative mating, BLX crossover, BGA mutation, replacement, and a Rust example
+- [Basin-hopping](https://basin.rs/guide/solvers/global-and-stochastic/basin-hopping/): local-solver composition, Metropolis acceptance, adaptive steps, and a Rust example
+- [CMA-ES with local search](https://basin.rs/guide/solvers/memetic/cma-inject/): local refinement, composition requirements, evaluation budgets, and a Rust example
+- [Bounded CMA-ES with local search](https://basin.rs/guide/solvers/memetic/bounded-cma-inject/): local refinement, composition requirements, evaluation budgets, and a Rust example
+- [Differential evolution with local search](https://basin.rs/guide/solvers/memetic/de-inject/): local refinement, composition requirements, evaluation budgets, and a Rust example
+- [Local-search chains](https://basin.rs/guide/solvers/memetic/ma-ls-ch/): local refinement, composition requirements, evaluation budgets, and a Rust example
+- [CMA-ES chains](https://basin.rs/guide/solvers/memetic/ma-ls-ch-cma/): local refinement, composition requirements, evaluation budgets, and a Rust example
+- [Solis–Wets chains](https://basin.rs/guide/solvers/memetic/ma-ls-ch-sw/): local refinement, composition requirements, evaluation budgets, and a Rust example
+- [SLSQP](https://basin.rs/guide/solvers/general-constrained/slsqp/): constraint declarations, dense subproblems, convergence diagnostics, and a Rust example
+- [Barrier method](https://basin.rs/guide/solvers/general-constrained/barrier-method/): Phase I feasibility, log-barrier continuation, inner solver requirements, and a Rust example
+- [Augmented Lagrangian](https://basin.rs/guide/solvers/general-constrained/augmented-lagrangian-method/): linear equalities, multiplier and penalty updates, feasibility and stationarity, and a Rust example
+- [Brent minimization](https://basin.rs/guide/solvers/scalar-minimization/brent/): parabolic interpolation, golden-section safeguards, automatic minimum bracketing, and a Rust example
+- [Brent with derivatives](https://basin.rs/guide/solvers/scalar-minimization/brent-derivative/): derivative secant steps, scalar bounds, position and gradient tolerances, and a Rust example
+- [Golden-section search](https://basin.rs/guide/solvers/scalar-minimization/golden-section/): interval reduction, evaluation reuse, boundary minima, position tolerances, and a Rust example
+- [Bisection root finding](https://basin.rs/guide/solvers/root-finding/bisection/): interval halving, bracket requirements, position tolerances, and a Rust example
+- [Brent root finding](https://basin.rs/guide/solvers/root-finding/brent/): interpolation, bisection safeguards, automatic bracketing, and a Rust example
+- [Secant root finding](https://basin.rs/guide/solvers/root-finding/secant/): safeguarded secant steps, bracket contraction, position tolerances, and a Rust example
+- [Newton root finding](https://basin.rs/guide/solvers/root-finding/newton/): first derivatives, separate and combined callbacks, fallback steps, and Rust examples
+- [Halley root finding](https://basin.rs/guide/solvers/root-finding/halley/): first and second derivatives, separate and combined callbacks, safeguards, and Rust examples
+- [TOMS 748 root finding](https://basin.rs/guide/solvers/root-finding/toms748/): derivative-free interpolation cycles, bracket contraction, evaluation counts, and a Rust example
+
+## Development
+
+- [Migrating to Basin 2.0](https://basin.rs/guide/migrating-to-v2/): upgrade from Basin 1.x, including constraints, states, termination reports, solver settings, and checkpoints
+- [Migrating to Basin 3.0](https://basin.rs/guide/migrating-to-v3/): development API with optional constraint declarations and standalone objective and residual traits
+- [Changelog](https://basin.rs/guide/changelog/): release notes and changes
+- [Contributing to Basin](https://basin.rs/guide/contributing/): development, verification, and release workflows
+
+## Reference
+
+- [API documentation (docs.rs)](https://docs.rs/basin): full, authoritative API reference
+- [crates.io](https://crates.io/crates/basin): published releases
+- [Source (GitHub)](https://github.com/jolars/basin): repository, issues, and changelog
+
+## Optional
+
+- [Benchmarks](https://basin.rs/benchmarks/): how to read the solver, library, and backend comparisons
+- [Comparing solvers](https://basin.rs/benchmarks/solvers/): convergence from shared starting points under a time budget
+- [Comparing libraries](https://basin.rs/benchmarks/competitors/): solver-by-solver comparisons with setup, interpretation, and methodology
+- [Choosing a backend](https://basin.rs/benchmarks/backends/): measured scaling for vector methods, dense matrices, and sparse least squares
+- [Visualizer](https://basin.rs/visualizer/): interactive in-browser solver visualization (WASM)

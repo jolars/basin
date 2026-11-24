@@ -46,10 +46,9 @@ const basinManifestDir = resolve(webDir, "..", "crates", "basin");
 const migrationPage = resolve(
     webDir,
     "src",
-    "routes",
     "guide",
     "migrating-from-argmin",
-    "+page.svx",
+    "index.md",
 );
 const keep = process.env.KEEP_SNIPPETS === "1";
 
@@ -57,7 +56,7 @@ function checkMigrationDependencyVersions(): void {
     // Versionary bumps the manifest in its release PR, after main already
     // documents the new API. The upgrade guide names that API's target version.
     const upgradePage = readFileSync(
-        resolve(webDir, "src/routes/guide/migrating-to-v3/+page.svx"),
+        resolve(webDir, "src/guide/migrating-to-v3/index.md"),
         "utf8",
     );
     const expectedMajor = upgradePage.match(
@@ -120,7 +119,7 @@ function extractSolverSnippets(directory: string): Snippet[] {
         const path = join(directory, entry.name);
         if (entry.isDirectory()) {
             snippets.push(...extractSolverSnippets(path));
-        } else if (entry.name === "+page.svx") {
+        } else if (entry.name === "index.md") {
             for (const [name, source] of extractSnippets(path)) {
                 snippets.push({ name, source });
             }
@@ -180,9 +179,7 @@ const checks: PackageCheck[] = [
     {
         name: "solver-guides",
         dependencies: basinDependency(),
-        snippets: extractSolverSnippets(
-            resolve(webDir, "src/routes/guide/solvers"),
-        ),
+        snippets: extractSolverSnippets(resolve(webDir, "src/guide/solvers")),
         run: true,
     },
 ];

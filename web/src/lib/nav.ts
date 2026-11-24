@@ -1,38 +1,11 @@
-// Shared navigation model. `href` is an app path without a leading slash.
-// Calling `resolve()` prefixes the configured base, so links also work in
-// deployments under a URL prefix. `section` is the first path segment, used
-// for active-state matching across a whole section (e.g. any `/guide/*` page
-// lights up the "Guide" link).
-
-import { resolve } from "$app/paths";
-import type { Path, ResolvedPathname } from "$app/types";
-
-// A single-path signature avoids TypeScript's limit on Kit's generated union
-// of argument tuples while preserving validation against the site's paths.
-export const resolvePath = resolve as (path: Path) => ResolvedPathname;
-
 export type NavLink = {
     label: string;
-    href: Path;
-    /** First path segment for active-state matching. Omit for external links. */
-    section?: string;
-    external?: boolean;
+    href: string;
 };
 
-export type DocsNavItem =
-    | (NavLink & { fragment?: string })
-    | { label: string; children: DocsNavItem[] };
+export type DocsNavItem = NavLink | { label: string; children: DocsNavItem[] };
 
-// `href`s carry a trailing slash to match `trailingSlash: 'always'`
-// (set in the root `+layout.ts`), so links hit the canonical URL with no
-// redirect hop.
-
-/** Top-level site navigation, shown in the header. */
-export const NAV_LINKS: NavLink[] = [
-    { label: "Guide", href: "guide/getting-started/", section: "guide" },
-    { label: "Visualizer", href: "visualizer/", section: "visualizer" },
-    { label: "Benchmarks", href: "benchmarks/", section: "benchmarks" },
-];
+// Keep trailing slashes so links match the canonical URLs.
 
 /** Sidebar links for the benchmark guides. */
 export const BENCHMARK_LINKS: NavLink[] = [
@@ -44,32 +17,13 @@ export const BENCHMARK_LINKS: NavLink[] = [
 
 /** Sidebar links for the guide section. */
 export const DOCS_LINKS: NavLink[] = [
-    { label: "Overview", href: "guide/", section: "guide" },
-    {
-        label: "Getting started",
-        href: "guide/getting-started/",
-        section: "guide",
-    },
-    {
-        label: "Migrating from Argmin",
-        href: "guide/migrating-from-argmin/",
-        section: "guide",
-    },
-    {
-        label: "Migrating to Basin 2.0",
-        href: "guide/migrating-to-v2/",
-        section: "guide",
-    },
-    {
-        label: "Migrating to Basin 3.0",
-        href: "guide/migrating-to-v3/",
-        section: "guide",
-    },
+    { label: "Getting started", href: "guide/getting-started/" },
+    { label: "Choosing a solver", href: "guide/solvers/" },
+    { label: "Migrating from Argmin", href: "guide/migrating-from-argmin/" },
 ];
 
 /** Sidebar links grouped by solver family. */
 export const SOLVER_LINKS: DocsNavItem[] = [
-    { label: "Choosing a solver", href: "guide/solvers/", fragment: "" },
     {
         label: "First-order",
         children: [
@@ -313,15 +267,3 @@ export const SOLVER_LINKS: DocsNavItem[] = [
         ],
     },
 ];
-
-/**
- * The active section for a route. Returns the first path segment
- * (`'guide'`, `'visualizer'`, …) or `''` for the landing page.
- *
- * Derived from `page.route.id`, which is already base-independent
- * (`/guide/solvers`, never `/basin/...`), so there's no `base` prefix to
- * strip, unlike `page.url.pathname`.
- */
-export function activeSection(routeId: string | null): string {
-    return (routeId ?? "").split("/")[1] ?? "";
-}

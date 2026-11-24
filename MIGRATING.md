@@ -3,5 +3,5 @@
 See the [Basin 2.0 migration guide](https://basin.rs/guide/migrating-to-v2/).
 
 The published site follows the latest stable release. During 2.0 development,
-you can read the [guide's source](web/src/routes/guide/migrating-to-v2/+page.svx)
+you can read the [guide's source](web/src/guide/migrating-to-v2/index.md)
 in this repository.

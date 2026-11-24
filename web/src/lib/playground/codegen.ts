@@ -72,10 +72,7 @@ const GRADIENT_IMPL = `impl Gradient for Rosenbrock {
     type Gradient = Vec<f64>;
     fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, Infallible> {
         let residual = x[1] - x[0].powi(2);
-        Ok(vec![
-            -2.0 * (1.0 - x[0]) - 400.0 * x[0] * residual,
-            200.0 * residual,
-        ])
+        Ok(vec![-2.0 * (1.0 - x[0]) - 400.0 * x[0] * residual, 200.0 * residual])
     }
 }`;
 
@@ -138,17 +135,14 @@ export type RunOutput = {
 export function generateSnippet(cfg: PlaygroundConfig): string {
     let solverExpr = `GradientDescent::new(${rustFloat(cfg.alpha)})`;
     if (cfg.beta > 0) {
-        solverExpr += `\n        .with_momentum(${rustFloat(cfg.beta)})`;
+        solverExpr += `.with_momentum(${rustFloat(cfg.beta)})`;
     }
 
     const startVec = `vec![${rustFloat(cfg.start[0])}, ${rustFloat(cfg.start[1])}]`;
 
     return [
         "use std::convert::Infallible;",
-        "use basin::{",
-        "    CostFunction, Executor, FirstOrderState, Gradient,",
-        "    GradientDescent,",
-        "};",
+        "use basin::{CostFunction, Executor, FirstOrderState, Gradient, GradientDescent};",
         "",
         "struct Rosenbrock;",
         "",
@@ -160,9 +154,7 @@ export function generateSnippet(cfg: PlaygroundConfig): string {
         `    let solver = ${solverExpr};`,
         `    let state = FirstOrderState::new(${startVec});`,
         `    let result = Executor::new(Rosenbrock, solver, state)`,
-        `        .max_iter(${rustInt(cfg.maxIter)})`,
-        "        .run()",
-        "        .unwrap();",
+        `        .max_iter(${rustInt(cfg.maxIter)}).run().unwrap();`,
         "",
         `    println!("${buildOutputLine("{:?}", "{}")}", result.param(), result.cost());`,
         "}",

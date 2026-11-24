@@ -1,6 +1,5 @@
 {
-    "extends": "$app/tsconfig",
-    "include": ["src", "test", "tests", "*.ts", "*.js"],
+    "include": ["src/", ".vitepress/", "*.ts"],
     "exclude": ["src/service-worker", "src/lib/basin-wasm/**/*.js"],
     "compilerOptions": {
         "allowJs": true,
@@ -11,7 +10,10 @@
         "skipLibCheck": true,
         "sourceMap": true,
         "strict": true,
+        "module": "ESNext",
+        "target": "ES2022",
         "moduleResolution": "bundler",
+        "allowImportingTsExtensions": true,
         "noEmit": true
     }
 }

@@ -6,7 +6,7 @@ Basin follows [semantic versioning]. Breaking changes ship only in a major
 release, while new solvers, backends, and opt-in features arrive in minor
 releases. Follow [Maintenance and releases](#maintenance-and-releases) for
 backport and release procedures. Document breaking changes in a migration guide
-under `web/src/routes/guide/`.
+under `web/src/guide/`.
 
 [semantic versioning]: https://semver.org/
 
@@ -94,10 +94,8 @@ lychee --config web/lychee.toml \
   'web/build/**/*.html'
 ```
 
-The checker reads HTML rather than `.svx` sources, whose relative links name
-site routes. Its preprocessor removes mdsvex's `rel="nofollow"` attribute only
-from the checker input so lychee includes those external links. DOI links
-request citation metadata because some publishers block automated HTML
+The checker reads HTML rather than `.md` sources, whose relative links name
+site routes. DOI links request citation metadata because some publishers block automated HTML
 requests. The published HTML is unchanged.
 
 ### `cargo test --all-features` needs a BLAS/LAPACK provider
@@ -154,8 +152,7 @@ symbols. Its artifacts live under `target/profiling`. For frame-pointer stack
 sampling, also pass
 `RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C force-frame-pointers=yes"` and record
 with `--call-graph fp`; the Cargo profile does not itself enable frame pointers.
-The project-local [performance
-skill](.codex/skills/basin-perf-investigation/SKILL.md) provides the focused
+The [profiling guide](crates/basin/benches/profiling.md) provides the
 benchmark and profiler commands.
 
 ## Architecture
@@ -502,7 +499,7 @@ is newer so it can exercise every supported backend:
 The workspace manifest is at the repo root (shared lockfile) with three members:
 
 - `crates/basin`: the library.
-- `crates/basin-wasm`: `wasm-bindgen` JS bindings consumed by the Svelte and
+- `crates/basin-wasm`: `wasm-bindgen` JS bindings consumed by the Vue and
   Tailwind visualizer in `web/` (deployed to Cloudflare Workers). `web/` is its own
   node project, **not** a Cargo workspace member.
 - `crates/competitor-bench`: benchmarks against competing libraries.

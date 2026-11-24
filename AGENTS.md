@@ -155,16 +155,16 @@ differences or omit a supported backend.
 
 ### Web documentation
 
-The static SvelteKit site at `https://basin.rs/` signposts to the authoritative
+The static VitePress site at `https://basin.rs/` signposts to the authoritative
 docs.rs API rather than copying it. When a top-level section is added, removed,
-or renamed, update the hand-maintained `web/src/routes/llms.txt/+server.ts`;
-keep it a link-oriented signpost with absolute `SITE_ORIGIN` URLs and trailing
+or renamed, update the hand-maintained `web/src/public/llms.txt`;
+keep it a link-oriented signpost with absolute `https://basin.rs/` URLs and trailing
 slashes. The sitemap discovers pages automatically.
 
 ### Solver catalogue
 
 When a solver is added, removed, renamed, or changes backend support or
-references, update `web/src/routes/guide/solvers/+page.svx` in the same change:
+references, update `web/src/guide/solvers/index.md` in the same change:
 
 - The prose catalogue must equal the public solver re-exports in
   `crates/basin/src/lib.rs`.
