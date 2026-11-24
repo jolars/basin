@@ -31,14 +31,15 @@ line-search requirements are described in [Nocedal and Wright
 
 For a larger problem, [L-BFGS](../l-bfgs/) retains a short history of curvature
 pairs instead of a dense matrix. If you can supply useful Hessian-vector
-products, compare [trust-region Newton](../../#trust-region). For objectives
-expressed through residuals and a Jacobian, consider the [nonlinear least-squares
-methods](../../#nonlinear-least-squares).
+products, compare [trust-region Newton](../../trust-region/trust-region-newton/).
+For objectives expressed through residuals and a Jacobian, consider the methods
+in the [nonlinear least-squares benchmarks](../../../benchmarks/least-squares/).
 
 BFGS follows local descent directions, so its starting point matters. Noisy or
 nonsmooth gradients can also make its curvature model unreliable. Compare
-[derivative-free methods](../../#derivative-free) when a reliable gradient is
-unavailable.
+the methods in the [derivative-free
+benchmarks](../../../benchmarks/derivative-free-and-global/) when a reliable
+gradient is unavailable.
 
 ## How it works
 

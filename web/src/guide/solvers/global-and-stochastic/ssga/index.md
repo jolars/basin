@@ -26,7 +26,8 @@ Consider SSGA when you want an evolutionary baseline that improves a
 population through a small number of evaluations per iteration. Basin's
 operators follow the genetic component in [Molina et al.
 (2010)](#ref-molina-et-al-2010), Section 4.4. It is also the population
-search used by [MA-LSCh-CMA](../../#ma-ls-ch-cma), which adds local refinement.
+search used by [MA-LSCh-CMA](../../memetic/ma-ls-ch-cma/), which adds local
+refinement.
 
 Compare [differential evolution](../de/) for generation-wide trial
 construction from population differences. SSGA can use a newly accepted

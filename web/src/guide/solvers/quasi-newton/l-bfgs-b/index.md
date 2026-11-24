@@ -32,8 +32,9 @@ For an unconstrained problem, use [L-BFGS](../l-bfgs/) or [BFGS](../bfgs/).
 [Projected gradient descent](../../first-order/projected-gradient-descent/)
 offers a simpler method with little working storage for box bounds. For
 least-squares objectives with bounds, compare [trust-region
-reflective](../../#trust-region-reflective). Linear and nonlinear constraint
-blocks need a method that supports them, such as [SLSQP](../../#slsqp).
+reflective](../../nonlinear-least-squares/trust-region-reflective/). Linear and
+nonlinear constraint blocks need a method that supports them, such as
+[SLSQP](../../general-constrained/slsqp/).
 
 L-BFGS-B finds a local constrained solution. Different starting points can lead
 to different minima, and noisy or nonsmooth gradients can make its curvature

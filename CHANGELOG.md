@@ -502,7 +502,7 @@ Saved runs also need attention. Basin 1.x exact checkpoints cannot be resumed in
 
 ### Performance Improvements
 - **nlls:** cache r and J across iterations in GN, LM, TRF ([`aef1197`](https://github.com/jolars/basin/commit/aef11970d2fe24beabd5b63f93fd3f4633829049))
-## [0.1.0](https://github.com/jolars/basin/compare/v0.0.1...v0.1.0) (2026-05-19)
+## [0.1.0](https://github.com/jolars/basin/releases/tag/v0.1.0) (2026-05-19)
 
 ### Breaking changes
 - rename step_size to line_search ([`15b0d42`](https://github.com/jolars/basin/commit/15b0d4240e00c2c53920ad3fafdac3142bb9f3e3))

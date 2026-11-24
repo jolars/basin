@@ -32,7 +32,8 @@ For a smooth problem where curvature information could reduce the number of
 iterations, compare [L-BFGS-B](../../quasi-newton/l-bfgs-b/). For an unconstrained problem, use
 [gradient descent](../gradient-descent/) or
 [L-BFGS](../../quasi-newton/l-bfgs/). Linear and nonlinear constraints need a
-method that supports those blocks, such as [SLSQP](../../#slsqp).
+method that supports those blocks, such as
+[SLSQP](../../general-constrained/slsqp/).
 
 The method follows local descent directions. Different starting points can lead
 to different constrained minima, and a poorly scaled objective can make progress

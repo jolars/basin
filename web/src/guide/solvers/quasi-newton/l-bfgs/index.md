@@ -30,15 +30,14 @@ memory for additional curvature information. The original numerical study is
 
 For a smaller problem where a dense approximation is affordable,
 [BFGS](../bfgs/) is another option. If you can supply useful Hessian-vector
-products, consider [trust-region Newton](../../#trust-region). For curve fitting
-expressed through residuals and a Jacobian, compare the [nonlinear least-squares
-methods](../../#nonlinear-least-squares).
+products, consider [trust-region Newton](../../trust-region/trust-region-newton/).
+For curve fitting expressed through residuals and a Jacobian, compare the methods
+in the [nonlinear least-squares benchmarks](../../../benchmarks/least-squares/).
 
 L-BFGS follows local descent directions, so different starting points can lead
 to different minima. Its curvature estimates also depend on changes in the
-gradient. If your objective is noisy or nonsmooth, compare [derivative-free
-methods](../../#derivative-free) instead of assuming those estimates will be
-reliable.
+gradient. If your objective is noisy or nonsmooth, compare the methods in the
+[derivative-free benchmarks](../../../benchmarks/derivative-free-and-global/).
 
 ## How it works
 
