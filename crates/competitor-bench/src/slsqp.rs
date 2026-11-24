@@ -133,6 +133,10 @@ fn quadratic_gradient(x: &[f64], g: &mut [f64]) {
 
 fn ball(x: &[f64], g: Option<&mut [f64]>, obj: &mut Objective) -> f64 {
     obj.0.borrow_mut().constraint_evals += 1;
+    ball_value(x, g)
+}
+
+fn ball_value(x: &[f64], g: Option<&mut [f64]>) -> f64 {
     if let Some(g) = g {
         for (g, v) in g.iter_mut().zip(x) {
             *g = 2.0 * v / x.len() as f64;

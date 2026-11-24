@@ -56,11 +56,11 @@ for 4.0.0.
   partial steps, exact resume, incumbent counts, and LM's numerical safeguards.
   The driver keeps attempted counts when a callback fails and discards the
   partial state before publication or checkpointing.
-- [ ] **Use competitor comparisons to test diagnostics.** Prioritize
-  [constrained SLSQP against NLopt and bounded least squares against
-  `rmpfit`](#first-additions). Check which feasibility, stationarity, and
-  complementarity evidence callers can retrieve, and whether they can
-  recover the Jacobian at the accepted fit.
+- [x] **Use competitor comparisons to test diagnostics.** The
+  [diagnostics audit](crates/basin/benches/benchmarking.md#constrained-and-least-squares-diagnostics)
+  compares native and reconstructed feasibility, stationarity, and
+  complementarity. It checks when callers can capture the Jacobian at the
+  accepted fit or need to reevaluate it.
 
 ## Basin 4.0.0
 
@@ -405,8 +405,9 @@ compatibility and numerical behavior still need verification.
   stationarity, and complementarity where available.
 
   - [ ] **Compare bounded BOBYQA against NLopt.**
-  - [ ] **Compare constrained SLSQP against NLopt.** Reuse HS71 and an analytic
-    constrained quadratic.
+  - [x] **Compare constrained SLSQP against NLopt.** The
+    [HS71 and constrained quadratic comparison](crates/basin/benches/benchmarking.md#slsqp-against-nlopt)
+    validates the returned points and compares KKT evidence.
   - [x] **Compare BFGS against argmin.** Published 100-variable Rosenbrock
     traces with matched identity seeds and Moré–Thuente settings, callback
     counts, and independent returned-objective checks.
@@ -429,14 +430,11 @@ compatibility and numerical behavior still need verification.
   - [ ] **Add the `slsqp` crate as another Rust reference.** Record its shared
     NLopt lineage.
 
-- [ ] **Add bounded least squares against `rmpfit`.** [`rmpfit`
-  2.0.0](https://docs.rs/rmpfit/2.0.0/rmpfit/) is a pure-Rust CMPFIT port
-  with analytic or numerical derivatives, parameter bounds, and fixed
-  parameters. Compare with Basin's LM and bounded LM using existing NIST
-  fixtures plus fitting cases with active bounds and fixed coordinates.
-  Normalize half-RSS versus RSS, derivative settings, scaling, and stopping
-  tests. Compare TRF on the same problems for solver effectiveness, while
-  keeping the algorithm distinction explicit: CMPFIT is bounded LM, not TRF.
+- [x] **Add bounded least squares against `rmpfit`.** The
+  [MPFIT comparison](crates/basin/benches/benchmarking.md#least-squares-against-mpfit)
+  covers Basin's LM, bounded LM, and TRF on the NIST fits and uses analytic
+  fits to test active bounds, fixed coordinates, and Jacobian recovery.
+  It compares RSS and records the scaling and stopping tests for each method.
 
 ### Additional Rust packages
 

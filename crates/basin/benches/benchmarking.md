@@ -76,6 +76,116 @@ in `competitor-bench` or an isolated investigation workspace. Profile the actual
 production implementation; avoid a copied kernel that can drift from it, and do
 not expose private internals as new public API solely for a probe.
 
+## Constrained and least-squares diagnostics
+
+Run the diagnostics comparison and its focused checks from the workspace root:
+
+```sh
+cargo run --locked --release -p competitor-bench --bin verify_diagnostics
+cargo test --locked -p competitor-bench --bin verify_diagnostics
+```
+
+The comparison uses `f64`, Basin's `Vec` backend, NLopt 2.9.1 through
+`nlopt` 0.8.1, and `rmpfit` 2.0.0. It reports native stops and counted
+solve work alongside independent checks at the returned points. See the
+public result APIs for [NLopt](https://docs.rs/nlopt/0.8.1/nlopt/struct.Nlopt.html)
+and [MPFIT](https://docs.rs/rmpfit/2.0.0/rmpfit/struct.MPStatus.html).
+
+### SLSQP against NLopt
+
+Both implementations start at the same point on HS71 and the 30-variable
+quadratic with an active ball constraint. They use analytic derivatives and
+an objective evaluation budget of 200. Basin checks Kraft's absolute
+accuracy at `1e-10`, with an additional iteration limit of 200. NLopt checks
+absolute objective change at `1e-10` and uses a constraint tolerance of
+`1e-8`. Basin counts nonlinear value blocks and whole constraint Jacobians.
+NLopt's scalar constraint callbacks can also fill one derivative row.
+
+Basin's selected record supplies the point, objective, objective gradient,
+and an unscaled L1 violation. The retained solver supplies QP multiplier
+estimates, the projected Lagrangian-gradient infinity norm, and nonlinear
+inequality complementarity. Reevaluating the constraints and derivatives at
+the returned point reproduces both metrics with those multipliers. The stop
+report identifies the convergence predicate and its operands. NLopt's Rust
+result supplies the point, objective, and status. Rebuilding the KKT evidence
+also requires estimating the multipliers.
+
+The audit fits nonlinear multipliers by least squares on coordinates more
+than `1e-6` from each box face, with the known active inequality on each
+fixture. It then checks stationarity on every coordinate, checks the
+inequality multiplier sign, and measures nonlinear and box complementarity
+separately. It uses `1e-8` for total violation and complementarity and
+`1e-5` for stationarity.
+
+| Case and implementation | Objective calls | Recomputed L1 violation | Projected stationarity | Nonlinear complementarity |
+| ----------------------- | --------------: | ----------------------: | ---------------------: | ------------------------: |
+| HS71, Basin             |               6 |                6.64e-11 |                8.62e-9 |                  1.71e-11 |
+| HS71, NLopt             |               7 |                6.07e-11 |                8.62e-9 |                  1.41e-11 |
+| Quadratic, Basin        |              45 |                6.33e-15 |               8.40e-10 |                  6.33e-14 |
+| Quadratic, NLopt        |              65 |                 2.12e-9 |                2.08e-5 |                   2.12e-8 |
+
+Both implementations pass the HS71 checks. NLopt reports `FtolReached` on
+the quadratic with stationarity and complementarity above the audit thresholds.
+The separately reconstructed box complementarity is below `1e-8` on all
+four runs.
+
+### Least squares against MPFIT
+
+The harness uses both starts on all 27 NIST datasets and an analytic fit
+with residuals `[a² - 4, b - a, c - 3]`. The analytic fit has an active
+upper bound `a <= 1`. The fixed variant also sets `c = 2`. The independent
+checks use RSS (twice Basin's cost), box violation, the projected `Jᵀr`
+infinity norm, and box complementarity estimated from `Jᵀr` on near-active
+faces. NIST recovery requires relative errors within `1e-4` for RSS and
+every parameter.
+
+All implementations use the same analytic models. Basin LM and MPFIT use
+Jacobian-column scaling, an initial step factor of 100, and
+orthogonality, relative model reduction, and scaled-radius tests at
+`1e-10`. Their update rules and the timing of their checks differ.
+Bounded LM uses Coleman–Li scaling and Nielsen damping. TRF uses
+Coleman–Li scaling and a reflective trust region. Both use their native
+scaled-gradient test plus observed relative cost and step checks at
+`1e-10`. The harness counts residual and Jacobian work separately.
+MPFIT's analytic derivative callback also evaluates the residual. Version
+2.0.0 starts `n_fev` at one, and the audit reports it alongside the actual
+count. The budgets are 20,000 residual evaluations and 2,000 Basin
+iterations or MPFIT acceptances.
+
+| Implementation   | NIST fits recovered | Most recent Jacobian callback at returned point |
+| ---------------- | ------------------: | ----------------------------------------------: |
+| Basin LM         |               52/54 |                                           14/54 |
+| Basin bounded LM |               41/54 |                                            5/54 |
+| Basin TRF        |               50/54 |                                           54/54 |
+| MPFIT            |               51/54 |                                           12/54 |
+
+Bounded LM, TRF, and MPFIT recover the active-bound fit (RSS 9) in 5,
+4, and 6 residual evaluations, respectively. The direct bounded LM run
+with a fixed coordinate moves that coordinate by about `2e-10` during
+strict-interior initialization and fails with non-finite damping. TRF and
+MPFIT handle the fixed coordinate directly. Eliminating it in the bounded
+LM adapter also recovers the constrained fit (RSS 10). Those three
+successful runs use 4, 6, and 5 residual evaluations, respectively.
+
+Basin's `PointState` publishes the accepted point and cost. The termination
+report carries the tests that passed. Opt-in model observations can carry a
+scaled-gradient or orthogonality comparison at the **base point** of the last
+trial, even when the trial moves to a different point. MPFIT returns the
+accepted parameters and residuals, a stop code, covariance, uncertainty, and
+the count of pegged coordinates. Exact feasibility and projected stationarity
+and complementarity at the fit can be checked by reevaluating the model.
+
+The one-step checks use a Jacobian that changes with the fitted parameters.
+LM, bounded LM, and MPFIT evaluate it at the seed and return the next accepted
+point. TRF calls the Jacobian at the acceptance point before publication,
+including when the iteration limit fires. Callers can save that Jacobian in
+their callback and match its coordinates against the returned point. MPFIT
+also provides a matching callback on the analytic fits that stop on
+orthogonality, with columns only for the free coordinates on the fixed fit.
+To obtain a full Jacobian, evaluate the original model's analytic Jacobian
+at the returned parameters, or reuse a callback capture whose point and
+column set match.
+
 ## Account for Basin's execution model
 
 - `crates/basin/src/core/problem.rs`: `Problem::counts()` holds authoritative

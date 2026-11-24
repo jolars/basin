@@ -30,6 +30,8 @@ publish = false
 [dependencies]
 basin = { path = "../basin", features = ["nalgebra_v0_34", "ndarray_v0_17", "faer", "problems"] }
 levenberg-marquardt = "0.15"
+# Pin the CMPFIT release audited by verify_diagnostics.
+rmpfit = "=2.0.0"
 dogleg = "=0.1.1"
 nalgebra = "0.34"
 ndarray = { version = "0.17", default-features = false }
