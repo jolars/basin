@@ -4,7 +4,7 @@
 use std::convert::Infallible;
 
 use basin::{
-    BoxConstraints, CostFunction, Executor, Gbnm, GbnmState, State,
+    BoxConstraints, CostFunction, Executor, Gbnm, GbnmState, Scalar, State,
     TerminationReason,
 };
 
@@ -326,17 +326,60 @@ fn pinned_coordinates_are_excluded_from_the_local_simplex() {
     );
 }
 
+struct FixedBox<F> {
+    point: Vec<F>,
+    cost: F,
+}
+
+impl<F: Scalar> CostFunction for FixedBox<F> {
+    type Param = Vec<F>;
+    type Output = F;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Vec<F>) -> Result<F, Infallible> {
+        assert_eq!(x, &self.point);
+        Ok(self.cost)
+    }
+}
+
+impl<F: Scalar> BoxConstraints for FixedBox<F> {
+    fn lower(&self) -> &Vec<F> {
+        &self.point
+    }
+    fn upper(&self) -> &Vec<F> {
+        &self.point
+    }
+}
+
 #[test]
-#[should_panic(expected = "GBNM requires at least one free coordinate")]
-fn an_all_pinned_box_is_rejected() {
-    let problem = FlatBox {
-        lower: vec![1.0, 2.0],
-        upper: vec![1.0, 2.0],
-    };
-    let _ =
-        Executor::new(problem, Gbnm::new(1), GbnmState::new(vec![1.0, 2.0]))
-            .max_iter(0)
-            .run();
+fn gbnm_evaluates_an_all_fixed_box_once() {
+    macro_rules! check {
+        ($f:ty) => {{
+            for (cost, expected) in [
+                (5.0 as $f, TerminationReason::SolverConverged),
+                (<$f>::NAN, TerminationReason::SolverFailed),
+                (<$f>::INFINITY, TerminationReason::SolverFailed),
+            ] {
+                let result = Executor::new(
+                    FixedBox {
+                        point: vec![1.0 as $f, 2.0 as $f],
+                        cost,
+                    },
+                    Gbnm::new(42),
+                    GbnmState::new(vec![99.0 as $f, -99.0 as $f]),
+                )
+                .max_iter(10)
+                .run()
+                .unwrap();
+                assert_eq!(result.reason, expected);
+                assert_eq!(result.param(), &vec![1.0 as $f, 2.0 as $f]);
+                assert_eq!(result.state.cost_evals(), 1);
+                assert_eq!(result.state.iter(), 0);
+            }
+        }};
+    }
+    check!(f64);
+    check!(f32);
 }
 
 #[test]

@@ -86,7 +86,8 @@ struct BoxGeometry<'a, V> {
 ///
 /// Equal lower and upper bounds pin a coordinate. Pinned coordinates are
 /// excluded from simplex geometry, density calculations, and convergence
-/// tests. At least one coordinate must remain free.
+/// tests. An all-fixed box evaluates its sole feasible point once and stops.
+/// A non-finite objective at that point reports solver failure.
 ///
 /// # Numerical behavior
 ///
@@ -547,6 +548,22 @@ where
         state.restart_count = 0;
         state.restart = GbnmRestart::Probabilistic;
         state.restart_center = None;
+        if free.is_empty() {
+            let cost = problem.cost(&center)?;
+            // Keep the sole vertex in the existing state representation so
+            // exact checkpoints retain their layout.
+            state.simplex = Some(BasicSimplexState {
+                vertices: vec![center],
+                costs: vec![cost],
+                iter: 0,
+                cost_evals: 1,
+                best_cost: cost,
+                best_iter: 0,
+                best_cost_evals: 1,
+                scratch: Vec::new(),
+            });
+            return Ok(state);
+        }
         self.install_restart(
             problem,
             state,
@@ -566,6 +583,11 @@ where
         problem: &mut Problem<P>,
         mut state: GbnmState<V, F>,
     ) -> Result<(GbnmState<V, F>, Option<TerminationReason>), Self::Error> {
+        if let Some(reason) =
+            <Self as Solver<P, GbnmState<V, F>>>::terminate(self, &state)
+        {
+            return Ok((state, Some(reason)));
+        }
         let lower = problem.inner().lower().clone();
         let upper = problem.inner().upper().clone();
         let free = free_coordinates(&lower, &upper);
@@ -667,6 +689,16 @@ where
             },
         )?;
         Ok((state, None))
+    }
+
+    fn terminate(&self, state: &GbnmState<V, F>) -> Option<TerminationReason> {
+        match state.costs() {
+            [cost] if cost.is_finite() => {
+                Some(TerminationReason::SolverConverged)
+            }
+            [_] => Some(TerminationReason::SolverFailed),
+            _ => None,
+        }
     }
 }
 
