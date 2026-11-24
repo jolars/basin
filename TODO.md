@@ -81,9 +81,21 @@ whether to adopt the conditional changes below.
   changes explicitly so observers and checkpoint sinks can distinguish
   feasibility-first selection from strict objective improvement. Keep objective
   targets and stalls tied to an eligible objective incumbent.
+- [ ] **Define which inner results composed solvers can consume.** Decide
+  whether feasibility-aware outer solvers may reevaluate and use a selected
+  point from an inner run that has no objective incumbent. The constrained-DE
+  prototype keeps the existing member in this case. Replace the legacy
+  cost-sentinel fallback in `segment_incumbent` with checked access.
 - [ ] **Make threaded evaluation opt-in at the call site.** Have `parallel`
   enable threaded execution and keep serial APIs usable when a dependency
   enables the feature. Apply thread-safety bounds to the threaded path.
+  Validate the migration on Basin's built-in finite-difference adapters and
+  population solvers with the downstream feature-unification fixture.
+- [ ] **Decide whether configured executors should be movable.** The downstream
+  fixture moves a run factory to a worker and creates the executor and its
+  local hooks there. If callers need to move an already-built executor,
+  prototype hook storage that preserves `Send` for transferable runs while
+  supporting local observers, stop hooks, and checkpoint sinks.
 - [ ] **Consolidate the line-search contract.** Return an accepted step with its
   optional retained evaluation or a soft search failure. Require
   bounded-search support in solvers that need it, preserve typed callback
@@ -102,6 +114,12 @@ whether to adopt the conditional changes below.
   features. Document the feature migration and exact-version checks. Verify
   that a run resumed from Postcard matches an uninterrupted run and that the
   default WASM build still works.
+- [ ] **Decide when to expose Jacobian-product accounting.** Add separate
+  counters for Jacobian and transpose-Jacobian products in 4.0 or alongside
+  iterative TRF. Preserve attempted-request counting through budgets, nested
+  runs, and exact resume. If the serialized layout changes, decide whether
+  older six-counter checkpoints need a migration path or an explicit
+  version rejection.
 - [ ] **Make square finite-difference Hessians the default.** Infer the square
   matrix from the parameter backend while keeping Jacobian rows tied to the
   residual or constraint count. Document migration for callers that name or
@@ -626,7 +644,10 @@ scalar types.
   central HVPs. Include expensive analytic gradients and synthesized
   gradients to expose nested overhead. Explicitly address compatibility
   before adding `Send` or `Sync` bounds to the currently unrestricted HVP
-  free functions, and retain the zero-direction shortcut.
+  free functions, and retain the zero-direction shortcut. The
+  [downstream fixture](crates/basin/tests/fixtures/evaluation_unification)
+  verifies overlap and nested finite-difference dispatch for both stencils.
+  Use the timing comparison to decide whether to adopt the threaded path.
 - [ ] **Evaluate parallelism within central stencils.** Expose the positive and
   negative gradient and Jacobian probes, and the four off-diagonal Hessian
   probes, as separate tasks when the existing column or entry tasks cannot
