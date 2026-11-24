@@ -44,6 +44,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.release_tag || github.sha }}
+          # The changelog links to commits throughout the release history.
+          fetch-depth: 0
 
       # Older tags retain their original deployment configuration. Use the
       # selected workflow revision's hosting tools when redeploying them.
@@ -112,6 +114,34 @@ jobs:
           cargo doc --no-deps -p basin
           --features nalgebra-lapack,ndarray-blas,faer,parallel,problems,serde
 
+      - name: Prepare changelog link targets
+        id: changelog-links
+        shell: bash
+        env:
+          RELEASE_SHA: >-
+            ${{ github.event_name == 'pull_request' &&
+                github.event.pull_request.head.repo.full_name == github.repository &&
+                (github.head_ref == 'versionary/release' || github.head_ref == 'versionary/release-v1') &&
+                github.event.pull_request.head.sha || '' }}
+        run: |
+          # GitHub's commit pages intermittently return 503. Check the hashes
+          # against the repository history fetched by checkout.
+          commit_links="$RUNNER_TEMP/basin-commits"
+          mkdir -p "$commit_links"
+          git log --all --format=%H | (cd "$commit_links" && xargs -r touch --)
+
+          if [[ -n "$RELEASE_SHA" ]]; then
+            # Versionary creates the tag after merge. Check the comparison
+            # using the release PR's commit until the tag exists.
+            tag="$(jq -er '."pending-release-targets"[] | select(.path == ".") | .tag' .versionary-manifest.json)"
+            if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Expected a stable Versionary release tag, got $tag." >&2
+              exit 1
+            fi
+            tag_pattern="${tag//./[.]}"
+            echo "remap=--remap '(^https://github[.]com/jolars/basin/compare/[^/]+[.][.][.])${tag_pattern}$ \${1}${RELEASE_SHA}'" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Check website links
         uses: lycheeverse/lychee-action@v2
         with:
@@ -119,6 +149,8 @@ jobs:
             --config web/lychee.toml
             --remap '^https://basin\.rs/ file://${{ github.workspace }}/web/build/'
             --remap '^https://docs\.rs/basin/latest/basin/ file://${{ github.workspace }}/target/doc/basin/'
+            --remap '^https://github\.com/jolars/basin/commit/([a-f0-9]{40})$ file://${{ runner.temp }}/basin-commits/${1}'
+            ${{ steps.changelog-links.outputs.remap }}
             'web/build/**/*.html'
           output: ${{ runner.temp }}/lychee-report.md
           fail: true
