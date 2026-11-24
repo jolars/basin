@@ -490,3 +490,117 @@ backend_regression!(
 
 #[path = "support/backend_aliases.rs"]
 mod backend_aliases;
+
+#[derive(Clone, Copy)]
+enum CustomSearch {
+    StepOnly,
+    Retained,
+    Failed,
+}
+
+impl LineSearch<Quadratic, Vec<f64>> for CustomSearch {
+    type Error = Infallible;
+
+    fn next(
+        &mut self,
+        _: &mut Problem<Quadratic>,
+        _: &Vec<f64>,
+        _: f64,
+        _: &Vec<f64>,
+        _: &Vec<f64>,
+    ) -> Result<f64, Self::Error> {
+        unreachable!("L-BFGS-B must call the bounded search")
+    }
+
+    fn next_with_bounds(
+        &mut self,
+        problem: &mut Problem<Quadratic>,
+        param: &Vec<f64>,
+        _: f64,
+        _: &Vec<f64>,
+        direction: &Vec<f64>,
+        bounds: LineSearchBounds,
+    ) -> Result<LineSearchResult<Vec<f64>, f64>, Self::Error> {
+        let step = bounds.initial();
+        let mut trial = param.clone();
+        basin::ScaledAdd::scaled_add(&mut trial, step, direction);
+        let cost = problem.cost(&trial)?;
+        Ok(match self {
+            Self::StepOnly => {
+                LineSearchResult::new(LineSearchOutcome::Step(step))
+            }
+            Self::Retained => {
+                let gradient = problem.gradient(&trial)?;
+                LineSearchResult::with_evaluation(step, trial, cost, gradient)
+            }
+            Self::Failed => LineSearchResult::new(LineSearchOutcome::Failed),
+        })
+    }
+}
+
+#[test]
+fn custom_bounded_searches_publish_matching_records_and_counts() {
+    for (
+        search,
+        expected_probes,
+        param,
+        cost,
+        gradient,
+        gradient_evals,
+        iter,
+        code,
+    ) in [
+        (
+            CustomSearch::StepOnly,
+            vec![vec![0.5], vec![1.0], vec![1.0]],
+            1.0,
+            2401.0,
+            -98.0,
+            2,
+            1,
+            TerminationCode::MaxIter,
+        ),
+        (
+            CustomSearch::Retained,
+            vec![vec![0.5], vec![1.0]],
+            1.0,
+            2401.0,
+            -98.0,
+            2,
+            1,
+            TerminationCode::MaxIter,
+        ),
+        (
+            CustomSearch::Failed,
+            vec![vec![0.5], vec![1.0]],
+            0.5,
+            2450.25,
+            -99.0,
+            1,
+            0,
+            TerminationCode::SolverFailed,
+        ),
+    ] {
+        let problem = Quadratic::new(vec![50.0]);
+        let probes = problem.probes.clone();
+        let result = Executor::new(
+            problem,
+            Lbfgsb::with_line_search(search),
+            FirstOrderState::new(vec![0.5]),
+        )
+        .max_iter(1)
+        .run()
+        .unwrap();
+        assert_eq!(*probes.borrow(), expected_probes);
+        assert_eq!(result.cost_evals(), expected_probes.len() as u64);
+        assert_eq!(result.state.gradient_evals(), gradient_evals);
+        assert_eq!(result.iter(), iter);
+        assert_eq!(result.report.code(), code);
+        assert_eq!(
+            result.state.current(),
+            Some((&vec![param], cost, &vec![gradient]))
+        );
+        assert_eq!(result.best_param(), &[param]);
+        assert_eq!(result.state.best_cost(), cost);
+    }
+}

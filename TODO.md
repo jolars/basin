@@ -28,11 +28,9 @@ for 4.0.0.
   unification enables `parallel`. A configured factory crosses threads before
   creating the executor and its local hooks. Forward and central
   Hessian-vector products exercise overlapping gradient calls.
-- [ ] **Test line searches with objectives defined only inside their bounds.**
-  Exercise custom strategies that return just a step, retain an accepted
-  evaluation, or report a soft failure. Prototype an opt-in projected Armijo
-  search for projected gradient descent and check that every trial is
-  feasible.
+- [x] **Test line searches with objectives defined only inside their bounds.**
+  The [line-search API prototype](#line-search-api-prototype) exercises custom
+  bounded strategies and projected Armijo through the executor.
 - [ ] **Prepare the square Hessian default.** Add square matrix construction and
   reusable output for dynamic backends. Test owned and in-place Hessians,
   `f32` constructor inference, and rectangular Jacobians. Keep an explicit
@@ -96,11 +94,11 @@ whether to adopt the conditional changes below.
   local hooks there. If callers need to move an already-built executor,
   prototype hook storage that preserves `Send` for transferable runs while
   supporting local observers, stop hooks, and checkpoint sinks.
-- [ ] **Consolidate the line-search contract.** Return an accepted step with its
-  optional retained evaluation or a soft search failure. Require
-  bounded-search support in solvers that need it, preserve typed callback
-  errors and evaluation counts, and give projected gradient descent a search
-  path that keeps its trial evaluations feasible.
+- [ ] **Decide how to consolidate the line-search contract.** Use the
+  [line-search API prototype](#line-search-api-prototype) to decide what an
+  accepted result must carry, how to enforce feasible trials, and how
+  projected gradient descent should select its search. Preserve typed callback
+  errors and evaluation counts.
 - [ ] **Use authoritative counts for raw budgets.** Drive raw budgets from the
   problem wrapper's authoritative counts and make numeric inner budgets
   serializable. Document how legacy budget callers migrate. Retire
@@ -654,6 +652,41 @@ scalar types.
   occupy the pool. Compare flattened probe batches with selective joins,
   including extra scratch memory, cloning, and scheduling costs. Keep all
   new threading behind `parallel` and preserve the sequential WASM path.
+
+### Line-search API prototype
+
+The [bounded L-BFGS-B tests](crates/basin/tests/lbfgsb_line_search_bounds.rs)
+use custom strategies that probe the same feasible trial. Including
+initialization, the step-only strategy uses three cost and two gradient
+requests. The solver reevaluates the cost because the strategy returns only the
+step. Returning the full evaluation uses two cost and two gradient requests.
+A soft failure after the trial cost uses two cost and one gradient request,
+preserves the current and best records, and completes zero iterations.
+
+The [test-only projected descent driver](crates/basin/src/solver/projected_gradient_descent/line_search_api_prototype.rs)
+uses the existing projected Armijo kernel. On a quadratic defined only inside
+the box, the current PGD backtracking path sends an out-of-box point to the
+objective. Projected Armijo skips duplicate projected trials, tests sufficient
+decrease using the actual displacement, and publishes the accepted evaluation
+directly. The cost-first and fused paths both use four cost requests, with two
+and four gradient requests respectively, including initialization. These counts
+hold in both precisions on all four dense backends. Exhaustion preserves the
+seed record and publishes the attempted work. A callback error at a feasible
+trial reaches the caller with its original type.
+
+Questions for 4.0:
+
+- Should acceptance carry the actual trial point in both search geometries?
+  Should a strategy also be able to retain a cost without a gradient and let
+  the solver request only the missing derivative?
+- Should bounded-ray and projected searches require distinct capabilities, or
+  should the solver supply a trial evaluator that constructs feasible points
+  before any callback? The existing bounded-ray interface gives strategies a
+  step limit and relies on them to honor it.
+- Should PGD use projected Armijo by default when a line search is selected,
+  or should callers choose it explicitly? How should PGD distinguish projected
+  stationarity from exhaustion without moving convergence policy into the
+  strategy?
 
 ### Iterative-TRF API prototype
 

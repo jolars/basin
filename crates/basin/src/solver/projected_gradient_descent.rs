@@ -247,3 +247,6 @@ where
         Ok(crate::SolverStep::from((state, None)))
     }
 }
+
+#[cfg(test)]
+mod line_search_api_prototype;
