@@ -66,43 +66,9 @@ This nonsmooth absolute-value valley has its unique minimum at `[1.0, 2.0]`.
 The example sets the minimum poll size on the solver and the evaluation budget
 on the executor.
 
-<!-- compile: solver-mads -->
-```rust
-use basin::{CostFunction, Executor, Mads, Termination};
-use std::convert::Infallible;
+<<< ../../../../../../crates/basin/examples/solver_guides/mads.rs
 
-struct AbsValley;
-
-impl CostFunction for AbsValley {
-    type Param = Vec<f64>;
-    type Output = f64;
-    type Error = Infallible;
-
-    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
-        Ok((x[0] - 1.0).abs() + 2.0 * (x[1] - 2.0).abs())
-    }
-}
-
-fn main() {
-    let solver = Mads::new()
-        .with_initial_poll_size(1.0)
-        .with_minimum_poll_size(1e-8);
-
-    let result = Executor::from_start(AbsValley, solver, vec![0.0, 0.0])
-        .max_cost_evals(5_000)
-        .run()
-        .unwrap();
-
-    assert!(matches!(
-        result.report.termination,
-        Termination::Converged(_)
-    ));
-    let incumbent = result.incumbent_record().expect("expected an incumbent");
-    assert!(incumbent.cost < 1e-6);
-    assert!((incumbent.param[0] - 1.0).abs() < 1e-6);
-    assert!((incumbent.param[1] - 2.0).abs() < 1e-6);
-}
-```
+[View `mads.rs` on GitHub](https://github.com/jolars/basin/blob/main/crates/basin/examples/solver_guides/mads.rs)
 
 ## Practical considerations
 
@@ -136,59 +102,9 @@ problem that combines those blocks.
 This example starts outside the unit disk and uses the constrained mode. The
 unconstrained minimum is `[2.0, 0.0]`; the constrained minimum is `[1.0, 0.0]`.
 
-<!-- compile: solver-mads-constrained -->
-```rust
-use basin::{
-    Constrained, ConstraintSet, ConstraintSolveError, CostFunction, Executor,
-    Mads, NonlinearInequalityValues, ViolationMeasure,
-};
-use std::convert::Infallible;
+<<< ../../../../../../crates/basin/examples/solver_guides/mads_constrained.rs
 
-struct DiskQuadratic;
-
-impl CostFunction for DiskQuadratic {
-    type Param = Vec<f64>;
-    type Output = f64;
-    type Error = Infallible;
-
-    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
-        Ok((x[0] - 2.0).powi(2) + x[1].powi(2))
-    }
-}
-
-impl NonlinearInequalityValues for DiskQuadratic {
-    type Param = Vec<f64>;
-    type Values = Vec<f64>;
-    type Error = Infallible;
-
-    fn nonlinear_inequalities(
-        &self,
-        x: &Self::Param,
-    ) -> Result<Self::Values, ConstraintSolveError<Self::Error>> {
-        Ok(vec![x[0].powi(2) + x[1].powi(2) - 1.0])
-    }
-}
-
-fn main() {
-    let constraints = ConstraintSet::new().with_nonlinear_inequalities(1);
-    let problem = Constrained::new(DiskQuadratic, constraints);
-    let solver = Mads::new()
-        .with_initial_poll_size(1.0)
-        .with_minimum_poll_size(1e-7)
-        .constrained();
-
-    let result = Executor::from_start(problem, solver, vec![2.0, 0.0])
-        .max_cost_evals(5_000)
-        .run()
-        .unwrap();
-
-    let (x, cost, violation) = result.state.best().unwrap();
-    assert_eq!(violation.measure(), &ViolationMeasure::SquaredL2);
-    assert!(violation.value < 1e-10);
-    assert!(x[0].powi(2) + x[1].powi(2) <= 1.0 + 1e-5);
-    assert!((cost - 1.0).abs() < 1e-3);
-}
-```
+[View `mads_constrained.rs` on GitHub](https://github.com/jolars/basin/blob/main/crates/basin/examples/solver_guides/mads_constrained.rs)
 
 The violation report contains the squared-sum measure, not the largest
 constraint residual. Inspect the selected point and individual constraints

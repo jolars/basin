@@ -55,24 +55,9 @@ the smaller absolute residual.
 This value-only callback solves `x² - 2 = 0` on `[0, 2]`. The iteration limit
 counts startup and interpolation cycles, rather than individual callbacks.
 
-<!-- compile: root-toms748 -->
-```rust
-use basin::Toms748Root;
-use std::convert::Infallible;
+<<< ../../../../../../crates/basin/examples/solver_guides/root_toms748.rs
 
-fn main() {
-    let result = Toms748Root::new(0.0, 2.0)
-        .with_absolute_position_tolerance(1e-10)
-        .with_max_iter(100)
-        .solve(|x| Ok::<_, Infallible>(x * x - 2.0))
-        .unwrap();
-
-    assert!(result.converged());
-    assert!((result.root() - 2.0_f64.sqrt()).abs() < 1e-10);
-    assert_eq!(result.value(), result.root() * result.root() - 2.0);
-    assert_eq!(result.function_evals(), result.callback_evals());
-}
-```
+[View `root_toms748.rs` on GitHub](https://github.com/jolars/basin/blob/main/crates/basin/examples/solver_guides/root_toms748.rs)
 
 ## Practical considerations
 

@@ -10,6 +10,9 @@
 - [Overview](https://basin.rs/guide/): how the problem, solver, state, and executor pieces fit together
 - [Getting started](https://basin.rs/guide/getting-started/): install, backend features, and a first solve
 - [Migrating from Argmin](https://basin.rs/guide/migrating-from-argmin/): map Argmin 0.11 problem traits, solvers, errors, bounds, observers, and backends to Basin
+
+## Solvers
+
 - [Choosing a solver](https://basin.rs/guide/solvers/): selection guide and full catalog grouped by algorithm family, including constraint support and scalar root finding
 - [Gradient descent](https://basin.rs/guide/solvers/first-order/gradient-descent/): fixed steps, line searches, heavy-ball momentum, and a Rust example
 - [Nonlinear conjugate gradient](https://basin.rs/guide/solvers/first-order/nonlinear-cg/): Hager–Zhang and Polak–Ribière+ updates, restarts, and a Rust example
@@ -73,9 +76,14 @@
 - [crates.io](https://crates.io/crates/basin): published releases
 - [Source (GitHub)](https://github.com/jolars/basin): repository, issues, and changelog
 
-## Optional
+## Benchmarks
 
-- [Benchmarks](https://basin.rs/benchmarks/): how to read the solver, library, and backend comparisons
-- [Comparing libraries](https://basin.rs/benchmarks/competitors/): solver-by-solver comparisons with setup, interpretation, and methodology
-- [Choosing a backend](https://basin.rs/benchmarks/backends/): measured scaling for vector methods, dense matrices, and sparse least squares
+- [Smooth unconstrained optimization](https://basin.rs/guide/benchmarks/smooth-unconstrained/)
+- [Constrained optimization](https://basin.rs/guide/benchmarks/constrained/)
+- [Derivative-free and global search](https://basin.rs/guide/benchmarks/derivative-free-and-global/)
+- [Nonlinear least squares](https://basin.rs/guide/benchmarks/least-squares/)
+- [Backends](https://basin.rs/guide/benchmarks/backends/)
+
+## Visualizer
+
 - [Visualizer](https://basin.rs/visualizer/): interactive in-browser solver visualization (WASM)

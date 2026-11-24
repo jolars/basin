@@ -78,47 +78,9 @@ This quadratic has its minimum at `[1.0, -2.0]`. The example uses the default
 Hager–Zhang update and line search, sets a gradient tolerance on the solver, and
 limits iterations through the executor.
 
-<!-- compile: solver-nonlinear-cg -->
-```rust
-use basin::{CostFunction, Executor, Gradient, NonlinearCg, Termination};
-use std::convert::Infallible;
+<<< ../../../../../../crates/basin/examples/solver_guides/nonlinear_cg.rs
 
-struct Quadratic;
-
-impl CostFunction for Quadratic {
-    type Param = Vec<f64>;
-    type Output = f64;
-    type Error = Infallible;
-
-    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
-        Ok((x[0] - 1.0).powi(2) + 4.0 * (x[1] + 2.0).powi(2))
-    }
-}
-
-impl Gradient for Quadratic {
-    type Gradient = Vec<f64>;
-
-    fn gradient(&self, x: &Self::Param) -> Result<Self::Gradient, Self::Error> {
-        Ok(vec![2.0 * (x[0] - 1.0), 8.0 * (x[1] + 2.0)])
-    }
-}
-
-fn main() {
-    let solver = NonlinearCg::new().with_absolute_gradient_tolerance(1e-8);
-
-    let result = Executor::from_start(Quadratic, solver, vec![-3.0, 5.0])
-        .max_iter(200)
-        .run()
-        .unwrap();
-
-    assert!(matches!(
-        result.report.termination,
-        Termination::Converged(_)
-    ));
-    assert!((result.param()[0] - 1.0).abs() < 1e-7);
-    assert!((result.param()[1] + 2.0).abs() < 1e-7);
-}
-```
+[View `nonlinear_cg.rs` on GitHub](https://github.com/jolars/basin/blob/main/crates/basin/examples/solver_guides/nonlinear_cg.rs)
 
 To try Polak–Ribière+, import `CgUpdate` and add
 `.with_update(CgUpdate::PolakRibierePlus)` to the solver configuration.
@@ -175,6 +137,8 @@ optional convergence check can impose additional capabilities. See the API's
 [Backends
 section](https://docs.rs/basin/latest/basin/solver/nonlinear_cg/struct.NonlinearCg.html#backends)
 for the exact requirements.
+
+See the [library benchmark](../../../benchmarks/smooth-unconstrained/#nonlinear-conjugate-gradient) for this solver.
 
 <References
 :entries='["hager-zhang-2005", "polak-ribiere-1969", "gilbert-nocedal-1992"]' />

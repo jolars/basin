@@ -54,47 +54,16 @@ the two-trial contraction safeguard, and uses bracket width for convergence.
 This callback computes `f(x)` and `f'(x)` together for `x² - 2`. The initial
 guess is strictly inside `[0, 2]`.
 
-<!-- compile: root-newton-combined -->
-```rust
-use basin::NewtonRoot;
-use std::convert::Infallible;
+<<< ../../../../../../crates/basin/examples/solver_guides/root_newton_combined.rs
 
-fn main() {
-    let result = NewtonRoot::new(0.0, 2.0)
-        .with_initial_guess(1.0)
-        .with_absolute_position_tolerance(1e-10)
-        .with_max_iter(100)
-        .solve_combined(|x| Ok::<_, Infallible>((x * x - 2.0, 2.0 * x)))
-        .unwrap();
-
-    assert!(result.converged());
-    assert!((result.root() - 2.0_f64.sqrt()).abs() < 1e-10);
-    assert_eq!(result.function_evals(), result.callback_evals());
-    assert_eq!(result.derivative_evals(), result.callback_evals());
-    assert_eq!(result.second_derivative_evals(), 0);
-}
-```
+[View `root_newton_combined.rs` on GitHub](https://github.com/jolars/basin/blob/main/crates/basin/examples/solver_guides/root_newton_combined.rs)
 
 Use `solve` when the value and derivative are separate calculations. Both
 callbacks return the same application error type.
 
-<!-- compile: root-newton-separate -->
-```rust
-use basin::NewtonRoot;
-use std::convert::Infallible;
+<<< ../../../../../../crates/basin/examples/solver_guides/root_newton_separate.rs
 
-fn main() {
-    let result = NewtonRoot::new(0.0, 2.0)
-        .solve(
-            |x| Ok::<_, Infallible>(x * x - 2.0),
-            |x| Ok(2.0 * x),
-        )
-        .unwrap();
-
-    assert!(result.converged());
-    assert!((result.root() - 2.0_f64.sqrt()).abs() < 1e-10);
-}
-```
+[View `root_newton_separate.rs` on GitHub](https://github.com/jolars/basin/blob/main/crates/basin/examples/solver_guides/root_newton_separate.rs)
 
 ## Practical considerations
 

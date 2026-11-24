@@ -9,7 +9,7 @@ description: 'Choose a Basin linear-algebra backend using measured solve times f
     import { BACKEND_BENCHMARKS as data } from "#lib/data/benchmarks.ts";
 </script>
 
-# Choosing a backend
+# Backends
 
 Backend choice changes how Basin stores parameters and performs linear algebra.
 These comparisons keep each solver and problem fixed, vary the backend, and
@@ -134,27 +134,4 @@ This favorable least-squares design does not exercise rank deficiency or the
 cases where damping helps. Use it to compare the measured sparse paths, and
 choose the solver based on your problem's numerical properties.
 
-## Methodology and reproduction
-
-Measured {{ data.generatedAt }} on {{ data.env.cpu }} ({{ data.env.os }}/{{ data.env.arch }}).
-Each point is Criterion's mean time for a complete solve, with a
-{{ data.iterations }}-iteration cap. The least-squares, CMA-ES, and SLSQP cases can
-converge before that cap. The figures use logarithmic axes for both solve time
-and problem size.
-
-The committed data also stores 95% confidence intervals on the mean, although
-the figures show only the means. Small visual differences should be read with
-that measurement uncertainty in mind. Absolute times are machine-specific.
-
-From the repository root, run the benchmark and collect the Criterion results:
-
-```sh
-cargo bench -p basin --features nalgebra,ndarray,faer,problems --bench solver_backends
-pnpm --dir web collect:benchmarks
-```
-
-The [benchmark source](https://github.com/jolars/basin/blob/main/crates/basin/benches/solver_backends.rs)
-defines the solver configurations and fixtures. The
-[collection script](https://github.com/jolars/basin/blob/main/web/scripts/collect-benchmarks.ts)
-selects the curated cases from `target/criterion/` and writes the data used by
-this page.
+[Benchmark methodology and reproduction](https://github.com/jolars/basin/blob/main/web/README.md#backends)

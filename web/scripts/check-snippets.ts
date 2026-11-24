@@ -2,10 +2,10 @@
  * Compile-check for public website snippets.
  *
  * The landing-page programs come from their code generator. Migration-guide
- * programs and solver examples are extracted from specially marked Rust
- * fences in the page source, so CI checks the exact code readers see. Backend
- * examples run in isolated Cargo packages: feature unification must not let a
- * newer backend implementation hide a broken exact-version feature.
+ * programs are extracted from marked Rust fences. Solver guides include
+ * runnable Cargo examples, which this script runs directly. Backend examples
+ * run in isolated Cargo packages: feature unification must not let a newer
+ * backend implementation hide a broken exact-version feature.
  *
  * Run with: `pnpm run check:snippets` (uses tsx).
  *
@@ -23,7 +23,7 @@ import {
     writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -43,6 +43,7 @@ type PackageCheck = {
 const scriptDir = fileURLToPath(new URL(".", import.meta.url));
 const webDir = resolve(scriptDir, "..");
 const basinManifestDir = resolve(webDir, "..", "crates", "basin");
+const solverExampleDir = join(basinManifestDir, "examples", "solver_guides");
 const migrationPage = resolve(
     webDir,
     "src",
@@ -113,20 +114,34 @@ function extractSnippets(pagePath: string): Map<string, string> {
 
 const migrationSnippets = extractSnippets(migrationPage);
 
-function extractSolverSnippets(directory: string): Snippet[] {
-    const snippets: Snippet[] = [];
+function findSolverExamples(directory: string): string[] {
+    const examples: string[] = [];
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
         const path = join(directory, entry.name);
         if (entry.isDirectory()) {
-            snippets.push(...extractSolverSnippets(path));
+            examples.push(...findSolverExamples(path));
         } else if (entry.name === "index.md") {
-            for (const [name, source] of extractSnippets(path)) {
-                snippets.push({ name, source });
+            const page = readFileSync(path, "utf8");
+            for (const [, include] of page.matchAll(/^<<<[ \t]+(\S+)/gm)) {
+                const source = resolve(directory, include);
+                if (
+                    dirname(source) !== solverExampleDir ||
+                    !source.endsWith(".rs")
+                ) {
+                    throw new Error(
+                        `expected a Basin Cargo example in ${path}: ${include}`,
+                    );
+                }
+                examples.push(basename(source, ".rs"));
             }
         }
     }
-    return snippets;
+    return examples;
 }
+
+const solverExamples = new Set(
+    findSolverExamples(resolve(webDir, "src/guide/solvers")).sort(),
+);
 
 function migrationSnippet(name: string): Snippet {
     const source = migrationSnippets.get(name);
@@ -174,12 +189,6 @@ const checks: PackageCheck[] = [
             migrationSnippet("basin-observer-cancellation"),
             migrationSnippet("basin-backend-vec"),
         ],
-        run: true,
-    },
-    {
-        name: "solver-guides",
-        dependencies: basinDependency(),
-        snippets: extractSolverSnippets(resolve(webDir, "src/guide/solvers")),
         run: true,
     },
 ];
@@ -238,6 +247,19 @@ console.log(
 );
 
 try {
+    console.log(`Running ${solverExamples.size} solver guide examples…`);
+    for (const name of solverExamples) {
+        console.log(`  ${name}`);
+        execFileSync(
+            "cargo",
+            ["run", "-p", "basin", "--example", name, "--quiet"],
+            {
+                cwd: basinManifestDir,
+                stdio: "inherit",
+            },
+        );
+    }
+
     for (const check of checks) {
         const crateDir = join(checkRoot, check.name);
         const binDir = join(crateDir, "src", "bin");

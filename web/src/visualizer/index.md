@@ -23,7 +23,6 @@ Live optimization trajectories from the Basin Rust library. Click the contour to
 reset the starting point.
 
 </div>
-
 <div class="vp-raw">
   <component :is="visualizer" v-if="visualizer" />
   <p v-else class="visualizer-container py-6">Loading visualizer…</p>

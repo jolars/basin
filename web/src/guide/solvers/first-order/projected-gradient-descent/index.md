@@ -64,69 +64,9 @@ constrained minimum to `[0.5, -1.0]`, where the raw gradient is nonzero. The
 example declares bounds on the problem, uses a fixed step, and stops on the
 projected-gradient residual.
 
-<!-- compile: solver-projected-gradient-descent -->
-```rust
-use basin::{
-    BoxBounds, ConstraintDescription, ConstraintSet, Constraints, CostFunction,
-    Executor, Gradient, ProjectedGradientDescent, Termination,
-};
-use std::convert::Infallible;
+<<< ../../../../../../crates/basin/examples/solver_guides/projected_gradient_descent.rs
 
-struct BoundedQuadratic {
-    lower: Vec<f64>,
-    upper: Vec<f64>,
-}
-
-impl Constraints for BoundedQuadratic {
-    type Set = ConstraintSet<BoxBounds<Vec<f64>>>;
-
-    fn constraints(
-        &self,
-    ) -> <Self::Set as ConstraintDescription>::Borrowed<'_> {
-        ConstraintSet::new()
-            .with_bounds(BoxBounds::new(Some(&self.lower), Some(&self.upper)))
-    }
-}
-
-impl CostFunction for BoundedQuadratic {
-    type Param = Vec<f64>;
-    type Output = f64;
-    type Error = Infallible;
-
-    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
-        Ok((x[0] - 1.0).powi(2) + 4.0 * (x[1] + 2.0).powi(2))
-    }
-}
-
-impl Gradient for BoundedQuadratic {
-    type Gradient = Vec<f64>;
-
-    fn gradient(&self, x: &Self::Param) -> Result<Self::Gradient, Self::Error> {
-        Ok(vec![2.0 * (x[0] - 1.0), 8.0 * (x[1] + 2.0)])
-    }
-}
-
-fn main() {
-    let problem = BoundedQuadratic {
-        lower: vec![-1.0, -1.0],
-        upper: vec![0.5, 1.0],
-    };
-    let solver = ProjectedGradientDescent::new(0.1)
-        .with_absolute_projected_gradient_tolerance(1e-8);
-
-    let result = Executor::from_start(problem, solver, vec![-3.0, 5.0])
-        .max_iter(200)
-        .run()
-        .unwrap();
-
-    assert!(matches!(
-        result.report.termination,
-        Termination::Converged(_)
-    ));
-    assert!((result.param()[0] - 0.5).abs() < 1e-7);
-    assert!((result.param()[1] + 1.0).abs() < 1e-7);
-}
-```
+[View `projected_gradient_descent.rs` on GitHub](https://github.com/jolars/basin/blob/main/crates/basin/examples/solver_guides/projected_gradient_descent.rs)
 
 The starting point lies outside the box. Initialization projects it to
 `[-1.0, 1.0]` before the first objective or gradient evaluation.

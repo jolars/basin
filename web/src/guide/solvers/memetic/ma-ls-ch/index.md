@@ -62,48 +62,9 @@ uses a fixed seed and checks the historical best against that analytic
 reference. A successful result on this objective does not certify global
 optimality on a general problem.
 
-<!-- compile: solver-ma-ls-ch -->
-```rust
-use basin::{
-    BoxBounds, Constrained, ConstraintSet, CostFunction, Executor, MaLsCh,
-    PopulationProgress, SamplingDomain, SolisWets,
-};
-use std::convert::Infallible;
+<<< ../../../../../../crates/basin/examples/solver_guides/ma_ls_ch.rs
 
-struct Sphere;
-
-impl CostFunction for Sphere {
-    type Param = Vec<f64>;
-    type Output = f64;
-    type Error = Infallible;
-
-    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
-        Ok(x.iter().map(|v| v * v).sum())
-    }
-}
-
-fn main() {
-    let bounds = BoxBounds::new(Some(vec![-5.0; 2]), Some(vec![5.0; 2]));
-    let problem =
-        Constrained::new(Sphere, ConstraintSet::new().with_bounds(bounds));
-    let solver = MaLsCh::with_inner(7, SolisWets::<Vec<f64>>::new(0))
-        .with_pop_size(20)
-        .with_ls_intensity(100);
-
-    let result = Executor::new(
-        SamplingDomain::new(problem),
-        solver,
-        PopulationProgress::<Vec<f64>>::empty(),
-    )
-    .max_cost_evals(10_000)
-    .run()
-    .unwrap();
-
-    let incumbent = result.incumbent_record().expect("expected an incumbent");
-    assert!(incumbent.cost < 1e-4);
-    assert!(incumbent.param.iter().all(|v| v.abs() < 0.01));
-}
-```
+[View `ma_ls_ch.rs` on GitHub](https://github.com/jolars/basin/blob/main/crates/basin/examples/solver_guides/ma_ls_ch.rs)
 
 ## Practical considerations
 

@@ -53,33 +53,9 @@ The initial interval `[0, 1]` does not bracket the root, so `RootBracketer`
 expands it while respecting the lower domain limit. Always check the bracket
 search result before starting the solve.
 
-<!-- compile: root-brent -->
-```rust
-use basin::{BrentRoot, RootBracketer};
-use std::convert::Infallible;
+<<< ../../../../../../crates/basin/examples/solver_guides/root_brent.rs
 
-fn main() {
-    let function = |x| Ok::<_, Infallible>(x * x - 2.0);
-    let search = RootBracketer::new(0.0, 1.0)
-        .with_lower_bound(0.0)
-        .bracket(function)
-        .unwrap();
-    assert!(search.bracketed());
-
-    let (lower, upper) = search.bracket();
-    let result = BrentRoot::new(lower, upper)
-        .with_absolute_position_tolerance(1e-10)
-        .with_max_iter(100)
-        .solve(function)
-        .unwrap();
-
-    assert!(result.converged());
-    assert!((result.root() - 2.0_f64.sqrt()).abs() < 1e-10);
-    assert_eq!(result.value(), result.root() * result.root() - 2.0);
-    let total_evaluations = search.function_evals() + result.function_evals();
-    assert!(total_evaluations > result.function_evals());
-}
-```
+[View `root_brent.rs` on GitHub](https://github.com/jolars/basin/blob/main/crates/basin/examples/solver_guides/root_brent.rs)
 
 If you already know a bracket, pass its endpoints directly to `BrentRoot::new`.
 The interval belongs to the root finder; it needs no `BoxBounds` declaration,

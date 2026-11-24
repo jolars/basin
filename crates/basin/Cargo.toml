@@ -183,3 +183,213 @@ required-features = ["nalgebra_all", "faer_all", "problems"]
 name = "solver_backends"
 harness = false
 required-features = ["nalgebra_all", "ndarray_all", "faer_all", "problems"]
+
+# Examples included in the website solver guides.
+
+[[example]]
+name = "augmented_lagrangian_method"
+path = "examples/solver_guides/augmented_lagrangian_method.rs"
+
+[[example]]
+name = "barrier_method"
+path = "examples/solver_guides/barrier_method.rs"
+
+[[example]]
+name = "basin_hopping"
+path = "examples/solver_guides/basin_hopping.rs"
+
+[[example]]
+name = "bfgs"
+path = "examples/solver_guides/bfgs.rs"
+
+[[example]]
+name = "bobyqa"
+path = "examples/solver_guides/bobyqa.rs"
+
+[[example]]
+name = "bounded_cma_es"
+path = "examples/solver_guides/bounded_cma_es.rs"
+
+[[example]]
+name = "bounded_cma_inject"
+path = "examples/solver_guides/bounded_cma_inject.rs"
+
+[[example]]
+name = "bounded_levenberg_marquardt"
+path = "examples/solver_guides/bounded_levenberg_marquardt.rs"
+
+[[example]]
+name = "brent"
+path = "examples/solver_guides/brent.rs"
+
+[[example]]
+name = "brent_derivative"
+path = "examples/solver_guides/brent_derivative.rs"
+
+[[example]]
+name = "cma_es"
+path = "examples/solver_guides/cma_es.rs"
+
+[[example]]
+name = "cma_inject"
+path = "examples/solver_guides/cma_inject.rs"
+
+[[example]]
+name = "cobyla"
+path = "examples/solver_guides/cobyla.rs"
+
+[[example]]
+name = "de"
+path = "examples/solver_guides/de.rs"
+
+[[example]]
+name = "de_inject"
+path = "examples/solver_guides/de_inject.rs"
+
+[[example]]
+name = "direct"
+path = "examples/solver_guides/direct.rs"
+
+[[example]]
+name = "gauss_newton"
+path = "examples/solver_guides/gauss_newton.rs"
+
+[[example]]
+name = "gbnm"
+path = "examples/solver_guides/gbnm.rs"
+
+[[example]]
+name = "global_best_pso"
+path = "examples/solver_guides/global_best_pso.rs"
+
+[[example]]
+name = "golden_section"
+path = "examples/solver_guides/golden_section.rs"
+
+[[example]]
+name = "gradient_descent"
+path = "examples/solver_guides/gradient_descent.rs"
+
+[[example]]
+name = "lbfgs"
+path = "examples/solver_guides/lbfgs.rs"
+
+[[example]]
+name = "lbfgsb"
+path = "examples/solver_guides/lbfgsb.rs"
+
+[[example]]
+name = "lbfgsb_projected_policy"
+path = "examples/solver_guides/lbfgsb_projected_policy.rs"
+
+[[example]]
+name = "levenberg_marquardt"
+path = "examples/solver_guides/levenberg_marquardt.rs"
+
+[[example]]
+name = "levenberg_marquardt_qr"
+path = "examples/solver_guides/levenberg_marquardt_qr.rs"
+
+[[example]]
+name = "lincoa"
+path = "examples/solver_guides/lincoa.rs"
+
+[[example]]
+name = "ma_ls_ch"
+path = "examples/solver_guides/ma_ls_ch.rs"
+
+[[example]]
+name = "ma_ls_ch_cma"
+path = "examples/solver_guides/ma_ls_ch_cma.rs"
+
+[[example]]
+name = "ma_ls_ch_sw"
+path = "examples/solver_guides/ma_ls_ch_sw.rs"
+
+[[example]]
+name = "mads"
+path = "examples/solver_guides/mads.rs"
+
+[[example]]
+name = "mads_constrained"
+path = "examples/solver_guides/mads_constrained.rs"
+
+[[example]]
+name = "nelder_mead_quadratic"
+path = "examples/solver_guides/nelder_mead_quadratic.rs"
+
+[[example]]
+name = "newuoa"
+path = "examples/solver_guides/newuoa.rs"
+
+[[example]]
+name = "nonlinear_cg"
+path = "examples/solver_guides/nonlinear_cg.rs"
+
+[[example]]
+name = "projected_gradient_descent"
+path = "examples/solver_guides/projected_gradient_descent.rs"
+
+[[example]]
+name = "random_search"
+path = "examples/solver_guides/random_search.rs"
+
+[[example]]
+name = "root_bisection"
+path = "examples/solver_guides/root_bisection.rs"
+
+[[example]]
+name = "root_brent"
+path = "examples/solver_guides/root_brent.rs"
+
+[[example]]
+name = "root_halley_combined"
+path = "examples/solver_guides/root_halley_combined.rs"
+
+[[example]]
+name = "root_halley_separate"
+path = "examples/solver_guides/root_halley_separate.rs"
+
+[[example]]
+name = "root_newton_combined"
+path = "examples/solver_guides/root_newton_combined.rs"
+
+[[example]]
+name = "root_newton_separate"
+path = "examples/solver_guides/root_newton_separate.rs"
+
+[[example]]
+name = "root_secant"
+path = "examples/solver_guides/root_secant.rs"
+
+[[example]]
+name = "root_toms748"
+path = "examples/solver_guides/root_toms748.rs"
+
+[[example]]
+name = "sgd"
+path = "examples/solver_guides/sgd.rs"
+
+[[example]]
+name = "simulated_annealing"
+path = "examples/solver_guides/simulated_annealing.rs"
+
+[[example]]
+name = "slsqp"
+path = "examples/solver_guides/slsqp.rs"
+
+[[example]]
+name = "solis_wets"
+path = "examples/solver_guides/solis_wets.rs"
+
+[[example]]
+name = "ssga"
+path = "examples/solver_guides/ssga.rs"
+
+[[example]]
+name = "trust_region_newton"
+path = "examples/solver_guides/trust_region_newton.rs"
+
+[[example]]
+name = "trust_region_reflective"
+path = "examples/solver_guides/trust_region_reflective.rs"

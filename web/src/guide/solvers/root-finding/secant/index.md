@@ -53,24 +53,9 @@ estimate. An exact zero collapses the bracket immediately.
 The positive zero of `x² - 2` is bracketed by `[0, 2]`. `Infallible` supplies
 the error type for this callback, which cannot fail.
 
-<!-- compile: root-secant -->
-```rust
-use basin::SecantRoot;
-use std::convert::Infallible;
+<<< ../../../../../../crates/basin/examples/solver_guides/root_secant.rs
 
-fn main() {
-    let result = SecantRoot::new(0.0, 2.0)
-        .with_absolute_position_tolerance(1e-10)
-        .with_max_iter(100)
-        .solve(|x| Ok::<_, Infallible>(x * x - 2.0))
-        .unwrap();
-
-    assert!(result.converged());
-    assert!((result.root() - 2.0_f64.sqrt()).abs() < 1e-10);
-    assert_eq!(result.value(), result.root() * result.root() - 2.0);
-    assert_eq!(result.callback_evals(), result.function_evals());
-}
-```
+[View `root_secant.rs` on GitHub](https://github.com/jolars/basin/blob/main/crates/basin/examples/solver_guides/root_secant.rs)
 
 ## Practical considerations
 

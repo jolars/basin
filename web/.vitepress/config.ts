@@ -111,16 +111,20 @@ export default defineConfig({
             {
                 text: "Guide",
                 link: "/guide/getting-started/",
-                activeMatch: "^/guide/",
+                activeMatch: "^/guide/(?!solvers(?:/|$))",
+            },
+            {
+                text: "Solvers",
+                link: "/guide/solvers/",
+                activeMatch: "^/guide/solvers/",
             },
             { text: "Visualizer", link: "/visualizer/" },
-            { text: "Benchmarks", link: "/benchmarks/" },
             { text: "API", link: "https://docs.rs/basin" },
         ],
         sidebar: {
             "/guide/": [
                 { text: "Introduction", items: sidebar(DOCS_LINKS) },
-                { text: "Solvers", items: sidebar(SOLVER_LINKS) },
+                { text: "Benchmarks", items: sidebar(BENCHMARK_LINKS) },
                 {
                     text: "Development",
                     items: [
@@ -146,7 +150,9 @@ export default defineConfig({
                     ],
                 },
             ],
-            "/benchmarks/": sidebar(BENCHMARK_LINKS),
+            "/guide/solvers/": [
+                { text: "Solvers", items: sidebar(SOLVER_LINKS) },
+            ],
         },
         outline: [2, 3],
         search: { provider: "local" },

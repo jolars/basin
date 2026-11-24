@@ -8,10 +8,29 @@ export type DocsNavItem = NavLink | { label: string; children: DocsNavItem[] };
 // Keep trailing slashes so links match the canonical URLs.
 
 /** Sidebar links for the benchmark guides. */
-export const BENCHMARK_LINKS: NavLink[] = [
-    { label: "Overview", href: "benchmarks/" },
-    { label: "Comparing libraries", href: "benchmarks/competitors/" },
-    { label: "Choosing a backend", href: "benchmarks/backends/" },
+export const BENCHMARK_LINKS: DocsNavItem[] = [
+    {
+        label: "Competitors",
+        children: [
+            {
+                label: "Smooth unconstrained optimization",
+                href: "guide/benchmarks/smooth-unconstrained/",
+            },
+            {
+                label: "Constrained optimization",
+                href: "guide/benchmarks/constrained/",
+            },
+            {
+                label: "Derivative-free and global search",
+                href: "guide/benchmarks/derivative-free-and-global/",
+            },
+            {
+                label: "Nonlinear least squares",
+                href: "guide/benchmarks/least-squares/",
+            },
+        ],
+    },
+    { label: "Backends", href: "guide/benchmarks/backends/" },
 ];
 
 /** Sidebar links for the guide section. */
@@ -23,6 +42,7 @@ export const DOCS_LINKS: NavLink[] = [
 
 /** Sidebar links grouped by solver family. */
 export const SOLVER_LINKS: DocsNavItem[] = [
+    { label: "Choosing a solver", href: "guide/solvers/" },
     {
         label: "First-order",
         children: [

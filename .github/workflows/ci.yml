@@ -258,8 +258,8 @@ jobs:
         working-directory: web
         # See web.yml for why the freshness gate is disabled in CI.
         run: pnpm install --frozen-lockfile --config.minimumReleaseAge=0
-      # Checks every landing-page program plus the migration guide's Argmin
-      # before-example and Basin after-examples. Exact backend versions run in
+      # Checks generated playground programs, migration snippets, and the Cargo
+      # examples included in solver guides. Exact backend versions run in
       # isolated packages so feature unification cannot hide a broken pairing.
       - name: Compile and run website snippets
         working-directory: web

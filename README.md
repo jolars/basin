@@ -17,9 +17,8 @@ Basin runs natively and in the browser, with no BLAS/LAPACK or threads required
 by the default build. Its design is inspired by [argmin].
 
 See the documentation at [basin.rs/guide] or browse the API reference at
-[docs.rs/basin]. There is also an in-browser [solver visualizer] and a
-[benchmarks site] comparing Basin against competing crates and across backends
-and solvers.
+[docs.rs/basin]. The Guide also has [competitor benchmarks] and
+[backend benchmarks]. Explore optimization in the [solver visualizer].
 
 To port an existing Argmin project, see [Migrating from
 Argmin](https://basin.rs/guide/migrating-from-argmin/).
@@ -234,5 +233,6 @@ dual licensed as above, without any additional terms or conditions.
 [basin.rs/guide]: https://basin.rs/guide/
 [docs.rs/basin]: https://docs.rs/basin
 [solver visualizer]: https://basin.rs/visualizer/
-[benchmarks site]: https://basin.rs/benchmarks/
+[competitor benchmarks]: https://basin.rs/guide/benchmarks/smooth-unconstrained/
+[backend benchmarks]: https://basin.rs/guide/benchmarks/backends/
 [Solvers]: https://basin.rs/guide/solvers/

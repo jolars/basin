@@ -1,6 +1,6 @@
 /**
  * Collect the competitor-axis convergence traces into a committed JSON file
- * the `/benchmarks/competitors` page imports.
+ * the library benchmark pages import.
  *
  * Reads the trace harness output at `target/competitor-traces.json` (basin
  * vs competing libraries as suboptimality-vs-time curves), wraps it with run metadata, and

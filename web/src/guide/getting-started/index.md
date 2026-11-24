@@ -23,7 +23,8 @@ Exact version features are also available for nalgebra 0.32–0.35, ndarray
 `ndarray_latest`, and `faer_latest` features remain as synonyms. When several
 releases of one backend are enabled, Basin implements each independently.
 The package MSRV is Rust 1.87; nalgebra 0.35 and `nalgebra` require Rust
-1.89.
+1.89. See [backend benchmarks](../benchmarks/backends/) for how solve time
+scales with different backends.
 
 In Basin 2.0, no features are enabled by default. Enable `problems` with
 `cargo add basin --features problems` to use the standard test-function corpus

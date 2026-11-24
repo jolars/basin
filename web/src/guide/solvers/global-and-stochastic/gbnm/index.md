@@ -77,58 +77,9 @@ evaluation budget. Even on this simple objective, the result should use
 the historical best: the active local search can move to a worse point
 when a restart begins.
 
-<!-- compile: solver-gbnm -->
-```rust
-use basin::{
-    BoxBounds, ConstraintDescription, ConstraintSet, Constraints,
-    CostFunction, Executor, Gbnm,
-};
-use std::convert::Infallible;
+<<< ../../../../../../crates/basin/examples/solver_guides/gbnm.rs
 
-struct BoundedSphere {
-    lower: Vec<f64>,
-    upper: Vec<f64>,
-}
-
-impl CostFunction for BoundedSphere {
-    type Param = Vec<f64>;
-    type Output = f64;
-    type Error = Infallible;
-
-    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
-        Ok(x.iter().map(|v| v * v).sum())
-    }
-}
-
-impl Constraints for BoundedSphere {
-    type Set = ConstraintSet<BoxBounds<Vec<f64>>>;
-
-    fn constraints(&self) -> <Self::Set as ConstraintDescription>::Borrowed<'_> {
-        ConstraintSet::new().with_bounds(BoxBounds::new(
-            Some(&self.lower),
-            Some(&self.upper),
-        ))
-    }
-}
-
-fn main() {
-    let problem = BoundedSphere {
-        lower: vec![-5.0; 2],
-        upper: vec![5.0; 2],
-    };
-    let solver = Gbnm::new(42);
-
-    let result = Executor::from_start(problem, solver, vec![4.0, 4.0])
-        .max_cost_evals(2_000)
-        .run()
-        .unwrap();
-
-    let incumbent = result.incumbent_record().expect("expected an incumbent");
-    assert!(incumbent.cost < 1e-4);
-    assert!(incumbent.param.iter().all(|v| (-5.0..=5.0).contains(v)));
-    assert!(incumbent.cost <= result.cost());
-}
-```
+[View `gbnm.rs` on GitHub](https://github.com/jolars/basin/blob/main/crates/basin/examples/solver_guides/gbnm.rs)
 
 The assertions check an analytic reference and bound feasibility. Reaching
 the budget is an execution limit, rather than a global convergence claim.

@@ -55,51 +55,16 @@ For `x³ - 2`, the callback returns the function value, first derivative, and
 second derivative in that order. A combined callback can share intermediate
 calculations such as `x²`.
 
-<!-- compile: root-halley-combined -->
-```rust
-use basin::HalleyRoot;
-use std::convert::Infallible;
+<<< ../../../../../../crates/basin/examples/solver_guides/root_halley_combined.rs
 
-fn main() {
-    let result = HalleyRoot::new(0.0, 2.0)
-        .with_initial_guess(1.0)
-        .with_absolute_position_tolerance(1e-10)
-        .with_max_iter(100)
-        .solve_combined(|x| {
-            let square = x * x;
-            Ok::<_, Infallible>((square * x - 2.0, 3.0 * square, 6.0 * x))
-        })
-        .unwrap();
-
-    assert!(result.converged());
-    assert!((result.root() - 2.0_f64.cbrt()).abs() < 1e-10);
-    assert_eq!(result.function_evals(), result.callback_evals());
-    assert_eq!(result.derivative_evals(), result.callback_evals());
-    assert_eq!(result.second_derivative_evals(), result.callback_evals());
-}
-```
+[View `root_halley_combined.rs` on GitHub](https://github.com/jolars/basin/blob/main/crates/basin/examples/solver_guides/root_halley_combined.rs)
 
 Alternatively, `solve` accepts three separate fallible callbacks with the
 same application error type.
 
-<!-- compile: root-halley-separate -->
-```rust
-use basin::HalleyRoot;
-use std::convert::Infallible;
+<<< ../../../../../../crates/basin/examples/solver_guides/root_halley_separate.rs
 
-fn main() {
-    let result = HalleyRoot::new(0.0, 2.0)
-        .solve(
-            |x| Ok::<_, Infallible>(x * x * x - 2.0),
-            |x| Ok(3.0 * x * x),
-            |x| Ok(6.0 * x),
-        )
-        .unwrap();
-
-    assert!(result.converged());
-    assert!((result.root() - 2.0_f64.cbrt()).abs() < 1e-10);
-}
-```
+[View `root_halley_separate.rs` on GitHub](https://github.com/jolars/basin/blob/main/crates/basin/examples/solver_guides/root_halley_separate.rs)
 
 ## Practical considerations
 

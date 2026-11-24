@@ -3,3 +3,11 @@
 /docs /guide/ 301
 /docs/ /guide/ 301
 /docs/* /guide/:splat 301
+/benchmarks /guide/benchmarks/smooth-unconstrained/ 301
+/benchmarks/ /guide/benchmarks/smooth-unconstrained/ 301
+/benchmarks/competitors /guide/benchmarks/smooth-unconstrained/ 301
+/benchmarks/competitors/ /guide/benchmarks/smooth-unconstrained/ 301
+/benchmarks/backends /guide/benchmarks/backends/ 301
+/benchmarks/backends/ /guide/benchmarks/backends/ 301
+/guide/benchmarks/methodology https://github.com/jolars/basin/blob/main/web/README.md#competitors 301
+/guide/benchmarks/methodology/ https://github.com/jolars/basin/blob/main/web/README.md#competitors 301

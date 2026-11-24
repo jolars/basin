@@ -66,42 +66,9 @@ This quadratic has its minimum at `[1.0, -2.0]`. A fixed seed makes the run
 reproducible. The solver stops when its mutation standard deviation reaches
 `1e-8`, and the executor also imposes an iteration budget.
 
-<!-- compile: solver-solis-wets -->
-```rust
-use basin::{CostFunction, Executor, SolisWets, Termination};
-use std::convert::Infallible;
+<<< ../../../../../../crates/basin/examples/solver_guides/solis_wets.rs
 
-struct Quadratic;
-
-impl CostFunction for Quadratic {
-    type Param = Vec<f64>;
-    type Output = f64;
-    type Error = Infallible;
-
-    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
-        Ok((x[0] - 1.0).powi(2) + 4.0 * (x[1] + 2.0).powi(2))
-    }
-}
-
-fn main() {
-    let solver = SolisWets::new(42)
-        .with_initial_step_size(1.0)
-        .with_absolute_step_size_tolerance(1e-8);
-
-    let result = Executor::from_start(Quadratic, solver, vec![-3.0, 5.0])
-        .max_iter(10_000)
-        .run()
-        .unwrap();
-
-    assert!(matches!(
-        result.report.termination,
-        Termination::Converged(_)
-    ));
-    assert!(result.cost() < 1e-12);
-    assert!((result.param()[0] - 1.0).abs() < 1e-6);
-    assert!((result.param()[1] + 2.0).abs() < 1e-6);
-}
-```
+[View `solis_wets.rs` on GitHub](https://github.com/jolars/basin/blob/main/crates/basin/examples/solver_guides/solis_wets.rs)
 
 ## Practical considerations
 

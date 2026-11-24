@@ -59,43 +59,9 @@ This quadratic has its minimum at `[1.0, -2.0]`. The example supplies only
 objective values, chooses the initial and final resolutions, and places an
 evaluation budget on the executor.
 
-<!-- compile: solver-newuoa -->
-```rust
-use basin::{CostFunction, Executor, Newuoa, Termination};
-use std::convert::Infallible;
+<<< ../../../../../../crates/basin/examples/solver_guides/newuoa.rs
 
-struct Quadratic;
-
-impl CostFunction for Quadratic {
-    type Param = Vec<f64>;
-    type Output = f64;
-    type Error = Infallible;
-
-    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
-        Ok((x[0] - 1.0).powi(2) + 4.0 * (x[1] + 2.0).powi(2))
-    }
-}
-
-fn main() {
-    let solver = Newuoa::new()
-        .with_initial_radius(0.5)
-        .with_final_radius(1e-8);
-
-    let result = Executor::from_start(Quadratic, solver, vec![-3.0, 5.0])
-        .max_cost_evals(500)
-        .run()
-        .unwrap();
-
-    assert!(matches!(
-        result.report.termination,
-        Termination::Converged(_)
-    ));
-    let incumbent = result.incumbent_record().expect("expected an incumbent");
-    assert!(incumbent.cost < 1e-12);
-    assert!((incumbent.param[0] - 1.0).abs() < 1e-6);
-    assert!((incumbent.param[1] + 2.0).abs() < 1e-6);
-}
-```
+[View `newuoa.rs` on GitHub](https://github.com/jolars/basin/blob/main/crates/basin/examples/solver_guides/newuoa.rs)
 
 ## Practical considerations
 
@@ -145,5 +111,7 @@ uses internal vectors and pure-Rust algebra, so no matrix capability or
 BLAS/LAPACK provider is required from the parameter backend. Basin's model
 updates and driver have been cross-validated against
 [PRIMA](https://github.com/libprima/prima) v0.7.2.
+
+See the [library benchmark](../../../benchmarks/derivative-free-and-global/#newuoa) for this solver.
 
 <References :entries='["powell-newuoa-2006"]' />

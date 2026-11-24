@@ -64,50 +64,9 @@ This quadratic has its minimum at `[1.0, -2.0]`. The example supplies an
 analytic gradient, sets a gradient tolerance on the solver, and limits
 iterations through the executor.
 
-<!-- compile: solver-lbfgs -->
-```rust
-use basin::{CostFunction, Executor, Gradient, Lbfgs, Termination};
-use std::convert::Infallible;
+<<< ../../../../../../crates/basin/examples/solver_guides/lbfgs.rs
 
-struct Quadratic;
-
-impl CostFunction for Quadratic {
-    type Param = Vec<f64>;
-    type Output = f64;
-    type Error = Infallible;
-
-    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
-        Ok((x[0] - 1.0).powi(2) + 4.0 * (x[1] + 2.0).powi(2))
-    }
-}
-
-impl Gradient for Quadratic {
-    type Gradient = Vec<f64>;
-
-    fn gradient(&self, x: &Self::Param) -> Result<Self::Gradient, Self::Error> {
-        Ok(vec![2.0 * (x[0] - 1.0), 8.0 * (x[1] + 2.0)])
-    }
-}
-
-fn main() {
-    let solver = Lbfgs::new()
-        .unbounded()
-        .with_m_capacity(10)
-        .with_absolute_gradient_tolerance(1e-8);
-
-    let result = Executor::from_start(Quadratic, solver, vec![-3.0, 5.0])
-        .max_iter(200)
-        .run()
-        .unwrap();
-
-    assert!(matches!(
-        result.report.termination,
-        Termination::Converged(_)
-    ));
-    assert!((result.param()[0] - 1.0).abs() < 1e-7);
-    assert!((result.param()[1] + 2.0).abs() < 1e-7);
-}
-```
+[View `lbfgs.rs` on GitHub](https://github.com/jolars/basin/blob/main/crates/basin/examples/solver_guides/lbfgs.rs)
 
 Call `.unbounded()` to select L-BFGS. `Lbfgs::new()` alone selects the
 box-constrained L-BFGS-B mode, also available through the `Lbfgsb` alias.
@@ -146,6 +105,8 @@ storage must be contiguous; strided ndarray views are unsupported. See the API's
 [Backends
 section](https://docs.rs/basin/latest/basin/solver/lbfgs/struct.Lbfgs.html#backends)
 for the exact capability requirements.
+
+See the [library benchmark](../../../benchmarks/smooth-unconstrained/#l-bfgs) for this solver.
 
 <References
 :entries='["liu-nocedal-1989", "nocedal-wright-2006", "more-thuente-1994"]' />
