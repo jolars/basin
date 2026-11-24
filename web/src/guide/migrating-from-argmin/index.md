@@ -55,19 +55,19 @@ For a linear-algebra backend, select the Basin feature matching the version
 already used by your application. The backend dependency and Basin feature must
 name the same release.
 
-  | Parameter type | Backend dependency                                                                    | Basin dependency                                             |
-  | -------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-  | `Vec<f64>`     | —                                                                                     | `basin = "3"`                                                |
-  | nalgebra 0.32  | `nalgebra = "0.32"`                                                                   | `basin = { version = "3", features = ["nalgebra_v0_32"] }`   |
-  | nalgebra 0.33  | `nalgebra = "0.33"`                                                                   | `basin = { version = "3", features = ["nalgebra_v0_33"] }`   |
-  | nalgebra 0.34  | `nalgebra = "0.34"`                                                                   | `basin = { version = "3", features = ["nalgebra_v0_34"] }`   |
-  | nalgebra 0.35  | `nalgebra = "0.35"`                                                                   | `basin = { version = "3", features = ["nalgebra_v0_35"] }`   |
-  | ndarray 0.15   | `ndarray = "0.15"`                                                                    | `basin = { version = "3", features = ["ndarray_v0_15"] }`    |
-  | ndarray 0.16   | `ndarray = "0.16"`                                                                    | `basin = { version = "3", features = ["ndarray_v0_16"] }`    |
-  | ndarray 0.17   | `ndarray = "0.17"`                                                                    | `basin = { version = "3", features = ["ndarray_v0_17"] }`    |
-  | faer 0.22      | `faer = { version = "0.22", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "3", features = ["faer_v0_22"] }`       |
-  | faer 0.23      | `faer = { version = "0.23", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "3", features = ["faer_v0_23"] }`       |
-  | faer 0.24      | `faer = { version = "0.24", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "3", features = ["faer_v0_24"] }`       |
+  | Parameter type | Backend dependency                                                                    | Basin dependency                                           |
+  | -------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+  | `Vec<f64>`     | —                                                                                     | `basin = "3"`                                              |
+  | nalgebra 0.32  | `nalgebra = "0.32"`                                                                   | `basin = { version = "3", features = ["nalgebra_v0_32"] }` |
+  | nalgebra 0.33  | `nalgebra = "0.33"`                                                                   | `basin = { version = "3", features = ["nalgebra_v0_33"] }` |
+  | nalgebra 0.34  | `nalgebra = "0.34"`                                                                   | `basin = { version = "3", features = ["nalgebra_v0_34"] }` |
+  | nalgebra 0.35  | `nalgebra = "0.35"`                                                                   | `basin = { version = "3", features = ["nalgebra_v0_35"] }` |
+  | ndarray 0.15   | `ndarray = "0.15"`                                                                    | `basin = { version = "3", features = ["ndarray_v0_15"] }`  |
+  | ndarray 0.16   | `ndarray = "0.16"`                                                                    | `basin = { version = "3", features = ["ndarray_v0_16"] }`  |
+  | ndarray 0.17   | `ndarray = "0.17"`                                                                    | `basin = { version = "3", features = ["ndarray_v0_17"] }`  |
+  | faer 0.22      | `faer = { version = "0.22", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "3", features = ["faer_v0_22"] }`     |
+  | faer 0.23      | `faer = { version = "0.23", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "3", features = ["faer_v0_23"] }`     |
+  | faer 0.24      | `faer = { version = "0.24", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "3", features = ["faer_v0_24"] }`     |
 
 The moving aliases `nalgebra`, `ndarray`, and `faer` are convenient for new
 applications. The `*_latest` spellings remain as deprecated synonyms. Exact
@@ -121,12 +121,12 @@ fn main() -> Result<(), Error> {
 In Basin, `Executor::from_start` asks the solver to construct its natural state
 from a point. Nelder–Mead builds its default 5% simplex there; the Argmin
 simplex above uses the same coordinate perturbations. Generic stopping rules
-belong on the solver; its simplex tolerances check both simplex diameter and cost
-spread, rather than Argmin's sample standard deviation of costs alone.
-Both tests have absolute and relative defaults. The example below
-disables the relative settings to request absolute-only thresholds. An absolute
-setter alone changes its floor while leaving the relative setting enabled;
-see [Migrating to Basin 2.0](../migrating-to-v2/#nelder-mead-convergence-defaults) for details.
+belong on the solver; its simplex tolerances check both simplex diameter and
+cost spread, rather than Argmin's sample standard deviation of costs alone. Both
+tests have absolute and relative defaults. The example below disables the
+relative settings to request absolute-only thresholds. An absolute setter alone
+changes its floor while leaving the relative setting enabled; see [Migrating to
+Basin 2.0](../migrating-to-v2/#nelder-mead-convergence-defaults) for details.
 
 <!-- compile: basin-nelder-mead -->
 ```rust
@@ -165,8 +165,8 @@ fn main() {
 ```
 
 Use `Executor::new` when you need a custom simplex or another fully constructed
-state. For example, pass `SimplexProgress::from_simplex(vertices)` as the
-third argument. `from_start` is intentionally unavailable for solvers whose
+state. For example, pass `SimplexProgress::from_simplex(vertices)` as the third
+argument. `from_start` is intentionally unavailable for solvers whose
 initialization samples a box or requires an explicit population, such as PSO,
 GA, DE, and random search. `CmaEs` and `BoundedCmaEs` support `from_start`: the
 starting point supplies the mean, and the solver configures the initial scale.
@@ -217,17 +217,17 @@ fn main() {
 }
 ```
 
-An endpoint root is a successful zero-iteration result. Reversed or
-same-sign brackets, non-finite values, and callback errors are distinct
-`BrentRootError` variants; reaching the iteration limit is a clean
-`RootResult` with `RootTerminationReason::MaxIter`.
+An endpoint root is a successful zero-iteration result. Reversed or same-sign
+brackets, non-finite values, and callback errors are distinct `BrentRootError`
+variants; reaching the iteration limit is a clean `RootResult` with
+`RootTerminationReason::MaxIter`.
 
 ## L-BFGS and L-BFGS-B
 
 Argmin's `LBFGS` is unconstrained. Basin exposes both algorithms through one
-type-state API: `Lbfgs<V, F, Unbounded>` is unconstrained, while `Lbfgsb` (and the
-default `Lbfgs`) requires `ConstraintSet<BoxBounds<V>>`. Moré–Thuente is Basin's default line
-search for both modes.
+type-state API: `Lbfgs<V, F, Unbounded>` is unconstrained, while `Lbfgsb` (and
+the default `Lbfgs`) requires `ConstraintSet<BoxBounds<V>>`. Moré–Thuente is
+Basin's default line search for both modes.
 
 <!-- compile: basin-lbfgs -->
 ```rust
@@ -270,14 +270,14 @@ fn main() {
 ```
 
 For a nondefault line search, use
-`Lbfgs::with_line_search(HagerZhang::new()).unbounded()`. The
-`delta`, `sigma`, `epsilon`, `theta`, `gamma`, initial step, step bounds, and
-evaluation budget have direct Basin counterparts. Argmin also exposes an `eta`
-setting on its Hager–Zhang line search, but does not use it there; the parameter
-belongs to the Hager–Zhang conjugate-gradient update, so Basin's line search
-intentionally omits it. A compatibility adapter can safely discard that
-setting. For bounds, use `Lbfgsb` as shown below. Basin does not currently
-replace Argmin's OWL-QN mode for L1 regularization.
+`Lbfgs::with_line_search(HagerZhang::new()).unbounded()`. The `delta`, `sigma`,
+`epsilon`, `theta`, `gamma`, initial step, step bounds, and evaluation budget
+have direct Basin counterparts. Argmin also exposes an `eta` setting on its
+Hager–Zhang line search, but does not use it there; the parameter belongs to the
+Hager–Zhang conjugate-gradient update, so Basin's line search intentionally
+omits it. A compatibility adapter can safely discard that setting. For bounds,
+use `Lbfgsb` as shown below. Basin does not currently replace Argmin's OWL-QN
+mode for L1 regularization.
 
 ## Nonlinear least squares
 
@@ -306,7 +306,10 @@ impl Residual for AffineResidual {
 impl Jacobian for AffineResidual {
     type Jacobian = DenseMatrix<f64>;
 
-    fn jacobian(&self, _x: &Self::Param) -> Result<Self::Jacobian, Self::Error> {
+    fn jacobian(
+        &self,
+        _x: &Self::Param,
+    ) -> Result<Self::Jacobian, Self::Error> {
         Ok(DenseMatrix::from_row_slice(2, 2, &[1.0, 0.0, 0.0, 1.0]))
     }
 }
@@ -323,9 +326,10 @@ fn main() {
 ```
 
 `LevenbergMarquardt::<Vec<f64>, DenseMatrix<f64>>::new()` is a drop-in solver
-change for the same problem and initial point. Its `with_gradient_orthogonality_tolerance`,
-`with_relative_model_reduction_tolerance`, and `with_relative_step_tolerance` methods expose the corresponding
-MINPACK-style stopping tests.
+change for the same problem and initial point. Its
+`with_gradient_orthogonality_tolerance`,
+`with_relative_model_reduction_tolerance`, and `with_relative_step_tolerance`
+methods expose the corresponding MINPACK-style stopping tests.
 
 ## Typed errors
 
@@ -360,9 +364,13 @@ impl CostFunction for FallibleSphere {
 }
 
 fn main() -> Result<(), ObjectiveError> {
-    let result = Executor::from_start(FallibleSphere, NelderMead::new(), vec![1.0, -1.0])
-        .max_iter(200)
-        .run()?;
+    let result = Executor::from_start(
+        FallibleSphere,
+        NelderMead::new(),
+        vec![1.0, -1.0],
+    )
+    .max_iter(200)
+    .run()?;
 
     assert!(result.cost() < 1e-8);
     Ok(())
@@ -373,8 +381,8 @@ Use `Infallible` for a total objective. An application that already uses a
 general error container can select that type instead. A problem error is a hard
 abort: `Executor::run` returns `Err` and no final observer fires. Solvers that
 validate constraints return `ConstraintSolveError<P::Error>`: its `Evaluation`
-variant preserves the original problem error, while `InvalidConstraints`
-reports malformed constraint declarations or callback outputs.
+variant preserves the original problem error, while `InvalidConstraints` reports
+malformed constraint declarations or callback outputs.
 
 ## Finite differences
 
@@ -415,15 +423,16 @@ fn main() {
 }
 ```
 
-`FiniteDiff` preserves the canonical constraint set, so adding numerical derivatives does not
-erase bounds. Under the optional `parallel` feature, its coordinate-wise
-evaluations can run in parallel.
+`FiniteDiff` preserves the canonical constraint set, so adding numerical
+derivatives does not erase bounds. Under the optional `parallel` feature, its
+coordinate-wise evaluations can run in parallel.
 
 ## Bounds and constraints
 
-Bounds describe the problem in Basin. Declare a box-only set through `Constraints`, then choose a
-solver whose type advertises that it consumes bounds. The compiler rejects a
-bounded solver paired with a problem that does not expose them.
+Bounds describe the problem in Basin. Declare a box-only set through
+`Constraints`, then choose a solver whose type advertises that it consumes
+bounds. The compiler rejects a bounded solver paired with a problem that does
+not expose them.
 
 <!-- compile: basin-box-constraints -->
 ```rust
@@ -480,34 +489,37 @@ fn main() {
 }
 ```
 
-Other direct consumers include projected `NelderMead`, `BoundedLevenbergMarquardt`, `Bobyqa`, and
-bounded global solvers. Linear and nonlinear constraints use their corresponding
-problem traits; barrier and augmented-Lagrangian adapters are explicit opt-ins
-when an inner solver is otherwise unconstrained.
+Other direct consumers include projected `NelderMead`,
+`BoundedLevenbergMarquardt`, `Bobyqa`, and bounded global solvers. Linear and
+nonlinear constraints use their corresponding problem traits; barrier and
+augmented-Lagrangian adapters are explicit opt-ins when an inner solver is
+otherwise unconstrained.
 
 ## Particle swarm optimization
 
 Argmin 0.11's `ParticleSwarm` and Basin's `GlobalBestPso` share the synchronous,
-coordinate-wise inertia update and the default coefficients
-`w=1/(2 ln 2)`, `c1=c2=1/2+ln 2`. Basin names the global-best topology
-explicitly because Standard PSO 2006 and 2011 require changing random
-neighborhoods, and SPSO-2011 also changes the motion distribution; those are
-future separate solvers, not hidden strategy modes.
+coordinate-wise inertia update and the default coefficients `w=1/(2 ln 2)`,
+`c1=c2=1/2+ln 2`. Basin names the global-best topology explicitly because
+Standard PSO 2006 and 2011 require changing random neighborhoods, and SPSO-2011
+also changes the motion distribution; those are future separate solvers, not
+hidden strategy modes.
 
-Move the box from Argmin's solver constructor to the problem's
-`Constraints` declaration. Set `PsoBoundaryHandling::Preserve` to match
-Argmin's clamp-position/retain-velocity behavior; Basin defaults to absorbing a
-boundary crossing. Basin's default initialization follows the Standard PSO 2006
-profile, `v=(u-x)/2`, rather than Argmin's `v~U(-span, span)`, so use a warm
-population with explicit positions and set
-`with_initial_velocities(Some(velocities))` on the solver when testing a migrated setup.
-Even then, compare numerical outcomes rather than requiring seeded trajectory
-identity: the two crates use different RNG versions and vector-sampling
-semantics.
+Move the box from Argmin's solver constructor to the problem's `Constraints`
+declaration. Set `PsoBoundaryHandling::Preserve` to match Argmin's
+clamp-position/retain-velocity behavior; Basin defaults to absorbing a boundary
+crossing. Basin's default initialization follows the Standard PSO 2006 profile,
+`v=(u-x)/2`, rather than Argmin's `v~U(-span, span)`, so use a warm population
+with explicit positions and set `with_initial_velocities(Some(velocities))` on
+the solver when testing a migrated setup. Even then, compare numerical outcomes
+rather than requiring seeded trajectory identity: the two crates use different
+RNG versions and vector-sampling semantics.
 
 <!-- compile: basin-global-best-pso -->
 ```rust
-use basin::{CostFunction, Executor, GlobalBestPso, PopulationProgress, PsoBoundaryHandling};
+use basin::{
+    CostFunction, Executor, GlobalBestPso, PopulationProgress,
+    PsoBoundaryHandling,
+};
 use std::convert::Infallible;
 
 struct BoundedSphere {
@@ -544,10 +556,11 @@ fn main() {
     let solver = GlobalBestPso::new(42)
         .with_swarm_size(40)
         .with_boundary_handling(PsoBoundaryHandling::Preserve);
-    let result = Executor::new(problem, solver, PopulationProgress::<Vec<f64>>::empty())
-        .max_iter(500)
-        .run()
-        .unwrap();
+    let result =
+        Executor::new(problem, solver, PopulationProgress::<Vec<f64>>::empty())
+            .max_iter(500)
+            .run()
+            .unwrap();
 
     assert!(result.cost() < 1e-6);
 }
@@ -555,8 +568,9 @@ fn main() {
 
 The solver owns the live RNG, velocities, and personal and global bests.
 `PopulationProgress` owns the observable members, costs, and incumbent metadata.
-For exact continuation, retain both through `run_with_solver()?.into_checkpoint()`
-and use `Executor::resume_from_checkpoint`, or serialize them together through
+For exact continuation, retain both through
+`run_with_solver()?.into_checkpoint()` and use
+`Executor::resume_from_checkpoint`, or serialize them together through
 `ExactCheckpointWriter`. A progress-only snapshot starts a fresh run that
 reevaluates its members and resets particle histories.
 
@@ -581,47 +595,45 @@ Argmin's `with_reannealing_fixed`, `with_reannealing_accepted`, and
 `with_reannealing_best` builder names carry over directly. The three triggers
 compose: Basin restarts the schedule when any enabled threshold is reached and
 resets all reannealing progress. Here, accepted-stall counts consecutive
-rejected proposals, while best-stall counts proposals without a new global
-best.
+rejected proposals, while best-stall counts proposals without a new global best.
 
 These choices follow Kirkpatrick, Gelatt & Vecchi's classical acceptance rule
-([DOI 10.1126/science.220.4598.671](https://doi.org/10.1126/science.220.4598.671)).
+([DOI
+10.1126/science.220.4598.671](https://doi.org/10.1126/science.220.4598.671)).
 Hajek's logarithmic convergence result requires a finite-state reversible chain
-and a problem-dependent coefficient
-([DOI 10.1287/moor.13.2.311](https://doi.org/10.1287/moor.13.2.311)), so it does
-not justify a universal schedule default.
+and a problem-dependent coefficient ([DOI
+10.1287/moor.13.2.311](https://doi.org/10.1287/moor.13.2.311)), so it does not
+justify a universal schedule default.
 
-For file checkpoints on native targets, enable `checkpoint-postcard` and
-attach an `ExactCheckpointWriter` with
-`Executor::checkpoint_with`. It writes the solver, state, and authoritative
-evaluation counters together. `read_exact_checkpoint` validates the format,
-Basin version, and concrete types; pass the result to
-`Executor::resume_from_checkpoint`, which restores the iteration boundary
-without rerunning solver initialization. Simulated annealing retains its
-stateful neighbor, RNG, and cooling history in the solver. `ProposalState`
-records its accepted point, cost, incumbent, counts, and acceptance history.
-The exact checkpoint captures both. State-only snapshots start a fresh chain
-through `Executor::new`. Reattach
-execution controls, observers, cancellation, and the checkpoint writer when
-resuming.
+For file checkpoints on native targets, enable `checkpoint-postcard` and attach
+an `ExactCheckpointWriter` with `Executor::checkpoint_with`. It writes the
+solver, state, and authoritative evaluation counters together.
+`read_exact_checkpoint` validates the format, Basin version, and concrete types;
+pass the result to `Executor::resume_from_checkpoint`, which restores the
+iteration boundary without rerunning solver initialization. Simulated annealing
+retains its stateful neighbor, RNG, and cooling history in the solver.
+`ProposalState` records its accepted point, cost, incumbent, counts, and
+acceptance history. The exact checkpoint captures both. State-only snapshots
+start a fresh chain through `Executor::new`. Reattach execution controls,
+observers, cancellation, and the checkpoint writer when resuming.
 
 ## Observers and cancellation
 
-Basin's `Observe<S>` observers receive read-only state and return `()`.
-For solver diagnostics, use
+Basin's `Observe<S>` observers receive read-only state and return `()`. For
+solver diagnostics, use
 [`observe_solver`](https://docs.rs/basin/latest/basin/core/executor/struct.Executor.html#method.observe_solver)
 with a closure borrowing the state and concrete solver, or implement
 [`ObserveSolver<S, So>`](https://docs.rs/basin/latest/basin/core/observer/trait.ObserveSolver.html).
 Both kinds share the same observation boundaries, modes, and registration order.
-Handle logging errors inside the observer. Use a cloned `CancellationToken`
-when a progress callback requests a normal stop; the executor returns the best
+Handle logging errors inside the observer. Use a cloned `CancellationToken` when
+a progress callback requests a normal stop; the executor returns the best
 available state with `Termination::Cancelled`.
 
 <!-- compile: basin-observer-cancellation -->
 ```rust
 use basin::{
-    CancellationToken, CostFunction, Executor, NelderMead, Observe, ObserverMode, State,
-    Termination,
+    CancellationToken, CostFunction, Executor, NelderMead, Observe,
+    ObserverMode, State, Termination,
 };
 use std::convert::Infallible;
 
@@ -655,12 +667,13 @@ fn main() {
     let observer = Progress {
         cancel: token.clone(),
     };
-    let result = Executor::from_start(Sphere, NelderMead::new(), vec![2.0, -1.0])
-        .max_iter(100)
-        .with_cancellation_token(token)
-        .observe_with(observer, ObserverMode::Always)
-        .run()
-        .unwrap();
+    let result =
+        Executor::from_start(Sphere, NelderMead::new(), vec![2.0, -1.0])
+            .max_iter(100)
+            .with_cancellation_token(token)
+            .observe_with(observer, ObserverMode::Always)
+            .run()
+            .unwrap();
 
     assert_eq!(result.report.termination, Termination::Cancelled);
     assert_eq!(result.iter(), 5);
@@ -826,15 +839,15 @@ fn main() {
 Basin's `Brent` minimizes a scalar objective, while `BrentRoot` solves a
 bracketed scalar equation through the direct API above. Basin does not offer a
 generic adapter for an Argmin solver implementation. Its Hager–Zhang
-configuration maps closely to Argmin's, but the implementations are not
-promised to produce identical trial trajectories.
+configuration maps closely to Argmin's, but the implementations are not promised
+to produce identical trial trajectories.
 
 Like Argmin, Basin's exact checkpoints capture the solver and state together.
 Basin also records the authoritative evaluation counters. Simulated annealing
-and global-best PSO keep their evolving stochastic data in the solver, so use
-an exact checkpoint to continue either run. Use a state-only file from
-`CheckpointWriter` to warm-start a fresh run. See
-[Save and resume a run](../getting-started/#save-and-resume-a-run).
+and global-best PSO keep their evolving stochastic data in the solver, so use an
+exact checkpoint to continue either run. Use a state-only file from
+`CheckpointWriter` to warm-start a fresh run. See [Save and resume a
+run](../getting-started/#save-and-resume-a-run).
 
 During a real migration, keep both integrations behind features until tests
 compare numerical results, termination behavior, evaluation counts, and runtime.
@@ -843,8 +856,8 @@ after the like-for-like path passes.
 
 ## Next
 
-- [Getting started](../getting-started/): state construction and shared
-  solver convergence settings.
+- [Getting started](../getting-started/): state construction and shared solver
+  convergence settings.
 - [Solvers](../solvers/): supported algorithms and problem requirements.
 - [Full Basin API](https://docs.rs/basin): authoritative type and method
   documentation.
