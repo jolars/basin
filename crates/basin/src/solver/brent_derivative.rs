@@ -268,10 +268,17 @@ where
         } else {
             -tol1
         };
-        // A composed stopping policy may continue after native width convergence.
-        // Its minimum displacement must still respect the original closed domain.
-        let u = (s.x + step).max(s.a).min(s.b);
-        if u == s.x {
+        // The minimum step can reach an endpoint before the bracket meets
+        // the width tolerance. Bisect toward that endpoint to keep shrinking
+        // the bracket without replaying its endpoint.
+        let mut u = s.x + step;
+        if u <= s.a || u >= s.b {
+            let endpoint = u.max(s.a).min(s.b);
+            s.e = endpoint - s.x;
+            u = half * s.x + half * endpoint;
+            s.d = u - s.x;
+        }
+        if u == s.x || !(s.a < u && u < s.b) {
             return Ok(crate::SolverStep::stopped(
                 state,
                 Termination::numerical_stall(

@@ -71,6 +71,42 @@ impl<F> Scalar for F where
 {
 }
 
+/// Result of applying a scaled addition to a trial point.
+pub enum ScaledAddOutcome {
+    /// The backend did not inspect the result.
+    Unknown,
+    /// The result is unchanged. Its finiteness may be unknown.
+    Unchanged,
+    /// The result changed. Its finiteness may be unknown.
+    Changed,
+    /// At least one resulting component is non-finite.
+    NonFinite {
+        /// Whether any component changed.
+        changed: bool,
+    },
+}
+
+impl ScaledAddOutcome {
+    fn from_components(changed: bool, finite: bool) -> Self {
+        if !finite {
+            Self::NonFinite { changed }
+        } else if changed {
+            Self::Changed
+        } else {
+            Self::Unchanged
+        }
+    }
+
+    fn changed(self) -> Option<bool> {
+        match self {
+            Self::Unknown => None,
+            Self::Unchanged => Some(false),
+            Self::Changed => Some(true),
+            Self::NonFinite { changed } => Some(changed),
+        }
+    }
+}
+
 /// In-place `self ← self + scalar · other`. Backend-generic vector update.
 ///
 /// The scalar type defaults to `f64` so the legacy `ScaledAdd<f64>` bound
@@ -89,6 +125,20 @@ pub trait ScaledAdd<S = f64> {
     ) -> Option<bool> {
         self.scaled_add(scalar, other);
         None
+    }
+
+    /// Apply a scaled addition and report changes and any detected non-finite
+    /// components. The default preserves the backend's change detection.
+    fn scaled_add_trial(
+        &mut self,
+        scalar: S,
+        other: &Self,
+    ) -> ScaledAddOutcome {
+        match self.scaled_add_with_change(scalar, other) {
+            Some(true) => ScaledAddOutcome::Changed,
+            Some(false) => ScaledAddOutcome::Unchanged,
+            None => ScaledAddOutcome::Unknown,
+        }
     }
 }
 

@@ -12,7 +12,8 @@ use super::sample::{
 use super::{
     ClampInPlace, ComponentDivAssign, ComponentMaxAssign, ComponentMulAssign,
     ComponentZip, Dot, FloorZerosInPlace, NegInPlace, NormInfinity,
-    NormSquared, ScaleInPlace, ScaledAdd, VectorIndex, VectorLen,
+    NormSquared, ScaleInPlace, ScaledAdd, ScaledAddOutcome, VectorIndex,
+    VectorLen,
 };
 
 impl<F: Scalar> ScaledAdd<F> for Vec<F> {
@@ -28,14 +29,24 @@ impl<F: Scalar> ScaledAdd<F> for Vec<F> {
         scalar: F,
         other: &Self,
     ) -> Option<bool> {
+        self.scaled_add_trial(scalar, other).changed()
+    }
+
+    fn scaled_add_trial(
+        &mut self,
+        scalar: F,
+        other: &Self,
+    ) -> ScaledAddOutcome {
         let mut changed = false;
+        let mut finite = true;
         assert_eq!(self.len(), other.len(), "scaled_add: length mismatch");
         for (x, y) in self.iter_mut().zip(other.iter()) {
             let next = *x + scalar * *y;
             changed |= next != *x;
+            finite &= next.is_finite();
             *x = next;
         }
-        Some(changed)
+        ScaledAddOutcome::from_components(changed, finite)
     }
 }
 

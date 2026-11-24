@@ -2,7 +2,7 @@
 pub mod diagnostics;
 use diagnostics::{Bracket, SearchExit, SearchTrial, Trace, TracedMoreThuente};
 
-use crate::core::math::{Dot, Scalar, ScaledAdd};
+use crate::core::math::{Dot, Scalar, ScaledAdd, ScaledAddOutcome};
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::line_search::{
     LineSearch, LineSearchBounds, LineSearchOutcome, LineSearchResult,
@@ -244,19 +244,35 @@ impl<F: Scalar> MoreThuente<F> {
             return Ok(LineSearchResult::new(LineSearchOutcome::Step(zero)));
         }
 
-        // Skip steps that round to the starting point before evaluating.
+        // Expand rounded-away trials. If expansion overflows, bisect
+        // between the last unchanged step and the non-finite trial.
         let mut stp = self.alpha_init;
         let mut trial = param.clone();
         let expansion_limit = self.stpmax.min(F::max_value());
-        while trial.scaled_add_with_change(stp, direction) == Some(false) {
-            let expanded = (stp + stp).min(expansion_limit);
-            if expanded <= stp {
+        let mut unchanged = zero;
+        let mut non_finite = None;
+        loop {
+            let next = match trial.scaled_add_trial(stp, direction) {
+                ScaledAddOutcome::Unchanged => {
+                    unchanged = stp;
+                    match non_finite {
+                        Some(upper) => stp + p5 * (upper - stp),
+                        None => (stp + stp).min(expansion_limit),
+                    }
+                }
+                ScaledAddOutcome::NonFinite { .. } => {
+                    non_finite = Some(stp);
+                    (unchanged + p5 * (stp - unchanged)).max(self.stpmin)
+                }
+                ScaledAddOutcome::Changed | ScaledAddOutcome::Unknown => break,
+            };
+            if next <= unchanged || non_finite == Some(next) {
                 trace.record_exit(SearchExit::Warning, Some(zero));
                 return Ok(LineSearchResult::new(LineSearchOutcome::Step(
                     zero,
                 )));
             }
-            stp = expanded;
+            stp = next;
             trial.clone_from(param);
         }
 

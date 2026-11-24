@@ -16,7 +16,7 @@ use super::{
     FloorZerosInPlace, GeneralRankOneUpdate, GramMatrix, LinearSolveError,
     LinearSolveSpd, MatDiagonal, MatTransposeVec, MatVec, MatrixFromDiagonal,
     MatrixIdentity, MaxDiagonal, NegInPlace, NormInfinity, NormSquared,
-    RankOneUpdate, ScaleInPlace, ScaledAdd, SymmetricEigen,
+    RankOneUpdate, ScaleInPlace, ScaledAdd, ScaledAddOutcome, SymmetricEigen,
     SymmetricEigenError, VectorIndex, VectorLen,
 };
 
@@ -36,14 +36,24 @@ where
         scalar: F,
         other: &Self,
     ) -> Option<bool> {
+        self.scaled_add_trial(scalar, other).changed()
+    }
+
+    fn scaled_add_trial(
+        &mut self,
+        scalar: F,
+        other: &Self,
+    ) -> ScaledAddOutcome {
         let mut changed = false;
+        let mut finite = true;
         assert_eq!(self.shape(), other.shape(), "scaled_add: shape mismatch");
         self.zip_mut_with(other, |x, y| {
             let next = *x + scalar * *y;
             changed |= next != *x;
+            finite &= next.is_finite();
             *x = next;
         });
-        Some(changed)
+        ScaledAddOutcome::from_components(changed, finite)
     }
 }
 
