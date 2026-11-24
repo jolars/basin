@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.15.3](https://github.com/jolars/basin/compare/v1.15.2...v1.15.3) (2026-11-24)
+
+### Bug Fixes
+- handle all-fixed boxes in GBNM ([`97d3786`](https://github.com/jolars/basin/commit/97d378681d169d9b98954c2b9284fc6fe2f1cad3)), refs [#109](https://github.com/jolars/basin/issues/109)
+- keep BrentDerivative trials inside the bracket ([`086c20d`](https://github.com/jolars/basin/commit/086c20dfddaf54288cd38fb6cdd133feb6f14828)), refs [#109](https://github.com/jolars/basin/issues/109)
+- **deps:** patch undici denial of service ([`502f574`](https://github.com/jolars/basin/commit/502f574a0239a21b9c7591b81e5a92aaf468660f))
+- **ci:** restrict default workflow token permissions ([`d1c66cf`](https://github.com/jolars/basin/commit/d1c66cf05d05242f8627e0446ef7fc86220f999d))
+- expand rounded-away More-Thuente trials ([`36fcf91`](https://github.com/jolars/basin/commit/36fcf913378622b62b0c1f1bd16a81404ad90e5e))
+
 ## [1.15.2](https://github.com/jolars/basin/compare/v1.15.1...v1.15.2) (2026-10-19)
 
 ### Bug Fixes
