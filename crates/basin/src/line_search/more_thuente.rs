@@ -1,4 +1,4 @@
-use crate::core::math::{Dot, Scalar, ScaledAdd};
+use crate::core::math::{Dot, Scalar, ScaledAdd, ScaledAddOutcome};
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::line_search::{
     LineSearch, LineSearchBounds, LineSearchOutcome, LineSearchResult,
@@ -52,7 +52,9 @@ pub struct MoreThuente<F = f64> {
     /// `xtol`-warning if the bracket has collapsed to relative size
     /// `≤ xtol`. Default `0.1` (Fortran `lnsrlb` constant).
     pub xtol: F,
-    /// Initial trial step. Default `1.0` (the quasi-Newton unit step).
+    /// Initial trial step. The search grows it within the step bounds if
+    /// the backend detects that the update leaves the parameter unchanged.
+    /// Default `1.0` (the quasi-Newton unit step).
     pub alpha_init: F,
     /// Hard lower bound on the step. Default `0.0`.
     pub stpmin: F,
@@ -200,6 +202,41 @@ impl<F: Scalar> MoreThuente<F> {
             return Ok(LineSearchResult::new(LineSearchOutcome::Step(zero)));
         }
 
+        if self.maxfev == 0 {
+            return Ok(LineSearchResult::new(LineSearchOutcome::Step(zero)));
+        }
+
+        // Expand rounded-away trials. If expansion overflows, bisect
+        // between the last unchanged step and the non-finite trial.
+        let mut stp = self.alpha_init;
+        let mut trial = param.clone();
+        let expansion_limit = self.stpmax.min(F::max_value());
+        let mut unchanged = zero;
+        let mut non_finite = None;
+        loop {
+            let next = match trial.scaled_add_with_change(stp, direction) {
+                ScaledAddOutcome::Unchanged => {
+                    unchanged = stp;
+                    match non_finite {
+                        Some(upper) => stp + p5 * (upper - stp),
+                        None => (stp + stp).min(expansion_limit),
+                    }
+                }
+                ScaledAddOutcome::NonFinite => {
+                    non_finite = Some(stp);
+                    (unchanged + p5 * (stp - unchanged)).max(self.stpmin)
+                }
+                ScaledAddOutcome::Changed | ScaledAddOutcome::Unknown => break,
+            };
+            if next <= unchanged || non_finite == Some(next) {
+                return Ok(LineSearchResult::new(LineSearchOutcome::Step(
+                    zero,
+                )));
+            }
+            stp = next;
+            trial.clone_from(param);
+        }
+
         // Initialization (Fortran lines 3514–3541).
         let mut brackt = false;
         let mut stage: u8 = 1;
@@ -214,14 +251,14 @@ impl<F: Scalar> MoreThuente<F> {
         let mut fy = finit;
         let mut gy = ginit;
         let mut stmin = zero;
-        let mut stmax = self.alpha_init + xtrapu * self.alpha_init;
+        let mut stmax = stp + xtrapu * stp;
 
-        let mut stp = self.alpha_init;
-
-        for _ in 0..self.maxfev {
+        for iteration in 0..self.maxfev {
             // Evaluate f(stp), g(stp): Fortran `task = 'FG'` callback.
-            let mut trial = param.clone();
-            trial.scaled_add(stp, direction);
+            if iteration > 0 {
+                trial.clone_from(param);
+                trial.scaled_add(stp, direction);
+            }
             let (f, g_full) = problem.cost_and_gradient(&trial)?;
             let g = g_full.dot(direction);
 

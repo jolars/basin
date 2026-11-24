@@ -21,7 +21,8 @@ use super::sample::{
 use super::{
     ClampInPlace, ComponentDivAssign, ComponentMaxAssign, ComponentMulAssign,
     ComponentZip, Dot, FloorZerosInPlace, NegInPlace, NormInfinity,
-    NormSquared, ScaleInPlace, ScaledAdd, VectorIndex, VectorLen,
+    NormSquared, ScaleInPlace, ScaledAdd, ScaledAddOutcome, VectorIndex,
+    VectorLen,
 };
 
 // The vector-tier ops used here (`Col::iter`, `Col::from_fn`, indexing, the
@@ -34,6 +35,25 @@ impl<F: Scalar> ScaledAdd<F> for Col<F> {
         assert_eq!(self.nrows(), other.nrows(), "scaled_add: shape mismatch");
         faer::zip!(self.as_mut(), other.as_ref())
             .for_each(|faer::unzip!(x, y)| *x = *x + scalar * *y);
+    }
+
+    fn scaled_add_with_change(
+        &mut self,
+        scalar: F,
+        other: &Self,
+    ) -> ScaledAddOutcome {
+        let mut changed = false;
+        let mut finite = true;
+        assert_eq!(self.nrows(), other.nrows(), "scaled_add: shape mismatch");
+        faer::zip!(self.as_mut(), other.as_ref()).for_each(
+            |faer::unzip!(x, y)| {
+                let next = *x + scalar * *y;
+                changed |= next != *x;
+                finite &= next.is_finite();
+                *x = next;
+            },
+        );
+        ScaledAddOutcome::from_components(changed, finite)
     }
 }
 

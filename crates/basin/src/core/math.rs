@@ -71,6 +71,30 @@ impl<F> Scalar for F where
 {
 }
 
+/// Result of applying a scaled addition to a trial point.
+pub enum ScaledAddOutcome {
+    /// The backend did not inspect the result.
+    Unknown,
+    /// All components are finite and unchanged.
+    Unchanged,
+    /// All components are finite and at least one changed.
+    Changed,
+    /// At least one resulting component is non-finite.
+    NonFinite,
+}
+
+impl ScaledAddOutcome {
+    fn from_components(changed: bool, finite: bool) -> Self {
+        if !finite {
+            Self::NonFinite
+        } else if changed {
+            Self::Changed
+        } else {
+            Self::Unchanged
+        }
+    }
+}
+
 /// In-place `self ← self + scalar · other`. Backend-generic vector update.
 ///
 /// The scalar type defaults to `f64` so the legacy `ScaledAdd<f64>` bound
@@ -79,6 +103,17 @@ impl<F> Scalar for F where
 pub trait ScaledAdd<S = f64> {
     /// Add `scalar · other` into `self` in place.
     fn scaled_add(&mut self, scalar: S, other: &Self);
+
+    /// Apply the scaled addition and report whether the trial is finite
+    /// and differs from the original point.
+    fn scaled_add_with_change(
+        &mut self,
+        scalar: S,
+        other: &Self,
+    ) -> ScaledAddOutcome {
+        self.scaled_add(scalar, other);
+        ScaledAddOutcome::Unknown
+    }
 }
 
 /// Squared and unsquared Euclidean norms.
