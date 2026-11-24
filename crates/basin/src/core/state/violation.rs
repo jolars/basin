@@ -79,9 +79,8 @@ pub enum ViolationTransformation {
 /// clones and uses copy-on-write when a builder changes it.
 ///
 /// Destructuring must include `..`.
-/// Future optional metadata must default to behavior compatible with these
-/// constructors throughout Basin 2.x. Serialization compatibility is separate
-/// from this source-compatibility contract.
+/// Within a major release, optional metadata defaults preserve constructor
+/// behavior. Serialization compatibility follows a separate contract.
 ///
 /// ```
 /// use basin::{SelectedState, ViolationMeasure, ViolationReport};

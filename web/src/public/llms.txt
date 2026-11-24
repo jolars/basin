@@ -66,7 +66,7 @@
 ## Development
 
 - [Migrating to Basin 2.0](https://basin.rs/guide/migrating-to-v2/): upgrade from Basin 1.x, including constraints, states, termination reports, solver settings, and checkpoints
-- [Migrating to Basin 3.0](https://basin.rs/guide/migrating-to-v3/): development API with optional constraint declarations and standalone objective and residual traits
+- [Migrating to Basin 3.0](https://basin.rs/guide/migrating-to-v3/): upgrade to optional constraint declarations and standalone objective and residual traits
 - [Changelog](https://basin.rs/guide/changelog/): release notes and changes
 - [Contributing to Basin](https://basin.rs/guide/contributing/): development, verification, and release workflows
 

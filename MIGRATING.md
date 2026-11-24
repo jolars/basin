@@ -1,7 +1,5 @@
-# Migrating to Basin 2.0
+# Migrating Basin applications
 
-See the [Basin 2.0 migration guide](https://basin.rs/guide/migrating-to-v2/).
-
-The published site follows the latest stable release. During 2.0 development,
-you can read the [guide's source](web/src/guide/migrating-to-v2/index.md)
-in this repository.
+- [Migrating to Basin 3.0](https://basin.rs/guide/migrating-to-v3/)
+- [Migrating to Basin 2.0](https://basin.rs/guide/migrating-to-v2/)
+- [Migrating from Argmin](https://basin.rs/guide/migrating-from-argmin/)

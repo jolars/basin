@@ -24,8 +24,7 @@ const FORMAT_VERSION: u32 = 1;
 /// Available on native targets with `checkpoint-postcard` or `serde`.
 ///
 /// Files start with `BASINST\0` and a little-endian `u32` format version of 1,
-/// followed by the postcard payload. Basin 2.0 reads only this format. See
-/// [`read_checkpoint`] for migration from legacy 1.x files.
+/// followed by the postcard payload.
 ///
 /// State-only checkpointing is an observer's job in Basin. It records an
 /// iterate for a later warm start without promising an identical trajectory.
@@ -141,14 +140,9 @@ where
 /// format markers, unsupported versions, malformed data, and trailing bytes
 /// return [`io::ErrorKind::InvalidData`].
 ///
-/// # Migrating from Basin 1.x
-///
-/// Basin 2.0 no longer reads unprefixed bincode files. Before upgrading, load
-/// them with a compatible 1.x release and rewrite them using
-/// [`CheckpointWriter`] from Basin 1.15 or later in the 1.x series, which writes
-/// postcard. The concrete state's serialized layout must still match. If it
-/// changes, export parameters from the 1.x application and construct a fresh
-/// state in 2.0. State snapshots do not promise exact continuation.
+/// The file must match the concrete state's serialized layout. See the
+/// [migration guide](https://basin.rs/guide/migrating-to-v2/#checkpoint-files)
+/// for moving saved runs from older formats.
 pub fn read_checkpoint<S: DeserializeOwned>(
     path: impl AsRef<Path>,
 ) -> io::Result<S> {

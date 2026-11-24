@@ -1,7 +1,6 @@
 # Migrating to Basin 3.0
 
-Basin 3.0 makes constraint declarations optional. This guide describes the
-development API on `main`; Basin 2.0 remains the published stable release.
+Basin 3.0 makes constraint declarations optional.
 For an upgrade from Basin 1.x, first follow the
 [Basin 2.0 migration guide](../migrating-to-v2/), then apply these changes.
 

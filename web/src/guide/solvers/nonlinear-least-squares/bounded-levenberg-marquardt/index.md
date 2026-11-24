@@ -103,7 +103,4 @@ Nalgebra-sparse and faer-sparse Jacobians are also supported. Their Gram
 matrices must contain the diagonal in the CSC pattern for damping. Use
 `BoundedLevenbergMarquardt::default()` for `f32`.
 
-This solver was named `Trf` in Basin 1.x. The current `TrustRegionReflective` is
-a separate algorithm with reflected steps and an explicit radius.
-
 <References :entries='["branch-coleman-li-1999"]' />

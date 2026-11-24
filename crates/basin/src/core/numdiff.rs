@@ -288,7 +288,7 @@ impl<P, const SQUARE: bool, F: Scalar, J> FiniteDiff<P, SQUARE, F, J> {
     /// Use the matrix associated with the parameter vector by
     /// [`DenseMatrixFromFn`] for the Hessian.
     ///
-    /// This explicitly selects the default representation for Basin 3.x.
+    /// This selects the default Hessian representation.
     /// Custom backends can supply this Hessian through [`DenseMatrixFromFn`].
     /// The Jacobian selection and finite-difference settings carry over.
     pub fn with_dense_hessian(self) -> FiniteDiff<P, false, F, J> {

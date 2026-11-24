@@ -19,17 +19,15 @@ cargo add basin --features nalgebra
 
 The moving aliases are `nalgebra`, `ndarray`, and `faer`.
 Exact version features are also available for nalgebra 0.32–0.35, ndarray
-0.15–0.17, and faer 0.22–0.24. The deprecated `nalgebra_latest`,
-`ndarray_latest`, and `faer_latest` features remain as synonyms. When several
-releases of one backend are enabled, Basin implements each independently.
+0.15–0.17, and faer 0.22–0.24. When several releases of one backend are
+enabled, Basin implements each independently.
 The package MSRV is Rust 1.87; nalgebra 0.35 and `nalgebra` require Rust
 1.89. See [backend benchmarks](../benchmarks/backends/) for how solve time
 scales with different backends.
 
-In Basin 2.0, no features are enabled by default. Enable `problems` with
+Basin enables no features by default. Enable `problems` with
 `cargo add basin --features problems` to use the standard test-function corpus
-in `basin::problems`. Basin 1.x enables this feature by default; on that release
-line, `default-features = false` excludes it.
+in `basin::problems`.
 
 ## A simple example
 
@@ -133,9 +131,9 @@ iterations, so a single iteration can take the run past an evaluation limit.
 
 ## Save and resume a run
 
-Use `Executor::resume_from_checkpoint` in place of the deprecated
-`Executor::resume`. An exact checkpoint holds the solver, state, and
-cumulative evaluation counts. For a completed run, capture it with
+Use `Executor::resume_from_checkpoint` to continue a saved run. An exact
+checkpoint holds the solver, state, and cumulative evaluation counts. For a
+completed run, capture it with
 `run_with_solver()?.into_checkpoint()`. For a paused run, consume the stepper
 with `Stepper::into_checkpoint`.
 
@@ -151,8 +149,8 @@ and checkpoint sinks you need. Exact continuation skips solver initialization.
 The iteration limit is absolute, so a checkpoint at iteration 400 leaves up to
 600 more iterations in this example.
 
-Enable `checkpoint-postcard` to save checkpoints to files on native targets.
-In Basin 3.x, `serde` also enables these APIs. Attach `ExactCheckpointWriter`
+Enable `checkpoint-postcard` or `serde` to save checkpoints to files on native
+targets. Attach `ExactCheckpointWriter`
 with `Executor::checkpoint_with`, then load the file with
 `read_exact_checkpoint`. The reader checks the file format, exact Basin
 version, and concrete solver and state types. For a fresh run from a state-only

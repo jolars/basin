@@ -225,7 +225,7 @@ pub enum ConvergenceTest {
 /// rejected trials, rather than a reconstruction from the final iterate.
 ///
 /// New variants may be added, so matches need a fallback arm. Existing variants
-/// keep their field lists throughout Basin 2.x and support direct construction
+/// keep their field lists within a major release and support direct construction
 /// and complete field patterns. Different mathematical representations use new
 /// variants, as with [`Self::UpperBound`] and [`Self::FactoredUpperBound`].
 /// Optional reporting metadata belongs on [`ConvergenceCriterion`].
@@ -569,8 +569,7 @@ pub enum PartialResultPolicy {
 }
 
 impl<F: Scalar> Termination<F> {
-    /// Native identities retained for diagnostic consumers migrating from 1.x.
-    /// The returned list is derived from this event, never from solver history.
+    /// Native convergence-test identifiers derived from this event.
     pub fn native_convergence_tests(
         &self,
     ) -> Vec<crate::NativeConvergenceTest> {
@@ -766,7 +765,7 @@ impl<F: Scalar> Termination<F> {
 
 /// Compatibility identifiers for bindings and compact status displays.
 ///
-/// Use [`Self::as_u8`] for the stable Basin 1.x numeric mapping. The
+/// Use [`Self::as_u8`] for the stable numeric mapping. The
 /// structured [`Termination`] carries the complete stopping explanation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -858,7 +857,7 @@ impl TerminationCode {
 }
 
 impl TerminationCode {
-    /// Stable numeric binding code, preserving the Basin 1.x mapping (0–23).
+    /// Stable numeric binding code (0–23).
     ///
     /// | Code | Identifier |
     /// | --- | --- |

@@ -5,8 +5,8 @@
 //! `CheckpointWriter`, which intentionally writes only a state for a later
 //! warm start.
 //!
-//! On native targets, enable `checkpoint-postcard` for built-in Postcard file
-//! readers and writers. In Basin 3.x, `serde` also enables these APIs.
+//! On native targets, enable `checkpoint-postcard` or `serde` for built-in
+//! Postcard file readers and writers.
 //!
 //! [`Stepper::into_checkpoint`](crate::Stepper::into_checkpoint) consumes a
 //! paused or cleanly stopped run without cloning or serialization. For a
@@ -347,8 +347,7 @@ mod file {
     /// [`Executor::resume_from_checkpoint`](crate::Executor::resume_from_checkpoint).
     ///
     /// Writes format version 4 with postcard-encoded metadata and payload.
-    /// Older Basin releases that support only earlier formats cannot read these files.
-    /// See [`read_exact_checkpoint`] for migration from Basin 1.x.
+    /// The file records the exact Basin version and the solver and state types.
     #[derive(Clone, Debug)]
     pub struct ExactCheckpointWriter {
         path: PathBuf,
@@ -435,14 +434,8 @@ mod file {
     /// Unsupported formats, mismatched metadata, malformed data, and trailing
     /// bytes return [`io::ErrorKind::InvalidData`].
     ///
-    /// # Migrating from Basin 1.x
-    ///
-    /// Basin 2.0 no longer reads formats 1–3, including bincode version 1.
-    /// Exact checkpoints from 1.x cannot continue in 2.0, even in postcard format,
-    /// because the exact Basin version must match. Finish the run with the
-    /// matching 1.x application, or load the checkpoint there and export its
-    /// parameters to initialize a fresh 2.0 run. Rewriting the format or editing
-    /// the version metadata does not make solver and state layouts compatible.
+    /// See the [migration guide](https://basin.rs/guide/migrating-to-v2/#checkpoint-files)
+    /// for moving saved runs from older formats.
     pub fn read_exact_checkpoint<So, S>(
         path: impl AsRef<Path>,
     ) -> io::Result<ExactCheckpoint<So, S>>

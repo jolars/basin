@@ -143,8 +143,6 @@ the same reference in machine-readable form.
 ## Where to go next
 
 - [Getting started](getting-started/): install Basin and run your first solve.
-- [Migrating to Basin 2.0](migrating-to-v2/): upgrade constraints, progress states,
-  termination reports, solver settings, and checkpoints from Basin 1.x.
 - [Migrating from Argmin](migrating-from-argmin/): translate problem traits,
   solver configuration, errors, bounds, and observers from Argmin 0.11.
 - [Solvers](solvers/): find a starting point and browse the individual guides.

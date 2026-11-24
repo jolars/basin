@@ -76,7 +76,7 @@ backend release at the next Basin upgrade. If dependency feature unification
 enables several versions of one backend, Basin implements every enabled version
 independently.
 
-Basin 2.0 replaces the backend-specific quasi-Newton state aliases with
+Basin uses
 [`FirstOrderState<V, F>`](https://docs.rs/basin/latest/basin/core/state/progress/struct.FirstOrderState.html).
 BFGS owns its inverse Hessian and infers the matrix through the vector's
 `DenseBackend` association. Each enabled backend version has its own
@@ -123,7 +123,7 @@ from a point. Nelder–Mead builds its default 5% simplex there; the Argmin
 simplex above uses the same coordinate perturbations. Generic stopping rules
 belong on the solver; its simplex tolerances check both simplex diameter and cost
 spread, rather than Argmin's sample standard deviation of costs alone.
-In Basin 2.0 both tests have absolute and relative defaults. The example below
+Both tests have absolute and relative defaults. The example below
 disables the relative settings to request absolute-only thresholds. An absolute
 setter alone changes its floor while leaving the relative setting enabled;
 see [Migrating to Basin 2.0](../migrating-to-v2/#nelder-mead-convergence-defaults) for details.
@@ -173,7 +173,7 @@ starting point supplies the mean, and the solver configures the initial scale.
 
 ## Common API mappings
 
-| Argmin 0.11 | Basin 2.0 |
+| Argmin 0.11 | Basin 3.x |
 | --- | --- |
 | `Executor::new(problem, solver).configure(|state| state.param(x).max_iters(n))` | `Executor::from_start(problem, solver, x).max_iter(n)` |
 | `NelderMead::new(simplex).with_sd_tolerance(tol)` | `NelderMead::new().with_absolute_simplex_size_tolerance(tol_x).with_absolute_simplex_cost_tolerance(tol_f)` |

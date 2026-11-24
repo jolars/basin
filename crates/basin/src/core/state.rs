@@ -217,9 +217,8 @@ pub trait State {
 pub trait GradientState: State {
     /// Gradient at the current [`param`](State::param), if populated.
     fn gradient(&self) -> Option<&Self::Param>;
-    /// Cumulative derivative work under the state's [`CountsMirror`]
-    /// mapping. In Basin 1.x this can include Jacobian, Hessian, and
-    /// Hessian-product evaluations as well as gradient calls.
+    /// Cumulative gradient evaluations under the state's [`CountsMirror`]
+    /// mapping.
     ///
     /// Populated by the
     /// [`Executor`](crate::core::executor::Executor) from the wrapper's

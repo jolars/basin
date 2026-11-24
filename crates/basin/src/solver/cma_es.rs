@@ -99,7 +99,7 @@ use workspace::Distribution;
 /// initial distribution and original seed, even when reusing a solver.
 /// Exact continuation retains the solver, progress, and counts together and
 /// skips initialization. With `serde`, all distribution and RNG fields serialize
-/// when `V`, `M`, and `F` do. Basin 1.x state files do not preserve this layout.
+/// when `V`, `M`, and `F` do.
 /// The refresh period defaults to one when absent from map-based formats.
 /// Binary checkpoints require the matching solver layout.
 ///
