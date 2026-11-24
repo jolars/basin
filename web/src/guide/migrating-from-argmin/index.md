@@ -173,21 +173,21 @@ starting point supplies the mean, and the solver configures the initial scale.
 
 ## Common API mappings
 
-| Argmin 0.11 | Basin 3.x |
-| --- | --- |
-| `Executor::new(problem, solver).configure(|state| state.param(x).max_iters(n))` | `Executor::from_start(problem, solver, x).max_iter(n)` |
-| `NelderMead::new(simplex).with_sd_tolerance(tol)` | `NelderMead::new().with_absolute_simplex_size_tolerance(tol_x).with_absolute_simplex_cost_tolerance(tol_f)` |
-| `LBFGS::new(MoreThuenteLineSearch::new(), m)` | `Lbfgs::new().unbounded().with_m_capacity(m)` or bounded `Lbfgsb::new()` |
-| `HagerZhangLineSearch::new()` | `HagerZhang::new()` |
-| `GaussNewtonLS` | `GaussNewton` for full steps or `LevenbergMarquardt` for damping |
-| `ParticleSwarm::new((lower, upper), n)` | `GlobalBestPso::new(seed).with_swarm_size(n)` plus problem-side `ConstraintSet<BoxBounds<V>>` and `PopulationProgress::empty()` |
-| `BrentRoot::new(lower, upper, tol)` | `BrentRoot::new(lower, upper).with_relative_position_tolerance(tol_rel).with_absolute_position_tolerance(tol_abs).solve(function)`; no `Executor` is needed |
-| `CostFunction`, `Gradient`, `Hessian`, `Residual`, `Jacobian` | Corresponding Basin traits, with one problem-owned error type |
-| Hand-written central differences | `FiniteDiff::new(problem)` or the standalone finite-difference functions |
-| Transforms, clamps, or penalties for box bounds | `ConstraintSet<BoxBounds<V>>` plus a solver that consumes bounds |
-| Argmin's general `Error` | The application's concrete error type in `CostFunction::Error` or `Residual::Error` |
-| `add_observer(observer, mode)` | `observe_with(observer, mode)` |
-| Returning an observer error to stop | A `CancellationToken` for a clean stop or a typed problem error for a hard abort |
+  | Argmin 0.11                                                                       | Basin 3.x                                                                                                                                                   |
+  | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `Executor::new(problem, solver).configure(\|state\| state.param(x).max_iters(n))` | `Executor::from_start(problem, solver, x).max_iter(n)`                                                                                                      |
+  | `NelderMead::new(simplex).with_sd_tolerance(tol)`                                 | `NelderMead::new().with_absolute_simplex_size_tolerance(tol_x).with_absolute_simplex_cost_tolerance(tol_f)`                                                 |
+  | `LBFGS::new(MoreThuenteLineSearch::new(), m)`                                     | `Lbfgs::new().unbounded().with_m_capacity(m)` or bounded `Lbfgsb::new()`                                                                                    |
+  | `HagerZhangLineSearch::new()`                                                     | `HagerZhang::new()`                                                                                                                                         |
+  | `GaussNewtonLS`                                                                   | `GaussNewton` for full steps or `LevenbergMarquardt` for damping                                                                                            |
+  | `ParticleSwarm::new((lower, upper), n)`                                           | `GlobalBestPso::new(seed).with_swarm_size(n)` plus problem-side `ConstraintSet<BoxBounds<V>>` and `PopulationProgress::empty()`                             |
+  | `BrentRoot::new(lower, upper, tol)`                                               | `BrentRoot::new(lower, upper).with_relative_position_tolerance(tol_rel).with_absolute_position_tolerance(tol_abs).solve(function)`; no `Executor` is needed |
+  | `CostFunction`, `Gradient`, `Hessian`, `Residual`, `Jacobian`                     | Corresponding Basin traits, with one problem-owned error type                                                                                               |
+  | Hand-written central differences                                                  | `FiniteDiff::new(problem)` or the standalone finite-difference functions                                                                                    |
+  | Transforms, clamps, or penalties for box bounds                                   | `ConstraintSet<BoxBounds<V>>` plus a solver that consumes bounds                                                                                            |
+  | Argmin's general `Error`                                                          | The application's concrete error type in `CostFunction::Error` or `Residual::Error`                                                                         |
+  | `add_observer(observer, mode)`                                                    | `observe_with(observer, mode)`                                                                                                                              |
+  | Returning an observer error to stop                                               | A `CancellationToken` for a clean stop or a typed problem error for a hard abort                                                                            |
 
 Tolerances with similar names need not use identical norms or stopping formulas.
 Preserve numerical behavior by comparing the final objective, parameters,
