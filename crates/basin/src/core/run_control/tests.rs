@@ -18,10 +18,12 @@ fn raw_categories_read_the_state_without_legacy_folds() {
         jacobian_evals: 7,
         hessian_evals: 11,
         hessian_product_evals: 13,
+        jacobian_product_evals: 17,
+        transpose_jacobian_product_evals: 19,
     });
     for (kind, count) in EvaluationKind::ALL
         .into_iter()
-        .zip([2, 3, 5, 7, 11, 13, 41])
+        .zip([2, 3, 5, 7, 11, 13, 17, 19, 77])
     {
         let mut control = RunControl::new().max_evaluations(kind, count + 1);
         assert_eq!(control.check(&state, 0), None);

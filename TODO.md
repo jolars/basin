@@ -16,14 +16,12 @@ for 4.0.0.
   higher-cost feasible replacement. Migrate result consumers to checked
   incumbent access where available, including composed solvers that may
   receive no inner incumbent.
-- [ ] **Exercise Jacobian products through the executor.** Extend the
-  [iterative-TRF prototype](#iterative-trf-api-prototype) to charge
-  attempted Jacobian and transpose-Jacobian products through the real
-  problem wrapper. Expand the raw budget mask and verify both categories in
-  budgets, state mirrors, nested count roll-ups, and checkpoints. Keep
-  hidden finite-difference probes outside the existing request counters.
-  Test automatic scratch reuse with residual-only and operator-only robust
-  problems, custom matrices, and concurrent calls.
+- [x] **Exercise Jacobian products through the executor.** The
+  [iterative-TRF prototype](#iterative-trf-api-prototype) charges attempted
+  products through `Problem` and checks budgets, state mirrors, nested counts,
+  and exact checkpoints. Finite-difference probes stay outside request counts.
+  Tests cover typed scratch reuse with residual-only and operator-only robust
+  problems, a custom Jacobian, and overlapping callbacks.
 - [ ] **Prototype explicit serial and threaded evaluation.** Add a downstream
   fixture where one dependency enables `parallel` and another uses a local
   callback. Test both execution paths, including finite differences and
@@ -663,10 +661,10 @@ The intended production entry is a separate
 `IterativeTrustRegionReflective<F = f64>` with `PointState<V, F>` and the
 existing box-problem declaration. It will require both product capabilities and
 vector operations, without `Jacobian`, `MatrixIndex`, `ScaleRowsInPlace`, matrix
-factorization, or matrix-entry access. This experiment implements its model
-preparation and operator consumption signatures, not a `Solver` impl or settings
-builders. Production LSMR tolerances, iteration limits, and regularization must
-be explicit algorithm controls. Automatic Jacobian-column scaling would require
+factorization, or matrix-entry access. This experiment implements model
+preparation and operator consumption. A deterministic test driver exercises the
+executor lifecycle. Production LSMR tolerances, iteration limits, and
+regularization must be explicit algorithm controls. Automatic Jacobian-column scaling would require
 a separate capability or explicit user scales; it must not introduce a hidden
 matrix-entry requirement.
 
@@ -696,11 +694,13 @@ The prototype establishes these contracts:
   before invoking callbacks, including failures. Robust weighting adds no
   evaluations. Do not charge matrix `jacobian_evals` for products. Internal
   probes stay excluded under the existing wrapper-boundary contract. The
-  prototype's `OperatorCounts` pairs real `EvalCounts` with two proposed fields
-  and tests totals, deltas, and composition. Production must add those fields to
-  the non-exhaustive `EvalCounts` and integrate state mirrors, budgets,
-  checkpoint/serde storage, and inner roll-ups before shipping the solver. The
-  experiment does not prove that executor integration yet.
+  unit-test build adds both categories to `EvalCounts` and exercises raw
+  budgets, state mirrors, inner-run deltas and merges, and exact checkpoint
+  resume. The release build retains its six-counter serialization.
+- Typed scratch belongs to each test execution. An owned callback seeds each
+  output, and later requests use the matching in-place callback. The dense
+  custom-matrix probe preserves fused dispatch. Concurrent evaluations share an
+  immutable robust problem and have independent scratch.
 - Callback errors propagate unchanged. Invalid initial residuals or loss models
   cannot produce a linearization; non-finite trial residuals yield infinite cost
   without replacing the model. Shape and non-finite derivative guards are
@@ -720,9 +720,8 @@ implementation](https://github.com/scipy/scipy/blob/v1.16.2/scipy/optimize/_lsq/
 and [its operator and robust-scaling
 helpers](https://github.com/scipy/scipy/blob/v1.16.2/scipy/optimize/_lsq/common.py).
 LSMR, the two-dimensional subspace solve, reflective step selection, sparse
-adapters, coloring, and production accounting/checkpoint integration remain
-future work. This prototype establishes the additive API path, not numerical
-convergence or performance of a large-scale solver.
+adapters, coloring, and public product accounting remain future work. Numerical
+convergence and large-scale performance still need validation.
 
 ### Constrained-DE API prototype
 

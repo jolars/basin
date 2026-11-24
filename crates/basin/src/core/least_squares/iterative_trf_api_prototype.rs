@@ -5,8 +5,10 @@
 
 use super::*;
 use crate::core::constraint::evaluation::BoxProblem;
-use crate::{BoxBounds, ConstraintSet, Constraints, EvalCounts, Problem};
+use crate::{BoxBounds, ConstraintSet, Constraints, Problem};
 use std::{cell::RefCell, rc::Rc};
+
+mod executor;
 
 /// Independent capabilities: neither requires a Jacobian associated type.
 /// Products are derivatives of the raw residual at x, pure and linear in v.
@@ -17,6 +19,15 @@ trait JacobianProduct: Residual {
         x: &Self::Param,
         v: &Self::Param,
     ) -> Result<Self::Output, Self::Error>;
+    fn jacobian_product_into(
+        &self,
+        x: &Self::Param,
+        v: &Self::Param,
+        out: &mut Self::Output,
+    ) -> Result<(), Self::Error> {
+        *out = self.jacobian_product(x, v)?;
+        Ok(())
+    }
 }
 trait TransposeJacobianProduct: Residual {
     fn transpose_jacobian_product(
@@ -24,57 +35,14 @@ trait TransposeJacobianProduct: Residual {
         x: &Self::Param,
         v: &Self::Output,
     ) -> Result<Self::Param, Self::Error>;
-}
-
-/// Models adding two fields to the non-exhaustive production EvalCounts.
-/// Production must put these fields in EvalCounts itself, so states, budgets,
-/// checkpoints, serialization, and inner roll-ups retain one source of truth.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct OperatorCounts {
-    existing: EvalCounts,
-    jacobian_product_evals: u64,
-    transpose_jacobian_product_evals: u64,
-}
-impl OperatorCounts {
-    fn total_work(&self) -> u64 {
-        self.existing.total_work()
-            + self.jacobian_product_evals
-            + self.transpose_jacobian_product_evals
-    }
-    fn delta_since(&self, base: &Self) -> Self {
-        Self {
-            existing: self.existing.delta_since(&base.existing),
-            jacobian_product_evals: self.jacobian_product_evals
-                - base.jacobian_product_evals,
-            transpose_jacobian_product_evals: self
-                .transpose_jacobian_product_evals
-                - base.transpose_jacobian_product_evals,
-        }
-    }
-    fn add(&mut self, other: &Self) {
-        self.existing.add(&other.existing);
-        self.jacobian_product_evals += other.jacobian_product_evals;
-        self.transpose_jacobian_product_evals +=
-            other.transpose_jacobian_product_evals;
-    }
-}
-
-struct OperatorProblem<P> {
-    problem: Problem<P>,
-    products: OperatorCounts,
-}
-impl<P> OperatorProblem<P> {
-    fn new(problem: P) -> Self {
-        Self {
-            problem: Problem::new(problem),
-            products: OperatorCounts::default(),
-        }
-    }
-    fn counts(&self) -> OperatorCounts {
-        OperatorCounts {
-            existing: *self.problem.counts(),
-            ..self.products
-        }
+    fn transpose_jacobian_product_into(
+        &self,
+        x: &Self::Param,
+        v: &Self::Output,
+        out: &mut Self::Param,
+    ) -> Result<(), Self::Error> {
+        *out = self.transpose_jacobian_product(x, v)?;
+        Ok(())
     }
 }
 
@@ -127,6 +95,74 @@ where
     }
 }
 
+struct RawCallbacks<P, F>(P, std::marker::PhantomData<F>);
+
+impl<P: OperatorObjective<F>, F: Scalar> Residual for RawCallbacks<P, F> {
+    type Param = Param<P, F>;
+    type Output = Residuals<P, F>;
+    type Error = Error<P, F>;
+
+    fn residual(&self, x: &Self::Param) -> Result<Self::Output, Self::Error> {
+        self.0.raw().residual(x)
+    }
+
+    fn residual_into(
+        &self,
+        x: &Self::Param,
+        out: &mut Self::Output,
+    ) -> Result<(), Self::Error> {
+        self.0.raw().residual_into(x, out)
+    }
+}
+
+fn counted<P: OperatorObjective<F>, F: Scalar>(
+    p: P,
+) -> Problem<RawCallbacks<P, F>> {
+    Problem::new(RawCallbacks(p, std::marker::PhantomData))
+}
+
+impl<P: OperatorObjective<F>, F: Scalar> Problem<RawCallbacks<P, F>> {
+    fn jacobian_product(
+        &mut self,
+        x: &Param<P, F>,
+        v: &Param<P, F>,
+    ) -> Result<Residuals<P, F>, Error<P, F>> {
+        self.counts_mut().jacobian_product_evals += 1;
+        self.inner().0.raw().jacobian_product(x, v)
+    }
+
+    fn transpose_jacobian_product(
+        &mut self,
+        x: &Param<P, F>,
+        v: &Residuals<P, F>,
+    ) -> Result<Param<P, F>, Error<P, F>> {
+        self.counts_mut().transpose_jacobian_product_evals += 1;
+        self.inner().0.raw().transpose_jacobian_product(x, v)
+    }
+    fn jacobian_product_into(
+        &mut self,
+        x: &Param<P, F>,
+        v: &Param<P, F>,
+        out: &mut Residuals<P, F>,
+    ) -> Result<(), Error<P, F>> {
+        self.counts_mut().jacobian_product_evals += 1;
+        self.inner().0.raw().jacobian_product_into(x, v, out)
+    }
+
+    fn transpose_jacobian_product_into(
+        &mut self,
+        x: &Param<P, F>,
+        v: &Residuals<P, F>,
+        out: &mut Param<P, F>,
+    ) -> Result<(), Error<P, F>> {
+        self.counts_mut().transpose_jacobian_product_evals += 1;
+        self.inner()
+            .0
+            .raw()
+            .transpose_jacobian_product_into(x, v, out)
+    }
+}
+
 type Param<P, F> = <<P as OperatorObjective<F>>::Raw as Residual>::Param;
 type Residuals<P, F> = <<P as OperatorObjective<F>>::Raw as Residual>::Output;
 type Error<P, F> = <<P as OperatorObjective<F>>::Raw as Residual>::Error;
@@ -135,14 +171,14 @@ type AugmentedOutput<P, F> = (Residuals<P, F>, Param<P, F>);
 /// The borrow ties products to one objective and accepted point. Rejected
 /// trial evaluations cannot replace that point or its frozen loss factors.
 struct Linearization<'a, P: OperatorObjective<F>, F: Scalar = f64> {
-    problem: &'a mut OperatorProblem<P>,
+    problem: &'a mut Problem<RawCallbacks<P, F>>,
     x: Param<P, F>,
     residual: Residuals<P, F>,
     factors: Vec<F>,
     cost: F,
 }
 fn linearize<P, F>(
-    problem: &mut OperatorProblem<P>,
+    problem: &mut Problem<RawCallbacks<P, F>>,
     x: Param<P, F>,
 ) -> Result<Option<Linearization<'_, P, F>>, Error<P, F>>
 where
@@ -154,12 +190,11 @@ where
 {
     // Constraint validation remains the future driver's responsibility. This
     // consumer only demonstrates the typed box capability and model boundary.
-    let raw = problem.problem.inner().raw();
+    let raw = problem.inner().0.raw();
     assert_eq!(raw.lower().vec_len(), x.vec_len());
     assert_eq!(raw.upper().vec_len(), x.vec_len());
-    problem.problem.counts_mut().residual_evals += 1;
-    let r = problem.problem.inner().raw().residual(&x)?;
-    let objective = problem.problem.inner();
+    let r = problem.residual(&x)?;
+    let objective = &problem.inner().0;
     let cost = objective.cost(&r);
     let Some((residual, factors)) = objective.model(&r) else {
         return Ok(None);
@@ -187,13 +222,7 @@ where
         v: &Param<P, F>,
     ) -> Result<Residuals<P, F>, Error<P, F>> {
         assert_eq!(v.vec_len(), self.x.vec_len());
-        self.problem.products.jacobian_product_evals += 1;
-        let mut out = self
-            .problem
-            .problem
-            .inner()
-            .raw()
-            .jacobian_product(&self.x, v)?;
+        let mut out = self.problem.jacobian_product(&self.x, v)?;
         assert_eq!(out.vec_len(), self.factors.len());
         multiply(&mut out, &self.factors);
         assert!(finite(&out), "invalid derivative product");
@@ -206,12 +235,8 @@ where
         assert_eq!(v.vec_len(), self.factors.len());
         let mut weighted = v.clone();
         multiply(&mut weighted, &self.factors);
-        self.problem.products.transpose_jacobian_product_evals += 1;
         let out = self
             .problem
-            .problem
-            .inner()
-            .raw()
             .transpose_jacobian_product(&self.x, &weighted)?;
         assert_eq!(out.vec_len(), self.x.vec_len());
         assert!(finite(&out), "invalid derivative product");
@@ -255,13 +280,12 @@ where
         Ok(out)
     }
     fn trial_cost(&mut self, x: &Param<P, F>) -> Result<F, Error<P, F>> {
-        self.problem.problem.counts_mut().residual_evals += 1;
-        let r = self.problem.problem.inner().raw().residual(x)?;
+        let r = self.problem.residual(x)?;
         assert_eq!(r.vec_len(), self.factors.len());
         if !finite(&r) {
             return Ok(F::infinity());
         }
-        Ok(self.problem.problem.inner().cost(&r))
+        Ok(self.problem.inner().0.cost(&r))
     }
 }
 fn num<F: Scalar>(x: f64) -> F {
@@ -289,6 +313,7 @@ struct Fixture<V, R, F> {
     upper: V,
     trace: Rc<RefCell<Vec<(u8, F)>>>,
     fail: Option<u8>,
+    in_place: Rc<[std::cell::Cell<usize>; 3]>,
     invalid: bool,
 }
 impl<V, R, F: Scalar> Fixture<V, R, F> {
@@ -300,6 +325,7 @@ impl<V, R, F: Scalar> Fixture<V, R, F> {
             upper: make_param(&[num(5.0); 2]),
             trace: Rc::default(),
             fail: None,
+            in_place: Default::default(),
             invalid: false,
         }
     }
@@ -312,22 +338,12 @@ impl<V, R, F: Scalar> Fixture<V, R, F> {
         }
     }
 }
-impl<V, R, F> Constraints for Fixture<V, R, F> {
-    type Set = ConstraintSet<BoxBounds<V>>;
-    fn constraints(&self) -> ConstraintSet<BoxBounds<&V>> {
-        ConstraintSet::new()
-            .with_bounds(BoxBounds::new(Some(&self.lower), Some(&self.upper)))
-    }
-}
-impl<V: VectorIndex<F>, R, F: Scalar> Residual for Fixture<V, R, F> {
-    type Param = V;
-    type Output = R;
-    type Error = &'static str;
-    fn residual(&self, x: &V) -> Result<R, Self::Error> {
+impl<V: VectorIndex<F>, R: VectorIndex<F>, F: Scalar> Fixture<V, R, F> {
+    fn residual_values(&self, x: &V) -> Result<[F; 3], &'static str> {
         let x0 = x.get_scalar(0);
         let x1 = x.get_scalar(1);
         self.request(0, x0)?;
-        Ok((self.make_residual)(&[
+        Ok([
             if self.invalid || x0 > num(4.0) {
                 F::infinity()
             } else {
@@ -335,13 +351,16 @@ impl<V: VectorIndex<F>, R, F: Scalar> Residual for Fixture<V, R, F> {
             },
             x0 * x0 + x1 - num(2.0),
             num::<F>(4.0) * x1 + num(3.0),
-        ]))
+        ])
     }
-}
-impl<V: VectorIndex<F>, R, F: Scalar> JacobianProduct for Fixture<V, R, F> {
-    fn jacobian_product(&self, x: &V, v: &V) -> Result<R, Self::Error> {
+
+    fn jacobian_product_values(
+        &self,
+        x: &V,
+        v: &V,
+    ) -> Result<[F; 3], &'static str> {
         self.request(1, x.get_scalar(0))?;
-        Ok((self.make_residual)(&[
+        Ok([
             if self.invalid {
                 F::nan()
             } else {
@@ -349,7 +368,67 @@ impl<V: VectorIndex<F>, R, F: Scalar> JacobianProduct for Fixture<V, R, F> {
             },
             num::<F>(2.0) * x.get_scalar(0) * v.get_scalar(0) + v.get_scalar(1),
             num::<F>(4.0) * v.get_scalar(1),
-        ]))
+        ])
+    }
+
+    fn transpose_jacobian_product_values(
+        &self,
+        x: &V,
+        v: &R,
+    ) -> Result<[F; 2], &'static str> {
+        self.request(2, x.get_scalar(0))?;
+        Ok([
+            v.get_scalar(0) + num::<F>(2.0) * x.get_scalar(0) * v.get_scalar(1),
+            num::<F>(2.0) * v.get_scalar(0)
+                + v.get_scalar(1)
+                + num::<F>(4.0) * v.get_scalar(2),
+        ])
+    }
+}
+
+impl<V, R, F> Constraints for Fixture<V, R, F> {
+    type Set = ConstraintSet<BoxBounds<V>>;
+    fn constraints(&self) -> ConstraintSet<BoxBounds<&V>> {
+        ConstraintSet::new()
+            .with_bounds(BoxBounds::new(Some(&self.lower), Some(&self.upper)))
+    }
+}
+impl<V: VectorIndex<F>, R: VectorIndex<F>, F: Scalar> Residual
+    for Fixture<V, R, F>
+{
+    type Param = V;
+    type Output = R;
+    type Error = &'static str;
+    fn residual(&self, x: &V) -> Result<R, Self::Error> {
+        Ok((self.make_residual)(&self.residual_values(x)?))
+    }
+    fn residual_into(&self, x: &V, out: &mut R) -> Result<(), Self::Error> {
+        let values = self.residual_values(x)?;
+        self.in_place[0].set(self.in_place[0].get() + 1);
+        for (i, value) in values.into_iter().enumerate() {
+            out.set_scalar(i, value);
+        }
+        Ok(())
+    }
+}
+impl<V: VectorIndex<F>, R: VectorIndex<F>, F: Scalar> JacobianProduct
+    for Fixture<V, R, F>
+{
+    fn jacobian_product(&self, x: &V, v: &V) -> Result<R, Self::Error> {
+        Ok((self.make_residual)(&self.jacobian_product_values(x, v)?))
+    }
+    fn jacobian_product_into(
+        &self,
+        x: &V,
+        v: &V,
+        out: &mut R,
+    ) -> Result<(), Self::Error> {
+        let values = self.jacobian_product_values(x, v)?;
+        self.in_place[1].set(self.in_place[1].get() + 1);
+        for (i, value) in values.into_iter().enumerate() {
+            out.set_scalar(i, value);
+        }
+        Ok(())
     }
 }
 impl<V: VectorIndex<F>, R: VectorIndex<F>, F: Scalar> TransposeJacobianProduct
@@ -360,13 +439,22 @@ impl<V: VectorIndex<F>, R: VectorIndex<F>, F: Scalar> TransposeJacobianProduct
         x: &V,
         v: &R,
     ) -> Result<V, Self::Error> {
-        self.request(2, x.get_scalar(0))?;
-        Ok((self.make_param)(&[
-            v.get_scalar(0) + num::<F>(2.0) * x.get_scalar(0) * v.get_scalar(1),
-            num::<F>(2.0) * v.get_scalar(0)
-                + v.get_scalar(1)
-                + num::<F>(4.0) * v.get_scalar(2),
-        ]))
+        Ok((self.make_param)(
+            &self.transpose_jacobian_product_values(x, v)?,
+        ))
+    }
+    fn transpose_jacobian_product_into(
+        &self,
+        x: &V,
+        v: &R,
+        out: &mut V,
+    ) -> Result<(), Self::Error> {
+        let values = self.transpose_jacobian_product_values(x, v)?;
+        self.in_place[2].set(self.in_place[2].get() + 1);
+        for (i, value) in values.into_iter().enumerate() {
+            out.set_scalar(i, value);
+        }
+        Ok(())
     }
 }
 
@@ -392,8 +480,7 @@ where
     let x = make_param(&[F::one(), num(-0.5)]);
     let v = make_param(&[num(0.25), -F::one()]);
     let u = make_residual(&[num(2.0), num(-3.0), F::one()]);
-    let mut problem =
-        OperatorProblem::new(Fixture::new(make_param, make_residual));
+    let mut problem = counted(Fixture::new(make_param, make_residual));
     let mut model =
         linearize::<_, F>(&mut problem, x.clone()).unwrap().unwrap();
     near(model.cost, num(2.125));
@@ -413,8 +500,8 @@ where
     near(normal.get_scalar(0), num(5.75));
     assert_eq!(normal.get_scalar(1), F::zero());
     let counts = model.problem.counts();
-    assert_eq!(counts.existing.residual_evals, 1);
-    assert_eq!(counts.existing.jacobian_evals, 0);
+    assert_eq!(counts.residual_evals, 1);
+    assert_eq!(counts.jacobian_evals, 0);
     assert_eq!(counts.jacobian_product_evals, 3);
     assert_eq!(counts.transpose_jacobian_product_evals, 3);
     assert_eq!(counts.total_work(), 7);
@@ -442,19 +529,13 @@ fn robust_case<V, R, F, L>(
     let fixture = Fixture::new(make_param, make_residual);
     let trace = fixture.trace.clone();
     let objective = RobustLeastSquares::new(fixture, loss).with_scale(num(0.7));
-    let mut problem = OperatorProblem::new(objective);
+    let mut problem = counted(objective);
     let x = make_param(&[F::one(), num(-0.5)]);
     let mut model =
         linearize::<_, F>(&mut problem, x.clone()).unwrap().unwrap();
     let raw_r = [num(-1.0), num(-1.5), F::one()];
-    let terms = raw_r.map(|r| {
-        model
-            .problem
-            .problem
-            .inner()
-            .loss()
-            .evaluate_scaled(r, num(0.7))
-    });
+    let terms = raw_r
+        .map(|r| model.problem.inner().0.loss().evaluate_scaled(r, num(0.7)));
     near(model.cost, terms.iter().map(|t| t.value).sum());
     let gradient = model.gradient().unwrap();
     near(
@@ -484,7 +565,7 @@ fn robust_case<V, R, F, L>(
         normal.get_scalar(1),
         num::<F>(2.0) * weighted[0] + weighted[1] + num::<F>(4.0) * weighted[2],
     );
-    let before = model.problem.counts();
+    let before = *model.problem.counts();
     assert!(
         model
             .trial_cost(&make_param(&[num(5.0), F::zero()]))
@@ -498,8 +579,8 @@ fn robust_case<V, R, F, L>(
         .map(|r| {
             model
                 .problem
-                .problem
                 .inner()
+                .0
                 .loss()
                 .evaluate_scaled(*r, num(0.7))
                 .value
@@ -510,7 +591,7 @@ fn robust_case<V, R, F, L>(
     near(repeated.get_scalar(0), gradient.get_scalar(0));
     near(repeated.get_scalar(1), gradient.get_scalar(1));
     let delta = model.problem.counts().delta_since(&before);
-    assert_eq!(delta.existing.residual_evals, 2);
+    assert_eq!(delta.residual_evals, 2);
     assert_eq!(delta.transpose_jacobian_product_evals, 1);
     assert_eq!(delta.total_work(), 3);
     assert!(
@@ -522,20 +603,15 @@ fn robust_case<V, R, F, L>(
     );
     let mut rollup = before;
     rollup.add(&delta);
-    assert_eq!(rollup, model.problem.counts());
+    assert_eq!(&rollup, model.problem.counts());
     let counts = model.problem.counts();
-    assert_eq!(counts.existing.cost_evals, 0);
-    assert_eq!(counts.existing.jacobian_evals, 0);
+    assert_eq!(counts.cost_evals, 0);
+    assert_eq!(counts.jacobian_evals, 0);
     // A newly accepted point rebuilds loss factors and uses its own products.
     let mut next = linearize::<_, F>(&mut problem, trial).unwrap().unwrap();
     near(next.cost, expected);
-    let terms = [F::one(), num(2.0), num(3.0)].map(|r| {
-        next.problem
-            .problem
-            .inner()
-            .loss()
-            .evaluate_scaled(r, num(0.7))
-    });
+    let terms = [F::one(), num(2.0), num(3.0)]
+        .map(|r| next.problem.inner().0.loss().evaluate_scaled(r, num(0.7)));
     let gradient = next.gradient().unwrap();
     near(
         gradient.get_scalar(0),
@@ -590,7 +666,7 @@ fn failed_requests_stay_counted_and_invalid_models_fail() {
                 p: P,
                 kind: u8,
             ) {
-                let mut p = OperatorProblem::new(p);
+                let mut p = counted(p);
                 let result = linearize::<_, f64>(&mut p, vec![1.0, -0.5]);
                 if kind == 0 {
                     assert!(matches!(result, Err("operator callback failed")));
@@ -604,7 +680,7 @@ fn failed_requests_stay_counted_and_invalid_models_fail() {
                     assert_eq!(error.unwrap_err(), "operator callback failed");
                 }
                 let counts = p.counts();
-                assert_eq!(counts.existing.residual_evals, 1);
+                assert_eq!(counts.residual_evals, 1);
                 assert_eq!(counts.jacobian_product_evals, u64::from(kind == 1));
                 assert_eq!(
                     counts.transpose_jacobian_product_evals,
@@ -622,16 +698,13 @@ fn failed_requests_stay_counted_and_invalid_models_fail() {
     let mut fixture =
         Fixture::new(|x: &[f64]| x.to_vec(), |x: &[f64]| x.to_vec());
     fixture.invalid = true;
-    let mut p = OperatorProblem::new(fixture);
+    let mut p = counted(fixture);
     assert!(
         linearize::<_, f64>(&mut p, vec![1.0, -0.5])
             .unwrap()
             .is_none()
     );
-    let mut p = OperatorProblem::new(RobustLeastSquares::new(
-        p.problem.into_inner(),
-        CauchyLoss,
-    ));
+    let mut p = counted(RobustLeastSquares::new(p.into_inner().0, CauchyLoss));
     assert!(
         linearize::<_, f64>(&mut p, vec![1.0, -0.5])
             .unwrap()
@@ -698,7 +771,7 @@ backend_cases!(operator_faer_022, |x| faer_0_22::Col::from_fn(
 fn shape_and_derivative_guards_preserve_attempted_counts() {
     use std::panic::{AssertUnwindSafe, catch_unwind};
     let fixture = Fixture::new(|x: &[f64]| x.to_vec(), |x: &[f64]| x.to_vec());
-    let mut problem = OperatorProblem::new(fixture);
+    let mut problem = counted(fixture);
     let mut model = linearize::<_, f64>(&mut problem, vec![1.0, -0.5])
         .unwrap()
         .unwrap();
@@ -743,9 +816,16 @@ impl JacobianProduct for ProbingProducts {
         x: &Vec<f64>,
         v: &Vec<f64>,
     ) -> Result<Vec<f64>, Self::Error> {
-        // Stand in for a directional-difference adapter's internal probes.
-        self.0.residual(x)?;
-        self.0.jacobian_product(x, v)
+        let h = 1e-6;
+        let xp = x.iter().zip(v).map(|(x, v)| x + h * v).collect();
+        let base = self.0.residual(x)?;
+        Ok(self
+            .0
+            .residual(&xp)?
+            .iter()
+            .zip(base)
+            .map(|(r, base)| (r - base) / h)
+            .collect())
     }
 }
 impl TransposeJacobianProduct for ProbingProducts {
@@ -754,15 +834,29 @@ impl TransposeJacobianProduct for ProbingProducts {
         x: &Vec<f64>,
         v: &Vec<f64>,
     ) -> Result<Vec<f64>, Self::Error> {
-        self.0.residual(x)?;
-        self.0.transpose_jacobian_product(x, v)
+        let h = 1e-6;
+        let base = self.0.residual(x)?;
+        (0..x.len())
+            .map(|i| {
+                let mut xp = x.clone();
+                xp[i] += h;
+                Ok(self
+                    .0
+                    .residual(&xp)?
+                    .iter()
+                    .zip(&base)
+                    .zip(v)
+                    .map(|((r, base), v)| (r - base) * v / h)
+                    .sum())
+            })
+            .collect()
     }
 }
 #[test]
 fn internal_probes_do_not_charge_boundary_residual_counts() {
     let fixture = Fixture::new(|x: &[f64]| x.to_vec(), |x: &[f64]| x.to_vec());
     let trace = fixture.trace.clone();
-    let mut problem = OperatorProblem::new(RobustLeastSquares::new(
+    let mut problem = counted(RobustLeastSquares::new(
         ProbingProducts(fixture),
         SoftL1Loss,
     ));
@@ -771,11 +865,12 @@ fn internal_probes_do_not_charge_boundary_residual_counts() {
         .unwrap();
     model.product(&vec![1.0, 0.0]).unwrap();
     model.gradient().unwrap();
-    assert_eq!(model.problem.counts().existing.residual_evals, 1);
+    assert_eq!(model.problem.counts().residual_evals, 1);
     assert_eq!(model.problem.counts().total_work(), 3);
+    assert_eq!(model.problem.counts().jacobian_evals, 0);
     assert_eq!(
         trace.borrow().iter().filter(|(kind, _)| *kind == 0).count(),
-        3
+        6
     );
 }
 

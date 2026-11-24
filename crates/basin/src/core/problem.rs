@@ -1031,6 +1031,10 @@ pub struct EvalCounts {
     /// opposed to [`hessian_evals`](Self::hessian_evals), where one call
     /// forms the full `O(n²)` matrix.
     pub hessian_product_evals: u64,
+    #[cfg(test)]
+    pub(crate) jacobian_product_evals: u64,
+    #[cfg(test)]
+    pub(crate) transpose_jacobian_product_evals: u64,
 }
 
 /// A raw evaluation category or the explicitly named sum of all categories.
@@ -1055,18 +1059,28 @@ pub enum EvaluationKind {
     Hessian,
     /// Hessian-vector products.
     HessianProduct,
-    /// Sum of all six categories, as in [`EvalCounts::total_work`].
+    #[cfg(test)]
+    /// Jacobian-vector products.
+    JacobianProduct,
+    #[cfg(test)]
+    /// Transpose-Jacobian-vector products.
+    TransposeJacobianProduct,
+    /// Sum of all categories, as in [`EvalCounts::total_work`].
     TotalWork,
 }
 
 impl EvaluationKind {
-    pub(crate) const ALL: [Self; 7] = [
+    pub(crate) const ALL: [Self; 7 + 2 * cfg!(test) as usize] = [
         Self::Cost,
         Self::Gradient,
         Self::Residual,
         Self::Jacobian,
         Self::Hessian,
         Self::HessianProduct,
+        #[cfg(test)]
+        Self::JacobianProduct,
+        #[cfg(test)]
+        Self::TransposeJacobianProduct,
         Self::TotalWork,
     ];
 
@@ -1078,6 +1092,12 @@ impl EvaluationKind {
             Self::Jacobian => counts.jacobian_evals,
             Self::Hessian => counts.hessian_evals,
             Self::HessianProduct => counts.hessian_product_evals,
+            #[cfg(test)]
+            Self::JacobianProduct => counts.jacobian_product_evals,
+            #[cfg(test)]
+            Self::TransposeJacobianProduct => {
+                counts.transpose_jacobian_product_evals
+            }
             Self::TotalWork => counts.total_work(),
         }
     }
@@ -1090,12 +1110,17 @@ impl EvalCounts {
     /// including finite-difference probes, are not added separately, so this
     /// sum does not measure all underlying function evaluations.
     pub fn total_work(&self) -> u64 {
-        self.cost_evals
+        let total = self.cost_evals
             + self.gradient_evals
             + self.residual_evals
             + self.jacobian_evals
             + self.hessian_evals
-            + self.hessian_product_evals
+            + self.hessian_product_evals;
+        #[cfg(test)]
+        let total = total
+            + self.jacobian_product_evals
+            + self.transpose_jacobian_product_evals;
+        total
     }
 
     /// Componentwise `self − base`. Used by
@@ -1110,6 +1135,13 @@ impl EvalCounts {
             hessian_evals: self.hessian_evals - base.hessian_evals,
             hessian_product_evals: self.hessian_product_evals
                 - base.hessian_product_evals,
+            #[cfg(test)]
+            jacobian_product_evals: self.jacobian_product_evals
+                - base.jacobian_product_evals,
+            #[cfg(test)]
+            transpose_jacobian_product_evals: self
+                .transpose_jacobian_product_evals
+                - base.transpose_jacobian_product_evals,
         }
     }
 
@@ -1126,6 +1158,12 @@ impl EvalCounts {
         self.jacobian_evals += other.jacobian_evals;
         self.hessian_evals += other.hessian_evals;
         self.hessian_product_evals += other.hessian_product_evals;
+        #[cfg(test)]
+        {
+            self.jacobian_product_evals += other.jacobian_product_evals;
+            self.transpose_jacobian_product_evals +=
+                other.transpose_jacobian_product_evals;
+        }
     }
 }
 

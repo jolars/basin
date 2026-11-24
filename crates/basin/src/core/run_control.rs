@@ -23,7 +23,7 @@ type Stop<S> = Box<dyn FnMut(&S) -> Option<Termination<<S as State>::Float>>>;
 
 struct RawBudgets<S> {
     limits: [u64; EvaluationKind::ALL.len()],
-    configured: u8,
+    configured: u16,
     counts: fn(&S) -> &EvalCounts,
 }
 

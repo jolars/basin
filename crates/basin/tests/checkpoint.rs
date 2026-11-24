@@ -210,3 +210,19 @@ fn postcard_preserves_ndarray_float_bits() {
         Array1::from_vec(values.to_vec())
     });
 }
+
+#[test]
+fn release_eval_counts_keep_the_six_counter_postcard_layout() {
+    let mut counts = basin::EvalCounts::default();
+    counts.cost_evals = 1;
+    counts.gradient_evals = 2;
+    counts.residual_evals = 3;
+    counts.jacobian_evals = 4;
+    counts.hessian_evals = 5;
+    counts.hessian_product_evals = 6;
+    assert_eq!(postcard::to_allocvec(&counts).unwrap(), [1, 2, 3, 4, 5, 6]);
+    assert_eq!(
+        postcard::from_bytes::<basin::EvalCounts>(&[1, 2, 3, 4, 5, 6]).unwrap(),
+        counts
+    );
+}
