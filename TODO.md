@@ -2,6 +2,131 @@
 
 Ordered by recommended sequence.
 
+## Basin 3.x
+
+Keep the public APIs and defaults compatible while testing the changes proposed
+for 4.0.0.
+
+- [ ] **Test progress before the first feasible objective evaluation.** Extend
+  the [constrained-DE prototype](#constrained-de-api-prototype) with an
+  objective that errors at infeasible points. Test publication of a point
+  and its violation with zero objective calls, including when execution
+  stops before feasibility. Exercise observers, budgets, inner runs, and
+  exact resume. Cover a selection change during a partial step and a
+  higher-cost feasible replacement. Migrate result consumers to checked
+  incumbent access where available, including composed solvers that may
+  receive no inner incumbent.
+- [ ] **Exercise Jacobian products through the executor.** Extend the
+  [iterative-TRF prototype](#iterative-trf-api-prototype) to charge
+  attempted Jacobian and transpose-Jacobian products through the real
+  problem wrapper. Expand the raw budget mask and verify both categories in
+  budgets, state mirrors, nested count roll-ups, and checkpoints. Keep
+  hidden finite-difference probes outside the existing request counters.
+  Test automatic scratch reuse with residual-only and operator-only robust
+  problems, custom matrices, and concurrent calls.
+- [ ] **Prototype explicit serial and threaded evaluation.** Add a downstream
+  fixture where one dependency enables `parallel` and another uses a local
+  callback. Test both execution paths, including finite differences and
+  population evaluation. Check whether callers can move a configured run to
+  a worker while preserving support for local hooks. Use the explicit
+  threaded path to evaluate parallel Hessian-vector products.
+- [ ] **Test line searches with objectives defined only inside their bounds.**
+  Exercise custom strategies that return just a step, retain an accepted
+  evaluation, or report a soft failure. Prototype an opt-in projected Armijo
+  search for projected gradient descent and check that every trial is
+  feasible.
+- [ ] **Prepare the square Hessian default.** Add square matrix construction and
+  reusable output for dynamic backends. Test owned and in-place Hessians,
+  `f32` constructor inference, and rectangular Jacobians. Keep an explicit
+  construction path for custom backends that supply the current Hessian
+  type.
+- [ ] **Test CMA-ES refresh policies.** Add a fixed refresh-period option to
+  bounded CMA-ES and its wrappers. Extend the [CMA-ES comparison
+  harness](crates/competitor-bench/src/bin/verify_cmaes.rs) to compare fixed
+  and automatic periods by time and evaluations to common objective and
+  feasibility targets. Vary problems, dimensions, population sizes, seeds,
+  and conditioning. Include bounded and injected runs, both precisions, and
+  all four dense backends.
+- [ ] **Prepare the checkpoint migration.** Add `checkpoint-postcard` as a
+  compatibility feature while keeping the native file APIs available under
+  `serde`. Deprecate state-only `Executor::resume` and document migration to
+  `resume_from_checkpoint`.
+- [ ] **Measure in-place stepping and borrowed stop reports.** Use the small
+  Levenberg–Marquardt and unbounded L-BFGS workloads from
+  [#140](https://github.com/jolars/basin/issues/140) against current `main`.
+  Measure passing `&mut S` to `Solver::next_iter` separately from borrowing
+  the stop report on manual steps. Check standalone and composed runs,
+  initialization stops, continuing partial steps, and exact resume. Verify
+  that a hard callback error preserves attempted counts and invalidates the
+  run before it can publish or checkpoint partial progress. Preserve
+  incumbent counts and LM's numerical safeguards.
+- [ ] **Use competitor comparisons to test diagnostics.** Prioritize
+  [constrained SLSQP against NLopt and bounded least squares against
+  `rmpfit`](#first-additions). Check which feasibility, stationarity, and
+  complementarity evidence callers can retrieve, and whether they can
+  recover the Jacobian at the accepted fit.
+
+## Basin 4.0.0
+
+Document the migration for each breaking change. Use the 3.x results to decide
+whether to adopt the conditional changes below.
+
+- [ ] **Make checked records the progress API.** Let solvers publish a point and
+  constraint violation before an objective is available. Distinguish missing
+  objectives from evaluated non-finite values. Move objective-specific
+  readers out of the base `State` contract and replace `best_param()`,
+  `best_cost()`, `best_iter()`, and `best_cost_evals()` on both executor
+  result types with `incumbent_record()`. Document missing incumbents and
+  raw publication counts. Publish incumbent changes explicitly so observers
+  and checkpoint sinks can distinguish feasibility-first selection from
+  strict objective improvement. Keep objective targets and stalls tied to an
+  eligible objective incumbent.
+- [ ] **Make threaded evaluation opt-in at the call site.** Have `parallel`
+  enable threaded execution and keep serial APIs usable when a dependency
+  enables the feature. Apply thread-safety bounds to the threaded path.
+- [ ] **Consolidate the line-search contract.** Return an accepted step with its
+  optional retained evaluation or a soft search failure. Require
+  bounded-search support in solvers that need it, preserve typed callback
+  errors and evaluation counts, and give projected gradient descent a search
+  path that keeps its trial evaluations feasible.
+- [ ] **Use authoritative counts for raw budgets.** Drive raw budgets from the
+  problem wrapper's authoritative counts and make numeric inner budgets
+  serializable. Document how legacy budget callers migrate. Retire
+  state-only `Executor::resume` and `ExactResumeState` in favor of
+  `resume_from_checkpoint`.
+- [ ] **Split Serde support from Postcard checkpoint files.** Make `serde`
+  enable serialization traits so callers can choose their codec. Make
+  `checkpoint-postcard` enable `serde` and expose both built-in native file
+  APIs for state-only and exact checkpoints. Keep `ExactCheckpoint`,
+  `CheckpointSink`, and in-memory resumption available without serialization
+  features. Document the feature migration and exact-version checks. Verify
+  that a run resumed from Postcard matches an uninterrupted run and that the
+  default WASM build still works.
+- [ ] **Make square finite-difference Hessians the default.** Infer the square
+  matrix from the parameter backend while keeping Jacobian rows tied to the
+  residual or constraint count. Document migration for callers that name or
+  store the old dynamic-row Hessian and for custom matrix builders.
+- [ ] **Make evaluation buffer reuse automatic.** Use typed storage by default
+  once the 3.x probes confirm that it preserves callback dispatch,
+  evaluation counts, fresh initialization, and exact continuation. Preserve
+  residual-only and matrix-free robust composition, and avoid holding a
+  shared scratch lock across independent callbacks. Document migration from
+  the opt-in builders and any changes to public type parameters or `Send`,
+  `Sync`, `Clone`, and `Copy` implementations.
+- [ ] **Make CMA-ES eigen refresh automatic if the comparisons support it.**
+  Derive a deterministic period from dimension, population size, and
+  covariance learning rates. Apply the policy to bounded and unbounded
+  CMA-ES and their wrappers, with `.with_eigen_update_period(1)` as an
+  explicit override. Preserve accounting, initialization, and exact
+  continuation of the refresh schedule. Document changed seeded trajectories
+  and how the lag between covariance updates and sampling axes affects TolX
+  and diagnostics.
+- [ ] **Adopt in-place stepping if the benchmark supports it.** Change the
+  `Solver` signature only if it measurably reduces small-solve overhead,
+  simplifies the driver, and passes the lifecycle checks. Adopt borrowed
+  stop reports if the separate measurement supports them, with the final
+  result taking ownership of the report.
+
 ## Solvers and integrations
 
 These priorities come from comparing Basin with the [SciPy optimization
@@ -736,7 +861,7 @@ and callback-domain contract; `RelaxedInner` does not provide that contract.
 
 - [x] **Prototype shared progress states with solver-owned machinery.** Follow
   the [state and lifecycle
-  contracts](CONTRIBUTING.md#state-and-lifecyclecontracts). Exercise BFGS
+  contracts](CONTRIBUTING.md#state-and-lifecycle-contracts). Exercise BFGS
   and L-BFGS for ownership and backend inference, Nelder-Mead for
   observation, and simulated annealing for continuation. Preserve Basin 1.x
   public APIs and behavior while evaluating compatible additions.
@@ -799,65 +924,6 @@ algorithm adapters cover unbounded L-BFGS, classical Nelder-Mead, and annealing
 without reannealing; serialization and performance remain migration work. Run
 the prototype with `cargo test -p basin --test state_api_prototype` and the
 desired backend features.
-
-## Basin 4.0
-
-Planned breaking changes. Preserve Basin 3.x APIs and defaults until the major
-release, and document the migration for each change.
-
-- [ ] **Use checked incumbent records on executor results.** Replace
-  `best_param()`, `best_cost()`, `best_iter()`, and `best_cost_evals()` on
-  both result types with `incumbent_record()`. Document how callers handle a
-  missing incumbent and migrate to the record's raw publication counts.
-  Audit how composed solvers handle inner runs without an incumbent, and
-  review the `State` trait's incumbent readers separately before removing
-  them.
-- [ ] **Prototype in-place executor state.** Benchmark the small
-  Levenberg–Marquardt and unbounded L-BFGS workloads from
-  [#140](https://github.com/jolars/basin/issues/140). Compare the current
-  driver with a prototype that keeps state in the executor and passes
-  `&mut S` to `Solver::next_iter`, which returns only the step outcome. On
-  callback error, invalidate the run so callers cannot observe or checkpoint
-  partial progress. Verify publication, evaluation counts, and stopping
-  evidence with a standalone solver, a composed solver, and exact checkpoint
-  resumption. Preserve incumbent counts and LM's numerical safeguards. Adopt
-  the breaking signature only if the prototype measurably reduces
-  small-solve overhead and simplifies the driver. If revisiting the stepping
-  API, consider borrowing the stop report from `step()` and moving it into
-  the final result.
-- [ ] **Make square finite-difference Hessians the default.** Have
-  `FiniteDiff::new` infer the square matrix from the parameter backend while
-  keeping Jacobian rows tied to the residual or constraint count. Document
-  the migration for callers that name or store the dynamic-row Hessian and
-  for custom backends that provide Hessian construction.
-- [ ] **Split Serde support from Postcard checkpoint files.** Make `serde`
-  enable serialization traits so callers can choose their own codec. Add an
-  opt-in `checkpoint-postcard` feature that enables `serde` and exposes the
-  built-in Postcard readers and writers on native targets. Keep
-  `ExactCheckpoint`, `CheckpointSink`, and in-memory resumption available
-  without serialization features. Document the Cargo feature migration and
-  the version checks for resuming exact checkpoints. Verify that a run
-  resumed from a Postcard file matches an uninterrupted run and that the
-  default WASM build still works.
-- [ ] **Make evaluation buffer reuse automatic.** Replace the compatible opt-in
-  evaluation storage on solvers and the robust least-squares adapter with
-  typed storage by default. Public type parameters and their `Send`, `Sync`,
-  `Clone`, and `Copy` implementations may change as needed. Document the
-  migration from the opt-in builders and preserve callback dispatch,
-  evaluation counts, fresh initialization, and exact continuation.
-- [ ] **Make CMA-ES eigen refresh automatic.** Derive a deterministic default
-  refresh period from dimension, population size, and covariance learning
-  rates. Apply the policy consistently to `CmaEs`, `BoundedCmaEs`, and their
-  wrappers, retaining `.with_eigen_update_period(1)` as an explicit
-  override. Select the policy using time and evaluations to common objective
-  and feasibility targets across more problems, dimensions, populations,
-  seeds, and conditioning levels, including bounded and injected runs. Cover
-  `f32` and `f64` on all four dense backends. Document changed seeded
-  trajectories and the lag between covariance updates and sampling axes,
-  including its effects on TolX and diagnostics. Preserve evaluation
-  accounting, fresh initialization, and exact continuation of the refresh
-  schedule. Reuse the [CMA-ES comparison
-  harness](crates/competitor-bench/src/bin/verify_cmaes.rs).
 
 ## Deferred design
 
