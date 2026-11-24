@@ -1,5 +1,26 @@
 # Changelog
 
+## [3.6.0](https://github.com/jolars/basin/compare/v3.5.0...v3.6.0) (2026-11-24)
+
+### Features
+
+- add `checkpoint-postcard` compatibility feature ([`00b4aa9`](https://github.com/jolars/basin/commit/00b4aa907298d3bf9e1b9219a68b4e88595ca15c))
+- configure bounded CMA-ES eigen refresh ([`8c86735`](https://github.com/jolars/basin/commit/8c86735992e36d93acb3e57532532d80b05374ac))
+- support square finite-difference Hessians on dynamic backends ([`ca37cc2`](https://github.com/jolars/basin/commit/ca37cc23b188f69106e9cb0889644b8163413813))
+- handle missing optimization incumbents ([`4f99923`](https://github.com/jolars/basin/commit/4f99923a02f8fd6eb2a160459ea39ed82eca58a4))
+- add matrix entry access for native arrays ([`3653886`](https://github.com/jolars/basin/commit/36538861e6d6d8722e950b79fab076b0806d0536))
+- build finite-difference Jacobians for native arrays ([`da31ccf`](https://github.com/jolars/basin/commit/da31ccf690d278140cd080293563d8664bbf6db0))
+- support native arrays in dense solvers ([`e0d9346`](https://github.com/jolars/basin/commit/e0d934666f4e56e446e25ccb420a08a52de48bd3))
+- expose checked incumbent records on executor results ([`0182f9c`](https://github.com/jolars/basin/commit/0182f9cbddeec68ef9602271bc62c7718dfa6de4))
+
+### Bug Fixes
+
+- safeguard Brent and More-Thuente trial points ([`2343a98`](https://github.com/jolars/basin/commit/2343a9814e23165f785ca8764aadb98f05c6a631)), refs [#141](https://github.com/jolars/basin/issues/141)
+
+### Performance Improvements
+
+- reduce overhead on small optimization runs ([`e827543`](https://github.com/jolars/basin/commit/e82754353b2140ca9d777d22e0ae0b983c19a4f9)), refs [#140](https://github.com/jolars/basin/issues/140)
+
 ## [3.5.0](https://github.com/jolars/basin/compare/v3.4.0...v3.5.0) (2026-11-23)
 
 ### Features
