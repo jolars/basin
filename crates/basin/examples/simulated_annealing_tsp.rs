@@ -53,6 +53,10 @@ fn main() {
         .run()
         .unwrap();
 
-    println!("tour: {:?}", result.best_param());
-    println!("length: {}", result.best_cost());
+    if let Some(incumbent) = result.incumbent_record() {
+        println!("tour: {:?}", incumbent.param);
+        println!("length: {}", incumbent.cost);
+    } else {
+        println!("No tour was selected.");
+    }
 }

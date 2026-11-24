@@ -161,7 +161,8 @@ use workspace::Distribution;
 ///     CmaEs::<_, DenseMatrix>::new(42, 0.3),
 ///     PopulationProgress::from_point(vec![1.0, 2.0]),
 /// ).max_iter(100).run()?;
-/// assert!(result.best_cost() < 1e-6);
+/// let incumbent = result.incumbent_record().expect("expected an incumbent");
+/// assert!(incumbent.cost < 1e-6);
 /// # Ok::<(), std::convert::Infallible>(())
 /// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -851,6 +852,14 @@ where
     /// generation) persists—that's the chain.
     fn prepare_resume(&self, state: &mut Self::State) {
         state.reset_segment_iter();
+    }
+
+    fn segment_incumbent<'a>(
+        &self,
+        state: &'a Self::State,
+    ) -> Option<(&'a V, F)> {
+        crate::IncumbentState::incumbent_record(state)
+            .map(|record| (record.param, record.cost))
     }
 
     fn configure_segment(

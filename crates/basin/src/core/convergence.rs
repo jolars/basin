@@ -869,6 +869,13 @@ where
     fn prepare_resume(&self, state: &mut Self::State) {
         self.solver.prepare_resume(state);
     }
+    fn segment_incumbent<'a>(
+        &self,
+        state: &'a Self::State,
+    ) -> Option<(&'a V, F)> {
+        self.solver.segment_incumbent(state)
+    }
+
     fn configure_segment(
         &mut self,
         state: &Self::State,

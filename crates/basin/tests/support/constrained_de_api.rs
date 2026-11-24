@@ -65,10 +65,10 @@ pub enum ShapeError {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-struct Selection<V, F: Scalar> {
-    member: PopulationMember<V, F>,
-    iter: u64,
-    counts: EvalCounts,
+pub struct Selection<V, F: Scalar> {
+    pub member: PopulationMember<V, F>,
+    pub iter: u64,
+    pub counts: EvalCounts,
 }
 
 /// Solvers publish selection events; only the executor stamps their metadata.
@@ -106,6 +106,9 @@ impl<V, F: Scalar> SelectedPopulationProgress<V, F> {
     /// Initialization can borrow every seed without inventing evaluated records.
     pub fn parameters(&self) -> impl ExactSizeIterator<Item = &V> {
         self.members.iter().map(|m| &m.param)
+    }
+    pub fn selection(&self) -> Option<&Selection<V, F>> {
+        self.best.as_ref()
     }
     pub fn best(&self) -> Option<&PopulationMember<V, F>> {
         self.best.as_ref().map(|s| &s.member)
@@ -159,10 +162,8 @@ impl<V: VectorLen, F: Scalar> SelectedPopulationProgress<V, F> {
         {
             return Err(ShapeError::InvalidViolation);
         }
-        let selected = members.get(current).ok_or(ShapeError::SelectedIndex)?;
-        if selected.cost.is_none()
-            || members.iter().any(|m| m.feasible() && m.cost.is_none())
-        {
+        members.get(current).ok_or(ShapeError::SelectedIndex)?;
+        if members.iter().any(|m| m.feasible() && m.cost.is_none()) {
             return Err(ShapeError::MissingObjective);
         }
         self.members = members;
@@ -447,6 +448,7 @@ fn publish<P, V, F>(
     problem: &mut Problem<P>,
     state: &mut SelectedPopulationProgress<V, F>,
     mut members: Vec<PopulationMember<V, F>>,
+    evaluate_infeasible: bool,
 ) -> Result<(), ConstraintSolveError<<P as CostFunction>::Error>>
 where
     P: PrototypeProblem<V, F>,
@@ -460,14 +462,16 @@ where
             best
         }
     });
-    if members[current].cost.is_none() {
+    if evaluate_infeasible && members[current].cost.is_none() {
         members[current].cost = Some(problem.cost(&members[current].param)?);
     }
-    let cost = members[current].cost.unwrap();
-    let select = !cost.is_nan()
-        && cost != F::infinity()
+    let select = members[current]
+        .cost
+        .is_none_or(|cost| cost < F::infinity())
         && state
-            .best()
+            .pending
+            .as_ref()
+            .or_else(|| state.best())
             .is_none_or(|old| better(&members[current], old));
     state
         .replace(members, current)
@@ -488,6 +492,7 @@ where
 pub struct ConstrainedDePrototype<V, F: Scalar = f64> {
     _configuration: De<F>,
     script: Vec<Vec<V>>,
+    evaluate_infeasible: bool,
     position: usize,
     layout: (usize, usize),
 }
@@ -498,9 +503,14 @@ impl<V, F: Scalar> ConstrainedDePrototype<V, F> {
         Self {
             _configuration: de,
             script: scripted_trials,
+            evaluate_infeasible: false,
             position: 0,
             layout: (0, 0),
         }
+    }
+    pub fn with_infeasible_objective(mut self) -> Self {
+        self.evaluate_infeasible = true;
+        self
     }
     pub fn position(&self) -> usize {
         self.position
@@ -539,7 +549,7 @@ where
         );
         self.position = 1;
         let members = self.evaluate_repaired(problem, seeds)?;
-        publish(problem, &mut state, members)?;
+        publish(problem, &mut state, members, self.evaluate_infeasible)?;
         Ok(state)
     }
     fn next_iter(
@@ -565,7 +575,7 @@ where
                 *original = trial;
             }
         }
-        publish(problem, &mut state, members)?;
+        publish(problem, &mut state, members, self.evaluate_infeasible)?;
         Ok(SolverStep::completed(state))
     }
 }
@@ -666,7 +676,7 @@ where
             I::State,
             Error = ConstraintSolveError<<P as CostFunction>::Error>,
         >,
-    I::State: State<Param = V, Float = F> + CountsMirror,
+    I::State: IncumbentState<Param = V, Float = F> + CountsMirror,
 {
     type Error = ConstraintSolveError<<P as CostFunction>::Error>;
     fn init(
@@ -711,15 +721,23 @@ where
             {
                 return Ok(SolverStep::stopped(state, stop));
             }
+            let Some(incumbent) = result.state.incumbent_record() else {
+                continue;
+            };
             // Rechecking after box repair prevents an inner result from bypassing selection.
             let refined = self
                 .outer
-                .evaluate_repaired(problem, vec![result.state.param().clone()])?
+                .evaluate_repaired(problem, vec![incumbent.param.clone()])?
                 .remove(0);
             if accepts(&refined, &state.members().unwrap()[i]) {
                 let mut members = state.members().unwrap().to_vec();
                 members[i] = refined;
-                publish(problem, &mut state, members)?;
+                publish(
+                    problem,
+                    &mut state,
+                    members,
+                    self.outer.evaluate_infeasible,
+                )?;
             }
         }
         Ok(SolverStep::completed(state))

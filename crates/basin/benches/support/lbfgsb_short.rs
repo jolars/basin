@@ -280,8 +280,10 @@ impl<V: Vector> Short<V> {
                 self.upper.as_slice()
             ) <= 1e-10
         );
-        assert_eq!(result.best_param().as_slice(), result.param().as_slice());
-        assert_eq!(result.best_cost(), result.cost());
+        let incumbent =
+            result.incumbent_record().expect("expected an incumbent");
+        assert_eq!(incumbent.param.as_slice(), result.param().as_slice());
+        assert_eq!(incumbent.cost, result.cost());
     }
 }
 

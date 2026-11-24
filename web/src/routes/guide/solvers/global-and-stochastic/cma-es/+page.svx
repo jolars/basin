@@ -62,7 +62,7 @@ generation, then draws the next population from the updated distribution.
 
 The current result reports the distribution mean and its evaluated cost.
 The historical best considers both the sampled members and the mean, so
-`best_param()` can differ from `param()`. Neither sequence of mean costs
+The selected point from `incumbent_record()` can differ from `param()`. Neither sequence of mean costs
 nor the best member of each new generation must improve monotonically.
 
 ## Example
@@ -99,8 +99,9 @@ fn main() {
         .unwrap();
 
     assert!(result.cost() < 1e-6);
-    assert!(result.best_cost() <= result.cost());
-    assert!(result.best_param().iter().all(|v| v.abs() < 1e-3));
+    let incumbent = result.incumbent_record().expect("expected an incumbent");
+    assert!(incumbent.cost <= result.cost());
+    assert!(incumbent.param.iter().all(|v| v.abs() < 1e-3));
 }
 ```
 

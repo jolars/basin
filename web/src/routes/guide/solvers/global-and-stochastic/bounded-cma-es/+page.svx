@@ -112,9 +112,10 @@ fn main() {
         .run()
         .unwrap();
 
-    assert!((result.best_cost() - 1.0).abs() < 1e-8);
-    assert!((result.best_param()[0] - 1.0).abs() < 1e-6);
-    assert!((result.best_param()[1] + 1.0).abs() < 1e-4);
+    let incumbent = result.incumbent_record().expect("expected an incumbent");
+    assert!((incumbent.cost - 1.0).abs() < 1e-8);
+    assert!((incumbent.param[0] - 1.0).abs() < 1e-6);
+    assert!((incumbent.param[1] + 1.0).abs() < 1e-4);
 }
 ```
 
@@ -137,7 +138,7 @@ solver contract.
 
 ### Keep raw objective values separate from search fitness
 
-`result.cost()` and `result.best_cost()` exclude the boundary penalty.
+The current objective and the objective from `incumbent_record()` exclude the boundary penalty.
 Likewise, published population costs match their clipped points. Use
 `penalized_costs()` on a retained solver when inspecting selection order,
 and `genotypes()` for the corresponding unrestricted samples.

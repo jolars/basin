@@ -109,14 +109,15 @@ fn main() {
         .unwrap();
 
     assert!(matches!(result.report.termination, Termination::Converged(_)));
-    assert!((result.best_param() - 1.0).abs() < 1e-6);
-    assert!((result.best_cost() + 2.0).abs() < 1e-10);
+    let incumbent = result.incumbent_record().expect("expected an incumbent");
+    assert!((incumbent.param - 1.0).abs() < 1e-6);
+    assert!((incumbent.cost + 2.0).abs() < 1e-10);
     assert_eq!(result.counts.cost_evals, result.counts.gradient_evals);
 }
 ```
 
 The derivative in `FirstOrderState` belongs to the current probe. Use
-`best_param()` and `best_cost()` for the lowest recorded objective; the most
+`incumbent_record()` for the lowest recorded objective; the most
 recent probe need not improve it.
 
 ## Practical considerations

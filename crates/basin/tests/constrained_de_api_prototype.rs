@@ -16,8 +16,8 @@ use basin::{
     BoxBounds, ConstraintDescription, ConstraintSet, ConstraintSolveError,
     Constraints, CostFunction, CountsMirror, De, EvalCounts, EvaluatedState,
     EvaluationKind, Executor, IncumbentState, InitialState, MemeticInner,
-    NumericalFailure, PointState, Problem, RawEvaluationState, Scalar, Solver,
-    SolverStep, State, Termination, TerminationStage, VectorLen, WarmStart,
+    NumericalFailure, Problem, RawEvaluationState, Scalar, Solver, SolverStep,
+    State, Termination, TerminationStage, VectorLen, WarmStart,
 };
 use prototype::{
     ConstrainedDeInjectPrototype, ConstrainedDePrototype, PopulationMember,
@@ -39,6 +39,7 @@ struct Fixture<V, F: Scalar = f64> {
     count: Rc<Cell<usize>>,
     trace: Trace<F>,
     fail_cost: Option<F>,
+    reject_infeasible: bool,
     fail_constraint: Option<F>,
     override_values: Option<Vec<F>>,
 }
@@ -50,6 +51,7 @@ impl<V, F: Scalar> Fixture<V, F> {
             count: Rc::new(Cell::new(2)),
             trace: Rc::default(),
             fail_cost: None,
+            reject_infeasible: false,
             fail_constraint: None,
             override_values: None,
         }
@@ -84,7 +86,13 @@ impl<V: VectorLen + Index<usize, Output = F>, F: Scalar> CostFunction
         self.trace
             .borrow_mut()
             .push((0, (0..x.vec_len()).map(|i| x[i]).collect()));
-        if self.fail_cost == Some(x[0]) {
+        if self.fail_cost == Some(x[0])
+            || (self.reject_infeasible
+                && (x[0] < F::one()
+                    || x[1] > F::one()
+                    || (0..x.vec_len())
+                        .any(|i| x[i] < self.lower[i] || x[i] > self.upper[i])))
+        {
             return Err(CallbackError::Cost);
         }
         Ok((0..x.vec_len()).map(|i| x[i] * x[i]).sum())
@@ -116,6 +124,7 @@ impl<V: VectorLen + Index<usize, Output = F>, F: Scalar>
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 struct ScriptedInner<V, F: Scalar = f64> {
     returned: V,
+    evaluate_infeasible: bool,
     stop_on_seed: Option<F>,
     stop: Option<Termination<F>>,
 }
@@ -123,20 +132,25 @@ impl<V, F: Scalar> ScriptedInner<V, F> {
     fn new(returned: V) -> Self {
         Self {
             returned,
+            evaluate_infeasible: true,
             stop_on_seed: None,
             stop: None,
         }
     }
 }
-impl<V: Clone, F: Scalar> InitialState<V> for ScriptedInner<V, F> {
-    type State = PointState<V, F>;
+impl<V: Clone + VectorLen, F: Scalar> InitialState<V> for ScriptedInner<V, F> {
+    type State = SelectedPopulationProgress<V, F>;
     fn seed(&self, x: &V) -> Self::State {
-        PointState::new(x.clone())
+        SelectedPopulationProgress::from_population(vec![x.clone()])
     }
 }
-impl<V: Clone, F: Scalar> WarmStart<V> for ScriptedInner<V, F> {}
-impl<V: Clone, F: Scalar> MemeticInner<V, F> for ScriptedInner<V, F> {}
-impl<P, V, F> Solver<P, PointState<V, F>> for ScriptedInner<V, F>
+impl<V: Clone + VectorLen, F: Scalar> WarmStart<V> for ScriptedInner<V, F> {}
+impl<V: Clone + VectorLen, F: Scalar> MemeticInner<V, F>
+    for ScriptedInner<V, F>
+{
+}
+impl<P, V, F> Solver<P, SelectedPopulationProgress<V, F>>
+    for ScriptedInner<V, F>
 where
     P: PrototypeProblem<V, F>,
     V: VectorLen + Clone + Index<usize, Output = F>,
@@ -146,8 +160,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PointState<V, F>,
-    ) -> Result<PointState<V, F>, Self::Error> {
+        mut state: SelectedPopulationProgress<V, F>,
+    ) -> Result<SelectedPopulationProgress<V, F>, Self::Error> {
         state.reset();
         let n = state.param().vec_len();
         let m = problem
@@ -156,19 +170,24 @@ where
             .nonlinear()
             .inequalities()
             .count();
-        let member = evaluate(problem, state.param().clone(), (n, m))?;
-        let cost = match member.cost() {
-            Some(c) => c,
-            None => problem.cost(member.param())?,
-        };
-        state.replace(member.param().clone(), cost);
+        let mut member = evaluate(problem, state.param().clone(), (n, m))?;
+        if self.evaluate_infeasible && member.cost().is_none() {
+            let cost = problem.cost(member.param())?;
+            member = PopulationMember::new(
+                member.param().clone(),
+                Some(cost),
+                member.violations().to_vec(),
+            );
+        }
+        state.replace(vec![member], 0).unwrap();
+        state.select_current();
         Ok(state)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PointState<V, F>,
-    ) -> Result<SolverStep<PointState<V, F>>, Self::Error> {
+        mut state: SelectedPopulationProgress<V, F>,
+    ) -> Result<SolverStep<SelectedPopulationProgress<V, F>>, Self::Error> {
         let stop = self.stop_on_seed.is_none_or(|v| state.param()[0] == v);
         let m = problem
             .inner()
@@ -176,16 +195,21 @@ where
             .nonlinear()
             .inequalities()
             .count();
-        let member = evaluate(
+        let mut member = evaluate(
             problem,
             self.returned.clone(),
             (state.param().vec_len(), m),
         )?;
-        let cost = match member.cost() {
-            Some(c) => c,
-            None => problem.cost(member.param())?,
-        };
-        state.replace(member.param().clone(), cost);
+        if self.evaluate_infeasible && member.cost().is_none() {
+            let cost = problem.cost(member.param())?;
+            member = PopulationMember::new(
+                member.param().clone(),
+                Some(cost),
+                member.violations().to_vec(),
+            );
+        }
+        state.replace(vec![member], 0).unwrap();
+        state.select_current();
         if stop {
             if let Some(reason) = &self.stop {
                 return Ok(SolverStep::stopped(state, reason.clone()));
@@ -216,6 +240,7 @@ fn de() -> ConstrainedDePrototype<Vec<f64>> {
         De::new(42).with_pop_size(4),
         script(|x| x.to_vec()),
     )
+    .with_infeasible_objective()
 }
 fn fixture() -> Fixture<Vec<f64>> {
     Fixture::new(|x| x.to_vec())
@@ -239,7 +264,8 @@ where
 {
     let p = Fixture::new(make);
     let trace = p.trace.clone();
-    let solver = ConstrainedDePrototype::new(De::<F>::new(42), script(make));
+    let solver = ConstrainedDePrototype::new(De::<F>::new(42), script(make))
+        .with_infeasible_objective();
     let mut stepper =
         Executor::new(p, solver, SelectedPopulationProgress::empty())
             .require_evaluated_state()
@@ -283,7 +309,8 @@ where
     assert_eq!(state.incumbent_record().unwrap().counts.cost_evals, 2);
     assert_eq!(state.current_record().unwrap().1, F::one());
     assert_eq!(state.best().unwrap().violations(), &[F::zero(), F::zero()]);
-    let outer = ConstrainedDePrototype::new(De::<F>::new(42), script(make));
+    let outer = ConstrainedDePrototype::new(De::<F>::new(42), script(make))
+        .with_infeasible_objective();
     let inner = ScriptedInner::new(make(&[num(0.5), F::zero()]));
     let result = Executor::new(
         Fixture::new(make),
@@ -382,11 +409,6 @@ fn storage_updates_are_atomic_and_pending_selections_own_their_records() {
             vec![member(0.0, Some(0.0), &[1.0])],
             1,
             ShapeError::SelectedIndex,
-        ),
-        (
-            vec![member(0.0, None, &[1.0])],
-            0,
-            ShapeError::MissingObjective,
         ),
         (
             vec![member(0.0, Some(0.0), &[1.0]), member(1.0, None, &[0.0])],
@@ -642,7 +664,8 @@ fn local_search_can_improve_an_infeasible_member_without_objective_ordering() {
     let outer = ConstrainedDePrototype::new(
         De::new(42),
         vec![vec![vec![0.0, 0.0], vec![-1.0, 0.0]]; 2],
-    );
+    )
+    .with_infeasible_objective();
     let inner = ScriptedInner::new(vec![0.5, 0.0]);
     let result = Executor::new(
         fixture(),
@@ -702,27 +725,30 @@ impl basin::Jacobian for Fixture<Vec<f64>> {
 
 struct AuditInner(ScriptedInner<Vec<f64>>);
 impl InitialState<Vec<f64>> for AuditInner {
-    type State = PointState<Vec<f64>>;
+    type State = SelectedPopulationProgress<Vec<f64>>;
     fn seed(&self, x: &Vec<f64>) -> Self::State {
         self.0.seed(x)
     }
 }
 impl WarmStart<Vec<f64>> for AuditInner {}
 impl MemeticInner<Vec<f64>> for AuditInner {}
-impl Solver<Fixture<Vec<f64>>, PointState<Vec<f64>>> for AuditInner {
+impl Solver<Fixture<Vec<f64>>, SelectedPopulationProgress<Vec<f64>>>
+    for AuditInner
+{
     type Error = ConstraintSolveError<CallbackError>;
     fn init(
         &mut self,
         p: &mut Problem<Fixture<Vec<f64>>>,
-        s: PointState<Vec<f64>>,
-    ) -> Result<PointState<Vec<f64>>, Self::Error> {
+        s: SelectedPopulationProgress<Vec<f64>>,
+    ) -> Result<SelectedPopulationProgress<Vec<f64>>, Self::Error> {
         self.0.init(p, s)
     }
     fn next_iter(
         &mut self,
         p: &mut Problem<Fixture<Vec<f64>>>,
-        s: PointState<Vec<f64>>,
-    ) -> Result<SolverStep<PointState<Vec<f64>>>, Self::Error> {
+        s: SelectedPopulationProgress<Vec<f64>>,
+    ) -> Result<SolverStep<SelectedPopulationProgress<Vec<f64>>>, Self::Error>
+    {
         let step = self.0.next_iter(p, s)?;
         let x = step.state.param();
         p.cost_and_gradient_and_hessian(x)?;
@@ -1024,4 +1050,175 @@ fn standalone_checkpoints_resume_the_script_and_observers_do_no_work() {
         .unwrap();
     assert_eq!(result.counts, expected.counts);
     assert_eq!(observed.get(), 5);
+}
+
+fn delayed_feasibility() -> ConstrainedDePrototype<Vec<f64>> {
+    ConstrainedDePrototype::new(
+        De::new(42),
+        vec![
+            vec![vec![0.0, 0.0], vec![-2.0, 0.0]],
+            vec![vec![0.5, 0.0], vec![-1.0, 0.0]],
+            vec![vec![0.5, 0.0], vec![-1.0, 0.0]],
+            vec![vec![1.0, 0.0], vec![-1.0, 0.0]],
+        ],
+    )
+}
+
+fn feasible_only() -> Fixture<Vec<f64>> {
+    let mut problem = fixture();
+    problem.reject_infeasible = true;
+    problem
+}
+
+#[test]
+fn zero_objective_progress_is_observable_and_resumes_exactly() {
+    use basin::{ExecutionLimit, ObservationEvent, ObserverMode};
+    let problem = feasible_only();
+    let trace = problem.trace.clone();
+    let expected = Executor::new(
+        problem,
+        delayed_feasibility(),
+        SelectedPopulationProgress::empty(),
+    )
+    .max_evaluations(EvaluationKind::Cost, 1)
+    .run()
+    .unwrap();
+    assert_eq!(expected.iter(), 3);
+    assert_eq!(expected.incumbent_record().unwrap().cost, 1.0);
+    assert_eq!(
+        expected.report.termination,
+        Termination::Limit(vec![ExecutionLimit::Evaluations {
+            kind: EvaluationKind::Cost,
+            observed: 1,
+            limit: 1,
+        }])
+    );
+
+    let problem = feasible_only();
+    let prefix = problem.trace.clone();
+    let observations = Rc::new(RefCell::new(Vec::new()));
+    let mut executor = Executor::new(
+        problem,
+        delayed_feasibility(),
+        SelectedPopulationProgress::empty(),
+    )
+    .max_evaluations(EvaluationKind::Residual, 6);
+    for mode in [ObserverMode::Always, ObserverMode::NewBest] {
+        let observations = observations.clone();
+        executor = executor.observe_solver(
+            move |state, _, event| {
+                let selection = state.selection().unwrap();
+                let boundary = match event {
+                    ObservationEvent::Init => "init",
+                    ObservationEvent::Iter => "iter",
+                    ObservationEvent::Final(_) => "final",
+                    _ => unreachable!(),
+                };
+                assert_eq!(selection.member.cost(), None);
+                assert_eq!(
+                    state.current().unwrap().param(),
+                    selection.member.param()
+                );
+                assert_eq!(
+                    selection.member.violations(),
+                    &[1.0 - selection.member.param()[0], 0.0]
+                );
+                assert!(state.current_record().is_none());
+                assert!(state.incumbent_record().is_none());
+                assert_eq!(state.raw_counts().cost_evals, 0);
+                observations.borrow_mut().push((
+                    mode,
+                    boundary,
+                    state.iter(),
+                    selection.iter,
+                    selection.counts.residual_evals,
+                ));
+            },
+            mode,
+        );
+    }
+    let stopped = executor.run_with_solver().unwrap();
+    assert!(stopped.incumbent_record().is_none());
+    assert_eq!(stopped.report.stage, TerminationStage::Boundary);
+    assert_eq!(
+        stopped.report.termination,
+        Termination::Limit(vec![ExecutionLimit::Evaluations {
+            kind: EvaluationKind::Residual,
+            observed: 6,
+            limit: 6,
+        }])
+    );
+    assert_eq!(
+        *observations.borrow(),
+        [
+            (ObserverMode::Always, "init", 0, 0, 2),
+            (ObserverMode::NewBest, "init", 0, 0, 2),
+            (ObserverMode::Always, "iter", 1, 1, 4),
+            (ObserverMode::NewBest, "iter", 1, 1, 4),
+            (ObserverMode::Always, "iter", 2, 1, 4),
+            (ObserverMode::Always, "final", 2, 1, 4),
+            (ObserverMode::NewBest, "final", 2, 1, 4),
+        ]
+    );
+    assert!(prefix.borrow().iter().all(|(kind, _)| *kind == 1));
+    let checkpoint = stopped.into_checkpoint();
+    #[cfg(feature = "serde")]
+    let checkpoints = [serde_round_trip(&checkpoint), checkpoint];
+    #[cfg(not(feature = "serde"))]
+    let checkpoints = [checkpoint];
+    for checkpoint in checkpoints {
+        let problem = feasible_only();
+        let suffix = problem.trace.clone();
+        let resumed = Executor::resume_from_checkpoint(problem, checkpoint)
+            .max_evaluations(EvaluationKind::Cost, 1)
+            .run()
+            .unwrap();
+        assert_eq!(resumed.state, expected.state);
+        assert_eq!(resumed.counts, expected.counts);
+        assert_eq!(resumed.report, expected.report);
+        assert_eq!(&*suffix.borrow(), &trace.borrow()[prefix.borrow().len()..]);
+    }
+}
+
+#[test]
+fn partial_step_publishes_constraint_selection_after_missing_inner_incumbent() {
+    let mut inner = ScriptedInner::new(vec![0.0, 0.0]);
+    inner.evaluate_infeasible = false;
+    inner.stop_on_seed = Some(-1.0);
+    inner.stop = Some(failure());
+    let solver = ConstrainedDeInjectPrototype::with_inner_solver(
+        delayed_feasibility(),
+        inner,
+    )
+    .with_k(2);
+    let result = Executor::new(
+        feasible_only(),
+        solver,
+        SelectedPopulationProgress::empty(),
+    )
+    .observe_solver(
+        |state, _, event| {
+            if let basin::ObservationEvent::Final(report) = event {
+                assert_eq!(
+                    report.stage,
+                    TerminationStage::Step { completed: false }
+                );
+                let selected = state.selection().unwrap();
+                assert_eq!(selected.member.param(), &[0.5, 0.0]);
+                assert_eq!(selected.member.violations(), &[0.5, 0.0]);
+                assert_eq!(selected.iter, 0);
+                assert_eq!(&selected.counts, state.raw_counts());
+            }
+        },
+        basin::ObserverMode::Always,
+    )
+    .run()
+    .unwrap();
+    assert!(result.incumbent_record().is_none());
+    assert_eq!(result.counts.cost_evals, 0);
+    assert_eq!(result.counts.residual_evals, 8);
+    assert!(matches!(
+        result.report.termination,
+        Termination::Failed(NumericalFailure::Inner { .. })
+    ));
 }

@@ -112,8 +112,9 @@ fn main() {
         .run()
         .unwrap();
 
-    assert!(result.best_cost() < 1e-2);
-    assert!(result.best_cost() <= result.cost());
+    let incumbent = result.incumbent_record().expect("expected an incumbent");
+    assert!(incumbent.cost < 1e-2);
+    assert!(incumbent.cost <= result.cost());
 }
 ```
 

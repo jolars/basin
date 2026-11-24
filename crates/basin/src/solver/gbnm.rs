@@ -165,7 +165,8 @@ struct BoxGeometry<'a, V> {
 ///         .max_cost_evals(2_000)
 ///         .run()
 ///         .unwrap();
-/// assert!(result.best_cost() < 1e-4);
+/// let incumbent = result.incumbent_record().expect("expected an incumbent");
+/// assert!(incumbent.cost < 1e-4);
 /// ```
 ///
 /// # References

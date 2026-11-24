@@ -48,7 +48,7 @@ ordinary CMA update. This follows
 the point away from the local solver's returned solution.
 
 Injection replaces selected members without DE's strict-improvement test.
-Use the historical `best_cost()` and `best_param()` when reporting results.
+Use `incumbent_record()` when reporting the historical selected point and cost.
 
 ## Example
 
@@ -93,8 +93,9 @@ fn main() {
     .run()
     .unwrap();
 
-    assert!(result.best_cost() < 1e-4);
-    assert!(result.best_param().iter().all(|v| v.abs() < 0.01));
+    let incumbent = result.incumbent_record().expect("expected an incumbent");
+    assert!(incumbent.cost < 1e-4);
+    assert!(incumbent.param.iter().all(|v| v.abs() < 0.01));
 }
 ```
 

@@ -123,9 +123,10 @@ fn main() {
         .run()
         .unwrap();
 
-    assert!(result.best_cost() < 1e-4);
-    assert!(result.best_param().iter().all(|v| (-5.0..=5.0).contains(v)));
-    assert!(result.best_cost() <= result.cost());
+    let incumbent = result.incumbent_record().expect("expected an incumbent");
+    assert!(incumbent.cost < 1e-4);
+    assert!(incumbent.param.iter().all(|v| (-5.0..=5.0).contains(v)));
+    assert!(incumbent.cost <= result.cost());
 }
 ```
 
@@ -181,7 +182,7 @@ be exceeded by up to `n + 1` evaluations.
 ### Distinguish the active search from the incumbent
 
 `param()` and `cost()` describe the best vertex of the active local
-search. They can worsen after a restart. `best_param()` and `best_cost()`
+search. They can worsen after a restart. `incumbent_record()`
 retain the historical objective incumbent across searches. Use checked
 `current()` and `best()` state readers when non-finite evaluations may
 leave either unavailable.

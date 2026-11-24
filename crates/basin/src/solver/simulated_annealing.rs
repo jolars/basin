@@ -384,7 +384,8 @@ pub(crate) struct ReannealingProgress {
 ///     .max_iter(10_000)
 ///     .run()
 ///     .unwrap();
-/// assert!(result.best_cost() < 1e-2);
+/// let incumbent = result.incumbent_record().expect("expected an incumbent");
+/// assert!(incumbent.cost < 1e-2);
 /// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]

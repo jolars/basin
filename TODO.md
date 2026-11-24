@@ -7,7 +7,7 @@ Ordered by recommended sequence.
 Keep the public APIs and defaults compatible while testing the changes proposed
 for 4.0.0.
 
-- [ ] **Test progress before the first feasible objective evaluation.** Extend
+- [x] **Test progress before the first feasible objective evaluation.** Extend
   the [constrained-DE prototype](#constrained-de-api-prototype) with an
   objective that errors at infeasible points. Test publication of a point
   and its violation with zero objective calls, including when execution
@@ -76,11 +76,13 @@ whether to adopt the conditional changes below.
   objectives from evaluated non-finite values. Move objective-specific
   readers out of the base `State` contract and replace `best_param()`,
   `best_cost()`, `best_iter()`, and `best_cost_evals()` on both executor
-  result types with `incumbent_record()`. Document missing incumbents and
-  raw publication counts. Publish incumbent changes explicitly so observers
-  and checkpoint sinks can distinguish feasibility-first selection from
-  strict objective improvement. Keep objective targets and stalls tied to an
-  eligible objective incumbent.
+  result types with a checked record accessor. Revisit `incumbent_record()`
+  as the general name. Consider `selected_record()` for a record that can
+  carry a point and its constraint violation before its objective is evaluated.
+  Document record availability and raw publication counts. Publish selection
+  changes explicitly so observers and checkpoint sinks can distinguish
+  feasibility-first selection from strict objective improvement. Keep objective
+  targets and stalls tied to an eligible objective incumbent.
 - [ ] **Make threaded evaluation opt-in at the call site.** Have `parallel`
   enable threaded execution and keep serial APIs usable when a dependency
   enables the feature. Apply thread-safety bounds to the threaded path.
@@ -746,13 +748,11 @@ The prototype establishes these contracts:
   it and retains member order. A separate population capability exposes these
   records without promising a cost for every member. Seeds have no evaluated
   records.
-- Feasible members have evaluated objectives. An all-infeasible population
-  evaluates its selected representative before publication, leaving other
-  infeasible objectives optional. `State::cost()` therefore remains an actual
-  evaluated objective. A representative callback error propagates. This choice
-  requires an objective that can evaluate an infeasible representative; an
-  objective defined only on feasible points needs a different, future
-  availability contract.
+- Feasible members have evaluated objectives. Before feasibility, the selected
+  member can publish its point and violations with zero objective calls. Checked
+  objective records remain unavailable until their matching point has an
+  evaluated objective. A test-only opt-in evaluates an infeasible representative
+  to exercise callback errors and higher-cost feasible replacements.
 - Feasible trials beat infeasible members. Feasible pairs compare objective
   values; infeasible pairs use componentwise non-worsening violations, following
   [SciPy 1.16.2's Lampinen-based
@@ -768,8 +768,9 @@ The prototype establishes these contracts:
   nor `PopulationState`; objective targets and objective stalls cannot attach to
   it.
 - An injection inner must accept the original constrained problem. Seeds follow
-  the representative ranking. Every returned point is repaired to the box and
-  its constraints are reevaluated before applying the same trial selection rule.
+  the representative ranking. A consumable run with an objective incumbent
+  supplies a point for box repair and reevaluation under the same trial selection
+  rule. A run without an objective incumbent leaves the member in place.
   The prototype permits infeasible local starts and partial results; it does not
   permit a local solver to discard nonlinear blocks.
 - Nonempty nonlinear callback attempts charge `residual_evals`, including
@@ -778,7 +779,9 @@ The prototype establishes these contracts:
   execution shares the outer wrapper and never adds its counts twice.
 - Fresh initialization reevaluates member seeds and resets script position and
   bookkeeping. Exact checkpoints preserve the script position, members,
-  refinement schedule, inner solver, selection metadata, and counts. Tests cover
+  refinement schedule, inner solver, selection metadata, and counts. A checkpoint
+  taken before the first objective call resumes with the same callback sequence
+  and selection history as an uninterrupted run. Tests cover
   both precisions on all four dense backends and serialized `Vec` checkpoints.
 
 The fixture exercises finite boxes and nonlinear inequalities. Other constraint

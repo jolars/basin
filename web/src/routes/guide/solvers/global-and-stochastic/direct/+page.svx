@@ -122,8 +122,9 @@ fn main() {
         .run()
         .unwrap();
 
-    assert!(result.best_cost() < -78.33);
-    assert!(result.best_param().iter().all(|v| (-5.0..=5.0).contains(v)));
+    let incumbent = result.incumbent_record().expect("expected an incumbent");
+    assert!(incumbent.cost < -78.33);
+    assert!(incumbent.param.iter().all(|v| (-5.0..=5.0).contains(v)));
 }
 ```
 

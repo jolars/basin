@@ -541,6 +541,14 @@ where
         state.reset_progress();
     }
 
+    fn segment_incumbent<'a>(
+        &self,
+        state: &'a Self::State,
+    ) -> Option<(&'a V, F)> {
+        crate::IncumbentState::incumbent_record(state)
+            .map(|record| (record.param, record.cost))
+    }
+
     fn configure_segment(
         &mut self,
         _state: &Self::State,

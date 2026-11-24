@@ -143,6 +143,18 @@ where
     /// point of the chain.
     fn prepare_resume(&self, state: &mut Self::State);
 
+    /// Borrow the segment's selected point and cost, if available.
+    ///
+    /// The default uses the legacy best readers. Implementations with checked
+    /// incumbent access can override this method to report absence directly.
+    fn segment_incumbent<'a>(
+        &self,
+        state: &'a Self::State,
+    ) -> Option<(&'a V, F)> {
+        let cost = state.best_cost();
+        (cost < F::infinity()).then(|| (state.best_param(), cost))
+    }
+
     /// Configure execution stops or solver settings for a new chain segment.
     ///
     /// The default leaves the solver and controls unchanged. Built-in

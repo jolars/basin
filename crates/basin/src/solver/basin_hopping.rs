@@ -318,12 +318,11 @@ fn accept_guard(new_success: bool, incumbent_success: bool) -> bool {
 /// .run()
 /// .unwrap();
 ///
-/// // `best_cost()` is the global best the walk ever saw; the *current*
-/// // iterate may be a transiently accepted uphill hop.
+/// let incumbent = result.incumbent_record().expect("expected an incumbent");
 /// assert!(
-///     result.best_cost() < 1e-6,
+///     incumbent.cost < 1e-6,
 ///     "Ackley best cost {}",
-///     result.best_cost()
+///     incumbent.cost
 /// );
 /// # }
 /// ```

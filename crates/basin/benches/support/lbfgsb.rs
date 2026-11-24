@@ -231,11 +231,10 @@ impl<V: Vector> Driver<V> {
             self.projected_gradient(result.param().as_slice(), &gradient)
                 <= pg_limit
         );
-        assert_eq!(
-            result.state.best_param().as_slice(),
-            result.param().as_slice()
-        );
-        assert_eq!(result.state.best_cost(), result.cost());
+        let incumbent =
+            result.incumbent_record().expect("expected an incumbent");
+        assert_eq!(incumbent.param.as_slice(), result.param().as_slice());
+        assert_eq!(incumbent.cost, result.cost());
     }
 }
 

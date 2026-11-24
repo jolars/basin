@@ -263,15 +263,116 @@ fn nonfinite_chain_without_an_incumbent_does_not_read_best_param() {
         basin::MaLsChCma::<_, basin::DenseMatrix>::new(71)
             .with_pop_size(4)
             .with_nfrec(1)
-            .with_ls_intensity(8),
+            .with_ls_intensity(8)
+            .with_ls_improvement_threshold(0.0),
         PopulationProgress::empty(),
     )
     .max_iter(3)
-    .run()
+    .run_with_solver()
     .unwrap();
-    assert_eq!(result.state.best(), None);
+    assert!(result.incumbent_record().is_none());
+    assert!((0..4).any(|i| result.solver.ls_application_count(i) > 0));
+    assert!((0..4).all(|i| result.solver.chain(i).is_none()));
     assert_eq!(result.state.best_counts(), None);
     assert_eq!(result.iter(), 3);
+}
+
+#[test]
+fn zero_threshold_retains_the_chain_until_its_finite_probe() {
+    use basin::{
+        BoxBounds, ConstraintDescription, ConstraintSet, Constraints, MaLsCh,
+        PointState, Problem, ResumableInner, SamplingDomain, Solver,
+        SolverStep,
+    };
+
+    struct Fixture {
+        lo: Vec<f64>,
+        hi: Vec<f64>,
+    }
+
+    impl Constraints for Fixture {
+        type Set = ConstraintSet<BoxBounds<Vec<f64>>>;
+        fn constraints(
+            &self,
+        ) -> <Self::Set as ConstraintDescription>::Borrowed<'_> {
+            ConstraintSet::new()
+                .with_bounds(BoxBounds::new(Some(&self.lo), Some(&self.hi)))
+        }
+    }
+
+    impl CostFunction for Fixture {
+        type Param = Vec<f64>;
+        type Output = f64;
+        type Error = Infallible;
+
+        fn cost(&self, x: &Vec<f64>) -> Result<f64, Infallible> {
+            Ok(match x[0] {
+                0.0 => 0.0,
+                3.0 => f64::INFINITY,
+                _ => 1.0,
+            })
+        }
+    }
+
+    struct Explore;
+
+    impl ResumableInner<Vec<f64>> for Explore {
+        type State = PointState<Vec<f64>>;
+        fn seed_chain(
+            &self,
+            x: &Vec<f64>,
+            _: f64,
+            _: f64,
+            _: u64,
+        ) -> (Self, Self::State) {
+            (Self, PointState::new(x.clone()))
+        }
+        fn prepare_resume(&self, state: &mut Self::State) {
+            state.reset_progress();
+        }
+    }
+
+    impl Solver<SamplingDomain<Fixture>, PointState<Vec<f64>>> for Explore {
+        type Error = Infallible;
+        fn init(
+            &mut self,
+            problem: &mut Problem<SamplingDomain<Fixture>>,
+            mut state: PointState<Vec<f64>>,
+        ) -> Result<PointState<Vec<f64>>, Infallible> {
+            let probe = vec![3.0];
+            let cost = problem.cost(&probe)?;
+            state.replace(probe, cost);
+            Ok(state)
+        }
+        fn next_iter(
+            &mut self,
+            problem: &mut Problem<SamplingDomain<Fixture>>,
+            mut state: PointState<Vec<f64>>,
+        ) -> Result<SolverStep<PointState<Vec<f64>>>, Infallible> {
+            let probe = vec![0.0];
+            let cost = problem.cost(&probe)?;
+            state.replace(probe, cost);
+            Ok(SolverStep::completed(state))
+        }
+    }
+
+    let result = Executor::new(
+        SamplingDomain::new(Fixture {
+            lo: vec![1.0],
+            hi: vec![2.0],
+        }),
+        MaLsCh::with_inner(1, Explore)
+            .with_pop_size(4)
+            .with_nfrec(1)
+            .with_ls_intensity(1)
+            .with_ls_improvement_threshold(0.0),
+        PopulationProgress::empty(),
+    )
+    .max_iter(2)
+    .run()
+    .unwrap();
+
+    assert_eq!(result.incumbent_record().unwrap().cost, 0.0);
 }
 
 #[test]

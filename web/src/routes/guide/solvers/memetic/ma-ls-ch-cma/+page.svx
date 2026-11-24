@@ -98,8 +98,9 @@ fn main() {
     .run()
     .unwrap();
 
-    assert!(result.best_cost() < 1e-4);
-    assert!(result.best_param().iter().all(|v| v.abs() < 0.01));
+    let incumbent = result.incumbent_record().expect("expected an incumbent");
+    assert!(incumbent.cost < 1e-4);
+    assert!(incumbent.param.iter().all(|v| v.abs() < 0.01));
 }
 ```
 

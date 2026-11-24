@@ -104,7 +104,7 @@ impl<LS, S, F> Default for ChainHistory<LS, S, F> {
 ///      category; progress preserves all six categories.
 ///    - Bubble `SolverFailed` (rule 3: failure routing); other
 ///      reasons (`MaxCostEvals`, operator tolerances) are clean stops.
-///    - If `inner_result.best_cost() < costs[c_LS]`, write the improved
+///    - If the inner incumbent improves `costs[c_LS]`, write the improved
 ///      best evaluated param/cost back. Always update
 ///      `last_ls_cost[c_LS]` and `ls_application_count[c_LS]`. Store
 ///      the advanced `(solver, state)` pair back in the slot only when
@@ -685,19 +685,15 @@ where
         // whatever `param()`/`cost()` now report (CMA-ES reports the
         // distribution mean); the memetic algorithm wants the best
         // refinement found. The configured chain may search outside the box.
-        let new_cost = inner_result.best_cost();
-        // Conditional write-back: only adopt the LS result if it
-        // improves on the current cost. Strict Molina §4.3 step 10 is
-        // unconditional, but a conditional update is safer (CMA-ES is
-        // genuinely non-monotone over a chain segment) and matches the
-        // Rmalschains R package's behavior.
+        let incumbent = ls
+            .segment_incumbent(&inner_result.state)
+            .filter(|&(_, cost)| cost < F::infinity());
         let pre_segment_cost = state.costs[c_ls];
-        if !new_cost.is_nan()
-            && new_cost < F::infinity()
-            && (state.costs[c_ls].is_nan() || new_cost < state.costs[c_ls])
-        {
-            state.candidates[c_ls] = inner_result.best_param().clone();
-            state.costs[c_ls] = new_cost;
+        if let Some((point, cost)) = incumbent {
+            if pre_segment_cost.is_nan() || cost < pre_segment_cost {
+                state.candidates[c_ls] = point.clone();
+                state.costs[c_ls] = cost;
+            }
         }
         // Record the cost this segment started from: eligibility (Phase
         // 2) reads `last_ls_cost - costs`, the improvement obtained by

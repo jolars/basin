@@ -79,7 +79,8 @@ pub struct Bounded;
 ///     .max_cost_evals(500)
 ///     .run()
 ///     .unwrap();
-/// assert!(result.best_param()[0].is_finite());
+/// let incumbent = result.incumbent_record().expect("expected an incumbent");
+/// assert!(incumbent.param[0].is_finite());
 /// ```
 ///
 /// # Configuration

@@ -101,7 +101,8 @@ use driver::{NewuoaWork, Transition};
 ///     .max_cost_evals(500)
 ///     .run()
 ///     .unwrap();
-/// assert!(result.best_cost() < 1e-10);
+/// let incumbent = result.incumbent_record().expect("expected an incumbent");
+/// assert!(incumbent.cost < 1e-10);
 /// ```
 ///
 /// # Configuration
