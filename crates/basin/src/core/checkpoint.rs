@@ -5,6 +5,9 @@
 //! `CheckpointWriter`, which intentionally writes only a state for a later
 //! warm start.
 //!
+//! On native targets, enable `checkpoint-postcard` for built-in Postcard file
+//! readers and writers. In Basin 3.x, `serde` also enables these APIs.
+//!
 //! [`Stepper::into_checkpoint`](crate::Stepper::into_checkpoint) consumes a
 //! paused or cleanly stopped run without cloning or serialization. For a
 //! completed run, use [`Executor::run_with_solver`](crate::Executor::run_with_solver)
@@ -334,6 +337,8 @@ mod file {
     }
 
     /// Solver-aware exact-checkpoint file writer.
+    ///
+    /// Available on native targets with `checkpoint-postcard` or `serde`.
     ///
     /// Attach with [`Executor::checkpoint_with`](crate::Executor::checkpoint_with).
     /// Writes use a temporary sibling and atomic rename. Failures are reported

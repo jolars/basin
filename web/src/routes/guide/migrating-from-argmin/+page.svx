@@ -555,7 +555,7 @@ fn main() {
 
 The solver owns the live RNG, velocities, and personal and global bests.
 `PopulationProgress` owns the observable members, costs, and incumbent metadata.
-For exact continuation, retain both through `run_with_solver().into_checkpoint()`
+For exact continuation, retain both through `run_with_solver()?.into_checkpoint()`
 and use `Executor::resume_from_checkpoint`, or serialize them together through
 `ExactCheckpointWriter`. A progress-only snapshot starts a fresh run that
 reevaluates its members and resets particle histories.
@@ -591,7 +591,8 @@ and a problem-dependent coefficient
 ([DOI 10.1287/moor.13.2.311](https://doi.org/10.1287/moor.13.2.311)), so it does
 not justify a universal schedule default.
 
-For long runs, enable `serde` and attach an `ExactCheckpointWriter` with
+For file checkpoints on native targets, enable `checkpoint-postcard` and
+attach an `ExactCheckpointWriter` with
 `Executor::checkpoint_with`. It writes the solver, state, and authoritative
 evaluation counters together. `read_exact_checkpoint` validates the format,
 Basin version, and concrete types; pass the result to
@@ -828,14 +829,12 @@ generic adapter for an Argmin solver implementation. Its Hager–Zhang
 configuration maps closely to Argmin's, but the implementations are not
 promised to produce identical trial trajectories.
 
-Like Argmin, Basin's exact checkpoints serialize a solver and state together;
-Basin also records the authoritative evaluation counters. The older
-`CheckpointWriter` still snapshots only state and therefore provides a warm
-start, not a general promise of an identical future trajectory. State-only
-exact resume is explicitly supported by simulated annealing and global-best
-PSO because their states own every evolving stochastic component. Check a
-solver's API before making the same promise for another stochastic or
-population solver.
+Like Argmin, Basin's exact checkpoints capture the solver and state together.
+Basin also records the authoritative evaluation counters. Simulated annealing
+and global-best PSO keep their evolving stochastic data in the solver, so use
+an exact checkpoint to continue either run. Use a state-only file from
+`CheckpointWriter` to warm-start a fresh run. See
+[Save and resume a run](../getting-started/#save-and-resume-a-run).
 
 During a real migration, keep both integrations behind features until tests
 compare numerical results, termination behavior, evaluation counts, and runtime.

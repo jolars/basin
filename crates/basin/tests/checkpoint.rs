@@ -1,7 +1,10 @@
-//! Round-trip test for the `serde`-gated [`CheckpointWriter`] observer: run,
+//! Round-trip test for the native [`CheckpointWriter`] observer: run,
 //! checkpoint, reload, warm-start, and confirm this deterministic solver
 //! matches an uninterrupted run.
-#![cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+#![cfg(all(
+    any(feature = "serde", feature = "checkpoint-postcard"),
+    not(target_arch = "wasm32")
+))]
 
 #[path = "support/backend_aliases.rs"]
 mod backend_aliases;

@@ -43,7 +43,7 @@ for 4.0.0.
   feasibility targets. Vary problems, dimensions, population sizes, seeds,
   and conditioning. Include bounded and injected runs, both precisions, and
   all four dense backends.
-- [ ] **Prepare the checkpoint migration.** Add `checkpoint-postcard` as a
+- [x] **Prepare the checkpoint migration.** Add `checkpoint-postcard` as a
   compatibility feature while keeping the native file APIs available under
   `serde`. Deprecate state-only `Executor::resume` and document migration to
   `resume_from_checkpoint`.

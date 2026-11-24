@@ -177,6 +177,7 @@ fn resume_skips_init_even_at_iteration_zero() {
 }
 
 #[test]
+#[allow(deprecated)]
 fn legacy_state_resume_still_calls_resume_idempotent_init() {
     let state = TestState {
         param: (),
@@ -215,7 +216,10 @@ fn checkpoint_mode_gates_iterations_but_not_final_save() {
     assert_eq!(snapshots[1].solver().steps, 3);
 }
 
-#[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+#[cfg(all(
+    any(feature = "serde", feature = "checkpoint-postcard"),
+    not(target_arch = "wasm32")
+))]
 mod file {
     use std::io::ErrorKind;
     use std::path::{Path, PathBuf};

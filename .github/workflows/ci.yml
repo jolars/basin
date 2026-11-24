@@ -137,6 +137,11 @@ jobs:
       - run: cargo build -p basin ${{ matrix.flags }}
       - run: cargo check -p basin --all-targets ${{ matrix.flags }}
       - run: cargo test -p basin ${{ matrix.flags }}
+      - name: Test native checkpoint APIs with checkpoint-postcard
+        if: matrix.features == 'serde'
+        run: >-
+          cargo test -p basin --no-default-features --features checkpoint-postcard
+          --test checkpoint --test exact_checkpoint --test stochastic_exact_resume
 
   # The versioned nalgebra LAPACK features link a system LAPACK, so they get a
   # separate matrix (and remain absent from the wasm matrix). LAPACK symbols

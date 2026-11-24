@@ -93,10 +93,11 @@
 //! - [`History`]: records the `(iter, cost, best_cost)` trajectory for later
 //!   plotting or analysis.
 //!
-//! Heavier integrations (tracing, slog, a TUI) live in satellite crates; a
-//! `serde`-gated `CheckpointWriter` (non-wasm) snapshots the state to disk for
-//! warm-starting a later run. Solver-aware exact checkpoints live in the
-//! sibling [`checkpoint`](crate::core::checkpoint) module.
+//! Heavier integrations (tracing, slog, a TUI) live in satellite crates.
+//! On native targets, `CheckpointWriter` snapshots the state to disk for a
+//! later warm start. Enable `checkpoint-postcard` or `serde` to use it.
+//! Solver-aware exact checkpoints live in the sibling
+//! [`checkpoint`](crate::core::checkpoint) module.
 
 use crate::core::termination::TerminationReport;
 

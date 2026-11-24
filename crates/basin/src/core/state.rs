@@ -16,8 +16,8 @@
 //! pipeline composes at `F = f32`.
 //!
 //! [`AcceptanceState`] exposes proposal acceptance history to generic stall
-//! criteria. [`ExactResumeState`] marks a state that contains the complete
-//! evolution snapshot needed by [`Executor::resume`](crate::Executor::resume).
+//! criteria. [`ExactResumeState`] is the marker for the deprecated state-only
+//! [`Executor::resume`](crate::Executor::resume) constructor.
 //!
 //! External and new solvers can use [`PointState`] or [`FirstOrderState`] for
 //! shared progress storage with public, coherent record updates. See
@@ -266,8 +266,7 @@ pub trait CountsMirror: State {
     fn mirror(&mut self, delta: &EvalCounts);
 }
 
-/// Capability marker for states that contain enough information to resume an
-/// interrupted run without changing its trajectory.
+/// Capability marker for the deprecated state-only resume constructor.
 ///
 /// Implementations must return the complete wrapper-side evaluation counters
 /// represented by the snapshot. [`Executor::resume`](crate::Executor::resume)

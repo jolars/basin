@@ -156,6 +156,34 @@ returning `Some(basin::ApplicationStop::new("my_stop"))` to stop or `None` to co
 Basin 2.0 removes the former `terminate_on` facility and abbreviated tolerance
 setters. See [Migrating to Basin 2.0](../migrating-to-v2/#stopping-conditions).
 
+## Save and resume a run
+
+Use `Executor::resume_from_checkpoint` in place of the deprecated
+`Executor::resume`. An exact checkpoint holds the solver, state, and
+cumulative evaluation counts. For a completed run, capture it with
+`run_with_solver()?.into_checkpoint()`. For a paused run, consume the stepper
+with `Stepper::into_checkpoint`.
+
+```rust
+let checkpoint = executor.max_iter(400).run_with_solver()?.into_checkpoint();
+let result = Executor::resume_from_checkpoint(problem, checkpoint)
+    .max_iter(1_000)
+    .run()?;
+```
+
+Supply the same problem and reattach any budgets, observers, cancellation token,
+and checkpoint sinks you need. Exact continuation skips solver initialization.
+The iteration limit is absolute, so a checkpoint at iteration 400 leaves up to
+600 more iterations in this example.
+
+Enable `checkpoint-postcard` to save checkpoints to files on native targets.
+In Basin 3.x, `serde` also enables these APIs. Attach `ExactCheckpointWriter`
+with `Executor::checkpoint_with`, then load the file with
+`read_exact_checkpoint`. The reader checks the file format, exact Basin
+version, and concrete solver and state types. For a fresh run from a state-only
+file written by `CheckpointWriter`, load the saved state with
+`read_checkpoint` and use it to seed `Executor::new`.
+
 ## Next
 
 - [Migrating from Argmin](../migrating-from-argmin/): translate an existing

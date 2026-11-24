@@ -1,8 +1,7 @@
-//! A `serde`-gated observer that snapshots the state to disk.
+//! An observer that snapshots the state to disk.
 //!
-//! Available only with the `serde` feature and off `wasm32` (it does file
-//! I/O). The companion [`read_checkpoint`] reloads a state snapshot to warm
-//! start a later run. Exact continuation instead uses the solver-aware
+//! The companion [`read_checkpoint`] reloads a state snapshot to warm start a
+//! later run. For exact continuation, use the solver-aware
 //! [`ExactCheckpointWriter`](crate::ExactCheckpointWriter).
 
 use std::fs;
@@ -21,6 +20,8 @@ const FORMAT_VERSION: u32 = 1;
 
 /// Write the current state to a file with [`postcard`], overwriting the
 /// previous snapshot, so the file always holds the latest checkpoint.
+///
+/// Available on native targets with `checkpoint-postcard` or `serde`.
 ///
 /// Files start with `BASINST\0` and a little-endian `u32` format version of 1,
 /// followed by the postcard payload. Basin 2.0 reads only this format. See

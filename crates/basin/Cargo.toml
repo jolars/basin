@@ -98,6 +98,8 @@ faer_v0_23 = [
 ]
 faer_v0_24 = ["faer_all", "dep:faer", "dep:faer-traits", "dep:generativity"]
 parallel = ["dep:rayon", "faer?/rayon", "faer_0_22?/rayon", "faer_0_23?/rayon"]
+# In Basin 3.x, serde also enables the native Postcard file APIs.
+checkpoint-postcard = ["serde"]
 serde = [
   "dep:serde",
   "dep:postcard",

@@ -39,11 +39,11 @@
 //! validated before observation. Missing records panic as solver contract
 //! violations; hard problem errors bypass publication and validation.
 //!
-//! [`Executor::resume`] restores state-carried evolution data and evaluation
-//! counters, while [`Executor::resume_from_checkpoint`] restores the solver,
-//! state, and counters from an [`ExactCheckpoint`] and skips `init`.
-//! Consume a paused stepper with [`Stepper::into_checkpoint`], or retain the
-//! final solver and raw counters with [`Executor::run_with_solver`].
+//! [`Executor::resume_from_checkpoint`] restores the solver, state, and
+//! evaluation counters from an [`ExactCheckpoint`] and skips `init`.
+//! Capture a checkpoint with [`Stepper::into_checkpoint`] on a paused run or
+//! [`OptimizationResultWithSolver::into_checkpoint`] after
+//! [`Executor::run_with_solver`].
 
 use crate::core::checkpoint::{CheckpointSink, ExactCheckpoint};
 use crate::core::convergence::NativeConvergenceTest;
@@ -915,6 +915,16 @@ where
     /// [`no_acceptance`](Self::no_acceptance) and zero-tolerance
     /// [`no_objective_improvement`](Self::no_objective_improvement) preserve history stored in the
     /// state, while controls with private clocks or anchors begin a new run.
+    ///
+    /// To migrate, capture the solver, state, and counters together with
+    /// [`Stepper::into_checkpoint`] or
+    /// [`OptimizationResultWithSolver::into_checkpoint`]. Pass the checkpoint
+    /// and the same problem to [`Self::resume_from_checkpoint`], then reattach
+    /// execution controls and observers. This continuation skips solver
+    /// initialization and preserves solver-owned convergence history.
+    #[deprecated(
+        note = "capture an ExactCheckpoint and use Executor::resume_from_checkpoint"
+    )]
     pub fn resume(problem: P, solver: So, state: S) -> Self
     where
         S: ExactResumeState,
