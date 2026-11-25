@@ -316,7 +316,7 @@ fn exact_continuation_preserves_curvature_and_accounting() {
         .unwrap();
     let checkpoint = first.into_checkpoint();
     #[cfg(feature = "serde")]
-    let checkpoint: basin::ExactCheckpoint<
+    let checkpoint: basin::Checkpoint<
         Tnc<basin::Wolfe, Vec<f64>>,
         FirstOrderState<Vec<f64>>,
     > = serde_json::from_str(&serde_json::to_string(&checkpoint).unwrap())
@@ -388,7 +388,7 @@ fn fused_search_preserves_tnc_trajectory_and_exact_continuation() {
         .unwrap()
         .into_checkpoint();
     #[cfg(feature = "serde")]
-    let split: basin::ExactCheckpoint<
+    let split: basin::Checkpoint<
         Tnc<basin::FusedWolfe, Vec<f64>>,
         FirstOrderState<Vec<f64>>,
     > = serde_json::from_str(&serde_json::to_string(&split).unwrap()).unwrap();

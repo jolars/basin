@@ -160,10 +160,8 @@ fn serialized_checkpoint_retains_complete_model() {
         .unwrap()
         .into_checkpoint();
     let bytes = postcard::to_allocvec(&checkpoint).unwrap();
-    let restored: basin::ExactCheckpoint<
-        SolisWets<Vec<f64>>,
-        PointState<Vec<f64>>,
-    > = postcard::from_bytes(&bytes).unwrap();
+    let restored: basin::Checkpoint<SolisWets<Vec<f64>>, PointState<Vec<f64>>> =
+        postcard::from_bytes(&bytes).unwrap();
     let resumed = Executor::resume_from_checkpoint(Sphere, restored)
         .max_iter(35)
         .run_with_solver()

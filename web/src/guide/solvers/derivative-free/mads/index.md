@@ -142,7 +142,7 @@ count as residual evaluations; box-rejected probes make no objective call.
 The solver owns the mesh, Halton counters, and barrier history. Use
 `Executor::run_with_solver` to retain it and inspect `poll_size()` and
 `mesh_index()`. Fresh initialization resets those histories and reevaluates
-the starting point. An `ExactCheckpoint` retains them for exact continuation.
+the starting point. An `Checkpoint` retains them for exact continuation.
 
 Supported parameter types are `Vec<F>`, `nalgebra::DVector<F>`,
 `ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`, in every

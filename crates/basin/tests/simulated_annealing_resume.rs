@@ -2,9 +2,9 @@
 
 use basin::core::rng::ChaCha8Rng;
 use basin::{
-    CostFunction, ExactCheckpoint, ExactCheckpointWriter, Executor, Neighbor,
+    Checkpoint, CheckpointWriter, CostFunction, Executor, Neighbor,
     ObserverMode, ProposalState, SimulatedAnnealing, State,
-    TemperatureSchedule, TerminationCode, read_exact_checkpoint,
+    TemperatureSchedule, TerminationCode, read_checkpoint,
 };
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
@@ -92,7 +92,7 @@ fn serialized_solver_and_state_resume_bit_for_bit() {
         remove_checkpoint(path);
     }
 
-    let reference_writer = ExactCheckpointWriter::new(&reference_path);
+    let reference_writer = CheckpointWriter::new(&reference_path);
     let reference_status = reference_writer.status();
     let reference = Executor::from_start(RuggedCost, solver(), 12)
         .max_iter(80)
@@ -104,17 +104,17 @@ fn serialized_solver_and_state_resume_bit_for_bit() {
     Executor::from_start(RuggedCost, solver(), 12)
         .max_iter(31)
         .checkpoint_with(
-            ExactCheckpointWriter::new(&split_path),
+            CheckpointWriter::new(&split_path),
             ObserverMode::every(7),
         )
         .run()
         .unwrap();
-    let checkpoint: ExactCheckpoint<TestSolver, TestState> =
-        read_exact_checkpoint(&split_path).unwrap();
+    let checkpoint: Checkpoint<TestSolver, TestState> =
+        read_checkpoint(&split_path).unwrap();
     assert_eq!(checkpoint.state().iter(), 31);
     assert_eq!(checkpoint.counts().cost_evals, 32);
 
-    let resumed_writer = ExactCheckpointWriter::new(&resumed_path);
+    let resumed_writer = CheckpointWriter::new(&resumed_path);
     let resumed_status = resumed_writer.status();
     let resumed = Executor::resume_from_checkpoint(RuggedCost, checkpoint)
         .max_iter(80)
@@ -193,17 +193,15 @@ fn always_reject() -> RejectSolver {
     )
 }
 
-fn rejection_checkpoint(
-    name: &str,
-) -> ExactCheckpoint<RejectSolver, RejectState> {
+fn rejection_checkpoint(name: &str) -> Checkpoint<RejectSolver, RejectState> {
     let path = checkpoint_path(name);
     remove_checkpoint(&path);
     Executor::from_start(RuggedCost, always_reject(), 3)
         .max_iter(4)
-        .checkpoint_with(ExactCheckpointWriter::new(&path), ObserverMode::Never)
+        .checkpoint_with(CheckpointWriter::new(&path), ObserverMode::Never)
         .run()
         .unwrap();
-    let checkpoint = read_exact_checkpoint(&path).unwrap();
+    let checkpoint = read_checkpoint(&path).unwrap();
     remove_checkpoint(&path);
     checkpoint
 }

@@ -1218,7 +1218,7 @@ fn typed_hessian_buffer_survives_serialized_checkpoint() {
         basin::solver::trust_region::ExactHessian,
         basin::EvaluationBuffers<(), basin::DenseMatrix>,
     >;
-    type Checkpoint = basin::ExactCheckpoint<Solver, FirstOrderState<Vec<f64>>>;
+    type Checkpoint = basin::Checkpoint<Solver, FirstOrderState<Vec<f64>>>;
     let solver = || {
         basin::TrustRegion::new()
             .with_radius(0.1)

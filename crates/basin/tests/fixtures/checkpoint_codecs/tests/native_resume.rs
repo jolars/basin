@@ -1,7 +1,7 @@
 use std::convert::Infallible;
 
 use basin::{
-    CostFunction, CountsMirror, EvalCounts, ExactCheckpoint, Executor, Problem,
+    Checkpoint, CostFunction, CountsMirror, EvalCounts, Executor, Problem,
     Solver, SolverStep, State, StepOutcome,
 };
 use bincode_next::{Decode, Encode, Fingerprint};
@@ -127,8 +127,8 @@ struct WireCheckpointV1 {
     eval_counts: [u64; 6],
 }
 
-impl From<ExactCheckpoint<Halving, Progress>> for WireCheckpointV1 {
-    fn from(checkpoint: ExactCheckpoint<Halving, Progress>) -> Self {
+impl From<Checkpoint<Halving, Progress>> for WireCheckpointV1 {
+    fn from(checkpoint: Checkpoint<Halving, Progress>) -> Self {
         let (solver, state, counts) = checkpoint.into_parts();
         Self {
             scale: solver.scale,
@@ -147,7 +147,7 @@ impl From<ExactCheckpoint<Halving, Progress>> for WireCheckpointV1 {
     }
 }
 
-impl From<WireCheckpointV1> for ExactCheckpoint<Halving, Progress> {
+impl From<WireCheckpointV1> for Checkpoint<Halving, Progress> {
     fn from(wire: WireCheckpointV1) -> Self {
         let mut counts = EvalCounts::default();
         [

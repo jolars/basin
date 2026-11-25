@@ -40,12 +40,12 @@
 //! violations; hard problem errors bypass publication and validation.
 //!
 //! [`Executor::resume_from_checkpoint`] restores the solver, state, and
-//! evaluation counters from an [`ExactCheckpoint`] and skips `init`.
+//! evaluation counters from a [`Checkpoint`] and skips `init`.
 //! Capture a checkpoint with [`Stepper::into_checkpoint`] on a paused run or
 //! [`OptimizationResultWithSolver::into_checkpoint`] after
 //! [`Executor::run_with_solver`].
 
-use crate::core::checkpoint::{CheckpointSink, ExactCheckpoint};
+use crate::core::checkpoint::{Checkpoint, CheckpointSink};
 use crate::core::convergence::NativeConvergenceTest;
 use crate::core::observer::{
     ObservationEvent, Observe, ObserveSolver, ObserverMode, SolverCallback,
@@ -278,8 +278,8 @@ impl<S: State, So> OptimizationResultWithSolver<S, So> {
     /// discards the termination reason. Pass the checkpoint to
     /// [`Executor::resume_from_checkpoint`] with the same problem and newly
     /// configured execution policy to continue from this boundary.
-    pub fn into_checkpoint(self) -> ExactCheckpoint<So, S> {
-        ExactCheckpoint::from_parts(self.solver, self.state, self.counts)
+    pub fn into_checkpoint(self) -> Checkpoint<So, S> {
+        Checkpoint::from_parts(self.solver, self.state, self.counts)
     }
 }
 
@@ -665,8 +665,8 @@ where
     /// # Ok(())
     /// # }
     /// ```
-    pub fn into_checkpoint(self) -> Option<ExactCheckpoint<So, S>> {
-        Some(ExactCheckpoint::from_parts(
+    pub fn into_checkpoint(self) -> Option<Checkpoint<So, S>> {
+        Some(Checkpoint::from_parts(
             self.solver,
             self.state?,
             *self.problem.counts(),
@@ -923,7 +923,7 @@ where
     /// execution controls and observers. This continuation skips solver
     /// initialization and preserves solver-owned convergence history.
     #[deprecated(
-        note = "capture an ExactCheckpoint and use Executor::resume_from_checkpoint"
+        note = "capture a Checkpoint and use Executor::resume_from_checkpoint"
     )]
     pub fn resume(problem: P, solver: So, state: S) -> Self
     where
@@ -956,7 +956,7 @@ where
     /// or serializing the solver and state.
     pub fn resume_from_checkpoint(
         problem: P,
-        checkpoint: ExactCheckpoint<So, S>,
+        checkpoint: Checkpoint<So, S>,
     ) -> Self {
         let (solver, state, resume_counts) = checkpoint.into_parts();
         let mut executor = Self::new(problem, solver, state);

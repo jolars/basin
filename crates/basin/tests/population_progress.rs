@@ -343,7 +343,7 @@ where
             .unwrap()
             .into_checkpoint();
     let bytes = postcard::to_allocvec(&checkpoint).unwrap();
-    let restored: basin::ExactCheckpoint<So, PopulationProgress<Vec<f64>>> =
+    let restored: basin::Checkpoint<So, PopulationProgress<Vec<f64>>> =
         postcard::from_bytes(&bytes).unwrap();
     let resumed = Executor::resume_from_checkpoint(Sphere::new(), restored)
         .require_evaluated_state()

@@ -256,7 +256,7 @@ fn proposal_metadata_uses_publication_counts_and_iteration() {
 #[cfg(feature = "serde")]
 #[test]
 fn serialized_checkpoint_preserves_templates_and_live_components() {
-    type Checkpoint = basin::ExactCheckpoint<
+    type Checkpoint = basin::Checkpoint<
         SimulatedAnnealing<StatefulNeighbor>,
         basin::ProposalState<Vec<f64>>,
     >;

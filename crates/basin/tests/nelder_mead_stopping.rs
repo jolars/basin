@@ -384,7 +384,7 @@ fn serialized_checkpoint_preserves_reference_and_evidence() {
             .unwrap()
             .into_checkpoint();
         let bytes = postcard::to_allocvec(&checkpoint).unwrap();
-        let decoded: basin::ExactCheckpoint<
+        let decoded: basin::Checkpoint<
             NelderMead<Vec<f64>>,
             SimplexProgress<Vec<f64>>,
         > = postcard::from_bytes(&bytes).unwrap();

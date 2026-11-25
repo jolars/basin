@@ -1,8 +1,8 @@
 //! An observer that snapshots the state to disk.
 //!
-//! The companion [`read_checkpoint`] reloads a state snapshot to warm start a
-//! later run. For exact continuation, use the solver-aware
-//! [`ExactCheckpointWriter`](crate::ExactCheckpointWriter).
+//! Use [`read_state_snapshot`] to load a state snapshot for a later warm start.
+//! For exact continuation, use the solver-aware
+//! [`CheckpointWriter`](crate::CheckpointWriter).
 
 use std::fs;
 use std::io;
@@ -19,15 +19,14 @@ const MAGIC: &[u8; 8] = b"BASINST\0";
 const FORMAT_VERSION: u32 = 1;
 
 /// Write the current state to a file with [`postcard`], overwriting the
-/// previous snapshot, so the file always holds the latest checkpoint.
+/// previous snapshot.
 ///
 /// Available on native targets with `checkpoint-postcard`.
 ///
 /// Files start with `BASINST\0` and a little-endian `u32` format version of 1,
 /// followed by the postcard payload.
 ///
-/// State-only checkpointing is an observer's job in Basin. It records an
-/// iterate for a later warm start without promising an identical trajectory.
+/// A state snapshot records an iterate for a later warm start.
 /// Register it with an [`ObserverMode`](super::ObserverMode) to pick the
 /// cadence ([`Every(n)`](super::ObserverMode::Every) for every `n`th iteration,
 /// [`NewBest`](super::ObserverMode::NewBest) to snapshot only on improvement).
@@ -37,19 +36,19 @@ const FORMAT_VERSION: u32 = 1;
 /// [`PointState`](crate::PointState), [`FirstOrderState`](crate::FirstOrderState),
 /// and [`ProposalState`](crate::ProposalState) support serialization when their
 /// parameter and scalar types do. Solver-owned models, neighbors, and RNGs are
-/// absent from these snapshots; use [`ExactCheckpointWriter`](crate::ExactCheckpointWriter)
+/// absent from these snapshots; use [`CheckpointWriter`](crate::CheckpointWriter)
 /// to retain them.
 /// Handing a non-serializable state is a compile error.
 ///
-/// # Resume
+/// # Start a fresh run from a snapshot
 ///
-/// Read the file with [`read_checkpoint`], deserialize into the concrete state,
-/// and hand it to [`Executor::new`](crate::Executor::new). The solver runs its
-/// normal `init` path and begins a new run from the restored iterate.
+/// Use [`read_state_snapshot`] to load the concrete state, then pass it to
+/// [`Executor::new`](crate::Executor::new). The solver initializes a fresh run
+/// from the saved iterate.
 ///
 /// ```no_run
 /// # use basin::{FirstOrderState, CostFunction, Executor, Gradient, GradientDescent};
-/// use basin::{CheckpointWriter, ObserverMode, read_checkpoint};
+/// use basin::{ObserverMode, StateSnapshotWriter, read_state_snapshot};
 /// # struct Quadratic;
 /// impl CostFunction for Quadratic {
 /// #     type Param = Vec<f64>;
@@ -63,34 +62,33 @@ const FORMAT_VERSION: u32 = 1;
 /// #     type Gradient = Vec<f64>;
 /// #     fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, Self::Error> { Ok(x.clone()) }
 /// # }
-/// // First run: checkpoint every 10 iterations.
+/// // Save a snapshot every 10 iterations.
 /// Executor::new(Quadratic, GradientDescent::new(0.1), FirstOrderState::new(vec![5.0, 5.0]))
 ///     .max_iter(50)
-///     .observe_with(CheckpointWriter::new("run.ckpt"), ObserverMode::Every(10))
+///     .observe_with(StateSnapshotWriter::new("run.snapshot"), ObserverMode::Every(10))
 ///     .run()
 ///     .unwrap();
 ///
-/// // Later: reload and continue from where it stopped.
-/// let state: FirstOrderState<Vec<f64>> = read_checkpoint("run.ckpt").unwrap();
+/// // Start a fresh run from the saved iterate.
+/// let state: FirstOrderState<Vec<f64>> = read_state_snapshot("run.snapshot").unwrap();
 /// Executor::new(Quadratic, GradientDescent::new(0.1), state)
 ///     .max_iter(50)
 ///     .run()
 ///     .unwrap();
 /// ```
 #[derive(Clone, Debug)]
-pub struct CheckpointWriter {
+pub struct StateSnapshotWriter {
     path: PathBuf,
 }
 
-impl CheckpointWriter {
+impl StateSnapshotWriter {
     /// Snapshot to `path`, overwriting it on each fire.
     pub fn new(path: impl Into<PathBuf>) -> Self {
         Self { path: path.into() }
     }
 
-    /// Serialize `state` and write it to the checkpoint path. Writes to a
-    /// sibling `*.tmp` first and renames into place so a crash mid-write can't
-    /// truncate the previous good checkpoint.
+    /// Write the serialized state to a temporary sibling before renaming it
+    /// into place to protect the previous snapshot during the write.
     fn write<S: Serialize>(&self, state: &S) -> io::Result<()> {
         let payload = postcard::to_allocvec(state).map_err(io::Error::other)?;
         let mut bytes =
@@ -103,20 +101,18 @@ impl CheckpointWriter {
         fs::rename(&tmp, &self.path)
     }
 
-    /// Attempt the write; on failure, log to stderr and carry on. The
-    /// [`Observe`] contract is infallible—a failing checkpoint must not kill
-    /// the optimization run.
+    /// Report write failures to stderr and let the optimization run continue.
     fn try_write<S: Serialize>(&self, state: &S) {
         if let Err(err) = self.write(state) {
             eprintln!(
-                "CheckpointWriter: failed to write {}: {err}",
+                "StateSnapshotWriter: failed to write {}: {err}",
                 self.path.display()
             );
         }
     }
 }
 
-impl<S> Observe<S> for CheckpointWriter
+impl<S> Observe<S> for StateSnapshotWriter
 where
     S: State + Serialize,
 {
@@ -133,17 +129,19 @@ where
     }
 }
 
-/// Load a checkpoint previously written by [`CheckpointWriter`] into a concrete
-/// state, ready for [`Executor::new`](crate::Executor::new) as a warm start.
+/// Load a state snapshot written by [`StateSnapshotWriter`].
+///
+/// Pass the concrete state to [`Executor::new`](crate::Executor::new) to warm
+/// start a fresh run.
 ///
 /// Reads postcard state format version 1 without modifying the file. Missing
 /// format markers, unsupported versions, malformed data, and trailing bytes
 /// return [`io::ErrorKind::InvalidData`].
 ///
 /// The file must match the concrete state's serialized layout. See the
-/// [migration guide](https://basin.rs/guide/migrating-to-v2/#checkpoint-files)
-/// for moving saved runs from older formats.
-pub fn read_checkpoint<S: DeserializeOwned>(
+/// [migration guide](https://basin.rs/guide/migrating-to-v4/#existing-files)
+/// for using files from older versions of Basin.
+pub fn read_state_snapshot<S: DeserializeOwned>(
     path: impl AsRef<Path>,
 ) -> io::Result<S> {
     let bytes = fs::read(path)?;
@@ -151,9 +149,9 @@ pub fn read_checkpoint<S: DeserializeOwned>(
         |message: &str| io::Error::new(io::ErrorKind::InvalidData, message);
     let body = bytes
         .strip_prefix(MAGIC)
-        .ok_or_else(|| invalid_data("invalid state checkpoint magic"))?;
+        .ok_or_else(|| invalid_data("invalid state snapshot magic"))?;
     if body.len() < size_of::<u32>() {
-        return Err(invalid_data("truncated state checkpoint prefix"));
+        return Err(invalid_data("truncated state snapshot prefix"));
     }
     let version = u32::from_le_bytes(
         body[..size_of::<u32>()]
@@ -162,14 +160,14 @@ pub fn read_checkpoint<S: DeserializeOwned>(
     );
     if version != FORMAT_VERSION {
         return Err(invalid_data(&format!(
-            "unsupported state checkpoint format version {version}; expected {FORMAT_VERSION}"
+            "unsupported state snapshot format version {version}; expected {FORMAT_VERSION}"
         )));
     }
     let (state, remaining) =
         postcard::take_from_bytes(&body[size_of::<u32>()..])
             .map_err(|error| invalid_data(&error.to_string()))?;
     if !remaining.is_empty() {
-        return Err(invalid_data("trailing data in state checkpoint"));
+        return Err(invalid_data("trailing data in state snapshot"));
     }
     Ok(state)
 }

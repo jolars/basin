@@ -187,7 +187,7 @@ fn executor_budgets_and_exact_resume() {
     ));
     #[cfg(all(feature = "checkpoint-postcard", not(target_arch = "wasm32")))]
     let split_run = split_run.checkpoint_with(
-        crate::ExactCheckpointWriter::new(&path),
+        crate::CheckpointWriter::new(&path),
         ObserverMode::Always,
     );
     let mut stepper = split_run.into_stepper().unwrap();
@@ -199,7 +199,7 @@ fn executor_budgets_and_exact_resume() {
     let restored =
         postcard::from_bytes(&postcard::to_allocvec(&checkpoint).unwrap())
             .unwrap();
-    let resume = |checkpoint: crate::ExactCheckpoint<
+    let resume = |checkpoint: crate::Checkpoint<
         ModelDriver,
         crate::PointState<Vec<f64>>,
     >| {
@@ -224,7 +224,7 @@ fn executor_budgets_and_exact_resume() {
     resume(restored);
     #[cfg(all(feature = "checkpoint-postcard", not(target_arch = "wasm32")))]
     {
-        let restored = crate::read_exact_checkpoint(&path);
+        let restored = crate::read_checkpoint(&path);
         std::fs::remove_file(&path).unwrap();
         resume(restored.unwrap());
     }

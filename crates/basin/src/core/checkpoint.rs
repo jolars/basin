@@ -1,9 +1,8 @@
 //! Solver-aware checkpoints for exact continuation.
 //!
 //! An exact checkpoint captures the solver, state, and authoritative
-//! evaluation counters at one coherent iteration boundary. This differs from
-//! `CheckpointWriter`, which intentionally writes only a state for a later
-//! warm start.
+//! evaluation counters at one coherent iteration boundary. To save just the
+//! state for a later warm start, use `StateSnapshotWriter`.
 //!
 //! On native targets, enable `checkpoint-postcard` for built-in
 //! Postcard file readers and writers.
@@ -37,7 +36,7 @@ use crate::core::problem::EvalCounts;
 /// types, including the scalar and numerical backend. Check that the reader
 /// uses compatible builds of the solver, state, and their dependencies. Use a
 /// decoder that can reject malformed and trailing data. Basin's built-in
-/// `read_exact_checkpoint` checks its file format, Basin version, and concrete
+/// `read_checkpoint` checks its file format, Basin version, and concrete
 /// solver and state type names before decoding the payload.
 ///
 /// Supply the same problem, including any inputs that affect its evaluations,
@@ -49,7 +48,7 @@ This example uses `serde_json` as an application dependency and starts with
 finite values.
 
 ```
-use basin::{CostFunction, ExactCheckpoint, Executor, NelderMead, SimplexProgress, State};
+use basin::{Checkpoint, CostFunction, Executor, NelderMead, SimplexProgress, State};
 use std::convert::Infallible;
 
 struct Sphere;
@@ -72,7 +71,7 @@ let checkpoint = stepper.into_checkpoint().unwrap();
 assert_eq!(checkpoint.state().iter(), 1);
 
 let bytes = serde_json::to_vec(&checkpoint)?;
-let restored: ExactCheckpoint<NelderMead<Vec<f64>>, SimplexProgress<Vec<f64>>> =
+let restored: Checkpoint<NelderMead<Vec<f64>>, SimplexProgress<Vec<f64>>> =
     serde_json::from_slice(&bytes)?;
 assert_eq!(restored.state().iter(), 1);
 let result = Executor::resume_from_checkpoint(Sphere, restored)
@@ -86,13 +85,13 @@ assert_eq!(result.iter(), 10);
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
-pub struct ExactCheckpoint<So, S> {
+pub struct Checkpoint<So, S> {
     solver: So,
     state: S,
     counts: EvalCounts,
 }
 
-impl<So, S> ExactCheckpoint<So, S> {
+impl<So, S> Checkpoint<So, S> {
     /// Build a checkpoint from its complete parts.
     ///
     /// Callers constructing checkpoints manually are responsible for ensuring
@@ -155,7 +154,7 @@ mod file {
     use serde::Serialize;
     use serde::de::DeserializeOwned;
 
-    use super::{CheckpointSink, EvalCounts, ExactCheckpoint};
+    use super::{Checkpoint, CheckpointSink, EvalCounts};
 
     const MAGIC: &[u8; 8] = b"BASINEX\0";
     const FORMAT_VERSION: u32 = 4;
@@ -302,7 +301,7 @@ mod file {
         last_error: Option<CheckpointWriteError>,
     }
 
-    /// Shared health information for an [`ExactCheckpointWriter`].
+    /// Shared health information for a [`CheckpointWriter`].
     ///
     /// Clone this handle before moving the writer into an executor to inspect
     /// checkpoint health from another thread or after the run completes.
@@ -349,18 +348,18 @@ mod file {
     /// Attach with [`Executor::checkpoint_with`](crate::Executor::checkpoint_with).
     /// Writes use a temporary sibling and atomic rename. Failures are reported
     /// to stderr and through [`status`](Self::status), but do not stop the run.
-    /// Read the result with [`read_exact_checkpoint`] and pass it to
+    /// Read the result with [`read_checkpoint`] and pass it to
     /// [`Executor::resume_from_checkpoint`](crate::Executor::resume_from_checkpoint).
     ///
     /// Writes format version 4 with postcard-encoded metadata and payload.
     /// The file records the exact Basin version and the solver and state types.
     #[derive(Clone, Debug)]
-    pub struct ExactCheckpointWriter {
+    pub struct CheckpointWriter {
         path: PathBuf,
         status: CheckpointStatus,
     }
 
-    impl ExactCheckpointWriter {
+    impl CheckpointWriter {
         /// Write exact checkpoints to `path`.
         pub fn new(path: impl Into<PathBuf>) -> Self {
             Self {
@@ -409,7 +408,7 @@ mod file {
         }
     }
 
-    impl<So, S> CheckpointSink<So, S> for ExactCheckpointWriter
+    impl<So, S> CheckpointSink<So, S> for CheckpointWriter
     where
         So: Serialize,
         S: Serialize + crate::core::state::State,
@@ -425,7 +424,7 @@ mod file {
                         kind: error.kind(),
                         message: error.to_string(),
                     };
-                    eprintln!("ExactCheckpointWriter: {error}");
+                    eprintln!("CheckpointWriter: {error}");
                     self.status.record_failure(error);
                 }
             }
@@ -440,11 +439,11 @@ mod file {
     /// Unsupported formats, mismatched metadata, malformed data, and trailing
     /// bytes return [`io::ErrorKind::InvalidData`].
     ///
-    /// See the [migration guide](https://basin.rs/guide/migrating-to-v2/#checkpoint-files)
-    /// for moving saved runs from older formats.
-    pub fn read_exact_checkpoint<So, S>(
+    /// See the [migration guide](https://basin.rs/guide/migrating-to-v4/#existing-files)
+    /// for using files from older versions of Basin.
+    pub fn read_checkpoint<So, S>(
         path: impl AsRef<Path>,
-    ) -> io::Result<ExactCheckpoint<So, S>>
+    ) -> io::Result<Checkpoint<So, S>>
     where
         So: DeserializeOwned,
         S: DeserializeOwned,
@@ -512,7 +511,7 @@ mod file {
         }
         let payload: Payload<So, S> =
             decode_checkpoint_part(payload_bytes, "payload")?;
-        Ok(ExactCheckpoint::from_parts(
+        Ok(Checkpoint::from_parts(
             payload.solver,
             payload.state,
             payload.counts,
@@ -522,6 +521,5 @@ mod file {
 
 #[cfg(all(feature = "checkpoint-postcard", not(target_arch = "wasm32")))]
 pub use file::{
-    CheckpointStatus, CheckpointWriteError, ExactCheckpointWriter,
-    read_exact_checkpoint,
+    CheckpointStatus, CheckpointWriteError, CheckpointWriter, read_checkpoint,
 };

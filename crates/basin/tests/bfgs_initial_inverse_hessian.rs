@@ -9,8 +9,8 @@ use basin::FirstOrderState;
 #[cfg(feature = "serde")]
 use basin::solver::bfgs::{FixedInverseHessian, InitialInverseHessian};
 use basin::{
-    Bfgs, Constant, CostFunction, DenseMatrix, ExactCheckpoint, Executor,
-    Gradient, MatrixIdentity, State,
+    Bfgs, Checkpoint, Constant, CostFunction, DenseMatrix, Executor, Gradient,
+    MatrixIdentity, State,
 };
 use std::{cell::Cell, convert::Infallible};
 
@@ -160,7 +160,7 @@ fn skipped_curvature_does_not_replace_custom_seed() {
     let y: Vec<_> = next_gradient.iter().zip(g).map(|(a, b)| a - b).collect();
     let resumed = Executor::resume_from_checkpoint(
         quadratic(),
-        ExactCheckpoint::from_parts(
+        Checkpoint::from_parts(
             solver.with_relative_curvature_tolerance(0.0),
             state,
             counts,
@@ -206,7 +206,7 @@ fn skipped_default_curvature_defers_rescaling_until_the_first_update() {
         DenseMatrix::from_fn(2, 2, |i, j| if i == j { sy / yy } else { 0.0 });
     let resumed = Executor::resume_from_checkpoint(
         quadratic(),
-        ExactCheckpoint::from_parts(
+        Checkpoint::from_parts(
             solver.with_relative_curvature_tolerance(0.0),
             state,
             counts,
@@ -235,7 +235,7 @@ fn changing_initializer_affects_fresh_solves_but_preserves_the_live_model() {
     // must preserve the default model's pending first-update rescaling.
     let first = make().max_iter(0).run_with_solver().unwrap();
     let (solver, state, counts) = first.into_checkpoint().into_parts();
-    let checkpoint = ExactCheckpoint::from_parts(
+    let checkpoint = Checkpoint::from_parts(
         solver.with_initial_inverse_hessian(seed()),
         state,
         counts,
@@ -517,7 +517,7 @@ fn serialized_fixed_seed_preserves_model_then_restarts_from_original_seed() {
         Constant,
         FixedInverseHessian<DenseMatrix>,
     >;
-    type Checkpoint = ExactCheckpoint<Solver, FirstOrderState<Vec<f64>>>;
+    type BfgsCheckpoint = Checkpoint<Solver, FirstOrderState<Vec<f64>>>;
     let make = || {
         Executor::from_start(
             quadratic(),
@@ -534,7 +534,7 @@ fn serialized_fixed_seed_preserves_model_then_restarts_from_original_seed() {
             .unwrap()
             .into_checkpoint();
         let bytes = postcard::to_allocvec(&checkpoint).unwrap();
-        let restored: Checkpoint = postcard::from_bytes(&bytes).unwrap();
+        let restored: BfgsCheckpoint = postcard::from_bytes(&bytes).unwrap();
         let resumed = Executor::resume_from_checkpoint(quadratic(), restored)
             .max_iter(4)
             .run_with_solver()
@@ -571,7 +571,7 @@ fn default_identity_policy_preserves_the_previous_postcard_layout() {
         counts: &'a basin::EvalCounts,
     }
     type Solver = Bfgs<Vec<f64>, f64, DenseMatrix, Constant>;
-    type Checkpoint = ExactCheckpoint<Solver, FirstOrderState<Vec<f64>>>;
+    type BfgsCheckpoint = Checkpoint<Solver, FirstOrderState<Vec<f64>>>;
     assert!(
         !std::any::type_name::<Solver>().contains("IdentityInverseHessian")
     );
@@ -602,7 +602,7 @@ fn default_identity_policy_preserves_the_previous_postcard_layout() {
         };
         let bytes = postcard::to_allocvec(&previous).unwrap();
         assert_eq!(bytes, postcard::to_allocvec(&checkpoint).unwrap());
-        let restored: Checkpoint = postcard::from_bytes(&bytes).unwrap();
+        let restored: BfgsCheckpoint = postcard::from_bytes(&bytes).unwrap();
         let resumed = Executor::resume_from_checkpoint(quadratic(), restored)
             .max_iter(4)
             .run_with_solver()
@@ -642,7 +642,7 @@ impl InitialInverseHessian<Vec<f64>, DenseMatrix> for GradientSeed {
 #[cfg(feature = "serde")]
 #[test]
 fn named_gradient_initializer_survives_serialization_and_fresh_reuse() {
-    type Checkpoint = ExactCheckpoint<
+    type BfgsCheckpoint = Checkpoint<
         Bfgs<Vec<f64>, f64, DenseMatrix, Constant, GradientSeed>,
         FirstOrderState<Vec<f64>>,
     >;
@@ -665,7 +665,7 @@ fn named_gradient_initializer_survives_serialization_and_fresh_reuse() {
             .unwrap()
             .into_checkpoint();
         let bytes = postcard::to_allocvec(&checkpoint).unwrap();
-        let restored: Checkpoint = postcard::from_bytes(&bytes).unwrap();
+        let restored: BfgsCheckpoint = postcard::from_bytes(&bytes).unwrap();
         let resumed = Executor::resume_from_checkpoint(Sphere, restored)
             .max_iter(4)
             .run_with_solver()

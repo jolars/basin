@@ -1,12 +1,12 @@
 //! Capability controls exercised through the public owned and borrowed drivers.
 
 use basin::{
-    CostFunction, CountsMirror, EvalCounts, EvaluatedGradientState,
-    EvaluatedState, EvaluationKind, ExactCheckpoint, Executor, FirstOrderState,
-    Gradient, Hessian, HessianProduct, IncumbentRef, IncumbentState,
-    InnerExecutor, Jacobian, ObjectiveIncumbentState, Observe, ObserverMode,
-    PointState, Problem, RawEvaluationState, Residual, RunControl, Solver,
-    State, TerminationCode, run_loop_with_control,
+    Checkpoint, CostFunction, CountsMirror, EvalCounts, EvaluatedGradientState,
+    EvaluatedState, EvaluationKind, Executor, FirstOrderState, Gradient,
+    Hessian, HessianProduct, IncumbentRef, IncumbentState, InnerExecutor,
+    Jacobian, ObjectiveIncumbentState, Observe, ObserverMode, PointState,
+    Problem, RawEvaluationState, Residual, RunControl, Solver, State,
+    TerminationCode, run_loop_with_control,
 };
 use std::cell::Cell;
 use std::convert::Infallible;
@@ -210,7 +210,7 @@ fn incomplete_publications_never_reach_observers() {
 fn restored_checkpoints_and_borrowed_initialization_are_validated() {
     let calls = Rc::new(Cell::new(0));
     assert_incomplete(|| {
-        let checkpoint = ExactCheckpoint::from_parts(
+        let checkpoint = Checkpoint::from_parts(
             Incomplete {
                 init: true,
                 mid_step: false,

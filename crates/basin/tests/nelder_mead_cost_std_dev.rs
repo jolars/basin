@@ -453,7 +453,7 @@ fn fresh_and_exact_continuation_preserve_the_setting_and_result() {
         let checkpoint = {
             let bytes = postcard::to_allocvec(&checkpoint).unwrap();
             postcard::from_bytes::<
-                basin::ExactCheckpoint<
+                basin::Checkpoint<
                     NelderMead<Vec<f64>>,
                     SimplexProgress<Vec<f64>>,
                 >,

@@ -216,7 +216,7 @@ fn nonfinite_costs_and_ties_have_stable_selection_semantics() {
 #[cfg(feature = "serde")]
 #[test]
 fn serialized_checkpoint_keeps_workspace_while_progress_only_restarts() {
-    type Checkpoint = basin::ExactCheckpoint<
+    type Checkpoint = basin::Checkpoint<
         NelderMead<Vec<f64>>,
         basin::SimplexProgress<Vec<f64>>,
     >;

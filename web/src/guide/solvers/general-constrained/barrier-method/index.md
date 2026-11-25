@@ -117,7 +117,7 @@ points with eligible costs can establish an incumbent, so use checked state
 access when a run stops before finding one. The outer state exposes no gradient.
 
 Each inner solve starts fresh. Fresh outer initialization resets the phase,
-weight schedule, and progress; an `ExactCheckpoint` retains them along with the
+weight schedule, and progress. A `Checkpoint` retains them along with the
 inner solver and evaluation counts. Enable `with_inner_diagnostics(true)` and
 use `run_with_solver` to inspect the last attempted segment, including its
 phase, weight, gap, and native outcome. With `serde`, solver checkpoints are

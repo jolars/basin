@@ -233,7 +233,7 @@ fn continuing_a_native_stop_replaces_its_record() {
     .unwrap();
     assert_eq!(result.native_convergence_tests(), &[Test::AbsoluteGradient]);
     let (solver, state, counts) = result.into_checkpoint().into_parts();
-    let checkpoint = basin::ExactCheckpoint::from_parts(
+    let checkpoint = basin::Checkpoint::from_parts(
         solver.with_absolute_gradient_tolerance(None),
         state,
         counts,

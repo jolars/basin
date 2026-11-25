@@ -151,7 +151,7 @@ use driver::{CobylaWork, Transition};
 /// [`crate::Executor::run_with_solver`] or [`crate::Stepper::solver`]. Fresh
 /// initialization clears progress and rebuilds all machinery, including when
 /// reusing a populated state or changing problem dimensions. Retain an
-/// [`crate::ExactCheckpoint`] for continuation that skips initialization.
+/// [`crate::Checkpoint`] for continuation that skips initialization.
 /// With `serde`, the solver and state serialize the complete run. Legacy
 /// `CobylaState` payloads are incompatible; use their parameters for a fresh run.
 ///

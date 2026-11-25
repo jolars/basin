@@ -435,7 +435,7 @@ fn checkpoint_rebuilds_scratch_for_exact_continuation() {
         let checkpoint = stepper.into_checkpoint().unwrap();
         let bytes = postcard::to_allocvec(&checkpoint).unwrap();
         let (checkpoint, remaining): (
-            basin::ExactCheckpoint<Slsqp, SelectedFirstOrderState<Vec<f64>>>,
+            basin::Checkpoint<Slsqp, SelectedFirstOrderState<Vec<f64>>>,
             &[u8],
         ) = postcard::take_from_bytes(&bytes).unwrap();
         assert!(remaining.is_empty());

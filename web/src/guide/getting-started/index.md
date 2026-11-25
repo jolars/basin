@@ -131,8 +131,8 @@ iterations, so a single iteration can take the run past an evaluation limit.
 
 ## Save and resume a run
 
-Use `Executor::resume_from_checkpoint` to continue a saved run. An exact
-checkpoint holds the solver, state, and cumulative evaluation counts. For a
+Use `Executor::resume_from_checkpoint` to continue a saved run. A
+`Checkpoint` holds the solver, state, and cumulative evaluation counts. For a
 completed run, capture it with
 `run_with_solver()?.into_checkpoint()`. For a paused run, consume the stepper
 with `Stepper::into_checkpoint`.
@@ -151,12 +151,12 @@ The iteration limit is absolute, so a checkpoint at iteration 400 leaves up to
 
 Enable `checkpoint-postcard` to save checkpoints to files on native targets.
 Enable `serde` to serialize checkpoints with a codec you choose.
-Attach `ExactCheckpointWriter`
+Attach `CheckpointWriter`
 with `Executor::checkpoint_with`, then load the file with
-`read_exact_checkpoint`. The reader checks the file format, exact Basin
+`read_checkpoint`. The reader checks the file format, exact Basin
 version, and concrete solver and state types. For a fresh run from a state-only
-file written by `CheckpointWriter`, load the saved state with
-`read_checkpoint` and use it to seed `Executor::new`.
+file written by `StateSnapshotWriter`, load the saved state with
+`read_state_snapshot` and use it to seed `Executor::new`.
 
 ## Next
 

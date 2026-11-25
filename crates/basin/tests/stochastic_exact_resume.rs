@@ -4,9 +4,9 @@ use std::convert::Infallible;
 use std::path::{Path, PathBuf};
 
 use basin::{
-    BasinHopping, CmaEs, CostFunction, De, DenseMatrix, ExactCheckpoint,
-    ExactCheckpointWriter, Executor, NelderMead, ObserverMode, PointState,
-    PopulationProgress, SimplexProgress, Ssga, State, read_exact_checkpoint,
+    BasinHopping, Checkpoint, CheckpointWriter, CmaEs, CostFunction, De,
+    DenseMatrix, Executor, NelderMead, ObserverMode, PointState,
+    PopulationProgress, SimplexProgress, Ssga, State, read_checkpoint,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -125,7 +125,7 @@ fn de_resume_is_bit_identical() {
     )
     .max_iter(24)
     .checkpoint_with(
-        ExactCheckpointWriter::new(&reference_path),
+        CheckpointWriter::new(&reference_path),
         ObserverMode::Never,
     )
     .run()
@@ -137,21 +137,18 @@ fn de_resume_is_bit_identical() {
         PopulationProgress::empty(),
     )
     .max_iter(9)
-    .checkpoint_with(
-        ExactCheckpointWriter::new(&split_path),
-        ObserverMode::Never,
-    )
+    .checkpoint_with(CheckpointWriter::new(&split_path), ObserverMode::Never)
     .run()
     .unwrap();
-    let checkpoint: ExactCheckpoint<TestSolver, TestState> =
-        read_exact_checkpoint(&split_path).unwrap();
+    let checkpoint: Checkpoint<TestSolver, TestState> =
+        read_checkpoint(&split_path).unwrap();
     assert_eq!(checkpoint.state().iter(), 9);
 
     let resumed =
         Executor::resume_from_checkpoint(Landscape::new(3), checkpoint)
             .max_iter(24)
             .checkpoint_with(
-                ExactCheckpointWriter::new(&resumed_path),
+                CheckpointWriter::new(&resumed_path),
                 ObserverMode::Never,
             )
             .run()
@@ -192,7 +189,7 @@ fn ssga_resume_is_bit_identical() {
     )
     .max_iter(28)
     .checkpoint_with(
-        ExactCheckpointWriter::new(&reference_path),
+        CheckpointWriter::new(&reference_path),
         ObserverMode::Never,
     )
     .run()
@@ -204,21 +201,18 @@ fn ssga_resume_is_bit_identical() {
         PopulationProgress::empty(),
     )
     .max_iter(11)
-    .checkpoint_with(
-        ExactCheckpointWriter::new(&split_path),
-        ObserverMode::Never,
-    )
+    .checkpoint_with(CheckpointWriter::new(&split_path), ObserverMode::Never)
     .run()
     .unwrap();
-    let checkpoint: ExactCheckpoint<TestSolver, TestState> =
-        read_exact_checkpoint(&split_path).unwrap();
+    let checkpoint: Checkpoint<TestSolver, TestState> =
+        read_checkpoint(&split_path).unwrap();
     assert_eq!(checkpoint.state().iter(), 11);
 
     let resumed =
         Executor::resume_from_checkpoint(Landscape::new(3), checkpoint)
             .max_iter(28)
             .checkpoint_with(
-                ExactCheckpointWriter::new(&resumed_path),
+                CheckpointWriter::new(&resumed_path),
                 ObserverMode::Never,
             )
             .run()
@@ -259,7 +253,7 @@ fn cma_es_resume_is_bit_identical() {
     )
     .max_iter(22)
     .checkpoint_with(
-        ExactCheckpointWriter::new(&reference_path),
+        CheckpointWriter::new(&reference_path),
         ObserverMode::Never,
     )
     .run()
@@ -271,14 +265,11 @@ fn cma_es_resume_is_bit_identical() {
         make_state(),
     )
     .max_iter(8)
-    .checkpoint_with(
-        ExactCheckpointWriter::new(&split_path),
-        ObserverMode::Never,
-    )
+    .checkpoint_with(CheckpointWriter::new(&split_path), ObserverMode::Never)
     .run()
     .unwrap();
-    let checkpoint: ExactCheckpoint<TestSolver, TestState> =
-        read_exact_checkpoint(&split_path).unwrap();
+    let checkpoint: Checkpoint<TestSolver, TestState> =
+        read_checkpoint(&split_path).unwrap();
     assert_eq!(checkpoint.state().iter(), 8);
 
     let resumed = Executor::resume_from_checkpoint(
@@ -286,10 +277,7 @@ fn cma_es_resume_is_bit_identical() {
         checkpoint,
     )
     .max_iter(22)
-    .checkpoint_with(
-        ExactCheckpointWriter::new(&resumed_path),
-        ObserverMode::Never,
-    )
+    .checkpoint_with(CheckpointWriter::new(&resumed_path), ObserverMode::Never)
     .run()
     .unwrap();
 
@@ -330,7 +318,7 @@ fn basin_hopping_resume_is_bit_identical() {
     )
     .max_iter(18)
     .checkpoint_with(
-        ExactCheckpointWriter::new(&reference_path),
+        CheckpointWriter::new(&reference_path),
         ObserverMode::Never,
     )
     .run()
@@ -342,14 +330,11 @@ fn basin_hopping_resume_is_bit_identical() {
         PointState::new(vec![3.1, -2.7]),
     )
     .max_iter(7)
-    .checkpoint_with(
-        ExactCheckpointWriter::new(&split_path),
-        ObserverMode::Never,
-    )
+    .checkpoint_with(CheckpointWriter::new(&split_path), ObserverMode::Never)
     .run()
     .unwrap();
-    let checkpoint: ExactCheckpoint<TestSolver, TestState> =
-        read_exact_checkpoint(&split_path).unwrap();
+    let checkpoint: Checkpoint<TestSolver, TestState> =
+        read_checkpoint(&split_path).unwrap();
     assert_eq!(checkpoint.state().iter(), 7);
 
     let resumed = Executor::resume_from_checkpoint(
@@ -357,10 +342,7 @@ fn basin_hopping_resume_is_bit_identical() {
         checkpoint,
     )
     .max_iter(18)
-    .checkpoint_with(
-        ExactCheckpointWriter::new(&resumed_path),
-        ObserverMode::Never,
-    )
+    .checkpoint_with(CheckpointWriter::new(&resumed_path), ObserverMode::Never)
     .run()
     .unwrap();
 
@@ -379,7 +361,7 @@ fn basin_hopping_resume_is_bit_identical() {
 fn basin_hopping_checkpoint_rejects_inner_closures() {
     let path = checkpoint_path("basin-hopping", "inner-hook");
     remove_checkpoint(&path);
-    let writer = ExactCheckpointWriter::new(&path);
+    let writer = CheckpointWriter::new(&path);
     let status = writer.status();
     let solver = BasinHopping::new(NelderMead::adaptive(), 7)
         .with_inner_max_iter(12)

@@ -444,7 +444,7 @@ fn checkpoint_continuation_and_fresh_reset() {
     let checkpoint = {
         let bytes = postcard::to_allocvec(&checkpoint).unwrap();
         postcard::take_from_bytes::<
-            basin::ExactCheckpoint<Direct, PointState<Vec<f64>>>,
+            basin::Checkpoint<Direct, PointState<Vec<f64>>>,
         >(&bytes)
         .unwrap()
         .0

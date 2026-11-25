@@ -33,7 +33,7 @@
 //! values and per-run bookkeeping. [`State::reset_best`] clears only the
 //! incumbent, as it does for the existing state types.
 //!
-//! Exact continuation uses a solver-aware [`ExactCheckpoint`](crate::ExactCheckpoint)
+//! Exact continuation uses a solver-aware [`Checkpoint`](crate::Checkpoint)
 //! and [`Executor::resume_from_checkpoint`](crate::Executor::resume_from_checkpoint),
 //! which skips initialization. Shared progress alone does not contain the
 //! solver's evolution data, so these types do not implement

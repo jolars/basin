@@ -42,11 +42,11 @@ wire type with its own layout.
 
 ## Basin 4 design
 
-- Keep the in-memory checkpoint as the coherent solver, state, and
-  authoritative evaluation counts. Rename it to `Checkpoint` in Basin 4 and
-  use `StateSnapshot` terminology for warm starts. Keep `resume_from_checkpoint`
-  and the sink independent of codecs. Expose a borrowed checkpoint view if
-  several writers need to share the same no-clone entry point.
+- `Checkpoint` holds the solver, state, and authoritative evaluation counts.
+  `resume_from_checkpoint` and `CheckpointSink` work independently of codecs.
+  `StateSnapshotWriter` writes progress for warm starts. A borrowed checkpoint
+  view could give multiple writers a common entry point for saving without
+  cloning.
 - Keep direct Serde serialization for same-build continuation. Applications
   should check codec and settings, a format revision, the Basin version, the
   solver and state types, and the dependency builds that determine their

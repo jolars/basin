@@ -128,7 +128,7 @@ use driver::{NewuoaWork, Transition};
 /// schedule; [`rho`](Self::rho) returns `None` before initialization. Inspect
 /// it through [`crate::Executor::run_with_solver`] or [`crate::Stepper::solver`].
 ///
-/// Preserve [`crate::ExactCheckpoint`] for continuation without initialization
+/// Preserve [`crate::Checkpoint`] for continuation without initialization
 /// or reevaluation. With `serde`, the solver and shared state support
 /// serialization, including the complete numerical model. A progress-only
 /// snapshot is a fresh point warm start. Legacy algorithm-specific state

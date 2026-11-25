@@ -4,9 +4,8 @@ use std::convert::Infallible;
 use std::path::PathBuf;
 
 use basin::{
-    CostFunction, ExactCheckpoint, ExactCheckpointWriter, Executor,
-    GlobalBestPso, ObserverMode, PopulationProgress, State,
-    read_exact_checkpoint,
+    Checkpoint, CheckpointWriter, CostFunction, Executor, GlobalBestPso,
+    ObserverMode, PopulationProgress, State, read_checkpoint,
 };
 
 #[derive(Clone)]
@@ -109,7 +108,7 @@ fn solver_aware_checkpoint_resume_is_bit_identical() {
     let reference = Executor::new(problem(), solver(), TestState::empty())
         .max_iter(55)
         .checkpoint_with(
-            ExactCheckpointWriter::new(&reference_path),
+            CheckpointWriter::new(&reference_path),
             ObserverMode::Never,
         )
         .run()
@@ -117,19 +116,19 @@ fn solver_aware_checkpoint_resume_is_bit_identical() {
     Executor::new(problem(), solver(), TestState::empty())
         .max_iter(19)
         .checkpoint_with(
-            ExactCheckpointWriter::new(&split_path),
+            CheckpointWriter::new(&split_path),
             ObserverMode::Never,
         )
         .run()
         .unwrap();
 
-    let checkpoint: ExactCheckpoint<TestSolver, TestState> =
-        read_exact_checkpoint(&split_path).unwrap();
+    let checkpoint: Checkpoint<TestSolver, TestState> =
+        read_checkpoint(&split_path).unwrap();
     assert_eq!(checkpoint.state().iter(), 19);
     let resumed = Executor::resume_from_checkpoint(problem(), checkpoint)
         .max_iter(55)
         .checkpoint_with(
-            ExactCheckpointWriter::new(&resumed_path),
+            CheckpointWriter::new(&resumed_path),
             ObserverMode::Never,
         )
         .run()

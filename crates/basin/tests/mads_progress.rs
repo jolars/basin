@@ -185,7 +185,7 @@ macro_rules! lifecycle {
             #[test]
             fn serialized_models_resume_exactly_and_reset_on_a_fresh_run() {
                 type Checkpoint =
-                    basin::ExactCheckpoint<Mads<$mode>, $state<Vec<f64>>>;
+                    basin::Checkpoint<Mads<$mode>, $state<Vec<f64>>>;
                 let make = || {
                     Executor::from_start(
                         ($problem)(2),

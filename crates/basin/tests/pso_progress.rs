@@ -232,7 +232,7 @@ fn checkpoints_keep_rng_draws_and_particle_models_across_every_boundary() {
 #[test]
 fn serialized_models_continue_exactly_and_fresh_initialization_clears_scratch()
 {
-    type Checkpoint = basin::ExactCheckpoint<
+    type Checkpoint = basin::Checkpoint<
         GlobalBestPso<Vec<f64>>,
         PopulationProgress<Vec<f64>>,
     >;
@@ -337,7 +337,7 @@ fn custom_rng_continues_exactly_and_fresh_runs_clone_its_configured_value() {
     let checkpoint = {
         let bytes = postcard::to_allocvec(&checkpoint).unwrap();
         postcard::from_bytes::<
-            basin::ExactCheckpoint<
+            basin::Checkpoint<
                 GlobalBestPso<Vec<f64>, f64, CustomRng>,
                 PopulationProgress<Vec<f64>>,
             >,

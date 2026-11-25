@@ -126,7 +126,7 @@ fn exact_continuation_rebuilds_only_scratch() {
             let checkpoint = {
                 let encoded = postcard::to_allocvec(&checkpoint).unwrap();
                 postcard::from_bytes::<
-                    basin::ExactCheckpoint<
+                    basin::Checkpoint<
                         basin::solver::lbfgs::model_strategy::ModelLbfgsb<
                             Vec<f64>,
                         >,

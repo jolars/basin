@@ -128,7 +128,7 @@ whether to adopt the conditional changes below.
   support it needs beyond the Serde path. Document which compatibility
   checks callers own when serializing directly. See the
   [checkpoint codec fixture and results](crates/basin/tests/fixtures/checkpoint_codecs/README.md).
-- [ ] **Use `Checkpoint` for exact continuation.** Rename `ExactCheckpoint` to
+- [x] **Use `Checkpoint` for exact continuation.** Rename `ExactCheckpoint` to
   `Checkpoint`, `ExactCheckpointWriter` to `CheckpointWriter`, and
   `read_exact_checkpoint` to `read_checkpoint`. Keep one generic checkpoint
   containing the solver, progress state, and authoritative evaluation counts.
@@ -136,7 +136,7 @@ whether to adopt the conditional changes below.
   codecs so callers can attach their own writer and choose their format,
   fingerprint, and compatibility policy. Document the 4.0 name changes
   together with the state-only API migration.
-- [ ] **Give state-only snapshots explicit names.** Rename the existing
+- [x] **Give state-only snapshots explicit names.** Rename the existing
   `CheckpointWriter` to `StateSnapshotWriter` and the existing
   `read_checkpoint` to `read_state_snapshot`. Document how to load a
   snapshot and start a fresh run with `Executor::new`.

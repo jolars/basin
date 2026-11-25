@@ -312,7 +312,7 @@ fn serialization_preserves_inner_solver_and_adaptive_walk() {
         .unwrap()
         .into_checkpoint();
     let bytes = postcard::to_allocvec(&checkpoint).unwrap();
-    let restored: basin::ExactCheckpoint<Hopping, PointState<Vec<f64>>> =
+    let restored: basin::Checkpoint<Hopping, PointState<Vec<f64>>> =
         postcard::from_bytes(&bytes).unwrap();
     let resumed = Executor::resume_from_checkpoint(Sphere, restored)
         .max_iter(11)

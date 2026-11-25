@@ -114,7 +114,7 @@ readers follow the solver's explicit selection of accepted iterates. Inspect
 feasibility alongside cost when reporting a result.
 
 Fresh initialization reevaluates the clipped seed and rebuilds the Hessian model
-and constraint layout. An `ExactCheckpoint` retains the solver and state for
+and constraint layout. An `Checkpoint` retains the solver and state for
 continuation. With `serde`, checkpoints support serialization and rebuild
 disposable scratch on demand.
 

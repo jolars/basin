@@ -1,233 +1,457 @@
-//! State checkpoint files and Serde payload compatibility.
-#![cfg(feature = "serde")]
+use basin::{
+    Checkpoint, CheckpointSink, CountsMirror, EvalCounts, ExactResumeState,
+    Executor, ObserverMode, Problem, Solver, State,
+};
+use std::convert::Infallible;
+use std::sync::{Arc, Mutex};
 
-#[path = "support/backend_aliases.rs"]
-mod backend_aliases;
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+struct TestState {
+    param: (),
+    iter: u64,
+    cost_evals: u64,
+}
 
-use basin::{FirstOrderState, State};
+impl TestState {
+    fn new() -> Self {
+        Self {
+            param: (),
+            iter: 0,
+            cost_evals: 0,
+        }
+    }
+}
+
+impl State for TestState {
+    type Param = ();
+    type Float = f64;
+
+    fn iter(&self) -> u64 {
+        self.iter
+    }
+
+    fn increment_iter(&mut self) {
+        self.iter += 1;
+    }
+
+    fn cost_evals(&self) -> u64 {
+        self.cost_evals
+    }
+
+    fn param(&self) -> &Self::Param {
+        &self.param
+    }
+
+    fn cost(&self) -> Self::Float {
+        0.0
+    }
+
+    fn best_param(&self) -> &Self::Param {
+        &self.param
+    }
+
+    fn best_cost(&self) -> Self::Float {
+        0.0
+    }
+
+    fn best_iter(&self) -> u64 {
+        0
+    }
+
+    fn best_cost_evals(&self) -> u64 {
+        0
+    }
+
+    fn update_best(&mut self) {}
+
+    fn reset_best(&mut self) {}
+}
+
+impl CountsMirror for TestState {
+    fn mirror(&mut self, counts: &EvalCounts) {
+        self.cost_evals = counts.cost_evals;
+    }
+}
+
+impl ExactResumeState for TestState {
+    fn resume_counts(&self) -> EvalCounts {
+        let mut counts = EvalCounts::default();
+        counts.cost_evals = self.cost_evals;
+        counts
+    }
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+struct CountingSolver {
+    init_calls: u64,
+    steps: u64,
+}
+
+impl CountingSolver {
+    fn new() -> Self {
+        Self {
+            init_calls: 0,
+            steps: 0,
+        }
+    }
+}
+
+impl Solver<(), TestState> for CountingSolver {
+    type Error = Infallible;
+
+    fn init(
+        &mut self,
+        _problem: &mut Problem<()>,
+        state: TestState,
+    ) -> Result<TestState, Self::Error> {
+        self.init_calls += 1;
+        Ok(state)
+    }
+
+    fn next_iter(
+        &mut self,
+        _problem: &mut Problem<()>,
+        state: TestState,
+    ) -> Result<basin::SolverStep<TestState>, Self::Error> {
+        self.steps += 1;
+        Ok(basin::SolverStep::completed(state))
+    }
+}
+
+type Snapshot = Checkpoint<CountingSolver, TestState>;
+
+#[derive(Clone)]
+struct MemorySink {
+    snapshots: Arc<Mutex<Vec<Snapshot>>>,
+}
+
+impl CheckpointSink<CountingSolver, TestState> for MemorySink {
+    fn save(
+        &mut self,
+        solver: &CountingSolver,
+        state: &TestState,
+        counts: &EvalCounts,
+    ) {
+        self.snapshots.lock().unwrap().push(Checkpoint::from_parts(
+            solver.clone(),
+            state.clone(),
+            *counts,
+        ));
+    }
+}
+
+fn memory_sink() -> (MemorySink, Arc<Mutex<Vec<Snapshot>>>) {
+    let snapshots = Arc::new(Mutex::new(Vec::new()));
+    (
+        MemorySink {
+            snapshots: snapshots.clone(),
+        },
+        snapshots,
+    )
+}
+
+#[test]
+fn resume_skips_init_even_at_iteration_zero() {
+    let (writer, snapshots) = memory_sink();
+    Executor::new((), CountingSolver::new(), TestState::new())
+        .max_iter(0)
+        .checkpoint_with(writer, ObserverMode::Never)
+        .run()
+        .unwrap();
+    let checkpoint = snapshots.lock().unwrap().pop().unwrap();
+    assert_eq!(checkpoint.solver().init_calls, 1);
+
+    let (writer, snapshots) = memory_sink();
+    Executor::resume_from_checkpoint((), checkpoint)
+        .max_iter(0)
+        .checkpoint_with(writer, ObserverMode::Never)
+        .run()
+        .unwrap();
+    let checkpoint = snapshots.lock().unwrap().pop().unwrap();
+    assert_eq!(checkpoint.solver().init_calls, 1);
+}
+
+#[test]
+#[allow(deprecated)]
+fn legacy_state_resume_still_calls_resume_idempotent_init() {
+    let state = TestState {
+        param: (),
+        iter: 4,
+        cost_evals: 7,
+    };
+    let (writer, snapshots) = memory_sink();
+
+    Executor::resume((), CountingSolver::new(), state)
+        .max_iter(4)
+        .checkpoint_with(writer, ObserverMode::Never)
+        .run()
+        .unwrap();
+
+    let checkpoint = snapshots.lock().unwrap().pop().unwrap();
+    assert_eq!(checkpoint.solver().init_calls, 1);
+    assert_eq!(checkpoint.counts().cost_evals, 7);
+}
+
+#[test]
+fn checkpoint_mode_gates_iterations_but_not_final_save() {
+    let (writer, snapshots) = memory_sink();
+    Executor::new((), CountingSolver::new(), TestState::new())
+        .max_iter(3)
+        .checkpoint_with(writer, ObserverMode::every(2))
+        .run()
+        .unwrap();
+
+    let snapshots = snapshots.lock().unwrap();
+    let iterations: Vec<_> = snapshots
+        .iter()
+        .map(|checkpoint| checkpoint.state().iter())
+        .collect();
+    assert_eq!(iterations, vec![2, 3]);
+    assert_eq!(snapshots[0].solver().steps, 2);
+    assert_eq!(snapshots[1].solver().steps, 3);
+}
 
 #[cfg(all(feature = "checkpoint-postcard", not(target_arch = "wasm32")))]
 mod file {
+    use std::io::ErrorKind;
+    use std::path::{Path, PathBuf};
+
+    use basin::{CheckpointWriter, read_checkpoint, read_state_snapshot};
+
     use super::*;
-    use basin::{
-        CheckpointWriter, CostFunction, Executor, Gradient, GradientDescent,
-        ObserverMode, read_checkpoint,
-    };
 
-    struct Quadratic;
-
-    impl basin::Constraints for Quadratic {
-        type Set = basin::NoConstraints;
-        fn constraints(
-            &self,
-        ) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> {
-            basin::ConstraintSet::new()
-        }
-    }
-    impl CostFunction for Quadratic {
-        type Param = Vec<f64>;
-        type Output = f64;
-        type Error = std::convert::Infallible;
-
-        fn cost(&self, x: &Vec<f64>) -> Result<f64, std::convert::Infallible> {
-            Ok(0.5 * x.iter().map(|v| v * v).sum::<f64>())
-        }
+    fn checkpoint_path(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "basin-exact-api-{}-{name}.ckpt",
+            std::process::id()
+        ))
     }
 
-    impl Gradient for Quadratic {
-        type Gradient = Vec<f64>;
+    fn remove_checkpoint(path: &Path) {
+        let _ = std::fs::remove_file(path);
+        let mut temporary = path.as_os_str().to_owned();
+        temporary.push(".tmp");
+        let _ = std::fs::remove_file(PathBuf::from(temporary));
+    }
 
-        fn gradient(
-            &self,
-            x: &Vec<f64>,
-        ) -> Result<Vec<f64>, std::convert::Infallible> {
-            Ok(x.clone())
-        }
+    fn write_valid_checkpoint(path: &Path) {
+        remove_checkpoint(path);
+        Executor::new((), CountingSolver::new(), TestState::new())
+            .max_iter(2)
+            .checkpoint_with(CheckpointWriter::new(path), ObserverMode::Never)
+            .run()
+            .unwrap();
     }
 
     #[test]
-    fn checkpoint_warm_start_matches_uninterrupted_run() {
-        let dir = std::env::temp_dir()
-            .join(format!("basin-ckpt-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("run.ckpt");
-
-        let start = vec![5.0, -3.0, 2.0];
-        let step = 0.1;
-
-        // Reference: 20 uninterrupted iterations.
-        let reference = Executor::new(
-            Quadratic,
-            GradientDescent::new(step),
-            FirstOrderState::new(start.clone()),
-        )
-        .max_iter(20)
-        .run()
-        .unwrap();
-
-        // Split run: 12 iterations, checkpointing the final state, then reload and
-        // run 8 more.
-        Executor::new(
-            Quadratic,
-            GradientDescent::new(step),
-            FirstOrderState::new(start),
-        )
-        .max_iter(12)
-        .observe_with(CheckpointWriter::new(&path), ObserverMode::Every(4))
-        .run()
-        .unwrap();
-
-        let reloaded: FirstOrderState<Vec<f64>> =
-            read_checkpoint(&path).unwrap();
-        let bytes = std::fs::read(&path).unwrap();
-        assert_eq!(&bytes[..8], b"BASINST\0");
-        assert_eq!(&bytes[8..12], &1_u32.to_le_bytes());
-        assert_eq!(&bytes[12..], postcard::to_allocvec(&reloaded).unwrap());
-        // The checkpoint captured the 12th iterate.
-        assert_eq!(reloaded.iter(), 12);
-
-        // A state-only snapshot starts a fresh run: its point is reevaluated,
-        // and iteration and evaluation counters restart at zero.
-        let resumed =
-            Executor::new(Quadratic, GradientDescent::new(step), reloaded)
-                .max_iter(8)
-                .run()
-                .unwrap();
-
-        // Same optimum, reached identically.
-        assert_eq!(resumed.iter(), 8);
-        assert_eq!(resumed.state.counts().cost_evals, 9);
-        assert_eq!(resumed.state.counts().gradient_evals, 9);
-        for (a, b) in resumed.param().iter().zip(reference.param()) {
-            assert!((a - b).abs() < 1e-12, "resumed {a} vs reference {b}");
-        }
-        assert!((resumed.cost() - reference.cost()).abs() < 1e-12);
-
-        std::fs::remove_dir_all(&dir).ok();
-    }
-
-    #[test]
-    fn unprefixed_checkpoints_are_rejected() {
-        let path = std::env::temp_dir()
-            .join(format!("basin-unprefixed-{}.ckpt", std::process::id()));
-        // The scalar payload is valid by itself, but a file needs a prefix.
-        let bytes = [1];
-        std::fs::write(&path, bytes).unwrap();
-        let error = read_checkpoint::<u8>(&path).unwrap_err();
-        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+    fn postcard_checkpoint_resumes_and_preserves_counts() {
+        let path = checkpoint_path("postcard-resume");
+        let checkpoint = Snapshot::from_parts(
+            CountingSolver {
+                init_calls: 1,
+                steps: 300,
+            },
+            TestState {
+                param: (),
+                iter: 300,
+                cost_evals: 400,
+            },
+            {
+                let mut counts = EvalCounts::default();
+                counts.cost_evals = 400;
+                counts
+            },
+        );
+        let mut writer = CheckpointWriter::new(&path);
+        writer.save(
+            checkpoint.solver(),
+            checkpoint.state(),
+            checkpoint.counts(),
+        );
+        assert_eq!(writer.status().failure_count(), 0);
+        let original = std::fs::read(&path).unwrap();
+        let restored: Snapshot = read_checkpoint(&path).unwrap();
+        let error = read_state_snapshot::<u8>(&path).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::InvalidData);
         assert!(error.to_string().contains("magic"));
-        assert_eq!(std::fs::read(&path).unwrap(), bytes);
-        std::fs::remove_file(&path).unwrap();
+        assert_eq!(restored.solver().steps, 300);
+        assert_eq!(restored.counts().cost_evals, 400);
+        assert_eq!(std::fs::read(&path).unwrap(), original);
+
+        Executor::resume_from_checkpoint((), restored)
+            .max_iter(301)
+            .checkpoint_with(CheckpointWriter::new(&path), ObserverMode::Never)
+            .run()
+            .unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        assert_eq!(&bytes[..8], b"BASINEX\0");
+        assert_eq!(&bytes[8..12], &4_u32.to_le_bytes());
+        let header_len =
+            u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as usize;
+        let (header, rest): ((String, String, String), _) =
+            postcard::take_from_bytes(&bytes[16..16 + header_len]).unwrap();
+        assert!(rest.is_empty());
+        assert_eq!(header.0, env!("CARGO_PKG_VERSION"));
+        assert_eq!(header.1, std::any::type_name::<CountingSolver>());
+        assert_eq!(header.2, std::any::type_name::<TestState>());
+        let (checkpoint, rest): (Snapshot, _) =
+            postcard::take_from_bytes(&bytes[16 + header_len..]).unwrap();
+        assert!(rest.is_empty());
+        assert_eq!(checkpoint.solver().init_calls, 1);
+        assert_eq!(checkpoint.solver().steps, 301);
+        assert_eq!(checkpoint.state().iter(), 301);
+        assert_eq!(checkpoint.counts().cost_evals, 400);
+        let restored: Snapshot = read_checkpoint(&path).unwrap();
+        assert_eq!(restored.solver().steps, 301);
+        remove_checkpoint(&path);
     }
 
     #[test]
-    fn invalid_postcard_checkpoints_are_rejected() {
-        let path = std::env::temp_dir()
-            .join(format!("basin-invalid-{}.ckpt", std::process::id()));
-        let prefix = [b"BASINST\0".as_slice(), &1_u32.to_le_bytes()].concat();
-        let mut unsupported = prefix.clone();
-        unsupported[8..12].copy_from_slice(&2_u32.to_le_bytes());
-
-        for bytes in [
-            vec![],
-            prefix[..3].to_vec(),
-            [b"BASINEX\0".as_slice(), &1_u32.to_le_bytes(), &[1]].concat(),
-            prefix[..8].to_vec(),
-            prefix[..10].to_vec(),
-            unsupported,
-            prefix.clone(),
-            [prefix.as_slice(), &[1, 0]].concat(),
-        ] {
-            std::fs::write(&path, bytes).unwrap();
-            let error = read_checkpoint::<u8>(&path).unwrap_err();
-            assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+    fn unsupported_formats_are_rejected_before_decoding() {
+        let path = checkpoint_path("unsupported-format");
+        write_valid_checkpoint(&path);
+        let original = std::fs::read(&path).unwrap();
+        for version in [0_u32, 1, 2, 3, 5, u32::MAX] {
+            let mut bytes = original.clone();
+            bytes[8..12].copy_from_slice(&version.to_le_bytes());
+            std::fs::write(&path, &bytes).unwrap();
+            let error = read_checkpoint::<CountingSolver, TestState>(&path)
+                .unwrap_err();
+            assert_eq!(error.kind(), ErrorKind::InvalidData);
+            assert!(error.to_string().contains(&format!(
+                "unsupported exact checkpoint format version {version}"
+            )));
+            assert_eq!(std::fs::read(&path).unwrap(), bytes);
         }
-        std::fs::write(&path, [prefix.as_slice(), &[2]].concat()).unwrap();
-        assert_eq!(
-            read_checkpoint::<bool>(&path).unwrap_err().kind(),
-            std::io::ErrorKind::InvalidData
-        );
-        std::fs::remove_file(&path).unwrap();
+        remove_checkpoint(&path);
     }
-}
 
-fn round_trip<T: serde::Serialize + serde::de::DeserializeOwned>(
-    value: &T,
-) -> T {
-    let bytes = postcard::to_allocvec(value).unwrap();
-    let (restored, remaining) = postcard::take_from_bytes(&bytes).unwrap();
-    assert!(remaining.is_empty());
-    restored
-}
+    #[test]
+    fn file_round_trip_and_header_validation() {
+        let path = checkpoint_path("validation");
+        write_valid_checkpoint(&path);
+        let original = std::fs::read(&path).unwrap();
 
-macro_rules! check_float_bits {
-    ($float:ty, $nan_bits:expr, $vector:expr) => {{
-        let nan = <$float>::from_bits($nan_bits);
-        let values: &[$float] = &[
-            0.0,
-            -0.0,
-            1.5,
-            <$float>::INFINITY,
-            <$float>::NEG_INFINITY,
-            nan,
-            -nan,
-        ];
-        let state = FirstOrderState::<_, $float>::new(($vector)(values));
-        let restored = round_trip(&state);
-        let expected = values
-            .iter()
-            .map(|value| value.to_bits())
-            .collect::<Vec<_>>();
-        assert_eq!(
-            restored
-                .param()
-                .iter()
-                .map(|value| value.to_bits())
-                .collect::<Vec<_>>(),
-            expected
+        let checkpoint: Snapshot = read_checkpoint(&path).unwrap();
+        assert_eq!(checkpoint.solver().steps, 2);
+        assert_eq!(checkpoint.state().iter(), 2);
+
+        let wrong_type = read_checkpoint::<u64, TestState>(&path).unwrap_err();
+        assert_eq!(wrong_type.kind(), ErrorKind::InvalidData);
+        assert!(wrong_type.to_string().contains("solver type"));
+
+        let wrong_state =
+            read_checkpoint::<CountingSolver, u64>(&path).unwrap_err();
+        assert_eq!(wrong_state.kind(), ErrorKind::InvalidData);
+        assert!(wrong_state.to_string().contains("state type"));
+
+        let mut invalid_magic = original.clone();
+        invalid_magic[0] ^= 0xff;
+        std::fs::write(&path, invalid_magic).unwrap();
+        let error =
+            read_checkpoint::<CountingSolver, TestState>(&path).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::InvalidData);
+        assert!(error.to_string().contains("magic"));
+
+        let mut invalid_basin_version = original.clone();
+        let version = env!("CARGO_PKG_VERSION").as_bytes();
+        let version_start = invalid_basin_version
+            .windows(version.len())
+            .position(|window| window == version)
+            .expect("Basin version is present in the exact-checkpoint header");
+        invalid_basin_version[version_start..version_start + version.len()]
+            .fill(b'x');
+        std::fs::write(&path, invalid_basin_version).unwrap();
+        let error =
+            read_checkpoint::<CountingSolver, TestState>(&path).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::InvalidData);
+        assert!(error.to_string().contains("written by Basin"));
+
+        std::fs::write(&path, &original[..10]).unwrap();
+        let error =
+            read_checkpoint::<CountingSolver, TestState>(&path).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::InvalidData);
+        assert!(error.to_string().contains("truncated"));
+
+        std::fs::write(&path, &original[..original.len() - 1]).unwrap();
+        let error =
+            read_checkpoint::<CountingSolver, TestState>(&path).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::InvalidData);
+
+        let header_len =
+            u32::from_le_bytes(original[12..16].try_into().unwrap()) as usize;
+        let mut oversized = original.clone();
+        oversized[12..16].copy_from_slice(&65_537_u32.to_le_bytes());
+        std::fs::write(&path, oversized).unwrap();
+        let error =
+            read_checkpoint::<CountingSolver, TestState>(&path).unwrap_err();
+        assert!(error.to_string().contains("too large"));
+
+        std::fs::write(&path, &original[..16 + header_len - 1]).unwrap();
+        let error =
+            read_checkpoint::<CountingSolver, TestState>(&path).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("truncated exact checkpoint header")
         );
-    }};
-}
 
-#[test]
-fn postcard_preserves_vec_float_bits() {
-    check_float_bits!(f32, 0x7fc0_0042, |values: &[f32]| values.to_vec());
-    check_float_bits!(f64, 0x7ff8_0000_0000_0042, |values: &[f64]| values
-        .to_vec());
-}
+        std::fs::write(&path, &original[..16 + header_len]).unwrap();
+        let error =
+            read_checkpoint::<CountingSolver, TestState>(&path).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("missing exact checkpoint payload")
+        );
 
-#[cfg(feature = "nalgebra_all")]
-#[test]
-fn postcard_preserves_nalgebra_float_bits() {
-    use backend_aliases::nalgebra::DVector;
-    check_float_bits!(f32, 0x7fc0_0042, DVector::from_column_slice);
-    check_float_bits!(f64, 0x7ff8_0000_0000_0042, DVector::from_column_slice);
-}
+        let mut trailing_header = original.clone();
+        trailing_header.insert(16 + header_len, 0);
+        trailing_header[12..16]
+            .copy_from_slice(&((header_len + 1) as u32).to_le_bytes());
+        std::fs::write(&path, trailing_header).unwrap();
+        let error =
+            read_checkpoint::<CountingSolver, TestState>(&path).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("trailing data in exact checkpoint header")
+        );
 
-#[cfg(feature = "ndarray_all")]
-#[test]
-fn postcard_preserves_ndarray_float_bits() {
-    use backend_aliases::ndarray::Array1;
-    check_float_bits!(f32, 0x7fc0_0042, |values: &[f32]| Array1::from_vec(
-        values.to_vec()
-    ));
-    check_float_bits!(f64, 0x7ff8_0000_0000_0042, |values: &[f64]| {
-        Array1::from_vec(values.to_vec())
-    });
-}
+        let mut trailing = original;
+        trailing.push(0);
+        std::fs::write(&path, trailing).unwrap();
+        let error =
+            read_checkpoint::<CountingSolver, TestState>(&path).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::InvalidData);
+        assert!(error.to_string().contains("trailing data"));
 
-#[test]
-fn release_eval_counts_keep_the_six_counter_postcard_layout() {
-    let mut counts = basin::EvalCounts::default();
-    counts.cost_evals = 1;
-    counts.gradient_evals = 2;
-    counts.residual_evals = 3;
-    counts.jacobian_evals = 4;
-    counts.hessian_evals = 5;
-    counts.hessian_product_evals = 6;
-    assert_eq!(postcard::to_allocvec(&counts).unwrap(), [1, 2, 3, 4, 5, 6]);
-    assert_eq!(
-        postcard::from_bytes::<basin::EvalCounts>(&[1, 2, 3, 4, 5, 6]).unwrap(),
-        counts
-    );
+        remove_checkpoint(&path);
+    }
+
+    #[test]
+    fn write_failures_are_recorded_without_stopping_the_run() {
+        let parent = std::env::temp_dir()
+            .join(format!("basin-exact-missing-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&parent);
+        let path = parent.join("run.ckpt");
+        let writer = CheckpointWriter::new(&path);
+        let status = writer.status();
+
+        let result = Executor::new((), CountingSolver::new(), TestState::new())
+            .max_iter(2)
+            .checkpoint_with(writer, ObserverMode::Never)
+            .run()
+            .unwrap();
+
+        assert_eq!(result.iter(), 2);
+        assert_eq!(status.last_successful_iter(), None);
+        assert_eq!(status.failure_count(), 1);
+        let error = status.last_error().unwrap();
+        assert_eq!(error.path(), path);
+        assert_eq!(error.iteration(), 2);
+        assert_eq!(error.kind(), ErrorKind::NotFound);
+    }
 }

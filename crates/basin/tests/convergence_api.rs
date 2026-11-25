@@ -359,7 +359,7 @@ fn relative_gradient_history_resets_for_fresh_borrowed_runs() {
 
 #[test]
 fn exact_resume_preserves_relative_gradient_anchor() {
-    use basin::{ExactCheckpoint, Problem, RunControl, run_loop_with_control};
+    use basin::{Checkpoint, Problem, RunControl, run_loop_with_control};
     let mut solver =
         GradientDescent::new(0.1).with_relative_gradient_tolerance(0.25);
     let mut problem = Problem::new(Sphere);
@@ -371,7 +371,7 @@ fn exact_resume_preserves_relative_gradient_anchor() {
     )
     .unwrap();
     let checkpoint =
-        ExactCheckpoint::from_parts(solver, first.state, *problem.counts());
+        Checkpoint::from_parts(solver, first.state, *problem.counts());
     let exact = Executor::resume_from_checkpoint(Sphere, checkpoint)
         .max_iter(100)
         .run()
@@ -386,7 +386,7 @@ fn exact_resume_preserves_relative_gradient_anchor() {
 #[test]
 fn repeated_boundary_checks_do_not_create_zero_changes() {
     use basin::{
-        ExactCheckpoint, Problem, RunControl, Solver, run_loop_with_control,
+        Checkpoint, Problem, RunControl, Solver, run_loop_with_control,
     };
     let mut solver = GradientDescent::new(0.1)
         .with_absolute_step_tolerance(0.0)
@@ -402,7 +402,7 @@ fn repeated_boundary_checks_do_not_create_zero_changes() {
     assert_eq!(solver.check_convergence(&problem, &first.state), None);
     assert_eq!(solver.check_convergence(&problem, &first.state), None);
     let checkpoint =
-        ExactCheckpoint::from_parts(solver, first.state, *problem.counts());
+        Checkpoint::from_parts(solver, first.state, *problem.counts());
     let resumed = Executor::resume_from_checkpoint(Sphere, checkpoint)
         .max_iter(2)
         .run()
@@ -693,8 +693,7 @@ fn projected_check_uses_each_inner_problems_bounds() {
 #[test]
 fn serialized_checkpoint_preserves_observed_convergence_history() {
     use basin::{
-        ExactCheckpoint, Problem, RunControl, SimplexProgress,
-        run_loop_with_control,
+        Checkpoint, Problem, RunControl, SimplexProgress, run_loop_with_control,
     };
     fn round_trip<T: serde::Serialize + serde::de::DeserializeOwned>(
         value: &T,
@@ -715,7 +714,7 @@ fn serialized_checkpoint_preserves_observed_convergence_history() {
     .unwrap();
     assert_eq!(first.report.code(), TerminationCode::MaxIter);
     let checkpoint =
-        ExactCheckpoint::from_parts(solver, first.state, *problem.counts());
+        Checkpoint::from_parts(solver, first.state, *problem.counts());
     let restored = round_trip(&checkpoint);
     let direct = Executor::resume_from_checkpoint(Sphere, checkpoint)
         .run()

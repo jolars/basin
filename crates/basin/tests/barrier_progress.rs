@@ -256,10 +256,8 @@ fn serialized_barrier_checkpoint_retains_phase_and_schedule() {
             .unwrap()
             .into_checkpoint();
         let bytes = postcard::to_allocvec(&checkpoint).unwrap();
-        let restored: basin::ExactCheckpoint<
-            Barrier,
-            basin::PointState<Vec<f64>>,
-        > = postcard::from_bytes(&bytes).unwrap();
+        let restored: basin::Checkpoint<Barrier, basin::PointState<Vec<f64>>> =
+            postcard::from_bytes(&bytes).unwrap();
         let resumed =
             Executor::resume_from_checkpoint(Inequality::new(1), restored)
                 .require_evaluated_state()

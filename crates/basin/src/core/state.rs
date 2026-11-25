@@ -272,14 +272,14 @@ pub trait CountsMirror: State {
 /// restores those counters, preserves best-so-far history and absolute
 /// iteration numbers, and calls the solver's resume-idempotent `init` method.
 /// No shipped shared state implements this marker: built-in solvers require
-/// [`ExactCheckpoint`](crate::ExactCheckpoint) for exact continuation. For a
+/// [`Checkpoint`](crate::Checkpoint) for exact continuation. For a
 /// custom state-only resume contract, solver-specific evolution data—including
 /// RNG and adaptive machinery—must
 /// live in the state itself. Exact continuation additionally assumes the same
 /// deterministic problem, solver configuration, scalar type, and code;
 /// executor-owned termination criteria are not part of the snapshot.
 /// This path resets solver-owned convergence history. To retain that history
-/// too, use [`ExactCheckpoint`](crate::ExactCheckpoint) and
+/// too, use [`Checkpoint`](crate::Checkpoint) and
 /// [`Executor::resume_from_checkpoint`](crate::Executor::resume_from_checkpoint).
 pub trait ExactResumeState: State {
     /// Complete evaluation counts at the point represented by this snapshot.

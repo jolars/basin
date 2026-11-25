@@ -333,11 +333,10 @@ pub use crate::bracket::{
 };
 pub use crate::core::augmented_lagrangian::AugmentedLagrangian;
 pub use crate::core::barrier::LogBarrier;
-pub use crate::core::checkpoint::{CheckpointSink, ExactCheckpoint};
+pub use crate::core::checkpoint::{Checkpoint, CheckpointSink};
 #[cfg(all(feature = "checkpoint-postcard", not(target_arch = "wasm32")))]
 pub use crate::core::checkpoint::{
-    CheckpointStatus, CheckpointWriteError, ExactCheckpointWriter,
-    read_exact_checkpoint,
+    CheckpointStatus, CheckpointWriteError, CheckpointWriter, read_checkpoint,
 };
 pub use crate::core::constraint::{
     BoundSide, BoxBounds, Constrained, ConstraintAxis, ConstraintBlock,
@@ -382,11 +381,11 @@ pub use crate::core::numdiff::{
     forward_difference_hessian, forward_difference_hessian_product,
     forward_difference_jacobian,
 };
-#[cfg(all(feature = "checkpoint-postcard", not(target_arch = "wasm32")))]
-pub use crate::core::observer::{CheckpointWriter, read_checkpoint};
 pub use crate::core::observer::{
     History, ObservationEvent, Observe, ObserveSolver, ObserverMode, Report,
 };
+#[cfg(all(feature = "checkpoint-postcard", not(target_arch = "wasm32")))]
+pub use crate::core::observer::{StateSnapshotWriter, read_state_snapshot};
 pub use crate::core::parameter_transform::{
     ParameterEvaluationError, ParameterScale, ParameterTransform,
     ParameterTransformError,

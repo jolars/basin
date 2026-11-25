@@ -143,7 +143,7 @@ fn exact_continuation_preserves_every_search_and_retention_choice() {
                 let checkpoint = {
                     let bytes = postcard::to_allocvec(&checkpoint).unwrap();
                     postcard::from_bytes::<
-                        basin::ExactCheckpoint<
+                        basin::Checkpoint<
                             ProjectedLbfgs<Vec<f64>>,
                             FirstOrderState<Vec<f64>>,
                         >,

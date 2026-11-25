@@ -847,7 +847,9 @@ Basin also records the authoritative evaluation counters. Simulated annealing
 and global-best PSO keep their evolving stochastic data in the solver, so use an
 exact checkpoint to continue either run. Use a state-only file from
 `CheckpointWriter` to warm-start a fresh run. See [Save and resume a
-run](../getting-started/#save-and-resume-a-run).
+run](../getting-started/#save-and-resume-a-run) for the current workflow and
+[Checkpoint and snapshot names](../migrating-to-v4/#checkpoint-and-snapshot-names)
+for the Basin 4.0 equivalents.
 
 During a real migration, keep both integrations behind features until tests
 compare numerical results, termination behavior, evaluation counts, and runtime.

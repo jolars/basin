@@ -3,8 +3,8 @@
 use std::{convert::Infallible, error::Error, io::Cursor};
 
 use basin::{
-    Bfgs, CmaEs, Constant, CostFunction, ExactCheckpoint, Executor,
-    FirstOrderState, Gradient, PopulationProgress, Stepper,
+    Bfgs, Checkpoint, CmaEs, Constant, CostFunction, Executor, FirstOrderState,
+    Gradient, PopulationProgress, Stepper,
 };
 use ndarray::{Array1, Array2};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -107,7 +107,7 @@ impl Gradient for Quadratic {
 
 type BfgsSolver = Bfgs<Array1<f64>, f64, Array2<f64>, Constant>;
 type BfgsState = FirstOrderState<Array1<f64>>;
-pub type BfgsCheckpoint = ExactCheckpoint<BfgsSolver, BfgsState>;
+pub type BfgsCheckpoint = Checkpoint<BfgsSolver, BfgsState>;
 
 type CmaSolver = CmaEs<Array1<f64>, Array2<f64>>;
 type CmaState = PopulationProgress<Array1<f64>>;

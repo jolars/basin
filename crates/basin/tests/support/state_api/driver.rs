@@ -1,6 +1,6 @@
 use super::state::{ObjectiveBest, Progress};
 use basin::core::math::Scalar;
-use basin::{EvalCounts, ExactCheckpoint, Problem, Solver, TerminationCode};
+use basin::{Checkpoint, EvalCounts, Problem, Solver, TerminationCode};
 use num_traits::Float;
 
 /// A narrow experiment with publication and ownership-returning completion.
@@ -20,8 +20,8 @@ pub struct Completed<S, So> {
 }
 
 impl<S, So> Completed<S, So> {
-    pub fn into_checkpoint(self) -> ExactCheckpoint<So, S> {
-        ExactCheckpoint::from_parts(self.solver, self.state, self.counts)
+    pub fn into_checkpoint(self) -> Checkpoint<So, S> {
+        Checkpoint::from_parts(self.solver, self.state, self.counts)
     }
 }
 
@@ -61,7 +61,7 @@ where
         })
     }
 
-    pub fn resume(problem: P, checkpoint: ExactCheckpoint<So, S>) -> Self {
+    pub fn resume(problem: P, checkpoint: Checkpoint<So, S>) -> Self {
         let (solver, state, counts) = checkpoint.into_parts();
         let mut problem = Problem::new(problem);
         *problem.counts_mut() = counts;
@@ -108,8 +108,8 @@ where
         Ok(reason)
     }
 
-    pub fn into_checkpoint(self) -> Option<ExactCheckpoint<So, S>> {
-        Some(ExactCheckpoint::from_parts(
+    pub fn into_checkpoint(self) -> Option<Checkpoint<So, S>> {
+        Some(Checkpoint::from_parts(
             self.solver,
             self.state?,
             *self.problem.counts(),

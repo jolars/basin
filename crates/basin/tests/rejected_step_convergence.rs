@@ -1,8 +1,8 @@
 //! Rejected trials must not look like converged cost or parameter changes.
 
 use basin::{
-    BoundedLevenbergMarquardt, CostFunction, DenseMatrix, ExactCheckpoint,
-    Executor, FirstOrderState, Gradient, Hessian, HessianProduct, Jacobian,
+    BoundedLevenbergMarquardt, Checkpoint, CostFunction, DenseMatrix, Executor,
+    FirstOrderState, Gradient, Hessian, HessianProduct, Jacobian,
     LevenbergMarquardt, LmDamping, PointState, Problem, Residual,
     RobustLeastSquares, RunControl, Solver, SquaredLoss, State,
     TerminationCode, TrustRegion, run_loop_with_control,
@@ -123,7 +123,7 @@ fn check_rejections<P, S, So>(
         assert_eq!(solver.check_convergence(&problem, &first.state), None);
 
         let checkpoint =
-            ExactCheckpoint::from_parts(solver, first.state, *problem.counts());
+            Checkpoint::from_parts(solver, first.state, *problem.counts());
         let result =
             Executor::resume_from_checkpoint(make_problem(), checkpoint)
                 .max_iter(100)

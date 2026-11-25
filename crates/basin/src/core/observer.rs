@@ -94,8 +94,8 @@
 //!   plotting or analysis.
 //!
 //! Heavier integrations (tracing, slog, a TUI) live in satellite crates.
-//! On native targets, `CheckpointWriter` snapshots the state to disk for a
-//! later warm start. Enable `checkpoint-postcard` to use it.
+//! On native targets, `StateSnapshotWriter` saves the state to disk for a later
+//! warm start. Enable `checkpoint-postcard` to use it.
 //! Solver-aware exact checkpoints live in the sibling
 //! [`checkpoint`](crate::core::checkpoint) module.
 
@@ -110,9 +110,9 @@ pub use history::History;
 pub use report::Report;
 
 #[cfg(all(feature = "checkpoint-postcard", not(target_arch = "wasm32")))]
-mod checkpoint;
+mod state_snapshot;
 #[cfg(all(feature = "checkpoint-postcard", not(target_arch = "wasm32")))]
-pub use checkpoint::{CheckpointWriter, read_checkpoint};
+pub use state_snapshot::{StateSnapshotWriter, read_state_snapshot};
 
 /// Hooks fired around the iteration loop. See the
 /// [module docs](self) for lifecycle and edge cases.

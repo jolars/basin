@@ -86,7 +86,7 @@ fn retention_switch_only_resets_on_mask_changes_and_checkpoint_preserves_mask()
         let checkpoint = {
             let bytes = postcard::to_allocvec(&checkpoint).unwrap();
             postcard::from_bytes::<
-                crate::ExactCheckpoint<
+                crate::Checkpoint<
                     ProjectedLbfgs<Vec<f64>>,
                     FirstOrderState<Vec<f64>>,
                 >,

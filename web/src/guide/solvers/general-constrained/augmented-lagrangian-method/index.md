@@ -113,7 +113,7 @@ application stopping rules should inspect feasibility alongside cost.
 
 The solver owns the multipliers, penalty history, and inner executor. The outer
 state exposes no objective gradient. Every inner solve starts fresh, while a
-fresh outer run resets multipliers and penalty history. An `ExactCheckpoint`
+fresh outer run resets multipliers and penalty history. An `Checkpoint`
 retains the solver, selected progress, and evaluation counts for continuation.
 With `serde`, checkpoints can be serialized when their constituent types can.
 

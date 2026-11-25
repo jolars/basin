@@ -165,7 +165,7 @@ macro_rules! lifecycle {
             #[test]
             fn serialized_checkpoints_preserve_the_model_and_radius_schedule() {
                 type Checkpoint =
-                    basin::ExactCheckpoint<$solver, PointState<Vec<f64>>>;
+                    basin::Checkpoint<$solver, PointState<Vec<f64>>>;
                 let make = || {
                     Executor::from_start(
                         ($prepare)(Bowl::new(2)),

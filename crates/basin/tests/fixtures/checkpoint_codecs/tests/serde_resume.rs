@@ -1,8 +1,8 @@
 #![cfg(feature = "serde-codecs")]
 
 use basin::{
-    CountsMirror, ExactCheckpoint, Executor, Solver, State, StepOutcome,
-    Stepper, Termination,
+    Checkpoint, CountsMirror, Executor, Solver, State, StepOutcome, Stepper,
+    Termination,
 };
 use bincode_next::{Decode, Encode, Fingerprint, config, error::DecodeError};
 use checkpoint_codecs::{
@@ -32,7 +32,7 @@ fn assert_same_boundary<S, So>(
 
 fn assert_continuation<S, So>(
     make: impl Fn() -> Stepper<Quadratic, S, So>,
-    round_trip: impl FnOnce(ExactCheckpoint<So, S>) -> ExactCheckpoint<So, S>,
+    round_trip: impl FnOnce(Checkpoint<So, S>) -> Checkpoint<So, S>,
 ) where
     S: State<Float = f64> + CountsMirror + Serialize,
     So: Solver<Quadratic, S, Error = Infallible> + Serialize,

@@ -268,7 +268,7 @@ fn serialized_checkpoint_preserves_model_and_trajectory() {
         .unwrap()
         .into_checkpoint();
     let bytes = postcard::to_allocvec(&checkpoint).unwrap();
-    type Checkpoint = basin::ExactCheckpoint<
+    type Checkpoint = basin::Checkpoint<
         Bfgs<Vec<f64>, f64, DenseMatrix, basin::Constant>,
         FirstOrderState<Vec<f64>>,
     >;

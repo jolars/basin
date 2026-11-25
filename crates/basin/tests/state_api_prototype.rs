@@ -859,7 +859,7 @@ fn exact_resume_preserves_convergence_history_and_fresh_run_resets_it() {
     *problem.counts_mut() = counts;
     assert!(solver.check_convergence(&problem, &state).is_none());
     assert!(solver.check_convergence(&problem, &state).is_none());
-    let checkpoint = basin::ExactCheckpoint::from_parts(solver, state, counts);
+    let checkpoint = basin::Checkpoint::from_parts(solver, state, counts);
     let result = Run::resume(Sphere, checkpoint).run(100).unwrap();
     assert_eq!(result.reason, baseline.reason);
     assert_eq!(result.state.param(), baseline.state.param());

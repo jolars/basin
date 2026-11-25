@@ -4,8 +4,8 @@ use std::convert::Infallible;
 mod backend;
 
 use basin::{
-    CostFunction, De, DeCrossover, DeInject, DeMutation, ExactCheckpoint,
-    Executor, NelderMead, PopulationProgress, State,
+    Checkpoint, CostFunction, De, DeCrossover, DeInject, DeMutation, Executor,
+    NelderMead, PopulationProgress, State,
 };
 
 #[derive(Clone)]
@@ -41,9 +41,9 @@ fn configured(
     }
 }
 
-type Checkpoint = ExactCheckpoint<De, PopulationProgress<Vec<f64>>>;
+type DeCheckpoint = Checkpoint<De, PopulationProgress<Vec<f64>>>;
 
-fn solve(solver: De, generations: u64) -> Checkpoint {
+fn solve(solver: De, generations: u64) -> DeCheckpoint {
     Executor::new(Quadratic::new(), solver, PopulationProgress::empty())
         .max_iter(generations)
         .run_with_solver()
@@ -74,7 +74,7 @@ fn every_combination_repeats_resets_and_resumes_exactly() {
 
                 let split = solve(make(), 7);
                 #[cfg(feature = "serde")]
-                let split: Checkpoint = postcard::from_bytes(
+                let split: DeCheckpoint = postcard::from_bytes(
                     &postcard::to_allocvec(&split).unwrap(),
                 )
                 .unwrap();

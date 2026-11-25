@@ -119,8 +119,7 @@ radius schedule. Use `Executor::run_with_solver` to retain the solver and read
 quadratic model, not the objective.
 
 Fresh initialization rebuilds the model and reevaluates its interpolation
-points. Preserve an `ExactCheckpoint` when continuing the same numerical run;
-a parameter snapshot starts a new model.
+points. Preserve a `Checkpoint` when continuing the same numerical run.
 
 Supported parameter types are `Vec<F>`, `nalgebra::DVector<F>`,
 `ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`. Present

@@ -45,7 +45,7 @@ use rectangle::{Rectangle, Work};
 /// Every fresh run starts at the box midpoint and clears the partition. This
 /// solver does not implement point warm starts. An entirely fixed box requires
 /// just one evaluation. Exact continuation uses a solver-and-state
-/// [`ExactCheckpoint`](crate::ExactCheckpoint), preserving the partition and
+/// [`Checkpoint`](crate::Checkpoint), preserving the partition and
 /// evaluation counts. With `serde`, the solver's evolving machinery is also
 /// serializable. Bounds and the objective must remain unchanged during a run
 /// and across exact continuation.

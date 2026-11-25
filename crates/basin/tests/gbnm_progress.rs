@@ -223,8 +223,7 @@ fn owned_checkpoints_preserve_local_search_and_restart_sequences() {
 #[cfg(feature = "serde")]
 #[test]
 fn serialized_checkpoints_retain_models_while_progress_only_restarts() {
-    type Checkpoint =
-        basin::ExactCheckpoint<Gbnm<Vec<f64>>, PointState<Vec<f64>>>;
+    type Checkpoint = basin::Checkpoint<Gbnm<Vec<f64>>, PointState<Vec<f64>>>;
     let make = || {
         Executor::from_start(
             FlatBox::quadratic(2),

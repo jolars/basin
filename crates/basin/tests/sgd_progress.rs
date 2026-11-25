@@ -257,7 +257,7 @@ fn serialized_checkpoint_preserves_rng_momentum_and_working_iterate() {
         .unwrap()
         .into_checkpoint();
     let bytes = postcard::to_allocvec(&checkpoint).unwrap();
-    let restored: basin::ExactCheckpoint<Sgd<Vec<f64>>, PointState<Vec<f64>>> =
+    let restored: basin::Checkpoint<Sgd<Vec<f64>>, PointState<Vec<f64>>> =
         postcard::from_bytes(&bytes).unwrap();
     let resumed = Executor::resume_from_checkpoint(problem(), restored)
         .require_evaluated_state()

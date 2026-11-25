@@ -317,7 +317,7 @@ fn serialized_augmented_lagrangian_checkpoint_retains_multipliers() {
         .unwrap()
         .into_checkpoint();
     let bytes = postcard::to_allocvec(&checkpoint).unwrap();
-    let restored: basin::ExactCheckpoint<
+    let restored: basin::Checkpoint<
         EqualitySolver,
         basin::SelectedState<Vec<f64>>,
     > = postcard::from_bytes(&bytes).unwrap();

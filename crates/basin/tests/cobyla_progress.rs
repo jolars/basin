@@ -161,7 +161,7 @@ fn owned_checkpoints_preserve_filter_and_radius_history() {
 #[test]
 fn serialized_checkpoints_preserve_every_model_buffer() {
     type Checkpoint =
-        basin::ExactCheckpoint<Cobyla<Vec<f64>>, SelectedState<Vec<f64>>>;
+        basin::Checkpoint<Cobyla<Vec<f64>>, SelectedState<Vec<f64>>>;
     let make = || {
         Executor::from_start(
             LowerBound,

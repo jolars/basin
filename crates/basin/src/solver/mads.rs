@@ -170,7 +170,7 @@ pub struct Constrained;
 /// return `None` before initialization; read them via
 /// [`crate::Executor::run_with_solver`] or [`crate::Stepper::solver`]. Fresh
 /// runs reset progress and rebuild those histories, reevaluating the seed.
-/// Exact continuation retains a [`crate::ExactCheckpoint`] and skips init.
+/// Exact continuation retains a [`crate::Checkpoint`] and skips init.
 /// With `serde`, every mode serializes its model and matching shared state.
 /// Legacy `MadsState` and `ConstrainedMadsState` payloads are incompatible.
 /// Native and configured poll-size stopping still read the solver's schedule;

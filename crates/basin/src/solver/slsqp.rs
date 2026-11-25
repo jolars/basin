@@ -110,7 +110,7 @@ pub enum SlsqpFailure {
 ///
 /// Fresh initialization reevaluates the clipped seed and rebuilds the Hessian
 /// approximation, constraint layout, and line-search history. Exact continuation
-/// retains a [`crate::ExactCheckpoint`] and skips initialization. With `serde`,
+/// retains a [`crate::Checkpoint`] and skips initialization. With `serde`,
 /// the solver and shared state support serialization; disposable numerical
 /// scratch is rebuilt on demand. Legacy `SlsqpState` payloads are incompatible.
 ///

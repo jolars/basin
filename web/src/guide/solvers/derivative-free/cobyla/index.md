@@ -117,7 +117,7 @@ test.
 The solver owns the simplex, penalty, filter, and radius schedule. Retain it
 with `Executor::run_with_solver` to inspect `rho()` or
 `geometry_diagnostics()`. Fresh initialization rebuilds those structures;
-an `ExactCheckpoint` preserves them for exact continuation.
+a `Checkpoint` preserves them for exact continuation.
 
 Supported parameter types are `Vec<F>`, `nalgebra::DVector<F>`,
 `ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`. Nonlinear

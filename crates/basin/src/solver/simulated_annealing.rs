@@ -303,7 +303,7 @@ pub(crate) struct ReannealingProgress {
 /// an independent default-RNG chain without consuming this chain's live RNG.
 ///
 /// Exact continuation retains the live components and uses a solver-aware
-/// [`ExactCheckpoint`](crate::ExactCheckpoint) with
+/// [`Checkpoint`](crate::Checkpoint) with
 /// [`Executor::resume_from_checkpoint`](crate::Executor::resume_from_checkpoint).
 /// State-only snapshots start a fresh chain through `Executor::new`; they no
 /// longer support `Executor::resume`. With `serde`, exact checkpoints include
