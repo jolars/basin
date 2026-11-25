@@ -32,10 +32,16 @@ use crate::core::problem::EvalCounts;
 /// your choice. Choose a codec that preserves all values your solver and state
 /// can contain, including non-finite floats if applicable.
 ///
-/// When storing the bytes, record and check the format version, exact Basin
-/// version, and concrete solver and state types before decoding. Basin's
-/// built-in `read_exact_checkpoint` performs these checks for its own file
-/// format. Supply the same problem and reapply the execution policy on resume.
+/// When storing the bytes, record and check the codec and its settings, the
+/// format version, the exact Basin version, and the concrete solver and state
+/// types, including the scalar and numerical backend. Check that the reader
+/// uses compatible builds of the solver, state, and their dependencies. Use a
+/// decoder that can reject malformed and trailing data. Basin's built-in
+/// `read_exact_checkpoint` checks its file format, Basin version, and concrete
+/// solver and state type names before decoding the payload.
+///
+/// Supply the same problem, including any inputs that affect its evaluations,
+/// and reapply the execution policy on resume.
 #[cfg_attr(
     feature = "serde",
     doc = r#"

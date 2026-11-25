@@ -113,7 +113,7 @@ whether to adopt the conditional changes below.
   features. Document the feature migration and exact-version checks. Verify
   that a run resumed from Postcard matches an uninterrupted run and that the
   default WASM build still works.
-- [ ] **Validate the checkpoint representation with another codec.** Use the
+- [x] **Validate the checkpoint representation with another codec.** Use the
   existing checkpoint types to compare Postcard, MessagePack via `rmp-serde`
   in tuple and named-field modes, and bincode-next through Serde. Save BFGS
   on ndarray after inverse Hessian updates and seeded CMA-ES after several
@@ -126,18 +126,26 @@ whether to adopt the conditional changes below.
   measurement ideas. Keep the prototype in tests and benchmarks. Prototype
   native bincode-next fingerprinting on a live checkpoint and record what
   support it needs beyond the Serde path. Document which compatibility
-  checks callers own when serializing directly. Consider a separate wire
-  schema if checkpoints need versioning independent of solver types or a
-  caller needs native codec traits for live solver state, such as
-  bincode-next fingerprinting.
+  checks callers own when serializing directly. See the
+  [checkpoint codec fixture and results](crates/basin/tests/fixtures/checkpoint_codecs/README.md).
 - [ ] **Use `Checkpoint` for exact continuation.** Rename `ExactCheckpoint` to
   `Checkpoint`, `ExactCheckpointWriter` to `CheckpointWriter`, and
-  `read_exact_checkpoint` to `read_checkpoint`. Document the 4.0 name
-  changes together with the state-only API migration.
+  `read_exact_checkpoint` to `read_checkpoint`. Keep one generic checkpoint
+  containing the solver, progress state, and authoritative evaluation counts.
+  Keep capture, `CheckpointSink`, and `resume_from_checkpoint` independent of
+  codecs so callers can attach their own writer and choose their format,
+  fingerprint, and compatibility policy. Document the 4.0 name changes
+  together with the state-only API migration.
 - [ ] **Give state-only snapshots explicit names.** Rename the existing
   `CheckpointWriter` to `StateSnapshotWriter` and the existing
   `read_checkpoint` to `read_state_snapshot`. Document how to load a
   snapshot and start a fresh run with `Executor::new`.
+- [ ] **Evaluate additional checkpoint codecs in 4.x.** Keep Postcard opt-in
+  and use the existing checkpoint and sink APIs for any additional readers and
+  writers. Start with Serde codecs. If a native codec needs access to a
+  built-in solver's saved state, prototype a private BFGS wire record and
+  measure the conversion and maintenance costs before expanding coverage.
+  Reject unsupported layouts unless a migration is provided.
 - [ ] **Decide when to expose Jacobian-product accounting.** Add separate
   counters for Jacobian and transpose-Jacobian products in 4.0 or alongside
   iterative TRF. Preserve attempted-request counting through budgets, nested
