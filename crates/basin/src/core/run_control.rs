@@ -182,7 +182,11 @@ impl<S: State> RunControl<S> {
     {
         self.validate = Some(|state| {
             assert!(
-                state.evaluated_record().is_some(),
+                state.evaluated_record().is_some()
+                    && state
+                        .current_record()
+                        .and_then(|record| record.cost)
+                        .is_some(),
                 "solver published incomplete state"
             );
         });

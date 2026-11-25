@@ -21,6 +21,9 @@ use crate::core::problem::EvalCounts;
 /// returned values actually match.
 pub trait EvaluatedState: State {
     /// Borrow the complete current record's point and cost, if available.
+    ///
+    /// Both values must match [`State::current_record`] when this returns
+    /// `Some`.
     fn evaluated_record(&self) -> Option<(&Self::Param, Self::Float)>;
 }
 
@@ -97,9 +100,11 @@ pub trait ConstraintViolationState: State {
 /// Incumbent selection compatible with objective-only targets and stalls.
 ///
 /// Implementors retain strict objective improvements among eligible published
-/// candidates. Equal costs preserve the incumbent and its metadata; NaN and
-/// positive infinity never establish an incumbent. Negative infinity may be
-/// retained but does not establish unboundedness. A constrained implementation
+/// candidates and expose the incumbent and its objective through
+/// [`State::selected_record`]. Equal costs preserve the incumbent and its
+/// metadata. NaN and positive infinity never establish an incumbent.
+/// An incumbent with negative infinity does not establish unboundedness.
+/// A constrained implementation
 /// must exclude infeasible candidates and preserve objective ordering among
 /// the eligible ones. Feasibility-first selection that can replace an
 /// incumbent with a higher-cost point must not implement this trait.

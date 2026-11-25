@@ -589,6 +589,23 @@ struct ExternalState {
 impl State for ExternalState {
     type Param = f64;
     type Float = f64;
+
+    fn current_record(&self) -> Option<basin::CurrentRef<'_, f64>> {
+        Some(basin::CurrentRef::new(
+            &self.point,
+            Some(1.0),
+            Some(&self.report),
+        ))
+    }
+
+    fn selected_record(&self) -> Option<basin::SelectedRef<'_, f64>> {
+        Some(basin::SelectedRef::new(
+            self.current_record()?,
+            0,
+            &self.counts,
+        ))
+    }
+
     fn iter(&self) -> u64 {
         0
     }
@@ -601,7 +618,8 @@ impl State for ExternalState {
 }
 impl EvaluatedState for ExternalState {
     fn evaluated_record(&self) -> Option<(&f64, f64)> {
-        Some((&self.point, 1.0))
+        let record = self.current_record()?;
+        Some((record.param, record.cost?))
     }
 }
 impl ConstraintViolationState for ExternalState {
@@ -618,7 +636,8 @@ struct Reports(Vec<ViolationReport>);
 impl<S: ConstraintViolationState<Float = f64>> Observe<S> for Reports {
     fn observe_init(&mut self, state: &S) {
         self.0.push(state.current_violation().unwrap().clone());
-        self.0.push(state.incumbent_violation().unwrap().clone());
+        assert_eq!(state.selected_violation(), state.incumbent_violation());
+        self.0.push(state.selected_violation().unwrap().clone());
     }
 }
 

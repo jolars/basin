@@ -84,11 +84,21 @@ requests charged through that boundary. Use the selected record’s optional
 | `best_iter()` | `selected_record().map(\|record\| record.iter)` |
 | `best_cost_evals()` | `selected_record().map(\|record\| record.counts.cost_evals)` |
 
-Custom states implement the mapped `cost_evals()` reader on `CountsMirror`.
-Use `result.counts` for authoritative run counts.
+Custom states implement both record readers on `State`. Return `None` when
+the corresponding record is unavailable. For `EvaluatedState`, return the
+point and cost from the current record once all advertised evaluations are
+available. For `ObjectiveIncumbentState`, expose the eligible incumbent and
+its objective through `selected_record()`.
 
-Register with `ObserverMode::SelectionChanged` to observe new selections
-during initialization and partial or completed steps. Implement
+Implement the mapped `cost_evals()` reader on `CountsMirror`. Use
+`result.counts` for authoritative run counts.
+
+`ObserverMode::NewBest` now fires only on completed steps that publish the
+first eligible objective or a strict improvement.
+Switch existing `NewBest` observers and checkpoint sinks on constrained runs
+to `ObserverMode::SelectionChanged` to keep receiving solver-selected
+incumbents. This mode observes new selections during initialization and
+partial or completed steps. Implement
 `observe_selection` for a trait observer, match
 `ObservationEvent::SelectionChanged` in a closure, or override
 `CheckpointSink::save_with_selection` to inspect the reason in a sink.

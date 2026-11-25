@@ -132,18 +132,18 @@ pub trait State {
     type Float: Scalar;
 
     /// Borrow the current published point and its available evaluations.
+    ///
+    /// Return `None` when no current evaluation data is available.
     fn current_record(
         &self,
-    ) -> Option<CurrentRef<'_, Self::Param, Self::Float>> {
-        None
-    }
+    ) -> Option<CurrentRef<'_, Self::Param, Self::Float>>;
 
     /// Borrow the selected point and its original publication metadata.
+    ///
+    /// Return `None` when the state has no selection or does not track one.
     fn selected_record(
         &self,
-    ) -> Option<SelectedRef<'_, Self::Param, Self::Float>> {
-        None
-    }
+    ) -> Option<SelectedRef<'_, Self::Param, Self::Float>>;
 
     /// Number of fully completed iterations. A
     /// [`Solver::next_iter`](crate::core::solver::Solver::next_iter)

@@ -23,7 +23,7 @@ const FORMAT_VERSION: u32 = 2;
 ///
 /// Available on native targets with `checkpoint-postcard`.
 ///
-/// Files start with `BASINST\0` and a little-endian `u32` format version of 1,
+/// Files start with `BASINST\0` and a little-endian `u32` format version of 2,
 /// followed by the postcard payload.
 ///
 /// A state snapshot records an iterate for a later warm start.

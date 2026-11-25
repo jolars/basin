@@ -59,6 +59,10 @@ impl State for MultiStartState {
     type Param = Vec<f64>;
     type Float = f64;
 
+    fn selected_record(&self) -> Option<basin::SelectedRef<'_, Vec<f64>>> {
+        None
+    }
+
     fn iter(&self) -> u64 {
         self.iter
     }

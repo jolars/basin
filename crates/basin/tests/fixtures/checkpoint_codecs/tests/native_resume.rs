@@ -25,6 +25,15 @@ impl State for Progress {
     type Param = f64;
     type Float = f64;
 
+    fn current_record(&self) -> Option<basin::CurrentRef<'_, f64>> {
+        (self.cost_evals > 0)
+            .then(|| basin::CurrentRef::new(&self.point, Some(self.cost), None))
+    }
+
+    fn selected_record(&self) -> Option<basin::SelectedRef<'_, f64>> {
+        None
+    }
+
     fn iter(&self) -> u64 {
         self.iter
     }

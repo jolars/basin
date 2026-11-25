@@ -27,6 +27,14 @@ impl State for TestState {
     type Param = ();
     type Float = f64;
 
+    fn current_record(&self) -> Option<basin::CurrentRef<'_, ()>> {
+        None
+    }
+
+    fn selected_record(&self) -> Option<basin::SelectedRef<'_, ()>> {
+        None
+    }
+
     fn iter(&self) -> u64 {
         self.iter
     }
