@@ -39,7 +39,7 @@ jobs:
         run: |
           mkdir -p target/coverage
           cargo llvm-cov -p basin --locked \
-            --features nalgebra,ndarray,faer,problems,parallel,serde \
+            --features nalgebra,ndarray,faer,problems,parallel,checkpoint-postcard \
             --lcov --skip-functions --output-path target/coverage/lcov.info
       - name: Generate HTML report
         run: >-

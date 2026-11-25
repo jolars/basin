@@ -5,7 +5,7 @@
 //! `CheckpointWriter`, which intentionally writes only a state for a later
 //! warm start.
 //!
-//! On native targets, enable `checkpoint-postcard` or `serde` for built-in
+//! On native targets, enable `checkpoint-postcard` for built-in
 //! Postcard file readers and writers.
 //!
 //! [`Stepper::into_checkpoint`](crate::Stepper::into_checkpoint) consumes a
@@ -136,7 +136,7 @@ pub trait CheckpointSink<So, S> {
     fn save(&mut self, solver: &So, state: &S, counts: &EvalCounts);
 }
 
-#[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+#[cfg(all(feature = "checkpoint-postcard", not(target_arch = "wasm32")))]
 mod file {
     use std::any::type_name;
     use std::ffi::OsString;
@@ -338,7 +338,7 @@ mod file {
 
     /// Solver-aware exact-checkpoint file writer.
     ///
-    /// Available on native targets with `checkpoint-postcard` or `serde`.
+    /// Available on native targets with `checkpoint-postcard`.
     ///
     /// Attach with [`Executor::checkpoint_with`](crate::Executor::checkpoint_with).
     /// Writes use a temporary sibling and atomic rename. Failures are reported
@@ -514,7 +514,7 @@ mod file {
     }
 }
 
-#[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+#[cfg(all(feature = "checkpoint-postcard", not(target_arch = "wasm32")))]
 pub use file::{
     CheckpointStatus, CheckpointWriteError, ExactCheckpointWriter,
     read_exact_checkpoint,

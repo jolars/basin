@@ -149,8 +149,9 @@ and checkpoint sinks you need. Exact continuation skips solver initialization.
 The iteration limit is absolute, so a checkpoint at iteration 400 leaves up to
 600 more iterations in this example.
 
-Enable `checkpoint-postcard` or `serde` to save checkpoints to files on native
-targets. Attach `ExactCheckpointWriter`
+Enable `checkpoint-postcard` to save checkpoints to files on native targets.
+Enable `serde` to serialize checkpoints with a codec you choose.
+Attach `ExactCheckpointWriter`
 with `Executor::checkpoint_with`, then load the file with
 `read_exact_checkpoint`. The reader checks the file format, exact Basin
 version, and concrete solver and state types. For a fresh run from a state-only

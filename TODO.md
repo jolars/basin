@@ -104,7 +104,7 @@ whether to adopt the conditional changes below.
   serializable. Document how legacy budget callers migrate. Retire
   state-only `Executor::resume` and `ExactResumeState` in favor of
   `resume_from_checkpoint`.
-- [ ] **Split Serde support from Postcard checkpoint files.** Make `serde`
+- [x] **Split Serde support from Postcard checkpoint files.** Make `serde`
   enable serialization traits so callers can choose their codec. Make
   `checkpoint-postcard` enable `serde` and expose both built-in native file
   APIs for state-only and exact checkpoints. Keep `ExactCheckpoint`,

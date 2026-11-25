@@ -1,4 +1,4 @@
-#![cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+#![cfg(all(feature = "checkpoint-postcard", not(target_arch = "wasm32")))]
 
 use basin::core::rng::ChaCha8Rng;
 use basin::{

@@ -133,6 +133,10 @@ export default defineConfig({
                             link: "/guide/migrating-from-argmin/",
                         },
                         {
+                            text: "Migrating to Basin 4.0",
+                            link: "/guide/migrating-to-v4/",
+                        },
+                        {
                             text: "Migrating to Basin 3.0",
                             link: "/guide/migrating-to-v3/",
                         },

@@ -95,7 +95,7 @@
 //!
 //! Heavier integrations (tracing, slog, a TUI) live in satellite crates.
 //! On native targets, `CheckpointWriter` snapshots the state to disk for a
-//! later warm start. Enable `checkpoint-postcard` or `serde` to use it.
+//! later warm start. Enable `checkpoint-postcard` to use it.
 //! Solver-aware exact checkpoints live in the sibling
 //! [`checkpoint`](crate::core::checkpoint) module.
 
@@ -109,9 +109,9 @@ pub(crate) use adapters::{SolverCallback, StateObserver};
 pub use history::History;
 pub use report::Report;
 
-#[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+#[cfg(all(feature = "checkpoint-postcard", not(target_arch = "wasm32")))]
 mod checkpoint;
-#[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+#[cfg(all(feature = "checkpoint-postcard", not(target_arch = "wasm32")))]
 pub use checkpoint::{CheckpointWriter, read_checkpoint};
 
 /// Hooks fired around the iteration loop. See the

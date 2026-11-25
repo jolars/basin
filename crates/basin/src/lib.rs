@@ -334,7 +334,7 @@ pub use crate::bracket::{
 pub use crate::core::augmented_lagrangian::AugmentedLagrangian;
 pub use crate::core::barrier::LogBarrier;
 pub use crate::core::checkpoint::{CheckpointSink, ExactCheckpoint};
-#[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+#[cfg(all(feature = "checkpoint-postcard", not(target_arch = "wasm32")))]
 pub use crate::core::checkpoint::{
     CheckpointStatus, CheckpointWriteError, ExactCheckpointWriter,
     read_exact_checkpoint,
@@ -382,7 +382,7 @@ pub use crate::core::numdiff::{
     forward_difference_hessian, forward_difference_hessian_product,
     forward_difference_jacobian,
 };
-#[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+#[cfg(all(feature = "checkpoint-postcard", not(target_arch = "wasm32")))]
 pub use crate::core::observer::{CheckpointWriter, read_checkpoint};
 pub use crate::core::observer::{
     History, ObservationEvent, Observe, ObserveSolver, ObserverMode, Report,

@@ -180,12 +180,12 @@ fn executor_budgets_and_exact_resume() {
         ModelDriver::default(),
         crate::PointState::new(vec![1.0, -0.5]),
     );
-    #[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "checkpoint-postcard", not(target_arch = "wasm32")))]
     let path = std::env::temp_dir().join(format!(
         "basin-operator-checkpoint-{}.ckpt",
         std::process::id()
     ));
-    #[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "checkpoint-postcard", not(target_arch = "wasm32")))]
     let split_run = split_run.checkpoint_with(
         crate::ExactCheckpointWriter::new(&path),
         ObserverMode::Always,
@@ -222,7 +222,7 @@ fn executor_budgets_and_exact_resume() {
     resume(checkpoint);
     #[cfg(feature = "serde")]
     resume(restored);
-    #[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "checkpoint-postcard", not(target_arch = "wasm32")))]
     {
         let restored = crate::read_exact_checkpoint(&path);
         std::fs::remove_file(&path).unwrap();

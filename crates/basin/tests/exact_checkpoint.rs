@@ -216,10 +216,7 @@ fn checkpoint_mode_gates_iterations_but_not_final_save() {
     assert_eq!(snapshots[1].solver().steps, 3);
 }
 
-#[cfg(all(
-    any(feature = "serde", feature = "checkpoint-postcard"),
-    not(target_arch = "wasm32")
-))]
+#[cfg(all(feature = "checkpoint-postcard", not(target_arch = "wasm32")))]
 mod file {
     use std::io::ErrorKind;
     use std::path::{Path, PathBuf};

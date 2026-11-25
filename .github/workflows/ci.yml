@@ -66,7 +66,7 @@ jobs:
       - run: >-
           cargo check -p basin --all-targets --no-default-features
           --features
-          nalgebra_v0_32-lapack,nalgebra_v0_33-lapack,nalgebra_v0_34-lapack,ndarray_v0_15-blas,ndarray_v0_16-blas,ndarray_v0_17-blas,faer_v0_22,faer_v0_23,faer_v0_24,parallel,problems,serde
+          nalgebra_v0_32-lapack,nalgebra_v0_33-lapack,nalgebra_v0_34-lapack,ndarray_v0_15-blas,ndarray_v0_16-blas,ndarray_v0_17-blas,faer_v0_22,faer_v0_23,faer_v0_24,parallel,problems,checkpoint-postcard
 
   docs:
     name: rustdoc
@@ -84,7 +84,7 @@ jobs:
           key: docs
       - run: >-
           cargo doc --no-deps -p basin
-          --features nalgebra-lapack,ndarray-blas,faer,parallel,problems,serde
+          --features nalgebra-lapack,ndarray-blas,faer,parallel,problems,checkpoint-postcard
       - run: cargo doc --no-deps -p basin
 
   test:
@@ -100,6 +100,8 @@ jobs:
             flags: "--features problems"
           - features: serde
             flags: "--features serde"
+          - features: checkpoint-postcard
+            flags: "--features checkpoint-postcard"
           - features: nalgebra 0.32
             flags: "--no-default-features --features nalgebra_v0_32,problems"
           - features: nalgebra 0.33
@@ -137,11 +139,14 @@ jobs:
       - run: cargo build -p basin ${{ matrix.flags }}
       - run: cargo check -p basin --all-targets ${{ matrix.flags }}
       - run: cargo test -p basin ${{ matrix.flags }}
-      - name: Test native checkpoint APIs with checkpoint-postcard
+      - name: Verify Serde has no normal Postcard dependency
         if: matrix.features == 'serde'
-        run: >-
-          cargo test -p basin --no-default-features --features checkpoint-postcard
-          --test checkpoint --test exact_checkpoint --test stochastic_exact_resume
+        run: |
+          dependencies=$(cargo tree -p basin --no-default-features --features serde --edges normal --prefix none)
+          if grep -q '^postcard v' <<< "$dependencies"; then
+            echo 'The serde-only build must not depend on Postcard.' >&2
+            exit 1
+          fi
 
   # The versioned nalgebra LAPACK features link a system LAPACK, so they get a
   # separate matrix (and remain absent from the wasm matrix). LAPACK symbols
@@ -210,6 +215,8 @@ jobs:
             flags: ""
           - features: serde
             flags: "--features serde"
+          - features: checkpoint-postcard
+            flags: "--features checkpoint-postcard"
           - features: nalgebra
             flags: "--features nalgebra"
           - features: deprecated nalgebra alias

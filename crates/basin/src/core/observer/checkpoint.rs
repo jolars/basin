@@ -21,7 +21,7 @@ const FORMAT_VERSION: u32 = 1;
 /// Write the current state to a file with [`postcard`], overwriting the
 /// previous snapshot, so the file always holds the latest checkpoint.
 ///
-/// Available on native targets with `checkpoint-postcard` or `serde`.
+/// Available on native targets with `checkpoint-postcard`.
 ///
 /// Files start with `BASINST\0` and a little-endian `u32` format version of 1,
 /// followed by the postcard payload.
