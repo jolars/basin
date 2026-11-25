@@ -87,7 +87,7 @@ use crate::line_search::{Constant, LineSearch, LineSearchOutcome};
 ///
 ///     .run()
 ///     .unwrap();
-/// assert!(result.cost() < 1e-12);
+/// assert!(result.current_record().unwrap().cost.unwrap() < 1e-12);
 /// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GradientDescent<L, V, F: Scalar = f64> {
@@ -371,10 +371,11 @@ mod tests {
         .unwrap();
 
         assert!(
-            momentum.cost() < plain.cost(),
+            momentum.current_record().unwrap().cost.unwrap()
+                < plain.current_record().unwrap().cost.unwrap(),
             "momentum cost {} should beat plain {}",
-            momentum.cost(),
-            plain.cost()
+            momentum.current_record().unwrap().cost.unwrap(),
+            plain.current_record().unwrap().cost.unwrap()
         );
     }
 

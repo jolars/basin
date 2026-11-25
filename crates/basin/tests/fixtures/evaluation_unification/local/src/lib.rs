@@ -1,3 +1,4 @@
+use basin::CountsMirror as _;
 use std::{cell::Cell, rc::Rc};
 
 use basin::{

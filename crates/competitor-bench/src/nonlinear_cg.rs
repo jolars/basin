@@ -99,7 +99,10 @@ fn basin_solve(
         exec = exec.observe_solver(
             move |state, _, event| {
                 if !matches!(event, basin::ObservationEvent::Final(_)) {
-                    samples.lock().unwrap().record(state.cost(), state.iter());
+                    samples.lock().unwrap().record(
+                        state.current_record().unwrap().cost.unwrap(),
+                        state.iter(),
+                    );
                 }
             },
             basin::ObserverMode::Always,
@@ -116,7 +119,7 @@ fn basin_solve(
     );
     let progress = Progress {
         point: result.param().clone(),
-        cost: result.cost(),
+        cost: result.current_record().unwrap().cost.unwrap(),
         iterations: result.iter(),
     };
     (format!("{:?}", result.report.code()), Some(progress))

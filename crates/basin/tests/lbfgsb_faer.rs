@@ -67,7 +67,11 @@ fn unbounded_rosenbrock_2d_converges() {
     .run()
     .unwrap();
 
-    assert!(result.cost() < 1e-10, "cost = {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 1e-10,
+        "cost = {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-4
             && (result.param()[1] - 1.0).abs() < 1e-4,
@@ -103,9 +107,9 @@ fn booth_at_corner_converges() {
         result.param()[1]
     );
     assert!(
-        (result.cost() - 20.0).abs() < 1e-8,
+        (result.current_record().unwrap().cost.unwrap() - 20.0).abs() < 1e-8,
         "cost = {}",
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }
 
@@ -134,7 +138,11 @@ fn booth_slack_bounds_recover_unconstrained_minimum() {
         result.param()[0],
         result.param()[1]
     );
-    assert!(result.cost() < 1e-8, "cost = {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 1e-8,
+        "cost = {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
 }
 
 #[path = "support/backend_aliases.rs"]

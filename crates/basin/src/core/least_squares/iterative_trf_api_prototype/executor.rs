@@ -211,7 +211,10 @@ fn executor_budgets_and_exact_resume() {
                 .run_with_solver()
                 .unwrap();
         assert_eq!(result.iter(), full.iter());
-        assert_eq!(result.cost(), full.cost());
+        assert_eq!(
+            result.current_record().unwrap().cost.unwrap(),
+            full.current_record().unwrap().cost.unwrap()
+        );
         assert_eq!(result.param(), full.param());
         assert_eq!(result.solver.residual, full.solver.residual);
         assert_eq!(result.solver.factors, full.solver.factors);

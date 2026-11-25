@@ -83,8 +83,8 @@ fn coherent<S: basin::ResumableInner<Vec<f64>>>(
         assert_eq!(f, x.iter().map(|v| v * v).sum::<f64>());
         if let Some((_, inner)) = solver.chain(i) {
             assert!(solver.ls_application_count(i) > 0);
-            assert_eq!(inner.best_cost(), f);
-            assert_eq!(inner.best_param(), x);
+            assert_eq!(inner.selected_record().unwrap().cost.unwrap(), f);
+            assert_eq!(inner.selected_record().unwrap().param, x);
         }
     }
     let (best, f) = state.best().unwrap();
@@ -230,7 +230,7 @@ fn explicit_population_is_repaired_and_incumbent_counts_match_publication() {
         &[vec![1.0; 2], vec![2.0; 2], vec![5.0, 0.0], vec![-5.0, 0.0]]
     );
     assert_eq!(result.state.best_counts(), Some(&result.counts));
-    assert_eq!(result.state.best_iter(), 0);
+    assert_eq!(result.state.selected_record().unwrap().iter, 0);
     assert_eq!(result.counts.cost_evals, 4);
 }
 
@@ -270,7 +270,7 @@ fn nonfinite_chain_without_an_incumbent_does_not_read_best_param() {
     .max_iter(3)
     .run_with_solver()
     .unwrap();
-    assert!(result.incumbent_record().is_none());
+    assert!(result.selected_record().is_none());
     assert!((0..4).any(|i| result.solver.ls_application_count(i) > 0));
     assert!((0..4).all(|i| result.solver.chain(i).is_none()));
     assert_eq!(result.state.best_counts(), None);
@@ -372,7 +372,7 @@ fn zero_threshold_retains_the_chain_until_its_finite_probe() {
     .run()
     .unwrap();
 
-    assert_eq!(result.incumbent_record().unwrap().cost, 0.0);
+    assert_eq!(result.selected_record().unwrap().cost.unwrap(), 0.0);
 }
 
 #[test]

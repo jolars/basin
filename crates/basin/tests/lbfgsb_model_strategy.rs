@@ -150,7 +150,10 @@ fn exact_continuation_rebuilds_only_scratch() {
             .run()
             .unwrap();
             assert_eq!(resumed.param(), reference.param());
-            assert_eq!(resumed.cost(), reference.cost());
+            assert_eq!(
+                resumed.current_record().unwrap().cost.unwrap(),
+                reference.current_record().unwrap().cost.unwrap()
+            );
             assert_eq!(resumed.state.counts(), reference.state.counts());
             assert_eq!(resumed.report, reference.report);
         }

@@ -312,7 +312,8 @@ fn custom_stop_sees_initialized_state() {
     let result =
         Executor::from_start(Sphere, GradientDescent::new(0.1), vec![1.0])
             .stop_when(|state: &FirstOrderState<Vec<f64>>| {
-                (basin::State::cost(state) == 1.0)
+                (basin::State::current_record(state).unwrap().cost.unwrap()
+                    == 1.0)
                     .then(|| basin::ApplicationStop::new("user_requested"))
             })
             .run()
@@ -330,7 +331,7 @@ fn simplex_settings_converge_together() {
         .run()
         .unwrap();
     assert_eq!(result.report.code(), TerminationCode::SimplexTolerance);
-    assert!(result.cost() < 1e-12);
+    assert!(result.current_record().unwrap().cost.unwrap() < 1e-12);
 }
 
 #[test]

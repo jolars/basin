@@ -94,7 +94,7 @@ macro_rules! lifecycle {
             .run_with_solver()
             .unwrap();
             assert_eq!(fresh.state.iter(), 0);
-            assert_eq!(fresh.state.best_iter(), 0);
+            assert_eq!(fresh.state.selected_record().unwrap().iter, 0);
             assert_eq!(fresh.counts.cost_evals, 1);
             assert_eq!(fresh.counts.gradient_evals, 1);
             assert_eq!(fresh.solver.history_len(), 0);
@@ -305,7 +305,7 @@ fn custom_contiguous_backend_needs_no_matrix_capabilities() {
             .max_iter(10)
             .run()
             .unwrap();
-    assert!(bounded.cost() < 1e-12);
+    assert!(bounded.current_record().unwrap().cost.unwrap() < 1e-12);
     let unbounded = Executor::from_start(
         basin::SamplingDomain::new(problem()),
         Lbfgs::new().unbounded(),
@@ -315,5 +315,5 @@ fn custom_contiguous_backend_needs_no_matrix_capabilities() {
     .max_iter(10)
     .run()
     .unwrap();
-    assert!(unbounded.cost() < 1e-12);
+    assert!(unbounded.current_record().unwrap().cost.unwrap() < 1e-12);
 }

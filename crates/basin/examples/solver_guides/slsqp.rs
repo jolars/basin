@@ -64,6 +64,9 @@ fn main() {
     let x = result.state.param();
     assert!((x[0] - 1.0).abs() < 1e-5);
     assert!(x[1].abs() < 1e-5);
-    assert!((result.state.cost() - 1.0).abs() < 1e-8);
+    assert!(
+        (result.state.current_record().unwrap().cost.unwrap() - 1.0).abs()
+            < 1e-8
+    );
     assert!(result.solver.constraint_violation().unwrap() < 1e-8);
 }

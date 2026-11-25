@@ -276,7 +276,7 @@ pub enum LmDamping {
 /// [`Residual`](crate::Residual) + [`Jacobian`](crate::Jacobian), not
 /// [`CostFunction`](crate::core::problem::CostFunction); problems
 /// whose user-facing `cost()` uses an unscaled `Σ rᵢ²` form will see
-/// `state.cost()` differ from `problem.cost(state.param())` by a
+/// `state.current_record().unwrap().cost.unwrap()` differ from `problem.cost(state.param())` by a
 /// factor of two. Both go to zero at the optimum, so cost-based
 /// termination criteria are unaffected.
 ///
@@ -851,7 +851,7 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
         if self.failed {
             if let Some(trace) = &mut self.trace {
                 trace.event(
-                    state.cost(),
+                    state.current_record().unwrap().cost.unwrap(),
                     "construction",
                     "invalid_initial_model",
                 );
@@ -877,7 +877,7 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
                     self.failed = true;
                     if let Some(trace) = &mut self.trace {
                         trace.event(
-                            state.cost(),
+                            state.current_record().unwrap().cost.unwrap(),
                             "construction",
                             "invalid_residual_model",
                         );
@@ -902,7 +902,7 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
             Err(error) => {
                 if let Some(trace) = &mut self.trace {
                     let index = trace.event(
-                        state.cost(),
+                        state.current_record().unwrap().cost.unwrap(),
                         "construction",
                         "factorization_failed",
                     );
@@ -924,13 +924,13 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
             || self.damping == LmDamping::TrustRegion
             || E::ROBUST)
             && ((!E::ROBUST && !r.norm_squared().is_finite())
-                || !state.cost().is_finite()
+                || !state.current_record().unwrap().cost.unwrap().is_finite()
                 || !g.norm_infinity().is_finite()
                 || !problem.valid_vector(&g))
         {
             if let Some(trace) = &mut self.trace {
                 let index = trace.event(
-                    state.cost(),
+                    state.current_record().unwrap().cost.unwrap(),
                     "construction",
                     "nonfinite_model",
                 );
@@ -962,7 +962,7 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
                 stopping::robust_gradient_converged(
                     &g,
                     &diag_cur,
-                    state.cost(),
+                    state.current_record().unwrap().cost.unwrap(),
                     tol,
                 )
             } else {
@@ -970,7 +970,9 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
             }
         });
         if let Some(trace) = &mut self.trace {
-            let mut row = LeastSquaresObservation::model(state.cost());
+            let mut row = LeastSquaresObservation::model(
+                state.current_record().unwrap().cost.unwrap(),
+            );
             row.gradient = vector(&g);
             row.diagonal = vector(&diag_cur);
             row.checks.push(LeastSquaresCheck {
@@ -995,7 +997,9 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
                         &g,
                         &diag_cur,
                         &r,
-                        E::ROBUST.then_some(state.cost()),
+                        E::ROBUST.then_some(
+                            state.current_record().unwrap().cost.unwrap(),
+                        ),
                         tolerance,
                     )
                 }),
@@ -1023,7 +1027,9 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
                         &g,
                         &diag_cur,
                         &r,
-                        E::ROBUST.then_some(state.cost()),
+                        E::ROBUST.then_some(
+                            state.current_record().unwrap().cost.unwrap(),
+                        ),
                         self.tol_grad_rel.unwrap(),
                     ),
                 })
@@ -1090,8 +1096,9 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
                         if let Some(index) = last_solve {
                             trace.observations[index].damping_after = Some(mu);
                         }
-                        let mut row =
-                            LeastSquaresObservation::model(state.cost());
+                        let mut row = LeastSquaresObservation::model(
+                            state.current_record().unwrap().cost.unwrap(),
+                        );
                         row.event = "subproblem";
                         row.outcome = Some(match &result {
                             Ok(_) => "solved",
@@ -1119,7 +1126,9 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
                 model_solves += 1;
                 let result = Model::solve(&a, &g, &d, mu, rank_tolerance);
                 if let Some(trace) = &mut self.trace {
-                    let mut row = LeastSquaresObservation::model(state.cost());
+                    let mut row = LeastSquaresObservation::model(
+                        state.current_record().unwrap().cost.unwrap(),
+                    );
                     row.event = "subproblem";
                     row.outcome = Some(match &result {
                         Ok(_) => "solved",
@@ -1162,7 +1171,7 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
         if self.damping == LmDamping::TrustRegion {
             if let Some(trace) = &mut self.trace {
                 let index = trace.event(
-                    state.cost(),
+                    state.current_record().unwrap().cost.unwrap(),
                     "damping_search",
                     if step.is_ok() { "selected" } else { "failed" },
                 );
@@ -1211,7 +1220,9 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
         let mut x_trial = state.param().clone();
         x_trial.scaled_add(F::one(), &h);
         let trial_record = self.trace.as_mut().map(|trace| {
-            let mut row = LeastSquaresObservation::model(state.cost());
+            let mut row = LeastSquaresObservation::model(
+                state.current_record().unwrap().cost.unwrap(),
+            );
             row.event = "trial";
             row.trial = true;
             row.step = vector(&h);
@@ -1235,7 +1246,7 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
         }
         let f_trial = problem.cost(&r_trial, |r| half * r.norm_squared());
 
-        let prev_cost = state.cost();
+        let prev_cost = state.current_record().unwrap().cost.unwrap();
         let actual_diff = prev_cost - f_trial;
         let rho = if l_diff > F::zero() {
             actual_diff / l_diff
@@ -1405,7 +1416,7 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
                         self.failed = true;
                         if let Some(trace) = &mut self.trace {
                             trace.event(
-                                state.cost(),
+                                state.current_record().unwrap().cost.unwrap(),
                                 "construction",
                                 "invalid_retained_model",
                             );
@@ -1431,13 +1442,18 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
                 let gradient = self.jtr_cache.as_ref().unwrap();
                 let valid = all_finite(gradient)
                     && problem.valid_vector(gradient)
-                    && state.cost().is_finite()
+                    && state
+                        .current_record()
+                        .unwrap()
+                        .cost
+                        .unwrap()
+                        .is_finite()
                     && (!E::ROBUST
                         || all_finite(self.r_cache.as_ref().unwrap()));
                 if !valid || self.model_cache.as_ref().unwrap().is_err() {
                     if let Some(trace) = &mut self.trace {
                         trace.event(
-                            state.cost(),
+                            state.current_record().unwrap().cost.unwrap(),
                             "construction",
                             "invalid_retained_model",
                         );

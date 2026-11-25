@@ -201,17 +201,29 @@ where
         assert_eq!(result.cost_evals(), 4);
         assert_eq!(result.state.gradient_evals(), if fused { 4 } else { 2 });
         assert_eq!(result.param().as_float_slice(), &accepted);
-        assert_eq!(result.best_param().as_float_slice(), &accepted);
+        assert_eq!(
+            result.selected_record().unwrap().param.as_float_slice(),
+            &accepted
+        );
         assert_eq!(
             result.state.gradient().unwrap().as_float_slice(),
             &point([-8.0, 12.0])
         );
-        assert_eq!(result.cost(), scalar(-6.875));
+        assert_eq!(
+            result.current_record().unwrap().cost.unwrap(),
+            scalar(-6.875)
+        );
         let initial_cost = scalar::<F>(-5.875);
         let coefficient = scalar::<F>(0.25);
         // The projection clips the first displacement from 0.5 to 0.25.
-        assert!(result.cost() <= initial_cost + coefficient * scalar(-3.0));
-        assert!(result.cost() > initial_cost + coefficient * scalar(-5.0));
+        assert!(
+            result.current_record().unwrap().cost.unwrap()
+                <= initial_cost + coefficient * scalar(-3.0)
+        );
+        assert!(
+            result.current_record().unwrap().cost.unwrap()
+                > initial_cost + coefficient * scalar(-5.0)
+        );
     }
 }
 
@@ -255,8 +267,11 @@ fn exhausted_search_publishes_attempts_without_completing_a_step() {
         result.state.current(),
         Some((&vec![0.75, 0.4375], -5.875, &vec![-8.0, -4.0]))
     );
-    assert_eq!(result.best_param(), &[0.75, 0.4375]);
-    assert_eq!(result.state.best_cost(), -5.875);
+    assert_eq!(result.selected_record().unwrap().param, &[0.75, 0.4375]);
+    assert_eq!(
+        result.state.selected_record().unwrap().cost.unwrap(),
+        -5.875
+    );
     assert_eq!(*probes.costs.borrow(), [[0.75, 0.4375], [1.0, 1.0]]);
     assert_eq!(result.cost_evals(), 2);
     assert_eq!(result.state.gradient_evals(), 1);

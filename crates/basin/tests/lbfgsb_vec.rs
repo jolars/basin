@@ -80,7 +80,11 @@ fn unbounded_rosenbrock_2d_converges() {
     .run()
     .unwrap();
 
-    assert!(result.cost() < 1e-10, "cost = {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 1e-10,
+        "cost = {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-4,
         "x[0] = {}",
@@ -129,9 +133,9 @@ fn booth_at_corner_converges() {
         result.param()[1]
     );
     assert!(
-        (result.cost() - 20.0).abs() < 1e-8,
+        (result.current_record().unwrap().cost.unwrap() - 20.0).abs() < 1e-8,
         "cost = {}, expected 20",
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }
 
@@ -164,7 +168,11 @@ fn booth_slack_bounds_recover_unconstrained_minimum() {
         "x[1] = {}",
         result.param()[1]
     );
-    assert!(result.cost() < 1e-8, "cost = {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 1e-8,
+        "cost = {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
 }
 
 /// Strictly convex 5-D quadratic `f(x) = ½ xᵀ A x − bᵀ x` with
@@ -242,9 +250,10 @@ fn quadratic_5d_diagonal_converges_quickly() {
     // Optimum: x[i] = 1/diag[i]; cost = -½ Σ 1/diag[i].
     let expected_cost = -0.5 * (1.0 + 0.5 + 1.0 / 3.0 + 0.25 + 0.2);
     assert!(
-        (result.cost() - expected_cost).abs() < 1e-8,
+        (result.current_record().unwrap().cost.unwrap() - expected_cost).abs()
+            < 1e-8,
         "cost = {}, expected {}",
-        result.cost(),
+        result.current_record().unwrap().cost.unwrap(),
         expected_cost
     );
     for (i, x_i) in result.param().iter().enumerate() {

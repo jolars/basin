@@ -465,7 +465,11 @@ fn nonfinite_original_costs_do_not_replace_a_coherent_outer_point() {
             .max_iter(2)
             .run()
             .unwrap();
-            (result.report.code(), result.cost(), result.state.iter())
+            (
+                result.report.code(),
+                result.current_record().unwrap().cost.unwrap(),
+                result.state.iter(),
+            )
         } else {
             let result = Executor::from_start(
                 probe_eq(problem),
@@ -475,7 +479,11 @@ fn nonfinite_original_costs_do_not_replace_a_coherent_outer_point() {
             .max_iter(2)
             .run()
             .unwrap();
-            (result.report.code(), result.cost(), result.state.iter())
+            (
+                result.report.code(),
+                result.current_record().unwrap().cost.unwrap(),
+                result.state.iter(),
+            )
         };
         assert_eq!(code, TerminationCode::SolverFailed);
         assert_eq!(cost, 0.0);

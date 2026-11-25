@@ -135,6 +135,6 @@ fn nonfinite_trial_model_stops_before_residual_evaluation() {
     };
     assert_eq!(report.code(), TerminationCode::SolverFailed);
     assert_eq!(stepper.state().param(), &vec![0.0]);
-    assert_eq!(stepper.state().cost(), 2.0);
+    assert_eq!(stepper.state().current_record().unwrap().cost.unwrap(), 2.0);
     assert_eq!(*stepper.counts(), counts);
 }

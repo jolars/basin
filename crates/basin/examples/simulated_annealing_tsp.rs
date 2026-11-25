@@ -53,9 +53,12 @@ fn main() {
         .run()
         .unwrap();
 
-    if let Some(incumbent) = result.incumbent_record() {
+    if let Some(incumbent) = result
+        .selected_record()
+        .filter(|record| record.cost.is_some())
+    {
         println!("tour: {:?}", incumbent.param);
-        println!("length: {}", incumbent.cost);
+        println!("length: {}", incumbent.cost.unwrap());
     } else {
         println!("No tour was selected.");
     }

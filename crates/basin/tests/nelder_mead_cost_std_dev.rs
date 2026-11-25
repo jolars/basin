@@ -442,7 +442,7 @@ fn fresh_and_exact_continuation_preserve_the_setting_and_result() {
         [ConvergenceTest::AbsoluteSimplexCostStdDev]
     );
     assert!(reference.iter() > 1 && reference.iter() < 2_000);
-    assert!(reference.cost() < 1e-4);
+    assert!(reference.current_record().unwrap().cost.unwrap() < 1e-4);
     for split in [0, 1, 7, reference.iter() - 1] {
         let checkpoint = make()
             .max_iter(split)

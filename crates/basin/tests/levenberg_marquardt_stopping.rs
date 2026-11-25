@@ -196,7 +196,7 @@ impl Residual for InvalidJacobian {
                 assert_eq!(convergence.criteria().len(), 3);
                 let basin::ConvergenceEvidence::ModelReduction { actual, predicted, reference_cost, gain_ratio, tolerance } = convergence.criteria()[0].evidence else { panic!("expected model evidence") };
                 assert_eq!(reference_cost, 2.);
-                assert_eq!(actual, reference_cost - result.cost());
+                assert_eq!(actual, reference_cost - result.current_record().unwrap().cost.unwrap());
                 assert!(actual.abs() <= tolerance * reference_cost);
                 assert!(predicted <= tolerance * reference_cost);
                 assert!(gain_ratio <= 2.);
@@ -561,7 +561,7 @@ impl Residual for Quadratic {
                         assert_eq!(result.state.counts().residual_evals, if enabled { 2 } else { 5 });
                         assert_eq!(result.state.counts().jacobian_evals, 1);
                         assert_eq!(result.state.iter(), if enabled { 0 } else { 4 });
-                        assert_eq!(result.cost(), 0.);
+                        assert_eq!(result.current_record().unwrap().cost.unwrap(), 0.);
                         assert_eq!(result.param()[0], 1.);
                         assert_eq!(result.param()[1], 2.);
                     }
@@ -588,7 +588,7 @@ impl Residual for Quadratic {
                     .unwrap();
                     assert_eq!(result.report.code(), TerminationCode::NumericalNoProgress);
                     assert!(!result.report.code().is_failure());
-                    assert_eq!(result.cost(), 1.);
+                    assert_eq!(result.current_record().unwrap().cost.unwrap(), 1.);
                     assert_eq!(result.param()[0], 1.);
                     assert_eq!(result.param()[1], 2.);
                     assert_eq!(result.state.counts().residual_evals, 2);
@@ -640,8 +640,8 @@ impl Residual for Quadratic {
                     .run()
                     .unwrap();
                     assert_eq!(result.report.code(), TerminationCode::NumericalNoProgress);
-                    assert!(result.cost() > 0.);
-                    assert!(result.cost() <= 4. * <$scalar>::EPSILON.powi(2));
+                    assert!(result.current_record().unwrap().cost.unwrap() > 0.);
+                    assert!(result.current_record().unwrap().cost.unwrap() <= 4. * <$scalar>::EPSILON.powi(2));
                     assert!((result.param()[0] - root).abs() <= <$scalar>::EPSILON);
                     assert!(result.state.counts().residual_evals < 20);
                 }

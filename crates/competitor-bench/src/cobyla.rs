@@ -172,7 +172,7 @@ impl Case {
         Outcome {
             // COBYLA's current state contains its feasibility-filter selection.
             point: result.param().clone(),
-            cost: result.cost(),
+            cost: result.current_record().unwrap().cost.unwrap(),
             objective_calls: problem.objective_calls.get(),
             constraint_calls: problem.constraint_calls.get(),
             iterations: Some(result.iter()),

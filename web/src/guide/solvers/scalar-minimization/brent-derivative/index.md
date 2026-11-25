@@ -61,7 +61,7 @@ declares scalar box bounds, and enables an absolute gradient tolerance.
 [View `brent_derivative.rs` on GitHub](https://github.com/jolars/basin/blob/main/crates/basin/examples/solver_guides/brent_derivative.rs)
 
 The derivative in `FirstOrderState` belongs to the current probe. Use
-`incumbent_record()` for the lowest recorded objective; the most
+`selected_record()` for the lowest recorded objective; the most
 recent probe need not improve it.
 
 ## Practical considerations

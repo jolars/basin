@@ -65,7 +65,7 @@ where
     .unwrap();
     assert_eq!(result.param()[0], F::one() + F::one());
     assert_eq!(result.param()[1], F::one() + F::one());
-    assert_eq!(result.cost(), F::zero());
+    assert_eq!(result.current_record().unwrap().cost.unwrap(), F::zero());
 }
 
 #[test]
@@ -207,7 +207,7 @@ fn finite_differences_need_no_constraint_declaration() {
     .max_iter(100)
     .run()
     .unwrap();
-    assert!(result.cost() < 1e-12);
+    assert!(result.current_record().unwrap().cost.unwrap() < 1e-12);
 }
 
 struct PlainResidual;
@@ -240,7 +240,7 @@ fn least_squares_and_robust_loss_need_no_constraint_declaration() {
     .max_iter(100)
     .run()
     .unwrap();
-    assert!(raw.cost() < 1e-12);
+    assert!(raw.current_record().unwrap().cost.unwrap() < 1e-12);
     let robust = Executor::from_start(
         RobustLeastSquares::new(PlainResidual, SquaredLoss),
         LevenbergMarquardt::new(),
@@ -249,7 +249,7 @@ fn least_squares_and_robust_loss_need_no_constraint_declaration() {
     .max_iter(100)
     .run()
     .unwrap();
-    assert!(robust.cost() < 1e-12);
+    assert!(robust.current_record().unwrap().cost.unwrap() < 1e-12);
 }
 
 impl NonlinearInequalityValues for Plain<Vec<f64>, f64> {

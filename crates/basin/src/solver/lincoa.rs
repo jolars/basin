@@ -112,7 +112,7 @@ use init::fold_constraints;
 ///     .max_cost_evals(500)
 ///     .run()
 ///     .unwrap();
-/// let incumbent = result.incumbent_record().expect("expected an incumbent");
+/// let incumbent = result.selected_record().expect("expected an incumbent");
 /// assert!((incumbent.param[0] - 1.0).abs() < 1e-3);
 /// assert!((incumbent.param[1] - 1.0).abs() < 1e-3);
 /// ```

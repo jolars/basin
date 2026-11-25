@@ -260,8 +260,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::CountsMirror;
     use crate::core::executor::Executor;
-    use crate::core::state::State;
 
     struct Quadratic {
         lo: f64,
@@ -356,11 +356,15 @@ mod tests {
         .unwrap();
         assert_eq!(r.report.code(), crate::TerminationCode::SolverConverged);
         assert!(
-            (r.best_param() - 1.0).abs() < 1e-6,
+            (r.selected_record().unwrap().param - 1.0).abs() < 1e-6,
             "x = {}",
-            r.best_param()
+            r.selected_record().unwrap().param
         );
-        assert!((r.best_cost() + 2.0).abs() < 1e-10, "f = {}", r.best_cost());
+        assert!(
+            (r.selected_record().unwrap().cost.unwrap() + 2.0).abs() < 1e-10,
+            "f = {}",
+            r.selected_record().unwrap().cost.unwrap()
+        );
         // Golden section converges linearly (bracket shrinks by ≈0.618 per
         // step), so it needs ~40 evals to reach √ε on [0, 2], looser than
         // Brent's parabolic budget. A generous ceiling guards against a real
@@ -415,22 +419,26 @@ mod tests {
         // optimum. These bounds still rule out the issue-#36 bug: a spurious
         // fire on the first probe would leave best_x near the ≈0.76 init point.
         assert!(
-            (r.best_param() - 1.0).abs() < 1e-3,
+            (r.selected_record().unwrap().param - 1.0).abs() < 1e-3,
             "best_x = {}, reason = {:?}",
-            r.best_param(),
+            r.selected_record().unwrap().param,
             r.report.code()
         );
         assert!(
-            (r.best_cost() + 2.0).abs() < 1e-6,
+            (r.selected_record().unwrap().cost.unwrap() + 2.0).abs() < 1e-6,
             "best_cost = {}, reason = {:?}",
-            r.best_cost(),
+            r.selected_record().unwrap().cost.unwrap(),
             r.report.code()
         );
-        assert!(r.best_iter() > 0, "best_iter = {}", r.best_iter());
         assert!(
-            r.best_cost_evals() > 0,
+            r.selected_record().unwrap().iter > 0,
+            "best_iter = {}",
+            r.selected_record().unwrap().iter
+        );
+        assert!(
+            r.selected_record().unwrap().counts.cost_evals > 0,
             "best_cost_evals = {}",
-            r.best_cost_evals()
+            r.selected_record().unwrap().counts.cost_evals
         );
     }
 }

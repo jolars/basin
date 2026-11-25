@@ -30,8 +30,8 @@ fn main() {
         .run()
         .unwrap();
 
-    let incumbent = result.incumbent_record().expect("expected an incumbent");
-    assert!((incumbent.cost - 1.0).abs() < 1e-8);
+    let incumbent = result.selected_record().expect("expected an incumbent");
+    assert!((incumbent.cost.unwrap() - 1.0).abs() < 1e-8);
     assert!((incumbent.param[0] - 1.0).abs() < 1e-6);
     assert!((incumbent.param[1] + 1.0).abs() < 1e-4);
 }

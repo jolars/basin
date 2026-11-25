@@ -45,7 +45,11 @@ fn levenberg_marquardt_converges_on_sparse_linear_regression() {
     .unwrap();
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
-    assert!(result.cost() < 1e-15, "cost = {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 1e-15,
+        "cost = {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-7,
         "x[0] = {}",
@@ -80,7 +84,11 @@ fn levenberg_marquardt_handles_sparse_diagonal_damping() {
     .unwrap();
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
-    assert!(result.cost() < 1e-20, "cost = {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 1e-20,
+        "cost = {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
 }
 
 #[test]
@@ -109,7 +117,11 @@ fn trust_region_limits_sparse_steps_and_converges() {
             assert_eq!(result.state.counts().jacobian_evals, 1);
         } else {
             assert_eq!(result.report.code(), TerminationCode::SolverConverged);
-            assert!(result.cost() < 1e-20, "cost = {}", result.cost());
+            assert!(
+                result.current_record().unwrap().cost.unwrap() < 1e-20,
+                "cost = {}",
+                result.current_record().unwrap().cost.unwrap()
+            );
             for i in 0..3 {
                 assert!((result.param()[i] - (i + 1) as f64).abs() < 1e-9);
             }

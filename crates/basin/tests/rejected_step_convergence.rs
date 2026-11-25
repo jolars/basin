@@ -118,7 +118,10 @@ fn check_rejections<P, S, So>(
         .unwrap();
         assert_eq!(first.report.code(), TerminationCode::MaxIter);
         assert_eq!(first.state.param(), &[0.1]);
-        assert_eq!(first.state.cost(), 0.5 * 0.99_f64.powi(2));
+        assert_eq!(
+            first.state.current_record().unwrap().cost.unwrap(),
+            0.5 * 0.99_f64.powi(2)
+        );
         assert_eq!(solver.check_convergence(&problem, &first.state), None);
         assert_eq!(solver.check_convergence(&problem, &first.state), None);
 
@@ -130,7 +133,10 @@ fn check_rejections<P, S, So>(
                 .run_with_solver()
                 .unwrap();
         assert_eq!(result.report.code(), accepted_reason);
-        assert!(result.state.cost() < 0.5 * 0.99_f64.powi(2));
+        assert!(
+            result.state.current_record().unwrap().cost.unwrap()
+                < 0.5 * 0.99_f64.powi(2)
+        );
         assert!(result.state.param()[0] > 0.1);
         solver = result.solver;
     }
@@ -168,7 +174,7 @@ macro_rules! rejection_checks {
                 .max_iter(100)
                 .run()
                 .unwrap();
-                assert!(result.cost() < 1e-12, "cost = {}", result.cost());
+                assert!(result.current_record().unwrap().cost.unwrap() < 1e-12, "cost = {}", result.current_record().unwrap().cost.unwrap());
                 }
             )+
         }
@@ -289,7 +295,7 @@ fn rejection_after_accepted_steps_does_not_establish_convergence() {
                 .any(|pair| { pair[0] != 0.1 && pair[0] == pair[1] })
         );
         assert_eq!(result.report.code(), TerminationCode::GradientTolerance);
-        assert!(result.cost() < 1e-16);
+        assert!(result.current_record().unwrap().cost.unwrap() < 1e-16);
     }
 
     check(

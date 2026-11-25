@@ -66,7 +66,7 @@ fn cma_es_reproducible_and_counts_match() {
     // `(λ + 1)·(iters + 1)`, not `λ·(iters + 1)` like the other population
     // solvers. Still feature-independent.
     assert_eq!(
-        a.cost_evals(),
+        a.counts.cost_evals,
         (lambda as u64 + 1) * (max_iter + 1),
         "CMA-ES cost_evals must equal (λ+1)·(iters+1) regardless of `parallel`"
     );
@@ -91,7 +91,7 @@ fn de_reproducible_and_counts_match() {
 
     assert_bit_identical(&a, &b);
     assert_eq!(
-        a.cost_evals(),
+        a.counts.cost_evals,
         expected_cost_evals(lambda as u64, max_iter),
         "DE cost_evals must equal pop·(iters+1) regardless of `parallel`"
     );
@@ -116,7 +116,7 @@ fn global_best_pso_reproducible_and_counts_match() {
 
     assert_bit_identical(&a, &b);
     assert_eq!(
-        a.cost_evals(),
+        a.counts.cost_evals,
         expected_cost_evals(swarm_size as u64, max_iter),
         "global-best PSO cost_evals must equal swarm·(iters+1) regardless of `parallel`"
     );
@@ -143,7 +143,7 @@ fn random_search_reproducible_and_counts_match() {
     // RandomSearch keeps the elite (already costed) and evaluates `λ` fresh
     // draws per iteration plus `λ` in `init`, so the formula still holds.
     assert_eq!(
-        a.cost_evals(),
+        a.counts.cost_evals,
         expected_cost_evals(lambda as u64, max_iter),
         "RandomSearch cost_evals must equal λ·(iters+1) regardless of `parallel`"
     );
@@ -157,8 +157,8 @@ fn assert_bit_identical<S: State>(
     S::Float: PartialEq + Debug,
 {
     assert_eq!(
-        a.cost(),
-        b.cost(),
+        a.current_record().unwrap().cost.unwrap(),
+        b.current_record().unwrap().cost.unwrap(),
         "best cost differs across same-seed runs"
     );
     assert_eq!(
@@ -167,8 +167,7 @@ fn assert_bit_identical<S: State>(
         "iterate differs across same-seed runs"
     );
     assert_eq!(
-        a.cost_evals(),
-        b.cost_evals(),
+        a.counts.cost_evals, b.counts.cost_evals,
         "cost_evals differs across same-seed runs"
     );
 }

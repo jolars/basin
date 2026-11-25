@@ -59,7 +59,7 @@ fn fresh_swarm_run_resets_progress_and_reevaluates_every_member() {
         .unwrap();
     assert_eq!(fresh.iter(), 0);
     assert_eq!(fresh.counts.cost_evals, 4);
-    assert_eq!(fresh.state.best_iter(), 0);
+    assert_eq!(fresh.state.selected_record().unwrap().iter, 0);
     let mut actual = fresh.state.candidates().to_vec();
     actual.sort_by(|a, b| a[0].total_cmp(&b[0]));
     assert_eq!(actual, members);
@@ -92,7 +92,7 @@ fn swarm_category_readers_do_not_fold_other_work_into_cost_calls() {
     state.mirror(&counts);
     state.update_best();
     assert_eq!(state.cost_evals(), 4);
-    assert_eq!(state.best_cost_evals(), 4);
+    assert_eq!(state.selected_record().unwrap().counts.cost_evals, 4);
     assert_eq!(state.counts(), &counts);
     assert_eq!(state.best_counts(), Some(&counts));
 }
@@ -139,7 +139,7 @@ fn full_population_replacement_keeps_the_historical_swarm_representative() {
     assert_eq!(result.state.costs(), &[4.0, 9.0]);
     assert_eq!(result.state.current(), Some((&vec![0.0], 0.0)));
     assert_eq!(result.state.best(), Some((&vec![0.0], 0.0)));
-    assert_eq!(result.state.best_iter(), 0);
+    assert_eq!(result.state.selected_record().unwrap().iter, 0);
     assert_eq!(result.state.best_counts().unwrap().cost_evals, 2);
     assert_eq!(result.state.counts().cost_evals, 6);
 }

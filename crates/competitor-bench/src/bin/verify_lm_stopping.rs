@@ -275,7 +275,7 @@ where
             &base,
             &self.diagonal.borrow(),
         );
-        let base_cost = state.cost();
+        let base_cost = state.current_record().unwrap().cost.unwrap();
         let before = self.calls.residual.get();
         self.calls.trial.take();
         let (state, completed, reason) =
@@ -290,7 +290,7 @@ where
             residual_calls: self.calls.residual.get(),
             jacobian_calls: self.calls.jacobian.get(),
             trial: trial.is_some(),
-            accepted: state.cost() < base_cost,
+            accepted: state.current_record().unwrap().cost.unwrap() < base_cost,
             unchanged: false,
             diagnostics,
             actual: None,

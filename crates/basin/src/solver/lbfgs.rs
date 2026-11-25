@@ -197,7 +197,7 @@ use self::subsm::subsm;
 /// ).max_iter(100).run().unwrap();
 /// assert!(matches!(result.report.termination, Termination::Converged(_)));
 /// assert_eq!(result.param(), &vec![1.0, -2.0]);
-/// assert_eq!(result.cost(), 0.0);
+/// assert_eq!(result.current_record().unwrap().cost.unwrap(), 0.0);
 /// ```
 ///
 /// # Backends
@@ -540,7 +540,11 @@ where
     ) -> Option<Termination<F>> {
         let gradient = crate::GradientState::gradient(state)
             .expect("L-BFGS-B requires initialized progress");
-        if !finite_evaluation(state.param(), state.cost(), gradient) {
+        if !finite_evaluation(
+            state.param(),
+            state.current_record().unwrap().cost.unwrap(),
+            gradient,
+        ) {
             return Some(Termination::numerical_failure(
                 "L-BFGS-B requires a finite point, cost, and gradient.",
             ));
@@ -559,7 +563,7 @@ where
             return None;
         }
         let previous = self.previous_cost?;
-        let current = state.cost();
+        let current = state.current_record().unwrap().cost.unwrap();
         let reference = previous.abs().max(current.abs()).max(F::one());
         let reduction = previous - current;
         (previous.is_finite() && reduction <= tolerance * reference).then(
@@ -1325,7 +1329,12 @@ where
     ) -> Option<Termination<F>> {
         let gradient = crate::GradientState::gradient(state)
             .expect("L-BFGS requires initialized progress");
-        (!finite_evaluation(state.param(), state.cost(), gradient)).then(|| {
+        (!finite_evaluation(
+            state.param(),
+            state.current_record().unwrap().cost.unwrap(),
+            gradient,
+        ))
+        .then(|| {
             Termination::numerical_failure(
                 "L-BFGS requires a finite point, cost, and gradient.",
             )

@@ -54,9 +54,7 @@ use crate::core::observer::{
 use crate::core::problem::{EvalCounts, Problem};
 use crate::core::run_control::RunControl;
 use crate::core::solver::Solver;
-use crate::core::state::{
-    CountsMirror, ExactResumeState, IncumbentRef, IncumbentState, State,
-};
+use crate::core::state::{CountsMirror, ExactResumeState, State};
 use crate::core::termination::{
     ApplicationStop, Termination, TerminationReport, TerminationStage,
 };
@@ -118,7 +116,7 @@ impl CancellationToken {
 /// Outcome of an optimization run.
 ///
 /// Owns the final progress, authoritative evaluation counts, and stopping report.
-/// Delegates `param()`/`cost()`/`iter()` to the underlying state so
+/// Delegates progress and iteration readers to the underlying state so
 /// callers don't need to import `State` for the common reads.
 /// Use [`Executor::run_with_solver`] to retain the final solver as well
 /// in an [`OptimizationResultWithSolver`].
@@ -134,6 +132,20 @@ pub struct OptimizationResult<S: State> {
 }
 
 impl<S: State> OptimizationResult<S> {
+    /// Borrow the final published point and its available evaluations.
+    pub fn current_record(
+        &self,
+    ) -> Option<crate::CurrentRef<'_, S::Param, S::Float>> {
+        self.state.current_record()
+    }
+
+    /// Borrow the selected point and its original publication metadata.
+    pub fn selected_record(
+        &self,
+    ) -> Option<crate::SelectedRef<'_, S::Param, S::Float>> {
+        self.state.selected_record()
+    }
+
     /// Construct a result from final progress, authoritative counts, and a report.
     pub fn new(
         state: S,
@@ -152,58 +164,17 @@ impl<S: State> OptimizationResult<S> {
         self.state.param()
     }
 
-    /// Cost at the final iterate.
-    pub fn cost(&self) -> S::Float {
-        self.state.cost()
-    }
-
     /// Number of fully completed iterations.
     pub fn iter(&self) -> u64 {
         self.state.iter()
     }
 
     /// Cumulative cost-function evaluations across the run.
-    pub fn cost_evals(&self) -> u64 {
-        self.state.cost_evals()
-    }
-
-    /// Best iterate under the state's incumbent-selection rule.
-    ///
-    /// # Panics
-    ///
-    /// Panics on shared progress states when no incumbent has been selected.
-    /// Use [`incumbent_record`](Self::incumbent_record) to check availability.
-    pub fn best_param(&self) -> &S::Param {
-        self.state.best_param()
-    }
-
-    /// Borrow the selected incumbent and its publication metadata.
-    ///
-    /// Returns `None` if the state has selected no incumbent.
-    pub fn incumbent_record(
-        &self,
-    ) -> Option<IncumbentRef<'_, S::Param, S::Float>>
+    pub fn cost_evals(&self) -> u64
     where
-        S: IncumbentState,
+        S: CountsMirror,
     {
-        self.state.incumbent_record()
-    }
-
-    /// Cost at [`best_param`](Self::best_param).
-    pub fn best_cost(&self) -> S::Float {
-        self.state.best_cost()
-    }
-
-    /// Iteration at which [`best_param`](Self::best_param) was found.
-    pub fn best_iter(&self) -> u64 {
-        self.state.best_iter()
-    }
-
-    /// Cumulative cost evaluations at the moment
-    /// [`best_param`](Self::best_param) was found; answers "how many
-    /// evals until the solver hit its best?".
-    pub fn best_cost_evals(&self) -> u64 {
-        self.state.best_cost_evals()
+        self.state.cost_evals()
     }
 
     /// Consume the result and return the final state.
@@ -237,6 +208,20 @@ pub struct OptimizationResultWithSolver<S: State, So> {
 }
 
 impl<S: State, So> OptimizationResultWithSolver<S, So> {
+    /// Borrow the final published point and its available evaluations.
+    pub fn current_record(
+        &self,
+    ) -> Option<crate::CurrentRef<'_, S::Param, S::Float>> {
+        self.state.current_record()
+    }
+
+    /// Borrow the selected point and its original publication metadata.
+    pub fn selected_record(
+        &self,
+    ) -> Option<crate::SelectedRef<'_, S::Param, S::Float>> {
+        self.state.selected_record()
+    }
+
     /// Construct a result that also owns the final solver.
     pub fn new(
         state: S,
@@ -289,11 +274,6 @@ impl<S: State, So> OptimizationResultWithSolver<S, So> {
         self.state.param()
     }
 
-    /// Cost at the final iterate.
-    pub fn cost(&self) -> S::Float {
-        self.state.cost()
-    }
-
     /// Number of fully completed iterations.
     pub fn iter(&self) -> u64 {
         self.state.iter()
@@ -302,45 +282,11 @@ impl<S: State, So> OptimizationResultWithSolver<S, So> {
     /// Cumulative evaluation work under the state's [`CountsMirror`] mapping.
     ///
     /// Use `counts.cost_evals` for the raw number of cost-function calls.
-    pub fn cost_evals(&self) -> u64 {
-        self.state.cost_evals()
-    }
-
-    /// Best iterate under the state's incumbent-selection rule.
-    ///
-    /// # Panics
-    ///
-    /// Panics on shared progress states when no incumbent has been selected.
-    /// Use [`incumbent_record`](Self::incumbent_record) to check availability.
-    pub fn best_param(&self) -> &S::Param {
-        self.state.best_param()
-    }
-
-    /// Borrow the selected incumbent and its publication metadata.
-    ///
-    /// Returns `None` if the state has selected no incumbent.
-    pub fn incumbent_record(
-        &self,
-    ) -> Option<IncumbentRef<'_, S::Param, S::Float>>
+    pub fn cost_evals(&self) -> u64
     where
-        S: IncumbentState,
+        S: CountsMirror,
     {
-        self.state.incumbent_record()
-    }
-
-    /// Cost at [`best_param`](Self::best_param).
-    pub fn best_cost(&self) -> S::Float {
-        self.state.best_cost()
-    }
-
-    /// Iteration at which [`best_param`](Self::best_param) was selected.
-    pub fn best_iter(&self) -> u64 {
-        self.state.best_iter()
-    }
-
-    /// State-mirrored evaluation work when the best iterate was selected.
-    pub fn best_cost_evals(&self) -> u64 {
-        self.state.best_cost_evals()
+        self.state.cost_evals()
     }
 }
 
@@ -498,8 +444,8 @@ where
     fn step_active<const RETAIN_REPORT: bool>(
         &mut self,
     ) -> Result<StepOutcome<S::Float>, So::Error> {
-        let notify = !self.checkpoints.is_empty() || !self.observers.is_empty();
-        let starting_iter = notify.then(|| self.state().iter());
+        let starting_iter = self.state().iter();
+        let mut selection = None;
         let outcome = if self
             .cancellation_token
             .as_ref()
@@ -508,7 +454,7 @@ where
             StepOutcome::Stopped(TerminationReport::new(
                 Termination::Cancelled,
                 TerminationStage::Boundary,
-                self.state().iter(),
+                starting_iter,
             ))
         } else {
             step_once(
@@ -517,66 +463,49 @@ where
                 &mut self.state,
                 &mut self.solver,
                 &mut self.control,
+                &mut selection,
             )?
         };
-        match &outcome {
-            StepOutcome::Continue => {
-                let Some(starting_iter) = starting_iter else {
-                    return Ok(outcome);
-                };
-                let state = self
-                    .state
-                    .as_ref()
-                    .expect("state slot is Some after Continue");
-                let iter = state.iter();
-                if iter == starting_iter {
-                    return Ok(outcome);
-                }
-                // `update_best` set `best_iter == iter` iff this iteration
-                // strictly improved the incumbent; that is exactly the
-                // `NewBest` firing condition.
-                let is_new_best = state.best_iter() == iter;
-                for (checkpoint, mode) in self.checkpoints.iter_mut() {
-                    if mode.fires_on(iter, is_new_best) {
-                        checkpoint.save(
-                            &self.solver,
-                            state,
-                            self.problem.counts(),
-                        );
-                    }
-                }
-                for (observer, mode) in self.observers.iter_mut() {
-                    if mode.fires_on(iter, is_new_best) {
-                        observer.observe_iter(state, &self.solver);
-                    }
+        let stopped = match &outcome {
+            StepOutcome::Continue => None,
+            StepOutcome::Stopped(report) => Some(report),
+        };
+        if let Some(report) = stopped.filter(|_| RETAIN_REPORT) {
+            self.finished = Some(report.clone());
+        }
+        let state = self.state.as_ref().expect("successful step retains state");
+        let completed = state.iter() != starting_iter;
+        let objective =
+            selection == Some(crate::SelectionChange::ObjectiveImproved);
+        for (sink, mode) in &mut self.checkpoints {
+            if stopped.is_some()
+                || (completed && mode.fires_on(state.iter(), objective))
+                || (*mode == ObserverMode::SelectionChanged
+                    && selection.is_some())
+            {
+                sink.save_with_selection(
+                    &self.solver,
+                    state,
+                    self.problem.counts(),
+                    selection,
+                );
+            }
+        }
+        for (observer, mode) in &mut self.observers {
+            if completed && mode.fires_on(state.iter(), objective) {
+                observer.observe_iter(state, &self.solver);
+            }
+        }
+        if let Some(change) = selection {
+            for (observer, mode) in &mut self.observers {
+                if *mode == ObserverMode::SelectionChanged {
+                    observer.observe_selection(state, &self.solver, change);
                 }
             }
-            StepOutcome::Stopped(reason) => {
-                if RETAIN_REPORT {
-                    self.finished = Some(reason.clone());
-                }
-                if !notify {
-                    return Ok(outcome);
-                }
-                let state =
-                    self.state.as_ref().expect("state slot is Some on Stopped");
-                for (checkpoint, _mode) in self.checkpoints.iter_mut() {
-                    checkpoint.save(&self.solver, state, self.problem.counts());
-                }
-                if reason.stage == (TerminationStage::Step { completed: true })
-                {
-                    for (observer, mode) in self.observers.iter_mut() {
-                        if mode.fires_on(
-                            state.iter(),
-                            state.best_iter() == state.iter(),
-                        ) {
-                            observer.observe_iter(state, &self.solver);
-                        }
-                    }
-                }
-                for (observer, _mode) in self.observers.iter_mut() {
-                    observer.observe_final(state, &self.solver, reason);
-                }
+        }
+        if let Some(report) = stopped {
+            for (observer, _) in &mut self.observers {
+                observer.observe_final(state, &self.solver, report);
             }
         }
         Ok(outcome)
@@ -707,6 +636,7 @@ fn step_once<P, S, So>(
     state_slot: &mut Option<S>,
     solver: &mut So,
     control: &mut RunControl<S>,
+    selection: &mut Option<crate::SelectionChange>,
 ) -> Result<StepOutcome<S::Float>, So::Error>
 where
     S: State + CountsMirror,
@@ -735,7 +665,7 @@ where
     if completed {
         next.increment_iter();
     }
-    next.update_best();
+    *selection = next.publish_selection();
     let iteration = next.iter();
     *state_slot = Some(next);
     Ok(match termination {
@@ -804,10 +734,12 @@ where
     control.validate(&state);
     // Mirror init's work onto the state before any termination check.
     state.mirror(&problem.counts().delta_since(&baseline));
-    state.update_best();
+    state.publish_selection();
     let mut slot = Some(state);
     let reason = loop {
-        match step_once(problem, &baseline, &mut slot, solver, control)? {
+        match step_once(
+            problem, &baseline, &mut slot, solver, control, &mut None,
+        )? {
             StepOutcome::Continue => continue,
             StepOutcome::Stopped(reason) => break reason,
         }
@@ -862,7 +794,7 @@ where
 /// .run()
 /// .unwrap();
 ///
-/// assert!(result.cost() < 1e-12);
+/// assert!(result.current_record().unwrap().cost.unwrap() < 1e-12);
 /// ```
 pub struct Executor<P, S: State, So> {
     problem: P,
@@ -1068,7 +1000,7 @@ where
     /// Register an [`Observe`] hook. Observers fire in registration order,
     /// including when mixed with [`observe_solver`](Self::observe_solver) or
     /// [`observe_solver_with`](Self::observe_solver_with);
-    /// `mode` gates [`Observe::observe_iter`] only;
+    /// The mode gates iteration and selection hooks.
     /// [`Observe::observe_init`] and [`Observe::observe_final`] always
     /// fire. See the [`observer`](crate::core::observer) module for the
     /// lifecycle.
@@ -1158,10 +1090,10 @@ where
 
     /// Register a solver-aware checkpoint destination.
     ///
-    /// `mode` controls saves after completed iterations. Every sink also saves
-    /// once when the run stops cleanly, regardless of the mode. Checkpoint
-    /// sinks are separate from state-only [`Observe`] implementations because
-    /// exact continuation requires both the solver and state.
+    /// The mode controls saves after completed iterations or on selection
+    /// changes. Selection changes can occur at initialization and during
+    /// partial steps. Each sink saves once when the run stops cleanly,
+    /// regardless of mode. An exact checkpoint carries the solver and state.
     ///
     /// Sink failures cannot change the optimization result; implementations
     /// must record or report their own failures. Calling this method again
@@ -1196,7 +1128,7 @@ where
             mut solver,
             control,
             mut observers,
-            checkpoints,
+            mut checkpoints,
             cancellation_token,
             resume_counts,
             skip_init,
@@ -1210,6 +1142,7 @@ where
             // per-run snapshot discipline.
             state.reset_best();
         }
+        let mut selection = None;
         let state = if skip_init {
             control.validate(&state);
             state
@@ -1220,11 +1153,30 @@ where
             // Mirror init's work onto the state before any termination
             // check. Baseline is zero: this is a fresh top-level wrapper.
             state.mirror(problem.counts());
-            state.update_best();
+            selection = state.publish_selection();
             state
         };
+        if selection.is_some() {
+            for (sink, mode) in &mut checkpoints {
+                if *mode == ObserverMode::SelectionChanged {
+                    sink.save_with_selection(
+                        &solver,
+                        &state,
+                        problem.counts(),
+                        selection,
+                    );
+                }
+            }
+        }
         for (observer, _mode) in observers.iter_mut() {
             observer.observe_init(&state, &solver);
+        }
+        if let Some(change) = selection {
+            for (observer, mode) in &mut observers {
+                if *mode == ObserverMode::SelectionChanged {
+                    observer.observe_selection(&state, &solver, change);
+                }
+            }
         }
         Ok(Stepper {
             problem,

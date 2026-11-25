@@ -68,12 +68,15 @@ fn converges_on_sphere() {
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
-        result.best_cost() < 1e-10,
+        result.selected_record().unwrap().cost.unwrap() < 1e-10,
         "best_cost = {}",
-        result.best_cost()
+        result.selected_record().unwrap().cost.unwrap()
     );
     // The reported iterate is the best (monotone), so the two coincide.
-    assert_eq!(result.cost(), result.best_cost());
+    assert_eq!(
+        result.current_record().unwrap().cost.unwrap(),
+        result.selected_record().unwrap().cost.unwrap()
+    );
 }
 
 #[test]
@@ -94,11 +97,11 @@ fn converges_on_rosenbrock_2d() {
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
-        result.best_cost() < 1e-4,
+        result.selected_record().unwrap().cost.unwrap() < 1e-4,
         "best_cost = {}",
-        result.best_cost()
+        result.selected_record().unwrap().cost.unwrap()
     );
-    let x = result.best_param();
+    let x = result.selected_record().unwrap().param;
     assert!(
         (x[0] - 1.0).abs() < 1e-2 && (x[1] - 1.0).abs() < 1e-2,
         "x = {x:?}"
@@ -193,17 +196,18 @@ fn outperforms_nelder_mead_on_discontinuous_step() {
 
     // MADS reaches the global-minimum plateau (value 0).
     assert_eq!(
-        mads.best_cost(),
+        mads.selected_record().unwrap().cost.unwrap(),
         0.0,
         "MADS best_cost = {}",
-        mads.best_cost()
+        mads.selected_record().unwrap().cost.unwrap()
     );
     // Nelder-Mead degenerates on the start plateau and stalls above it.
     assert!(
-        nm.best_cost() > mads.best_cost(),
+        nm.selected_record().unwrap().cost.unwrap()
+            > mads.selected_record().unwrap().cost.unwrap(),
         "NM {} should stall above MADS {}",
-        nm.best_cost(),
-        mads.best_cost()
+        nm.selected_record().unwrap().cost.unwrap(),
+        mads.selected_record().unwrap().cost.unwrap()
     );
 }
 
@@ -247,9 +251,9 @@ fn backend_generic_nalgebra() {
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
-        result.best_cost() < 1e-10,
+        result.selected_record().unwrap().cost.unwrap() < 1e-10,
         "best_cost = {}",
-        result.best_cost()
+        result.selected_record().unwrap().cost.unwrap()
     );
 }
 
@@ -292,9 +296,9 @@ fn backend_generic_ndarray() {
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
-        result.best_cost() < 1e-10,
+        result.selected_record().unwrap().cost.unwrap() < 1e-10,
         "best_cost = {}",
-        result.best_cost()
+        result.selected_record().unwrap().cost.unwrap()
     );
 }
 
@@ -334,9 +338,9 @@ fn backend_generic_faer() {
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
-        result.best_cost() < 1e-10,
+        result.selected_record().unwrap().cost.unwrap() < 1e-10,
         "best_cost = {}",
-        result.best_cost()
+        result.selected_record().unwrap().cost.unwrap()
     );
 }
 

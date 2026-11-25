@@ -1,5 +1,6 @@
 //! SGD publishes complete objective records without changing its batch cadence.
 
+use basin::CountsMirror as _;
 use basin::{
     BoxBounds, Constrained, ConstraintSet, CostFunction, EvaluationKind,
     Executor, MiniBatchGradient, PointState, RelaxedInner, SamplingDomain, Sgd,
@@ -150,7 +151,10 @@ fn refreshes_preserve_batch_trajectory_and_evaluation_cadence() {
         .run()
         .unwrap();
         assert_eq!(periodic.state.param(), last_refresh.param());
-        assert_eq!(periodic.state.cost(), last_refresh.cost());
+        assert_eq!(
+            periodic.state.current_record().unwrap().cost.unwrap(),
+            last_refresh.current_record().unwrap().cost.unwrap()
+        );
     }
 }
 
@@ -193,7 +197,7 @@ fn fresh_run_resets_momentum_batches_refresh_phase_and_progress() {
         .unwrap();
     coherent(&initialized.state, &Quadratic { samples: 5 });
     assert_eq!(initialized.state.iter(), 0);
-    assert_eq!(initialized.state.best_iter(), 0);
+    assert_eq!(initialized.state.selected_record().unwrap().iter, 0);
     assert_eq!(initialized.counts.cost_evals, 1);
     assert_eq!(initialized.counts.total_work(), 1);
     assert_eq!(

@@ -27,7 +27,10 @@ fn same_seed_yields_identical_trajectory() {
     };
     let result_a = run();
     let result_b = run();
-    assert_eq!(result_a.cost(), result_b.cost());
+    assert_eq!(
+        result_a.current_record().unwrap().cost.unwrap(),
+        result_b.current_record().unwrap().cost.unwrap()
+    );
     assert_eq!(result_a.param(), result_b.param());
 }
 
@@ -64,9 +67,9 @@ fn converges_on_sphere_5d_via_rho_tolerance() {
 
     assert_eq!(result.report.code(), TerminationCode::RhoTolerance);
     assert!(
-        result.cost() < 1e-6,
+        result.current_record().unwrap().cost.unwrap() < 1e-6,
         "sphere 5-D cost = {} (expected < 1e-6)",
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }
 
@@ -85,14 +88,14 @@ fn makes_progress_on_rosenbrock_2d() {
     .unwrap();
 
     assert!(
-        result.cost() < 1e-2,
+        result.current_record().unwrap().cost.unwrap() < 1e-2,
         "rosenbrock 2-D cost = {} (expected < 1e-2)",
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }
 
 /// Monotonicity contract: Solis-Wets only ever accepts strict
-/// improvements, so `state.cost()` is non-increasing across iterations.
+/// improvements, so `state.current_record().unwrap().cost.unwrap()` is non-increasing across iterations.
 #[test]
 fn cost_is_monotone_nonincreasing() {
     let mut stepper = Executor::from_start(
@@ -104,9 +107,9 @@ fn cost_is_monotone_nonincreasing() {
     .into_stepper()
     .unwrap();
 
-    let mut prev = stepper.state().cost();
+    let mut prev = stepper.state().current_record().unwrap().cost.unwrap();
     while let StepOutcome::Continue = stepper.step().unwrap() {
-        let current = stepper.state().cost();
+        let current = stepper.state().current_record().unwrap().cost.unwrap();
         assert!(
             current <= prev,
             "cost increased: prev = {prev}, current = {current}"
@@ -137,7 +140,10 @@ fn from_start_matches_explicit_state() {
     .run()
     .unwrap();
 
-    assert_eq!(via_seed.cost(), via_state.cost());
+    assert_eq!(
+        via_seed.current_record().unwrap().cost.unwrap(),
+        via_state.current_record().unwrap().cost.unwrap()
+    );
     assert_eq!(via_seed.param(), via_state.param());
 }
 
@@ -161,8 +167,8 @@ fn works_as_cma_inject_inner() {
     .unwrap();
 
     assert!(
-        result.cost() < 1e-6,
+        result.current_record().unwrap().cost.unwrap() < 1e-6,
         "cma-inject(solis-wets) sphere cost = {} (expected < 1e-6)",
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }

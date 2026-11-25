@@ -318,11 +318,11 @@ fn accept_guard(new_success: bool, incumbent_success: bool) -> bool {
 /// .run()
 /// .unwrap();
 ///
-/// let incumbent = result.incumbent_record().expect("expected an incumbent");
+/// let incumbent = result.selected_record().expect("expected an incumbent");
 /// assert!(
-///     incumbent.cost < 1e-6,
+///     incumbent.cost.unwrap() < 1e-6,
 ///     "Ackley best cost {}",
-///     incumbent.cost
+///     incumbent.cost.unwrap()
 /// );
 /// # }
 /// ```
@@ -628,7 +628,10 @@ where
             },
             |problem| self.inner.run(problem, seeded),
         )?;
-        state.replace(result.state.param().clone(), result.state.cost());
+        state.replace(
+            result.state.param().clone(),
+            result.state.current_record().unwrap().cost.unwrap(),
+        );
         // Record whether the initial relaxation succeeded so the first hop's
         // acceptance guard has a faithful incumbent-success flag (a hard `Err`
         // still bubbles via `?`; only soft `SolverFailed` reasons fold in here).
@@ -647,7 +650,7 @@ where
         problem: &mut Problem<P>,
         mut state: PointState<V, F>,
     ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
-        let f_old = state.cost();
+        let f_old = state.current_record().unwrap().cost.unwrap();
 
         // 1. Perturb the current iterate.
         let x_trial = self.step.take_step(state.param(), &mut self.rng);
@@ -680,7 +683,7 @@ where
         }
         let new_success = !result.report.termination.is_failure();
 
-        let f_new = result.state.cost();
+        let f_new = result.state.current_record().unwrap().cost.unwrap();
         let x_new = result.state.param().clone();
 
         // 3. Metropolis accept/reject, then SciPy's success guard

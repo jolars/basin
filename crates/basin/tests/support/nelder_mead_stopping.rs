@@ -372,7 +372,11 @@ where
                 .unwrap()
             };
             assert_eq!(result.report.code(), TerminationCode::SimplexTolerance);
-            assert!(result.cost() < f(1e-8), "cost {:?}", result.cost());
+            assert!(
+                result.current_record().unwrap().cost.unwrap() < f(1e-8),
+                "cost {:?}",
+                result.current_record().unwrap().cost.unwrap()
+            );
             for j in 0..10 {
                 assert!(
                     (result.param().get_scalar(j) - F::one()).abs() < f(1e-4),
@@ -408,7 +412,7 @@ where
         assert_eq!(result.report.code(), TerminationCode::SimplexTolerance);
         assert_eq!(result.iter(), 0);
         assert_eq!(result.cost_evals(), 3);
-        assert!(result.cost() > F::zero());
+        assert!(result.current_record().unwrap().cost.unwrap() > F::zero());
         for vertex in result.state.vertices() {
             for j in 0..2 {
                 assert_eq!(vertex.get_scalar(j), upper);

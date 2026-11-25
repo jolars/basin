@@ -1,3 +1,4 @@
+use basin::CountsMirror as _;
 use std::{
     cell::Cell,
     rc::Rc,
@@ -115,7 +116,10 @@ fn explicit_modes_agree_through_executor() {
             .run()
             .unwrap();
     assert_eq!(serial.param(), threaded.param());
-    assert_eq!(serial.cost().to_bits(), threaded.cost().to_bits());
+    assert_eq!(
+        serial.current_record().unwrap().cost.unwrap().to_bits(),
+        threaded.current_record().unwrap().cost.unwrap().to_bits()
+    );
     assert_eq!(serial.counts, threaded.counts);
     assert_eq!(threaded.cost_evals(), 3);
     assert_eq!(threaded.counts.gradient_evals, 3);

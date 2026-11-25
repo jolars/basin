@@ -315,7 +315,7 @@ fn run_case(library: Library, n: usize, constrained: bool) -> Run {
             iterations = Some(state.iter());
             (
                 state.param().clone(),
-                state.cost(),
+                state.current_record().unwrap().cost.unwrap(),
                 format!("{reason:?}"),
                 reason == TerminationCode::SolverConverged,
             )

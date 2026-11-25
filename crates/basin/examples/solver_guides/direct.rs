@@ -45,7 +45,7 @@ fn main() {
         .run()
         .unwrap();
 
-    let incumbent = result.incumbent_record().expect("expected an incumbent");
-    assert!(incumbent.cost < -78.33);
+    let incumbent = result.selected_record().expect("expected an incumbent");
+    assert!(incumbent.cost.unwrap() < -78.33);
     assert!(incumbent.param.iter().all(|v| (-5.0..=5.0).contains(v)));
 }

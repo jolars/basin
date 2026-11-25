@@ -2,6 +2,7 @@
 //! `lbfgsb` 0.1.1. The extended Rosenbrock objective and bounds follow the
 //! reference's driver 3 and Basin's `benches/support/lbfgsb.rs`.
 
+use basin::CountsMirror as _;
 use std::{
     cell::Cell, convert::Infallible, os::raw::c_long, sync::Mutex,
     time::Instant,
@@ -166,17 +167,17 @@ fn basin_solve(
     .max_cost_evals(limits.1)
     .into_stepper()
     .unwrap();
-    record(stepper.state().cost());
+    record(stepper.state().current_record().unwrap().cost.unwrap());
     loop {
         let iteration = stepper.iter();
         let outcome = stepper.step().unwrap();
         if stepper.iter() != iteration {
-            record(stepper.state().cost());
+            record(stepper.state().current_record().unwrap().cost.unwrap());
         }
         if let StepOutcome::Stopped(report) = outcome {
             return Outcome {
                 point: stepper.state().param().clone(),
-                cost: stepper.state().cost(),
+                cost: stepper.state().current_record().unwrap().cost.unwrap(),
                 iterations: stepper.iter(),
                 objective_calls: stepper.state().cost_evals() as usize,
                 gradient_calls: stepper.counts().gradient_evals as usize,

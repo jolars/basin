@@ -157,7 +157,7 @@ pub enum CgUpdate {
 ///     NonlinearCg::new().with_absolute_gradient_tolerance(1e-8),
 ///     vec![2.0, -1.0],
 /// ).max_iter(100).run().unwrap();
-/// assert!(result.cost() < 1e-12);
+/// assert!(result.current_record().unwrap().cost.unwrap() < 1e-12);
 /// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NonlinearCg<L, V, F: Scalar = f64> {

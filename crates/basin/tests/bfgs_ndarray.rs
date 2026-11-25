@@ -24,9 +24,9 @@ fn bfgs_converges_on_rosenbrock() {
             .unwrap();
 
     assert!(
-        result.cost() < 1e-8,
+        result.current_record().unwrap().cost.unwrap() < 1e-8,
         "expected near-zero cost, got {}",
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-4,
@@ -56,7 +56,11 @@ fn bfgs_terminates_on_gradient_tolerance() {
     .unwrap();
 
     assert_eq!(result.report.code(), TerminationCode::GradientTolerance);
-    assert!(result.cost() < 1e-10, "cost = {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 1e-10,
+        "cost = {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
 }
 
 #[path = "support/backend_aliases.rs"]

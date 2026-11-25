@@ -20,9 +20,9 @@ fn nelder_mead_standard_minimises_rosenbrock() {
     .unwrap();
 
     assert!(
-        result.cost() < 1e-6,
+        result.current_record().unwrap().cost.unwrap() < 1e-6,
         "expected near-zero cost, got {} (initial {})",
-        result.cost(),
+        result.current_record().unwrap().cost.unwrap(),
         initial_cost
     );
     let best = result.param();
@@ -44,7 +44,11 @@ fn nelder_mead_adaptive_minimises_rosenbrock() {
     .unwrap();
 
     // For n = 2, adaptive collapses to standard, so the bar is the same.
-    assert!(result.cost() < 1e-6, "cost = {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 1e-6,
+        "cost = {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
 }
 
 #[test]
@@ -100,7 +104,11 @@ fn nelder_mead_adaptive_sphere_5d() {
     .run()
     .unwrap();
 
-    assert!(result.cost() < 1e-8, "cost = {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 1e-8,
+        "cost = {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
 }
 
 #[test]
@@ -155,5 +163,5 @@ fn nelder_mead_from_simplex_accepts_custom_geometry() {
     .run()
     .unwrap();
 
-    assert!(result.cost() < 1e-6);
+    assert!(result.current_record().unwrap().cost.unwrap() < 1e-6);
 }

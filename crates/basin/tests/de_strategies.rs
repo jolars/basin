@@ -1,3 +1,4 @@
+use basin::CountsMirror as _;
 use std::convert::Infallible;
 
 #[path = "support/de_backend.rs"]
@@ -116,9 +117,11 @@ fn solutions_agree_with_scipy_1_16_2() {
             assert_eq!(Quadratic::new().cost(&point).unwrap(), cost);
             let result = solve(configured(mutation, crossover, true), 200);
             assert!(
-                (result.state().cost() - cost).abs() < 1e-12,
+                (result.state().current_record().unwrap().cost.unwrap() - cost)
+                    .abs()
+                    < 1e-12,
                 "{mutation:?} {crossover:?}: {}",
-                result.state().cost()
+                result.state().current_record().unwrap().cost.unwrap()
             );
             for (actual, expected) in result.state().param().iter().zip(point) {
                 assert!((actual - expected).abs() < 1e-6);
@@ -281,7 +284,7 @@ fn configured_de_composes_with_local_search() {
             .max_iter(12)
             .run()
             .unwrap();
-            assert!(result.cost() < 1e-5);
+            assert!(result.current_record().unwrap().cost.unwrap() < 1e-5);
             assert!(result.cost_evals() > 24 * 13);
         }
     }

@@ -72,7 +72,9 @@ pub fn solve_basin(n: usize) -> Summary {
     .unwrap();
     let stop = loop {
         let outcome = stepper.step().unwrap();
-        if (0.0..=TARGET).contains(&stepper.state().cost()) {
+        if (0.0..=TARGET)
+            .contains(&stepper.state().current_record().unwrap().cost.unwrap())
+        {
             break "target".to_owned();
         }
         if let StepOutcome::Stopped(reason) = outcome {
@@ -82,7 +84,7 @@ pub fn solve_basin(n: usize) -> Summary {
     let state = stepper.state();
     Summary {
         point: state.param().clone(),
-        cost: state.cost(),
+        cost: state.current_record().unwrap().cost.unwrap(),
         iterations: state.iter(),
         objective_calls: stepper.counts().cost_evals,
         stop,

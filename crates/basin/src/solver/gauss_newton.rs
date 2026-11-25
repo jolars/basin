@@ -99,7 +99,7 @@ use crate::{VectorIndex, VectorLen};
 /// [`Residual`](crate::Residual) + [`Jacobian`](crate::Jacobian), not
 /// [`CostFunction`](crate::core::problem::CostFunction);
 /// problems whose user-facing `cost()` uses an unscaled `Σ rᵢ²` form
-/// (e.g. Rosenbrock-as-residuals) will see `state.cost()` differ from
+/// (e.g. Rosenbrock-as-residuals) will see `state.current_record().unwrap().cost.unwrap()` differ from
 /// `problem.cost(state.param())` by a factor of two. Both go to zero
 /// at the optimum, so cost-based termination criteria are unaffected.
 ///
@@ -275,7 +275,11 @@ where
         let Some((model_r, j)) = problem.model(&r, j) else {
             self.failed = true;
             if let Some(trace) = &mut self.trace {
-                trace.event(state.cost(), "construction", "invalid_model");
+                trace.event(
+                    state.current_record().unwrap().cost.unwrap(),
+                    "construction",
+                    "invalid_model",
+                );
             }
             return Ok(state);
         };
@@ -295,7 +299,11 @@ where
         }
         if self.failed {
             if let Some(trace) = &mut self.trace {
-                trace.event(state.cost(), "construction", "invalid_model");
+                trace.event(
+                    state.current_record().unwrap().cost.unwrap(),
+                    "construction",
+                    "invalid_model",
+                );
             }
             return Ok(crate::SolverStep::from((
                 state,
@@ -319,7 +327,7 @@ where
                     self.failed = true;
                     if let Some(trace) = &mut self.trace {
                         trace.event(
-                            state.cost(),
+                            state.current_record().unwrap().cost.unwrap(),
                             "construction",
                             "invalid_model",
                         );
@@ -342,7 +350,7 @@ where
             self.failed = true;
             if let Some(trace) = &mut self.trace {
                 let index = trace.event(
-                    state.cost(),
+                    state.current_record().unwrap().cost.unwrap(),
                     "construction",
                     "invalid_gradient",
                 );
@@ -358,7 +366,9 @@ where
         }
         let gradient_norm = g.norm_infinity();
         if let Some(trace) = &mut self.trace {
-            let mut row = LeastSquaresObservation::model(state.cost());
+            let mut row = LeastSquaresObservation::model(
+                state.current_record().unwrap().cost.unwrap(),
+            );
             row.gradient = self.trace_vector.unwrap()(&g);
             row.checks.push(LeastSquaresCheck {
                 name: "absolute_gradient",
@@ -399,7 +409,9 @@ where
         neg_g.neg_in_place();
         let solved = gram.solve_spd(&neg_g);
         if let Some(trace) = &mut self.trace {
-            let mut row = LeastSquaresObservation::model(state.cost());
+            let mut row = LeastSquaresObservation::model(
+                state.current_record().unwrap().cost.unwrap(),
+            );
             row.event = "subproblem";
             row.outcome = Some(if solved.is_ok() {
                 "solved"
@@ -441,7 +453,9 @@ where
         let mut param = state.param().clone();
         param.scaled_add(F::one(), &delta);
         let trial = self.trace.as_mut().map(|trace| {
-            let mut row = LeastSquaresObservation::model(state.cost());
+            let mut row = LeastSquaresObservation::model(
+                state.current_record().unwrap().cost.unwrap(),
+            );
             row.event = "trial";
             row.outcome = Some("callback_pending");
             row.trial = true;
@@ -481,7 +495,8 @@ where
         self.r_cache = Some(r_new);
         self.j_cache = None;
 
-        let failed = E::ROBUST && !state.cost().is_finite();
+        let failed = E::ROBUST
+            && !state.current_record().unwrap().cost.unwrap().is_finite();
         self.failed = failed;
         Ok(crate::SolverStep::from((
             state,

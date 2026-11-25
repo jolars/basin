@@ -30,9 +30,9 @@ fn converges_on_sphere_d10() {
     .unwrap();
 
     assert!(
-        result.cost() < 1e-6,
+        result.current_record().unwrap().cost.unwrap() < 1e-6,
         "Sphere(D=10) nalgebra cost {} should be < 1e-6 within 20k evals",
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }
 
@@ -50,7 +50,10 @@ fn same_seed_yields_identical_trajectory() {
     };
     let result_a = run();
     let result_b = run();
-    assert_eq!(result_a.cost(), result_b.cost());
+    assert_eq!(
+        result_a.current_record().unwrap().cost.unwrap(),
+        result_b.current_record().unwrap().cost.unwrap()
+    );
     assert_eq!(result_a.param(), result_b.param());
 }
 

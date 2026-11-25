@@ -45,8 +45,14 @@ fn same_seed_yields_identical_trajectory() {
     let a = run(42);
     let b = run(42);
     assert_eq!(a.param(), b.param());
-    assert_eq!(a.cost(), b.cost());
-    assert_eq!(a.best_cost(), b.best_cost());
+    assert_eq!(
+        a.current_record().unwrap().cost.unwrap(),
+        b.current_record().unwrap().cost.unwrap()
+    );
+    assert_eq!(
+        a.selected_record().unwrap().cost.unwrap(),
+        b.selected_record().unwrap().cost.unwrap()
+    );
     assert_eq!(a.cost_evals(), b.cost_evals());
 }
 
@@ -100,9 +106,9 @@ fn converges_on_ackley_2d() {
     .unwrap();
 
     assert!(
-        result.best_cost() < 1e-6,
+        result.selected_record().unwrap().cost.unwrap() < 1e-6,
         "Ackley(2-D) best cost {} (expected < 1e-6)",
-        result.best_cost()
+        result.selected_record().unwrap().cost.unwrap()
     );
 }
 
@@ -130,7 +136,7 @@ fn success_rate_over_seeds_on_rastrigin_2d() {
             .max_iter(150)
             .run()
             .unwrap();
-            result.best_cost() < 1.0
+            result.selected_record().unwrap().cost.unwrap() < 1.0
         })
         .count();
 

@@ -1,9 +1,10 @@
 //! Public contract tests for Luersen and Le Riche's Globalized Bounded
 //! Nelder-Mead algorithm.
 
+use basin::CountsMirror as _;
 use std::convert::Infallible;
 
-use basin::{CostFunction, Executor, Gbnm, PointState, State, TerminationCode};
+use basin::{CostFunction, Executor, Gbnm, PointState, TerminationCode};
 
 #[derive(Clone)]
 struct BoundedRosenbrock {
@@ -145,7 +146,11 @@ fn upper_bound_start_explores_the_feasible_inward_direction() {
             .run_with_solver()
             .unwrap();
 
-    assert!(result.best_cost() < 1.0e-8, "cost = {}", result.best_cost());
+    assert!(
+        result.selected_record().unwrap().cost.unwrap() < 1.0e-8,
+        "cost = {}",
+        result.selected_record().unwrap().cost.unwrap()
+    );
 }
 
 #[test]
@@ -268,9 +273,13 @@ fn paper_rosenbrock_start_reaches_the_global_minimum() {
             .run_with_solver()
             .unwrap();
 
-    assert!(result.best_cost() < 1e-8, "cost = {}", result.best_cost());
-    assert!((result.best_param()[0] - 1.0).abs() < 1e-3);
-    assert!((result.best_param()[1] - 1.0).abs() < 1e-3);
+    assert!(
+        result.selected_record().unwrap().cost.unwrap() < 1e-8,
+        "cost = {}",
+        result.selected_record().unwrap().cost.unwrap()
+    );
+    assert!((result.selected_record().unwrap().param[0] - 1.0).abs() < 1e-3);
+    assert!((result.selected_record().unwrap().param[1] - 1.0).abs() < 1e-3);
     assert!(!result.solver.local_optima().is_empty());
 }
 
@@ -416,7 +425,7 @@ fn nan_costs_sort_after_finite_vertices() {
     .run_with_solver()
     .unwrap();
 
-    assert!(result.cost().is_finite());
+    assert!(result.current_record().unwrap().cost.unwrap().is_finite());
     assert!(result.solver.costs().last().unwrap().is_nan());
 }
 
@@ -462,6 +471,10 @@ fn probabilistic_restarts_escape_the_initial_rastrigin_basin() {
             .run_with_solver()
             .unwrap();
 
-    assert!(result.best_cost() < 1.0, "cost = {}", result.best_cost());
+    assert!(
+        result.selected_record().unwrap().cost.unwrap() < 1.0,
+        "cost = {}",
+        result.selected_record().unwrap().cost.unwrap()
+    );
     assert!(result.solver.restart_count() > 1);
 }

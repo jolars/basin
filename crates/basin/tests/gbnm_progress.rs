@@ -1,5 +1,6 @@
 //! GBNM progress and solver-owned restart history.
 
+use basin::CountsMirror as _;
 use basin::{CostFunction, Executor, Gbnm, PointState, State};
 use std::convert::Infallible;
 
@@ -60,7 +61,7 @@ fn fresh_gbnm_reevaluates_the_current_point_and_resets_progress() {
         .run_with_solver()
         .unwrap();
     assert_eq!(fresh.iter(), 0);
-    assert_eq!(fresh.state.best_iter(), 0);
+    assert_eq!(fresh.state.selected_record().unwrap().iter, 0);
     assert_eq!(fresh.counts.cost_evals, 3);
     assert_eq!(fresh.solver.search_starts(), &[seed]);
     assert_eq!(fresh.solver.restart_count(), 0);
@@ -103,7 +104,7 @@ fn worse_restarts_retain_matching_incumbent_and_raw_publication_metadata() {
     assert_eq!(result.solver.restart_count(), 5);
     assert!(result.state.current().unwrap().1 > 0.0);
     assert_eq!(result.state.best(), Some((&vec![0.0, 0.0], 0.0)));
-    assert_eq!(result.state.best_iter(), 0);
+    assert_eq!(result.state.selected_record().unwrap().iter, 0);
     assert_eq!(result.state.best_counts().unwrap().cost_evals, 3);
     assert_eq!(result.state.counts(), &result.counts);
     assert_eq!(result.state.cost_evals(), 18);

@@ -38,18 +38,17 @@ impl<F: Scalar> ObjectiveStall<F> {
         &mut self,
         state: &S,
     ) -> Option<Termination<<S as State>::Float>> {
-        let incumbent = state.incumbent_record()?;
+        let incumbent = state.selected_record()?;
+        let cost = incumbent.cost?;
         let improved_at = if self.min_delta == F::zero() {
             incumbent.iter
         } else {
             let (anchor, iter) =
-                self.anchor.get_or_insert((incumbent.cost, state.iter()));
+                self.anchor.get_or_insert((cost, state.iter()));
             // Subtract costs rather than the tolerance so an overflowing
             // finite decrease or a new negative infinity still improves.
-            if incumbent.cost < *anchor
-                && *anchor - incumbent.cost > self.min_delta
-            {
-                *anchor = incumbent.cost;
+            if cost < *anchor && *anchor - cost > self.min_delta {
+                *anchor = cost;
                 *iter = state.iter();
             }
             *iter
@@ -59,10 +58,8 @@ impl<F: Scalar> ObjectiveStall<F> {
                 iterations: state.iter().saturating_sub(improved_at),
                 patience: self.patience,
                 tolerance: self.min_delta,
-                reference_cost: self
-                    .anchor
-                    .map_or(incumbent.cost, |(cost, _)| cost),
-                best_cost: incumbent.cost,
+                reference_cost: self.anchor.map_or(cost, |(cost, _)| cost),
+                best_cost: cost,
             })
         })
     }
@@ -185,7 +182,7 @@ impl<S: State> RunControl<S> {
     {
         self.validate = Some(|state| {
             assert!(
-                state.current_record().is_some(),
+                state.evaluated_record().is_some(),
                 "solver published incomplete state"
             );
         });
@@ -247,12 +244,8 @@ impl<S: State> RunControl<S> {
     {
         assert!(target.is_finite(), "target objective must be finite");
         self.target = Some(Box::new(move |state| {
-            (state.incumbent_record()?.cost <= target).then_some(
-                Termination::Target {
-                    cost: state.incumbent_record()?.cost,
-                    target,
-                },
-            )
+            let cost = state.selected_record()?.cost?;
+            (cost <= target).then_some(Termination::Target { cost, target })
         }));
         self
     }
@@ -389,7 +382,7 @@ impl<S: State> RunControl<S> {
         gradient_evals: u64,
     ) -> Option<Termination<<S as State>::Float>>
     where
-        S: State,
+        S: crate::CountsMirror,
     {
         let mut limits = Vec::new();
         if state.iter() >= self.max_iter {

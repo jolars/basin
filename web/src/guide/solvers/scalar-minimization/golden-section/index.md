@@ -102,7 +102,7 @@ epsilon when choosing meaningful accuracy.
 ### Read the best recorded objective
 
 The current `param()` and `cost()` describe the new probe, which can be worse
-than a retained point. Use `incumbent_record()` for the lowest
+than a retained point. Use `selected_record()` for the lowest
 recorded objective, especially if the executor stops before interval
 convergence.
 

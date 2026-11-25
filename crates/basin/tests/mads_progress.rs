@@ -1,5 +1,6 @@
 //! MADS progress and solver-owned mesh schedules.
 
+use basin::CountsMirror as _;
 use basin::{CostFunction, Executor, Mads, Problem, Solver};
 use basin::{PointState, SelectedState, State};
 use std::convert::Infallible;
@@ -264,7 +265,7 @@ fn constrained_selection_preserves_feasibility_and_publication_counts() {
     .max_iter(20)
     .into_stepper()
     .unwrap();
-    let initial_cost = stepper.state().cost();
+    let initial_cost = stepper.state().current_record().unwrap().cost.unwrap();
     while stepper.finished().is_none() {
         let previous = stepper.state().clone();
         stepper.step().unwrap();
@@ -282,13 +283,18 @@ fn constrained_selection_preserves_feasibility_and_publication_counts() {
         assert_eq!(state.counts(), stepper.counts());
         assert_eq!(state.counts().residual_evals, state.cost_evals());
         if state.current() == previous.current() {
-            assert_eq!(state.best_iter(), previous.best_iter());
+            assert_eq!(
+                state.selected_record().unwrap().iter,
+                previous.selected_record().unwrap().iter
+            );
             assert_eq!(state.best_counts(), previous.best_counts());
         } else {
-            assert_eq!(state.best_iter(), state.iter());
+            assert_eq!(state.selected_record().unwrap().iter, state.iter());
             assert_eq!(state.best_counts(), Some(state.counts()));
         }
     }
-    assert!(stepper.state().cost() > initial_cost);
+    assert!(
+        stepper.state().current_record().unwrap().cost.unwrap() > initial_cost
+    );
     assert_eq!(stepper.state().current().unwrap().2.value, 0.0);
 }

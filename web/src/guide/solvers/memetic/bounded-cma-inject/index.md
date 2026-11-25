@@ -48,7 +48,7 @@ ordinary CMA update. This follows
 the point away from the local solver's returned solution.
 
 Injection replaces selected members without DE's strict-improvement test.
-Use `incumbent_record()` when reporting the historical selected point and cost.
+Use `selected_record()` when reporting the historical selected point and cost.
 
 The bounded outer also repairs injected points and applies its adaptive
 boundary penalty. Published points are repaired, with raw objective costs;

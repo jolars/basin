@@ -451,7 +451,7 @@ where
 ///
 ///     .run()
 ///     .unwrap();
-/// assert!(result.cost() < 1e-10);
+/// assert!(result.current_record().unwrap().cost.unwrap() < 1e-10);
 /// # }
 /// ```
 ///
@@ -498,7 +498,7 @@ where
 /// .max_iter(100)
 /// .run()
 /// .unwrap();
-/// assert!(result.cost() < 1e-16);
+/// assert!(result.current_record().unwrap().cost.unwrap() < 1e-16);
 /// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TrustRegion<
@@ -1208,7 +1208,11 @@ mod tests {
         .unwrap();
         // Cauchy point is only linearly convergent on this conditioning, so
         // a strong-but-not-machine-precision bound is the honest check.
-        assert!(result.cost() < 1e-8, "cost = {}", result.cost());
+        assert!(
+            result.current_record().unwrap().cost.unwrap() < 1e-8,
+            "cost = {}",
+            result.current_record().unwrap().cost.unwrap()
+        );
     }
 
     #[test]
@@ -1224,7 +1228,11 @@ mod tests {
         .max_iter(100)
         .run()
         .unwrap();
-        assert!(result.cost() < 1e-16, "cost = {}", result.cost());
+        assert!(
+            result.current_record().unwrap().cost.unwrap() < 1e-16,
+            "cost = {}",
+            result.current_record().unwrap().cost.unwrap()
+        );
     }
 
     #[test]
@@ -1238,7 +1246,11 @@ mod tests {
         .max_iter(100)
         .run()
         .unwrap();
-        assert!(result.cost() < 1e-16, "cost = {}", result.cost());
+        assert!(
+            result.current_record().unwrap().cost.unwrap() < 1e-16,
+            "cost = {}",
+            result.current_record().unwrap().cost.unwrap()
+        );
     }
 
     /// A quadratic whose gradient is poisoned with a NaN: the subproblem
@@ -1333,7 +1345,7 @@ mod tests {
             );
             assert_eq!(state.param(), &vec![1.0, 0.0]);
             assert_eq!(state.current().unwrap().2, &vec![1.0, 0.0]);
-            assert_eq!(state.cost(), 0.5);
+            assert_eq!(state.current_record().unwrap().cost.unwrap(), 0.5);
             assert_eq!(*problem.counts(), counts);
         }
     }
@@ -1349,7 +1361,11 @@ mod tests {
         .max_iter(100)
         .run()
         .unwrap();
-        assert!(result.cost() < 1e-16, "cost = {}", result.cost());
+        assert!(
+            result.current_record().unwrap().cost.unwrap() < 1e-16,
+            "cost = {}",
+            result.current_record().unwrap().cost.unwrap()
+        );
     }
 
     #[test]
@@ -1365,7 +1381,11 @@ mod tests {
         .max_iter(200)
         .run()
         .unwrap();
-        assert!(result.cost() < 1e-10, "cost = {}", result.cost());
+        assert!(
+            result.current_record().unwrap().cost.unwrap() < 1e-10,
+            "cost = {}",
+            result.current_record().unwrap().cost.unwrap()
+        );
     }
 
     #[test]
@@ -1381,7 +1401,11 @@ mod tests {
         .max_iter(500)
         .run()
         .unwrap();
-        assert!(result.cost() < 1e-10, "cost = {}", result.cost());
+        assert!(
+            result.current_record().unwrap().cost.unwrap() < 1e-10,
+            "cost = {}",
+            result.current_record().unwrap().cost.unwrap()
+        );
     }
 
     #[test]
@@ -1395,7 +1419,11 @@ mod tests {
         .max_iter(200)
         .run()
         .unwrap();
-        assert!(result.cost() < 1e-10, "cost = {}", result.cost());
+        assert!(
+            result.current_record().unwrap().cost.unwrap() < 1e-10,
+            "cost = {}",
+            result.current_record().unwrap().cost.unwrap()
+        );
     }
 
     /// The quadratic again, but exposing only a Hessian-vector product and
@@ -1484,7 +1512,11 @@ mod tests {
         .max_iter(100)
         .run()
         .unwrap();
-        assert!(result.cost() < 1e-16, "cost = {}", result.cost());
+        assert!(
+            result.current_record().unwrap().cost.unwrap() < 1e-16,
+            "cost = {}",
+            result.current_record().unwrap().cost.unwrap()
+        );
     }
 
     #[test]
@@ -1497,7 +1529,11 @@ mod tests {
         .max_iter(200)
         .run()
         .unwrap();
-        assert!(result.cost() < 1e-10, "cost = {}", result.cost());
+        assert!(
+            result.current_record().unwrap().cost.unwrap() < 1e-10,
+            "cost = {}",
+            result.current_record().unwrap().cost.unwrap()
+        );
     }
 
     #[test]
@@ -1511,7 +1547,11 @@ mod tests {
         .max_iter(500)
         .run()
         .unwrap();
-        assert!(result.cost() < 1e-8, "cost = {}", result.cost());
+        assert!(
+            result.current_record().unwrap().cost.unwrap() < 1e-8,
+            "cost = {}",
+            result.current_record().unwrap().cost.unwrap()
+        );
     }
 
     #[test]
@@ -1538,7 +1578,12 @@ mod tests {
         .run()
         .unwrap();
         assert_eq!(exact.state.iter(), free.state.iter());
-        assert!((exact.cost() - free.cost()).abs() < 1e-15);
+        assert!(
+            (exact.current_record().unwrap().cost.unwrap()
+                - free.current_record().unwrap().cost.unwrap())
+            .abs()
+                < 1e-15
+        );
     }
 
     #[test]

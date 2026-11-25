@@ -124,14 +124,17 @@ fn check<'a, S, P, E>(
         );
     }
     assert!(
-        (result.cost() - cost).abs() < 1e-9,
+        (result.current_record().unwrap().cost.unwrap() - cost).abs() < 1e-9,
         "{}: {} != {}",
         std::any::type_name::<S>(),
-        result.cost(),
+        result.current_record().unwrap().cost.unwrap(),
         cost
     );
     assert!(
-        (result.cost() - objective.cost(result.param()).unwrap()).abs() < 1e-12
+        (result.current_record().unwrap().cost.unwrap()
+            - objective.cost(result.param()).unwrap())
+        .abs()
+            < 1e-12
     );
 }
 

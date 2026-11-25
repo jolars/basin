@@ -39,5 +39,7 @@ fn main() {
 
     assert!((result.param()[0] - 2.0).abs() < 1e-6);
     assert!((result.param()[1] - 2.0).abs() < 1e-6);
-    assert!((result.cost() - 0.5).abs() < 1e-6);
+    assert!(
+        (result.current_record().unwrap().cost.unwrap() - 0.5).abs() < 1e-6
+    );
 }

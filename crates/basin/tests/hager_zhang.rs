@@ -596,8 +596,8 @@ fn unbounded_lbfgs_with_hager_zhang_progresses_on_ackley() {
 
     assert_ne!(result.report.code(), TerminationCode::SolverFailed);
     assert!(
-        result.cost() < initial_cost,
+        result.current_record().unwrap().cost.unwrap() < initial_cost,
         "cost {} did not improve on {initial_cost}",
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }

@@ -31,7 +31,11 @@ fn levenberg_marquardt_converges_on_rosenbrock_residuals() {
     .unwrap();
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
-    assert!(result.cost() < 1e-15, "cost = {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 1e-15,
+        "cost = {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-7,
         "x[0] = {}",
@@ -66,9 +70,9 @@ fn levenberg_marquardt_recovers_on_rank_deficient_powell_singular() {
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
-        result.cost() < 1e-10,
+        result.current_record().unwrap().cost.unwrap() < 1e-10,
         "cost = {} (LM should drive Powell to the origin)",
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
     // Powell's optimum is x* = 0; check each component drifted toward it.
     for (i, &xi) in result.param().iter().enumerate() {
@@ -95,9 +99,9 @@ fn levenberg_marquardt_converges_on_powell_singular_classical_start() {
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
-        result.cost() < 1e-10,
+        result.current_record().unwrap().cost.unwrap() < 1e-10,
         "cost = {} (Powell from classical start should reach near-zero)",
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }
 

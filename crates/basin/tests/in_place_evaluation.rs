@@ -504,7 +504,10 @@ fn check_continuation<V, F, So>(
                 .run_with_solver()
                 .unwrap();
         assert_eq!(resumed.counts, expected.counts);
-        assert_eq!(resumed.state.cost(), expected.state.cost());
+        assert_eq!(
+            resumed.state.current_record().unwrap().cost.unwrap(),
+            expected.state.current_record().unwrap().cost.unwrap()
+        );
         for i in 0..start.vec_len() {
             assert_eq!(
                 resumed.state.param().get_scalar(i),
@@ -1100,7 +1103,10 @@ fn check_buffer_checkpoint<P, So, S>(
                 .unwrap();
         assert_eq!(resumed.counts, expected.counts);
         assert_eq!(resumed.state.param(), expected.state.param());
-        assert_eq!(resumed.state.cost(), expected.state.cost());
+        assert_eq!(
+            resumed.state.current_record().unwrap().cost.unwrap(),
+            expected.state.current_record().unwrap().cost.unwrap()
+        );
         assert_eq!(resumed.report.code(), expected.report.code());
     }
 }

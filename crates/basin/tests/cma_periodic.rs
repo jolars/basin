@@ -37,9 +37,17 @@ macro_rules! check {
             assert_eq!(a.counts, b.counts);
             assert_eq!(a.counts.cost_evals, (a.iter() + 1) * 9);
             assert_eq!(a.report.code(), basin::TerminationCode::CmaEsTolerance);
-            assert!(a.cost().is_finite() && a.cost() < 1e-8, "{}", a.cost());
+            assert!(
+                a.current_record().unwrap().cost.unwrap().is_finite()
+                    && a.current_record().unwrap().cost.unwrap() < 1e-8,
+                "{}",
+                a.current_record().unwrap().cost.unwrap()
+            );
             use basin::CostFunction;
-            assert_eq!(a.cost(), Quadratic.cost(a.param()).unwrap());
+            assert_eq!(
+                a.current_record().unwrap().cost.unwrap(),
+                Quadratic.cost(a.param()).unwrap()
+            );
 
             let run_bounded = |period| {
                 let bounds = basin::BoxBounds::new(
@@ -66,7 +74,7 @@ macro_rules! check {
             assert_ne!(bounded.state, run_bounded(1).state);
             assert_eq!(bounded.counts.cost_evals, 13 * 9);
             assert_eq!(
-                bounded.cost(),
+                bounded.current_record().unwrap().cost.unwrap(),
                 Quadratic.cost(bounded.param()).unwrap(),
             );
             for candidate in bounded.state.candidates() {

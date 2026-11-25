@@ -39,7 +39,7 @@ pub mod violation;
 
 pub use capabilities::{
     ConstraintViolationState, EvaluatedGradientState, EvaluatedState,
-    IncumbentRef, IncumbentState, ObjectiveIncumbentState, RawEvaluationState,
+    ObjectiveIncumbentState, RawEvaluationState,
 };
 pub use progress::{
     FirstOrderState, GradientDimensionMismatch, PointState, ProposalState,
@@ -53,65 +53,97 @@ pub use violation::{
 use crate::core::math::Scalar;
 use crate::core::problem::EvalCounts;
 
-/// Minimum information the executor and generic termination criteria
-/// need to read from a solver's iterate.
-///
-/// # Contract
-///
-/// - **Caller must:** construct via the appropriate concrete state
-///   constructor (e.g. [`PointState::new`]) before handing the state to
-///   [`Executor`](crate::core::executor::Executor). The executor's `init`
-///   call populates derived fields (cost, gradient) before any termination
-///   check sees the state.
-/// - **Implementor must:** keep [`param`](Self::param) stable between
-///   iterations: the returned reference is valid until the next
-///   [`Solver::next_iter`](crate::core::solver::Solver::next_iter)
-///   returns. [`cost_evals`](Self::cost_evals) reports evaluation work
-///   using the state's [`CountsMirror`] mapping, not iterations: a single
-///   [`Solver::next_iter`](crate::core::solver::Solver::next_iter) may
-///   evaluate the cost many times (line searches, Nelder-Mead shrinks),
-///   and users budget against this counter rather than
-///   [`iter`](Self::iter).
-///
-/// # Current vs best
-///
-/// The trait exposes two parallel views of the iterate stream:
-///
-/// - **Current** ([`param`](Self::param), [`cost`](Self::cost)): what
-///   the solver's reported point and its evaluated cost. Examples include
-///   an accepted iterate, a Brent probe, and the CMA-ES distribution mean.
-///   The sequence may be nonmonotone. Solvers write these.
-/// - **Selected incumbent** ([`best_param`](Self::best_param),
-///   [`best_cost`](Self::best_cost), [`best_iter`](Self::best_iter),
-///   [`best_cost_evals`](Self::best_cost_evals)): the retained point and
-///   the iter/eval counts recorded by the state's selection rule.
-///   Most states retain the lowest-cost published point. Constrained
-///   states such as [`SelectedState`] instead
-///   mirror a solver-selected incumbent whose objective may increase
-///   as feasibility improves. The executor calls
-///   [`update_best`](Self::update_best) after every
-///   successful [`Solver::init`](crate::core::solver::Solver::init)/
-///   [`Solver::next_iter`](crate::core::solver::Solver::next_iter).
-///   Execution controls like
-///   [`no_objective_improvement`](crate::Executor::no_objective_improvement) and
-///   [`target_objective`](crate::Executor::target_objective) bind on
-///   a checked incumbent and require [`ObjectiveIncumbentState`]; solver-owned
-///   cost-change tests bind on `cost()`.
-///
-/// Best tracking sees published state, not every problem evaluation.
-/// For example, [`PopulationProgress`] considers its mean and sampled population.
-/// An unreported line-search probe is not automatically considered.
-/// Evaluation metadata records the count at publication, which can include
-/// evaluations made after the selected point was found.
-///
-/// Shared states, including [`PopulationProgress`] and [`SimplexProgress`],
-/// retain historical points independently of current members or vertices.
+/// A borrowed point and its available evaluation data.
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct CurrentRef<'a, V, F: Scalar = f64> {
+    /// Published point.
+    pub param: &'a V,
+    /// Evaluated objective, including non-finite values, when available.
+    pub cost: Option<F>,
+    /// Violation report for this point, when available.
+    pub violation: Option<&'a ViolationReport<F>>,
+}
+
+impl<'a, V, F: Scalar> CurrentRef<'a, V, F> {
+    /// Borrow a point and its matching evaluation data.
+    pub fn new(
+        param: &'a V,
+        cost: Option<F>,
+        violation: Option<&'a ViolationReport<F>>,
+    ) -> Self {
+        Self {
+            param,
+            cost,
+            violation,
+        }
+    }
+}
+
+/// A borrowed selection with its original publication metadata.
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct SelectedRef<'a, V, F: Scalar = f64> {
+    /// Selected point.
+    pub param: &'a V,
+    /// Evaluated objective, when available.
+    pub cost: Option<F>,
+    /// Violation report for the selected point, when available.
+    pub violation: Option<&'a ViolationReport<F>>,
+    /// Completed iteration count when the point was selected.
+    pub iter: u64,
+    /// All raw evaluation counts at the selection boundary.
+    pub counts: &'a EvalCounts,
+}
+
+impl<'a, V, F: Scalar> SelectedRef<'a, V, F> {
+    /// Borrow a selection and its publication metadata.
+    pub fn new(
+        point: CurrentRef<'a, V, F>,
+        iter: u64,
+        counts: &'a EvalCounts,
+    ) -> Self {
+        Self {
+            param: point.param,
+            cost: point.cost,
+            violation: point.violation,
+            iter,
+            counts,
+        }
+    }
+}
+
+/// Reason a publication changed the selected point.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum SelectionChange {
+    /// The first eligible objective or a strict improvement.
+    ObjectiveImproved,
+    /// A point explicitly selected by the solver's policy.
+    SolverSelected,
+}
+
+/// Iteration bookkeeping and checked progress for the executor.
 pub trait State {
     /// The parameter type the solver iterates over (e.g. `Vec<f64>`,
     /// `nalgebra::DVector<f64>`).
     type Param;
     /// The scalar type of the objective, such as `f64` or `f32`.
     type Float: Scalar;
+
+    /// Borrow the current published point and its available evaluations.
+    fn current_record(
+        &self,
+    ) -> Option<CurrentRef<'_, Self::Param, Self::Float>> {
+        None
+    }
+
+    /// Borrow the selected point and its original publication metadata.
+    fn selected_record(
+        &self,
+    ) -> Option<SelectedRef<'_, Self::Param, Self::Float>> {
+        None
+    }
 
     /// Number of fully completed iterations. A
     /// [`Solver::next_iter`](crate::core::solver::Solver::next_iter)
@@ -122,61 +154,12 @@ pub trait State {
     /// Increment [`iter`](Self::iter) by one. Called by the executor
     /// after a successful [`Solver::next_iter`](crate::core::solver::Solver::next_iter).
     fn increment_iter(&mut self);
-    /// Cumulative evaluation work under the state's [`CountsMirror`] mapping.
-    /// Every shipped shared state reports only raw cost-function calls.
-    /// Custom states define their mapping through [`CountsMirror`].
-    /// Diverges from `iter()` whenever a single iteration evaluates the
-    /// cost more than once (line searches, Nelder-Mead shrinks, etc.);
-    /// this is what users actually budget against.
-    ///
-    /// Populated by the
-    /// [`Executor`](crate::core::executor::Executor) from the wrapper's
-    /// `EvalCounts` after every
-    /// successful
-    /// [`Solver::init`](crate::core::solver::Solver::init)/
-    /// [`Solver::next_iter`](crate::core::solver::Solver::next_iter);
-    /// the per-state mapping is defined by the state's
-    /// [`CountsMirror`] impl. Solvers never write to this counter
-    /// directly; the wrapper's counts are authoritative.
-    fn cost_evals(&self) -> u64;
     /// Current iterate. Stable between
     /// [`Solver::next_iter`](crate::core::solver::Solver::next_iter)
     /// calls; available after successful initialization, including iter 0.
     /// Some constructors supply it immediately, while an empty population
     /// such as [`PopulationProgress::empty`] must first be initialized.
     fn param(&self) -> &Self::Param;
-    /// Cost at the current [`param`](Self::param).
-    ///
-    /// # Panics
-    ///
-    /// Shared states panic if `cost()` is read before
-    /// [`Solver::init`](crate::core::solver::Solver::init) has populated
-    /// the cached cost. By contract the executor calls `init` before any
-    /// stopping check, so reads from controls and from
-    /// [`OptimizationResult`](crate::core::executor::OptimizationResult)
-    /// are safe after successful initialization. Constructors supply no
-    /// evaluated records; use [`EvaluatedState::current_record`] or an inherent
-    /// checked reader to query availability.
-    fn cost(&self) -> Self::Float;
-
-    /// Selected incumbent under this state's best-tracking rule.
-    ///
-    /// Shared progress states retain this point independently of the current
-    /// record, including when all current population members change. Panics on
-    /// shared states until an eligible incumbent has been selected.
-    fn best_param(&self) -> &Self::Param;
-    /// Cost of the selected incumbent. This is the historical minimum for
-    /// objective-ordered states, but can increase under constrained
-    /// incumbent selection.
-    fn best_cost(&self) -> Self::Float;
-    /// Iteration recorded by the most recent incumbent update. Objective-
-    /// ordered states record strict improvements; states that mirror a
-    /// solver-selected incumbent may refresh this on every publication.
-    fn best_iter(&self) -> u64;
-    /// [`cost_evals`](Self::cost_evals) at the publication boundary that
-    /// recorded the incumbent. This need not be the precise evaluation
-    /// that found the point.
-    fn best_cost_evals(&self) -> u64;
     /// Refresh the incumbent using this state's selection rule. Most
     /// states retain strict objective improvements; population states can
     /// also consider exposed samples, and constrained states can mirror
@@ -189,6 +172,12 @@ pub trait State {
     /// once the state's counters have been mirrored. Solvers do not
     /// call this directly.
     fn update_best(&mut self);
+
+    /// Publish any new selection and report why it changed.
+    fn publish_selection(&mut self) -> Option<SelectionChange> {
+        self.update_best();
+        None
+    }
     /// Reset the best-so-far slots to their pre-init defaults
     /// (`best_cost = +∞`, all best counters zero).
     ///
@@ -223,19 +212,18 @@ pub trait GradientState: State {
     /// Populated by the
     /// [`Executor`](crate::core::executor::Executor) from the wrapper's
     /// `EvalCounts`; see
-    /// [`State::cost_evals`] for the broader rule and
+    /// [`crate::CountsMirror::cost_evals`] for the broader rule and
     /// [`CountsMirror`] for the per-state mapping.
     fn gradient_evals(&self) -> u64;
     /// [`gradient_evals`](Self::gradient_evals) at the publication boundary
-    /// that recorded the incumbent, the companion to
-    /// [`State::best_cost_evals`]. This is not necessarily the count at
+    /// that recorded the selection. This is not necessarily the count at
     /// the precise evaluation that found the point.
     fn best_gradient_evals(&self) -> u64;
 }
 
 /// Bridge from the wrapper's
 /// `EvalCounts` to the state's
-/// [`State::cost_evals`]/[`GradientState::gradient_evals`] counters.
+/// [`crate::CountsMirror::cost_evals`]/[`GradientState::gradient_evals`] counters.
 /// The [`Executor`](crate::core::executor::Executor) calls
 /// [`mirror`](Self::mirror) after every successful
 /// [`Solver::init`](crate::core::solver::Solver::init)/
@@ -258,6 +246,24 @@ pub trait GradientState: State {
 ///   and first-order states' gradient readers report only the named category.
 ///   Use `total_work()` on the raw counts for an explicit aggregate.
 pub trait CountsMirror: State {
+    /// Cumulative evaluation work under the state's [`CountsMirror`] mapping.
+    /// Every shipped shared state reports only raw cost-function calls.
+    /// Custom states define their mapping through [`CountsMirror`].
+    /// Diverges from `iter()` whenever a single iteration evaluates the
+    /// cost more than once (line searches, Nelder-Mead shrinks, etc.);
+    /// this is what users actually budget against.
+    ///
+    /// Populated by the
+    /// [`Executor`](crate::core::executor::Executor) from the wrapper's
+    /// `EvalCounts` after every
+    /// successful
+    /// [`Solver::init`](crate::core::solver::Solver::init)/
+    /// [`Solver::next_iter`](crate::core::solver::Solver::next_iter);
+    /// the per-state mapping is defined by the state's
+    /// [`CountsMirror`] impl. Solvers never write to this counter
+    /// directly; the wrapper's counts are authoritative.
+    fn cost_evals(&self) -> u64;
+
     /// Overwrite the state's counters from the per-run wrapper delta.
     /// Called by the executor after every successful
     /// [`Solver::init`](crate::core::solver::Solver::init) /
@@ -302,7 +308,7 @@ pub trait AcceptanceState: State {
 ///
 /// Mirrors [`GradientState`]: the trait exists so convergence checks
 /// (e.g. the simplex-collapse test of Lagarias et al. 1998, eq. T1) can
-/// bound on a richer view than [`State::param`]/[`State::cost`], which
+/// bound on a richer view than [`State::current_record`], which
 /// only see the best vertex.
 ///
 /// # Contract
@@ -311,7 +317,7 @@ pub trait AcceptanceState: State {
 ///   [`costs`](Self::costs) sorted by **ascending cost** at the start and
 ///   end of every [`Solver::next_iter`](crate::core::solver::Solver::next_iter)
 ///   call (and at the end of [`Solver::init`](crate::core::solver::Solver::init)).
-///   So [`State::param`]/[`State::cost`] always return the current best
+///   So [`State::current_record`] always returns the current best
 ///   vertex (`vertices[0]`/`costs[0]`).
 /// - **Implementor must:** sort `NaN` costs *last*, so a single bad
 ///   evaluation can't drag itself to the front and become the
@@ -328,7 +334,7 @@ pub trait SimplexState: State {
 /// A population of candidate parameters and matching costs.
 ///
 /// Generic consumers can inspect the whole population while
-/// [`State::param`]/[`State::cost`] expose one representative record.
+/// [`State::current_record`] expose one representative record.
 ///
 /// # Contract
 ///

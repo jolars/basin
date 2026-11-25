@@ -44,7 +44,7 @@ fn main() {
         .unwrap();
 
     println!("x = {:?}", result.param()); // ~[0.0, 0.0]
-    println!("f = {}", result.cost()); // ~0.0
+    println!("f = {}", result.current_record().unwrap().cost.unwrap()); // ~0.0
 }
 ```
 

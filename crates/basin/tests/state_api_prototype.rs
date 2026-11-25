@@ -6,6 +6,7 @@ mod backend_aliases;
 #[path = "support/state_api.rs"]
 mod prototype;
 
+use basin::CountsMirror as _;
 use basin::core::math::{NormSquared, ScaledAdd};
 use basin::core::math::{Scalar, VectorLen};
 use basin::core::rng::{ChaCha8Rng, RngExt};
@@ -185,7 +186,12 @@ fn external_solver_reuses_storage_and_executor_bookkeeping() {
     assert_eq!(result.counts.cost_evals, 4);
     assert_eq!(result.counts.gradient_evals, 4);
     assert_eq!(result.state.counts(), &result.counts);
-    assert!((result.state.cost() - 4.0 * 0.8_f64.powi(6)).abs() < 1e-14);
+    assert!(
+        (result.state.current_record().unwrap().cost.unwrap()
+            - 4.0 * 0.8_f64.powi(6))
+        .abs()
+            < 1e-14
+    );
 }
 
 #[test]
@@ -232,8 +238,8 @@ fn best_records_survive_nonmonotone_and_equal_cost_steps() {
         });
         assert!(!state.new_best());
         assert_eq!(state.best().unwrap().param, vec![1.0]);
-        assert_eq!(state.best_iter(), 0);
-        assert_eq!(state.best_cost_evals(), 1);
+        assert_eq!(state.selected_record().unwrap().iter, 0);
+        assert_eq!(state.selected_record().unwrap().counts.cost_evals, 1);
     }
     state.replace(vec![0.0], 0.0);
     state.publish(false, {
@@ -242,7 +248,7 @@ fn best_records_survive_nonmonotone_and_equal_cost_steps() {
         counts
     });
     assert_eq!(state.iter(), 2);
-    assert_eq!(state.best_cost_evals(), 8);
+    assert_eq!(state.selected_record().unwrap().counts.cost_evals, 8);
     assert!(state.new_best());
     state.publish(false, {
         let mut counts = basin::EvalCounts::default();
@@ -260,16 +266,16 @@ fn shared_population_retains_history_and_considers_evaluated_mean() {
         .unwrap();
     state.publish(false, basin::EvalCounts::default());
     assert_eq!(state.points(), &[vec![2.0], vec![1.0]]);
-    assert_eq!(state.cost(), 1.0);
+    assert_eq!(state.current_record().unwrap().cost.unwrap(), 1.0);
     state
         .replace_members(vec![vec![3.0], vec![4.0]], vec![9.0, 16.0])
         .unwrap();
     state.publish(true, basin::EvalCounts::default());
-    assert_eq!(state.best_param(), &[1.0]);
-    assert_eq!(state.best_cost(), 1.0);
+    assert_eq!(state.selected_record().unwrap().param, &[1.0]);
+    assert_eq!(state.selected_record().unwrap().cost.unwrap(), 1.0);
     state.publish_mean(vec![0.5], 0.25).unwrap();
     state.publish(true, basin::EvalCounts::default());
-    assert_eq!(state.best_param(), &[0.5]);
+    assert_eq!(state.selected_record().unwrap().param, &[0.5]);
     assert_eq!(state.costs(), &[9.0, 16.0]);
     let old = state.points().to_vec();
     assert!(state.replace_members(vec![vec![0.0]], vec![]).is_err());
@@ -282,7 +288,10 @@ fn shared_population_retains_history_and_considers_evaluated_mean() {
         .unwrap();
     state.publish(true, basin::EvalCounts::default());
     assert!(state.costs()[0].is_nan());
-    assert_eq!(state.best_cost(), f64::NEG_INFINITY);
+    assert_eq!(
+        state.selected_record().unwrap().cost.unwrap(),
+        f64::NEG_INFINITY
+    );
 }
 
 #[test]
@@ -308,14 +317,14 @@ fn constrained_selection_can_improve_feasibility_with_higher_cost() {
     state.publish(false, basin::EvalCounts::default());
     state.select(2, vec![1.0], 10.0, 0.0);
     state.publish(true, basin::EvalCounts::default());
-    assert_eq!(state.best_param(), &[1.0]);
-    assert_eq!(state.best_cost(), 10.0);
+    assert_eq!(state.selected_record().unwrap().param, &[1.0]);
+    assert_eq!(state.selected_record().unwrap().cost.unwrap(), 10.0);
     assert_eq!(state.violation(), 0.0);
     assert!(state.new_best());
     state.select(2, vec![1.0], 10.0, 0.0);
     state.publish(true, basin::EvalCounts::default());
     assert!(!state.new_best());
-    assert_eq!(state.best_iter(), 1);
+    assert_eq!(state.selected_record().unwrap().iter, 1);
 
     // These become ambiguous and fail compilation if either absent capability
     // is accidentally implemented. No external compile-test dependency is needed.
@@ -368,7 +377,12 @@ fn bfgs_and_lbfgs_match_shipped_solver_evaluations() {
             .run(12)
             .unwrap();
     compare_trace(&actual.borrow(), &expected.borrow());
-    assert!((result.state.cost() - baseline.cost()).abs() < 1e-10);
+    assert!(
+        (result.state.current_record().unwrap().cost.unwrap()
+            - baseline.current_record().unwrap().cost.unwrap())
+        .abs()
+            < 1e-10
+    );
     assert_eq!(result.counts.cost_evals, baseline.cost_evals());
     assert_eq!(result.solver.inverse_hessian().unwrap().nrows(), 2);
 
@@ -393,7 +407,12 @@ fn bfgs_and_lbfgs_match_shipped_solver_evaluations() {
     .run(12)
     .unwrap();
     compare_trace(&actual.borrow(), &expected.borrow());
-    assert!((result.state.cost() - baseline.cost()).abs() < 1e-10);
+    assert!(
+        (result.state.current_record().unwrap().cost.unwrap()
+            - baseline.current_record().unwrap().cost.unwrap())
+        .abs()
+            < 1e-10
+    );
     assert_eq!(result.counts.cost_evals, baseline.cost_evals());
     assert_eq!(result.solver.history_len(), 4);
 }
@@ -427,7 +446,10 @@ fn resume_first_order<
         assert_eq!(*actual.borrow(), *expected.borrow());
         assert_eq!(result.state.param(), baseline.state.param());
         assert_eq!(result.counts, baseline.counts);
-        assert_eq!(result.state.best_iter(), baseline.state.best_iter());
+        assert_eq!(
+            result.state.selected_record().unwrap().iter,
+            baseline.state.selected_record().unwrap().iter
+        );
     }
 }
 
@@ -536,7 +558,12 @@ fn nelder_mead_preserves_authoritative_simplex_allocations() {
         assert_eq!(run.solver().scratch().len(), 3);
     }
     compare_trace(&actual.borrow(), &expected.borrow());
-    assert!((run.state().unwrap().cost() - baseline.cost()).abs() < 1e-12);
+    assert!(
+        (run.state().unwrap().current_record().unwrap().cost.unwrap()
+            - baseline.current_record().unwrap().cost.unwrap())
+        .abs()
+            < 1e-12
+    );
 }
 
 #[derive(Clone, Default)]
@@ -686,15 +713,17 @@ macro_rules! backend_test {
             .unwrap()
             .run(8)
             .unwrap();
-            let _: F = first.state.cost();
+            let _: F = first.state.current_record().unwrap().cost.unwrap();
             let _: &V = first.state.param();
-            assert!(first.state.cost() < 10.0);
+            assert!(first.state.current_record().unwrap().cost.unwrap() < 10.0);
             let second =
                 Run::new(Rosenbrock::<V, F>::new(), Lbfgs::new(4), first.state)
                     .unwrap()
                     .run(8)
                     .unwrap();
-            assert!(second.state.cost() < 10.0);
+            assert!(
+                second.state.current_record().unwrap().cost.unwrap() < 10.0
+            );
             assert_eq!(second.state.counts(), &second.counts);
             assert!(second.solver.history_len() > 0);
             let points = vec![
@@ -710,7 +739,9 @@ macro_rules! backend_test {
             .unwrap()
             .run(8)
             .unwrap();
-            assert!(simplex.state.cost() < 10.0);
+            assert!(
+                simplex.state.current_record().unwrap().cost.unwrap() < 10.0
+            );
             let solver = Annealing::new(
                 RandomNeighbor::default,
                 5.0 as F,
@@ -722,7 +753,15 @@ macro_rules! backend_test {
                     .unwrap()
                     .run(8)
                     .unwrap();
-            assert!(chain.state.best_cost().is_finite());
+            assert!(
+                chain
+                    .state
+                    .selected_record()
+                    .unwrap()
+                    .cost
+                    .unwrap()
+                    .is_finite()
+            );
             assert_eq!(chain.counts.cost_evals, 9);
         }
     };
@@ -1104,7 +1143,7 @@ fn bfgs_accepts_an_explicit_nonclone_matrix_override() {
             .run(8)
             .unwrap();
     let _: &Custom = result.solver.inverse_hessian().unwrap();
-    assert!(result.state.cost() < 10.0);
+    assert!(result.state.current_record().unwrap().cost.unwrap() < 10.0);
 }
 
 #[test]

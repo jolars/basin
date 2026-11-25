@@ -49,9 +49,9 @@ fn converges_on_rosenbrock_2d() {
     // NEWUOA's natural convergence (ρ reached ρ_end), well within budget.
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
-        result.best_cost() < 1e-7,
+        result.selected_record().unwrap().cost.unwrap() < 1e-7,
         "best_cost = {}",
-        result.best_cost()
+        result.selected_record().unwrap().cost.unwrap()
     );
     assert!(
         result.cost_evals() < 500,
@@ -59,8 +59,11 @@ fn converges_on_rosenbrock_2d() {
         result.cost_evals()
     );
     // The reported iterate is the best (monotone), so the two coincide.
-    assert_eq!(result.cost(), result.best_cost());
-    let x = result.best_param();
+    assert_eq!(
+        result.current_record().unwrap().cost.unwrap(),
+        result.selected_record().unwrap().cost.unwrap()
+    );
+    let x = result.selected_record().unwrap().param;
     assert!(
         (x[0] - 1.0).abs() < 1e-3 && (x[1] - 1.0).abs() < 1e-3,
         "x = {x:?}"
@@ -162,9 +165,9 @@ fn backend_generic_nalgebra() {
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
-        result.best_cost() < 1e-7,
+        result.selected_record().unwrap().cost.unwrap() < 1e-7,
         "best_cost = {}",
-        result.best_cost()
+        result.selected_record().unwrap().cost.unwrap()
     );
 }
 

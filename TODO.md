@@ -67,24 +67,15 @@ for 4.0.0.
 Document the migration for each breaking change. Use the 3.x results to decide
 whether to adopt the conditional changes below.
 
-- [ ] **Make checked records the progress API.** Let solvers publish a point and
-  constraint violation before an objective is available. Distinguish missing
-  objectives from evaluated non-finite values. Move objective-specific
-  readers out of the base `State` contract and replace `best_param()`,
-  `best_cost()`, `best_iter()`, and `best_cost_evals()` on both executor
-  result types with a checked record accessor. Revisit `incumbent_record()`
-  as the general name. Consider `selected_record()` for a record that can
-  carry a point and its constraint violation before its objective is
-  evaluated. Document record availability and raw publication counts.
-  Publish selection changes explicitly so observers and checkpoint sinks can
-  distinguish feasibility-first selection from strict objective improvement.
-  Keep objective targets and stalls tied to an eligible objective incumbent.
+- [x] **Make checked records the progress API.** Current and selected records
+  can carry a point and constraint violation before objective evaluation.
+  Selection notifications identify how the point was chosen and preserve the
+  raw counts at publication. Objective targets and stalls use an eligible
+  objective incumbent. See the [Basin 4.0 migration guide](web/src/guide/migrating-to-v4/index.md#checked-progress-records).
 - [ ] **Define which inner results composed solvers can consume.** Decide
   whether feasibility-aware outer solvers may reevaluate and use a selected
   point from an inner run that has no objective incumbent. The
-  constrained-DE prototype keeps the existing member in this case. Replace
-  the legacy cost-sentinel fallback in `segment_incumbent` with checked
-  access.
+  constrained-DE prototype keeps the existing member in this case.
 - [ ] **Make threaded evaluation opt-in at the call site.** Have `parallel`
   enable threaded execution and keep serial APIs usable when a dependency
   enables the feature. Apply thread-safety bounds to the threaded path.
@@ -851,9 +842,8 @@ The prototype establishes these contracts:
 - Explicit selection events retain independent point, objective, and violation
   snapshots. The executor stamps iteration and all raw counts at publication,
   including clean mid-step stops. Republishing a selection preserves its age.
-  The state implements `IncumbentState` but neither `ObjectiveIncumbentState`
-  nor `PopulationState`; objective targets and objective stalls cannot attach to
-  it.
+  The state exposes checked selections. It has no objective-ordered selection
+  or population capability, so objective targets and stalls cannot attach to it.
 - An injection inner must accept the original constrained problem. Seeds follow
   the representative ranking. A consumable run with an objective incumbent
   supplies a point for box repair and reevaluation under the same trial

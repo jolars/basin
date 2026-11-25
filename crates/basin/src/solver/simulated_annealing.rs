@@ -384,8 +384,8 @@ pub(crate) struct ReannealingProgress {
 ///     .max_iter(10_000)
 ///     .run()
 ///     .unwrap();
-/// let incumbent = result.incumbent_record().expect("expected an incumbent");
-/// assert!(incumbent.cost < 1e-2);
+/// let incumbent = result.selected_record().expect("expected an incumbent");
+/// assert!(incumbent.cost.unwrap() < 1e-2);
 /// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
@@ -597,7 +597,7 @@ where
         problem: &mut Problem<P>,
         mut state: ProposalState<V, F>,
     ) -> Result<crate::SolverStep<ProposalState<V, F>>, Self::Error> {
-        let incumbent_cost = state.cost();
+        let incumbent_cost = state.current_record().unwrap().cost.unwrap();
         let temperature = self.temperature();
         let rng = self
             .live_rng
@@ -609,20 +609,27 @@ where
             .expect("annealing must be initialized")
             .propose(state.param(), temperature, rng)?;
         let candidate_cost = problem.cost(&candidate)?;
-        let new_best = candidate_cost < state.best_cost();
-        let accepted =
-            if candidate_cost.is_nan() || candidate_cost == F::infinity() {
-                false
-            } else if candidate_cost <= incumbent_cost {
-                true
-            } else {
-                let probability = uphill_acceptance_probability(
-                    candidate_cost - incumbent_cost,
-                    temperature,
-                );
-                let draw = F::from_f64(rng.random::<f64>()).unwrap();
-                draw < probability
-            };
+        let eligible =
+            !candidate_cost.is_nan() && candidate_cost != F::infinity();
+        let new_best = eligible
+            && state.selected_record().is_none_or(|record| {
+                candidate_cost
+                    < record
+                        .cost
+                        .expect("objective-ordered selection has a cost")
+            });
+        let accepted = if !eligible {
+            false
+        } else if candidate_cost <= incumbent_cost {
+            true
+        } else {
+            let probability = uphill_acceptance_probability(
+                candidate_cost - incumbent_cost,
+                temperature,
+            );
+            let draw = F::from_f64(rng.random::<f64>()).unwrap();
+            draw < probability
+        };
         self.accepted_iterate = accepted;
         if accepted {
             state.accept_proposal(candidate, candidate_cost);
@@ -650,7 +657,7 @@ where
     }
 
     fn terminate(&self, state: &ProposalState<V, F>) -> Option<Termination<F>> {
-        let cost = state.cost();
+        let cost = state.current_record().unwrap().cost.unwrap();
         if cost.is_nan() {
             Some(Termination::numerical_failure(
                 "Simulated annealing has a NaN objective at its current point.",

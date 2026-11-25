@@ -138,7 +138,10 @@ where
     .run()
     .unwrap();
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
-    assert!(result.cost() < F::from_f64(1e-10).unwrap());
+    assert!(
+        result.current_record().unwrap().cost.unwrap()
+            < F::from_f64(1e-10).unwrap()
+    );
     assert_eq!(calls.fused.load(Relaxed), 1);
     assert_eq!(calls.owned.load(Relaxed), 1);
     assert!(calls.in_place.load(Relaxed) > usize::from(reject_once));

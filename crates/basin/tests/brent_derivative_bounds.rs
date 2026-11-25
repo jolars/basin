@@ -48,5 +48,5 @@ fn brent_shrinks_the_bracket_when_the_minimum_step_reaches_an_endpoint() {
     .unwrap();
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
-    assert!((result.best_param() - 0.5).abs() < 1e-8);
+    assert!((result.selected_record().unwrap().param - 0.5).abs() < 1e-8);
 }

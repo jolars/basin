@@ -116,7 +116,7 @@ use rectangle::{Rectangle, Work};
 ///     Direct::new(),
 ///     PointState::new(vec![0.0; 2]),
 /// ).target_objective(-78.33).max_cost_evals(2000).run().unwrap();
-/// assert!(result.cost() < -78.33);
+/// assert!(result.current_record().unwrap().cost.unwrap() < -78.33);
 /// ```
 ///
 /// # References

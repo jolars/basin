@@ -108,7 +108,7 @@ pub enum DeCrossover {
 /// when `CR = 1`. Copied values can equal the target, including at fixed bounds.
 /// All trials are evaluated in a batch, with deterministic ordering under
 /// `parallel`. A trial replaces its target when its cost is no worse (`≤`).
-/// The population is then sorted by cost, so `state.cost()` reports its best.
+/// The population is then sorted by cost, so `state.current_record().unwrap().cost.unwrap()` reports its best.
 /// This is synchronous DE, corresponding to SciPy's `updating="deferred"`;
 /// it does not reproduce SciPy's random trajectory.
 ///

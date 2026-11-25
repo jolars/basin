@@ -34,7 +34,10 @@ fn same_seed_yields_identical_trajectory() {
     .run()
     .unwrap();
 
-    assert_eq!(result_a.cost(), result_b.cost());
+    assert_eq!(
+        result_a.current_record().unwrap().cost.unwrap(),
+        result_b.current_record().unwrap().cost.unwrap()
+    );
     let (a, b) = (result_a.param(), result_b.param());
     assert_eq!(a.nrows(), b.nrows());
     for i in 0..a.nrows() {

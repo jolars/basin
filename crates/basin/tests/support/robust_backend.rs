@@ -119,7 +119,10 @@ where
         F::from_f64(4.).unwrap() * error / (F::one() + error * error);
     assert!(error.abs() < F::from_f64(1e-6).unwrap());
     assert!(gradient.abs() < F::from_f64(1e-7).unwrap());
-    assert!(result.cost() < F::from_f64(1e-12).unwrap());
+    assert!(
+        result.current_record().unwrap().cost.unwrap()
+            < F::from_f64(1e-12).unwrap()
+    );
 }
 
 pub fn check<V, M, F, S, P, E>(
@@ -150,7 +153,10 @@ pub fn check<V, M, F, S, P, E>(
             < tolerance
     );
     assert!(
-        (result.cost() - F::from_f64(28.0 / 3.0).unwrap()).abs() < tolerance
+        (result.current_record().unwrap().cost.unwrap()
+            - F::from_f64(28.0 / 3.0).unwrap())
+        .abs()
+            < tolerance
     );
 }
 
@@ -179,12 +185,15 @@ where
         let point: Vec<_> = (0..stepper.state().param().vec_len())
             .map(|i| stepper.state().param().get_scalar(i))
             .collect();
-        let cost = stepper.state().cost();
+        let cost = stepper.state().current_record().unwrap().cost.unwrap();
         let counts = *stepper.counts();
         let iteration = stepper.state().iter();
         if let StepOutcome::Stopped(report) = stepper.step().unwrap() {
             assert_eq!(report.code(), TerminationCode::SolverFailed);
-            assert_eq!(stepper.state().cost(), cost);
+            assert_eq!(
+                stepper.state().current_record().unwrap().cost.unwrap(),
+                cost
+            );
             assert_eq!(*stepper.counts(), counts);
             assert_eq!(stepper.state().iter(), iteration);
             for (i, value) in point.iter().enumerate() {

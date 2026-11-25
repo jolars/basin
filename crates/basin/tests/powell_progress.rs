@@ -66,7 +66,7 @@ macro_rules! lifecycle {
                 .run_with_solver()
                 .unwrap();
                 assert_eq!(fresh.iter(), 0);
-                assert_eq!(fresh.state.best_iter(), 0);
+                assert_eq!(fresh.state.selected_record().unwrap().iter, 0);
                 assert_eq!(fresh.counts.cost_evals, 5);
                 assert_eq!(fresh.state.cost_evals(), 5);
                 assert_eq!(fresh.solver.rho(), Some(1.0));
@@ -88,12 +88,15 @@ macro_rules! lifecycle {
                 assert_eq!(state.cost_evals(), 2);
                 assert_eq!(state.counts(), &counts);
                 assert_eq!(state.best_counts(), Some(&counts));
-                assert_eq!(state.best_cost_evals(), 2);
+                assert_eq!(
+                    state.selected_record().unwrap().counts.cost_evals,
+                    2
+                );
                 state.increment_iter();
                 state.mirror(&EvalCounts::default());
                 state.update_best();
                 assert_eq!(state.best_counts(), Some(&counts));
-                assert_eq!(state.best_iter(), 0);
+                assert_eq!(state.selected_record().unwrap().iter, 0);
             }
 
             #[test]

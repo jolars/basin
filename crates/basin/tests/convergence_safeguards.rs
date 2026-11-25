@@ -1,3 +1,4 @@
+use basin::CountsMirror as _;
 use basin::{
     BrentDerivative, CostFunction, Executor, FirstOrderState, Gbnm, Gradient,
     PointState, Problem, Scalar, Solver, State, TerminationCode, VectorLen,

@@ -27,8 +27,8 @@ fn main() {
         result.report.termination,
         Termination::Converged(_)
     ));
-    let incumbent = result.incumbent_record().expect("expected an incumbent");
-    assert!(incumbent.cost < 1e-12);
+    let incumbent = result.selected_record().expect("expected an incumbent");
+    assert!(incumbent.cost.unwrap() < 1e-12);
     assert!((incumbent.param[0] - 1.0).abs() < 1e-6);
     assert!((incumbent.param[1] + 2.0).abs() < 1e-6);
 }

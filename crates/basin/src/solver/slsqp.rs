@@ -967,7 +967,7 @@ where
             // to executor controls without attempting empty BFGS updates.
             return Ok(crate::SolverStep::from((state, None)));
         }
-        let old_cost = state.cost();
+        let old_cost = state.current_record().unwrap().cost.unwrap();
         let merit = old_cost + work.weighted_violation();
         if !merit.is_finite() {
             work.failure = Some(SlsqpFailure::NonFiniteEvaluation);

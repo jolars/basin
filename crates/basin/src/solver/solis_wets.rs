@@ -44,7 +44,7 @@ use crate::solver::cma_inject::MemeticInner;
 /// reading would fire every iteration for the rest of the streak).
 ///
 /// The iterate only ever moves to a strictly better point, so
-/// `state.cost()` is non-increasing and equals `state.best_cost()`.
+/// `state.current_record().unwrap().cost.unwrap()` is non-increasing and equals `state.selected_record().unwrap().cost.unwrap()`.
 /// This is a *local* search method: the reversal step notwithstanding,
 /// no global convergence claim applies (Solis & Wets 1981, local-search
 /// theorem under H1 + H3).
@@ -143,7 +143,7 @@ use crate::solver::cma_inject::MemeticInner;
 ///     .max_iter(10_000)
 ///     .run()
 ///     .unwrap();
-/// assert!(result.cost() < 1e-6);
+/// assert!(result.current_record().unwrap().cost.unwrap() < 1e-6);
 /// ```
 #[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -389,7 +389,7 @@ where
         problem: &mut Problem<P>,
         mut state: PointState<V, F>,
     ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
-        let f_x = state.cost();
+        let f_x = state.current_record().unwrap().cost.unwrap();
         self.accepted_iterate = false;
         let bias = self.bias.as_mut().expect("SolisWets must be initialized");
 
@@ -541,14 +541,6 @@ where
         state.reset_progress();
     }
 
-    fn segment_incumbent<'a>(
-        &self,
-        state: &'a Self::State,
-    ) -> Option<(&'a V, F)> {
-        crate::IncumbentState::incumbent_record(state)
-            .map(|record| (record.param, record.cost))
-    }
-
     fn configure_segment(
         &mut self,
         _state: &Self::State,
@@ -684,12 +676,13 @@ mod tests {
             let state = solver.init(&mut problem, state).unwrap();
             let x_old = state.param().clone();
             let bias_old = solver.bias().unwrap().clone();
-            let f_old = state.cost();
+            let f_old = state.current_record().unwrap().cost.unwrap();
 
             let (state, _, _) =
                 solver.next_iter(&mut problem, state).unwrap().into_parts();
             let moved = state.param() != &x_old;
-            let improved = state.cost() < f_old;
+            let improved =
+                state.current_record().unwrap().cost.unwrap() < f_old;
             if moved && improved && solver.success_count() == 1 {
                 // Distinguish reversal from forward via the bias formula:
                 // reversal ⇒ b_new = b_old + 0.4 (x_new − x_old)
@@ -793,7 +786,10 @@ mod tests {
         }
         state.replace(state.param().clone(), -1000.0);
         let state = solver.init(&mut problem, state).unwrap();
-        assert_eq!(state.cost(), problem.inner().cost(state.param()).unwrap());
+        assert_eq!(
+            state.current_record().unwrap().cost.unwrap(),
+            problem.inner().cost(state.param()).unwrap()
+        );
         assert_eq!(solver.bias().unwrap(), &vec![0.0; 2]);
         assert_eq!(solver.step_size(), 0.7);
         assert_eq!(solver.success_count(), 0);

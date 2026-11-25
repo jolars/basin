@@ -80,16 +80,23 @@ where
             } else {
                 F::zero()
             };
-            assert!((result.best_param()[i] - expected).abs() < tolerance);
+            assert!(
+                (result.selected_record().unwrap().param[i] - expected).abs()
+                    < tolerance
+            );
         }
         let expected_cost = coefficients.iter().map(|c| c.min(0.0)).sum();
         assert!(
-            (result.best_cost() - F::from_f64(expected_cost).unwrap()).abs()
+            (result.selected_record().unwrap().cost.unwrap()
+                - F::from_f64(expected_cost).unwrap())
+            .abs()
                 < tolerance
         );
         assert_eq!(
-            (&problem).cost(result.best_param()).unwrap(),
-            result.best_cost()
+            (&problem)
+                .cost(result.selected_record().unwrap().param)
+                .unwrap(),
+            result.selected_record().unwrap().cost.unwrap()
         );
     }
 }

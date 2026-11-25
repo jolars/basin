@@ -109,7 +109,7 @@ fn barrier_method_tour() {
         result.report.code(),
         x[0],
         x[1],
-        result.cost(),
+        result.current_record().unwrap().cost.unwrap(),
     );
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);

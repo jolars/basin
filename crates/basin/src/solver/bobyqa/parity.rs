@@ -329,17 +329,20 @@ fn check_parity(text: &str) {
     // (these problems), relative to |f*| when it is large.
     let f_tol = 1e-6 * (1.0 + fx.final_f.abs());
     assert!(
-        (result.best_cost() - fx.final_f).abs() <= f_tol,
+        (result.selected_record().unwrap().cost.unwrap() - fx.final_f).abs()
+            <= f_tol,
         "{}: final f mismatch: prima={:.17e} basin={:.17e} diff={:.3e} tol={:.3e}",
         fx.problem,
         fx.final_f,
-        result.best_cost(),
-        (result.best_cost() - fx.final_f).abs(),
+        result.selected_record().unwrap().cost.unwrap(),
+        (result.selected_record().unwrap().cost.unwrap() - fx.final_f).abs(),
         f_tol,
     );
 
     let x_inf = result
-        .best_param()
+        .selected_record()
+        .unwrap()
+        .param
         .iter()
         .zip(&fx.final_x)
         .map(|(a, b)| (a - b).abs())
@@ -350,7 +353,7 @@ fn check_parity(text: &str) {
         fx.problem,
         x_inf,
         fx.final_x,
-        result.best_param(),
+        result.selected_record().unwrap().param,
     );
 
     // nf is the weakest signal: a paper-derived port takes a different (but

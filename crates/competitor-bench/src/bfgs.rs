@@ -112,13 +112,23 @@ fn basin_solve(problem: &Workload, n: usize, samples: &mut Samples) -> String {
     .unwrap();
     let status = loop {
         let state = stepper.state();
-        samples.record(state.param(), state.cost(), stepper.iter());
-        if (0.0..=TARGET).contains(&state.cost()) {
+        samples.record(
+            state.param(),
+            state.current_record().unwrap().cost.unwrap(),
+            stepper.iter(),
+        );
+        if (0.0..=TARGET)
+            .contains(&state.current_record().unwrap().cost.unwrap())
+        {
             break "TargetReached".into();
         }
         if let StepOutcome::Stopped(report) = stepper.step().unwrap() {
             let state = stepper.state();
-            samples.record(state.param(), state.cost(), stepper.iter());
+            samples.record(
+                state.param(),
+                state.current_record().unwrap().cost.unwrap(),
+                stepper.iter(),
+            );
             break format!("{:?}", report.code());
         }
     };

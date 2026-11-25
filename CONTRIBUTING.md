@@ -171,8 +171,8 @@ into user-provided `Problem` traits, until solver convergence, an execution limi
     with public record updates for external and new solvers. They retain raw
     evaluation counts, and category readers report only the named category; solver-owned
     machinery is preserved through solver-aware checkpoints. Opt-in
-    `EvaluatedState`/`EvaluatedGradientState`, `RawEvaluationState`, and
-    `IncumbentState` traits expose checked records and publication metadata.
+    `EvaluatedState`, `EvaluatedGradientState`, and `RawEvaluationState` expose
+    matching evaluation data. `State` exposes the current and selected records.
     `ObjectiveIncumbentState` guarantees objective-ordered eligible selection
     for generic targets and stalls. Gradient descent, projected gradient descent,
     trust regions, BFGS, both L-BFGS modes, and derivative Brent use `FirstOrderState`; SGD, Solis-Wets, basin-hopping, the barrier method, and cost-only
@@ -366,8 +366,8 @@ termination, and every successful step publishes counts and coherent progress.
 Ordinary results retain the report and authoritative evaluation counts. Exact
 continuation preserves convergence history and publishes a new event.
 
-`SolverStep` and `IncumbentRef` are non-exhaustive publication records with
-complete public constructors. Future optional metadata must have defaults that
+`SolverStep`, `CurrentRef`, and `SelectedRef` are
+non-exhaustive publication records with complete public constructors. Future optional metadata must have defaults that
 preserve existing constructor behavior; adding fields cannot require external
 solver or state implementations to supply new information within a major release.
 
@@ -425,7 +425,7 @@ validation. Follow the contracts below.
   feasible point, so generic objective-based controls require a capability that
   guarantees compatible selection semantics.
 - **Constraint reporting:** `ConstraintViolationState` borrows reports matching
-  the checked current and incumbent records, with the same availability.
+  the checked current and selected records, including before objective evaluation.
   Selection snapshots preserve the full report when current progress changes.
   `reset` clears both records; `reset_best` preserves current progress. Runtime
   measures remain solver-specific, including squared L2 for constrained MADS,

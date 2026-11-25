@@ -107,11 +107,16 @@ fn distant_optima_keep_every_evaluation_and_cached_value_feasible() {
                 TerminationCode::ProjectedGradientTolerance
             );
             assert_eq!(result.param(), &expected);
-            assert_eq!(result.best_param(), &expected);
-            assert_eq!(result.cost(), problem.cost(result.param()).unwrap());
+            assert_eq!(result.selected_record().unwrap().param, &expected);
             assert_eq!(
-                result.state.best_cost(),
-                problem.cost(result.best_param()).unwrap()
+                result.current_record().unwrap().cost.unwrap(),
+                problem.cost(result.param()).unwrap()
+            );
+            assert_eq!(
+                result.state.selected_record().unwrap().cost.unwrap(),
+                problem
+                    .cost(result.selected_record().unwrap().param)
+                    .unwrap()
             );
             assert_eq!(
                 result.state.gradient().unwrap(),
@@ -169,7 +174,10 @@ fn rounded_endpoints_are_feasible_before_evaluation() {
             TerminationCode::ProjectedGradientTolerance
         );
         assert!((result.param()[0] - bound).abs() < 1e-12);
-        assert_eq!(result.cost(), problem.cost(result.param()).unwrap());
+        assert_eq!(
+            result.current_record().unwrap().cost.unwrap(),
+            problem.cost(result.param()).unwrap()
+        );
         assert_eq!(
             result.state.gradient().unwrap(),
             &problem.gradient(result.param()).unwrap()
@@ -201,7 +209,7 @@ fn one_sided_and_fixed_bounds_keep_evaluations_feasible() {
             TerminationCode::ProjectedGradientTolerance
         );
         assert_eq!(result.param(), &[expected; 2]);
-        assert_eq!(result.best_param(), result.param());
+        assert_eq!(result.selected_record().unwrap().param, result.param());
     }
 }
 
@@ -223,8 +231,11 @@ fn check_builtin<S: LineSearch<Quadratic, Vec<f64>, Error = Infallible>>(
         TerminationCode::ProjectedGradientTolerance
     );
     assert_eq!(result.param(), &[0.0, 1.0]);
-    assert_eq!(result.best_param(), result.param());
-    assert_eq!(result.cost(), problem.cost(result.param()).unwrap());
+    assert_eq!(result.selected_record().unwrap().param, result.param());
+    assert_eq!(
+        result.current_record().unwrap().cost.unwrap(),
+        problem.cost(result.param()).unwrap()
+    );
     assert_eq!(
         result.state.gradient().unwrap(),
         &problem.gradient(result.param()).unwrap()
@@ -273,7 +284,7 @@ fn unsupported_custom_search_fails_without_evaluating_or_changing_state() {
     .unwrap();
     assert_eq!(result.report.code(), TerminationCode::SolverFailed);
     assert_eq!(result.param(), &[0.5; 2]);
-    assert_eq!(result.best_param(), result.param());
+    assert_eq!(result.selected_record().unwrap().param, result.param());
     assert_eq!(result.cost_evals(), 1);
     assert_eq!(result.state.gradient_evals(), 1);
 }
@@ -346,10 +357,13 @@ fn invalid_selected_steps_and_cached_points_leave_a_feasible_best() {
         .unwrap();
         assert_eq!(result.report.code(), TerminationCode::SolverFailed);
         assert_eq!(result.param(), &[0.5; 2]);
-        assert_eq!(result.best_param(), result.param());
+        assert_eq!(result.selected_record().unwrap().param, result.param());
         assert_eq!(result.cost_evals(), 1);
         assert_eq!(result.state.gradient_evals(), 1);
-        assert_eq!(result.cost(), problem.cost(result.param()).unwrap());
+        assert_eq!(
+            result.current_record().unwrap().cost.unwrap(),
+            problem.cost(result.param()).unwrap()
+        );
         assert_eq!(
             result.state.gradient().unwrap(),
             &problem.gradient(result.param()).unwrap()
@@ -455,8 +469,14 @@ macro_rules! backend_regression {
                 );
                 assert_eq!(result.param()[0], 0.0);
                 assert_eq!(result.param()[1], 1.0);
-                assert_eq!(result.best_param(), result.param());
-                assert_eq!(result.cost(), 50.0 * 50.0 + 49.0 * 49.0);
+                assert_eq!(
+                    result.selected_record().unwrap().param,
+                    result.param()
+                );
+                assert_eq!(
+                    result.current_record().unwrap().cost.unwrap(),
+                    50.0 * 50.0 + 49.0 * 49.0
+                );
                 assert_eq!(result.state.gradient().unwrap()[0], 100.0);
                 assert_eq!(result.state.gradient().unwrap()[1], -98.0);
             }
@@ -600,7 +620,7 @@ fn custom_bounded_searches_publish_matching_records_and_counts() {
             result.state.current(),
             Some((&vec![param], cost, &vec![gradient]))
         );
-        assert_eq!(result.best_param(), &[param]);
-        assert_eq!(result.state.best_cost(), cost);
+        assert_eq!(result.selected_record().unwrap().param, &[param]);
+        assert_eq!(result.state.selected_record().unwrap().cost.unwrap(), cost);
     }
 }

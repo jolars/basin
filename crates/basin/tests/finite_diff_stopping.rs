@@ -75,7 +75,7 @@ fn forward_bias_explains_strict_failure_and_explicit_tolerance_avoids_it() {
         Termination::Converged(_)
     ));
     assert_eq!(configured.param(), &vec![1.0, -2.0]);
-    assert_eq!(configured.cost(), 0.0);
+    assert_eq!(configured.current_record().unwrap().cost.unwrap(), 0.0);
     assert!(configured.counts.cost_evals < strict.counts.cost_evals);
 
     let central = Executor::new(
@@ -159,7 +159,10 @@ where
     let a = point.get_scalar(0) - F::one();
     let b = point.get_scalar(1) + num(2.0);
     assert!(a.abs().max(b.abs()) <= num(4.0) * tolerance);
-    assert!(result.cost() <= num(16.0) * tolerance * tolerance);
+    assert!(
+        result.current_record().unwrap().cost.unwrap()
+            <= num(16.0) * tolerance * tolerance
+    );
 }
 
 macro_rules! backend {

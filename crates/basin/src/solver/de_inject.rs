@@ -111,7 +111,7 @@ use crate::solver::de::De;
 /// [`with_absolute_cost_change_tolerance`](Self::with_absolute_cost_change_tolerance), or
 /// [`with_absolute_step_tolerance`](Self::with_absolute_step_tolerance)). The
 /// strict-less write-back preserves DE's non-increasing
-/// `state.cost()` contract.
+/// `state.current_record().unwrap().cost.unwrap()` contract.
 ///
 /// # Caveats
 ///

@@ -133,7 +133,7 @@ be exceeded by up to `n + 1` evaluations.
 ### Distinguish the active search from the incumbent
 
 `param()` and `cost()` describe the best vertex of the active local
-search. They can worsen after a restart. `incumbent_record()`
+search. They can worsen after a restart. `selected_record()`
 retain the historical objective incumbent across searches. Use checked
 `current()` and `best()` state readers when non-finite evaluations may
 leave either unavailable.

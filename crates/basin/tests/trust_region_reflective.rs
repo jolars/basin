@@ -175,7 +175,8 @@ fn interior_active_and_fixed_solutions() {
             .map(|r| 0.5 * r * r)
             .sum::<f64>();
         assert!(
-            (result.cost() - cost).abs() <= 4.0 * f64::EPSILON * cost.max(1.0)
+            (result.current_record().unwrap().cost.unwrap() - cost).abs()
+                <= 4.0 * f64::EPSILON * cost.max(1.0)
         );
         if lower == upper {
             assert_eq!(result.state.counts().residual_evals, 1);
@@ -202,7 +203,11 @@ fn rank_deficient_and_underdetermined() {
         .run()
         .unwrap();
         assert_eq!(result.report.code(), TerminationCode::SolverConverged);
-        assert!(result.cost() < 1e-20, "{}", result.cost());
+        assert!(
+            result.current_record().unwrap().cost.unwrap() < 1e-20,
+            "{}",
+            result.current_record().unwrap().cost.unwrap()
+        );
         assert!(result.param().iter().all(|x| x.is_finite()));
     }
 }
@@ -220,7 +225,11 @@ fn bounded_rosenbrock() {
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!((result.param()[0] - 1.22437075).abs() < 1e-6);
     assert!((result.param()[1] - 1.5).abs() < 1e-8);
-    assert!((result.cost() - 0.0252130939468).abs() < 1e-10);
+    assert!(
+        (result.current_record().unwrap().cost.unwrap() - 0.0252130939468)
+            .abs()
+            < 1e-10
+    );
 }
 
 #[test]
@@ -366,7 +375,7 @@ fn check_cost_floor<P>(
     }
     assert_eq!(result.state.counts().jacobian_evals, result.iter() + 1);
     if expected == TerminationCode::NumericalNoProgress {
-        assert_eq!(result.cost(), 2.0);
+        assert_eq!(result.current_record().unwrap().cost.unwrap(), 2.0);
         assert_eq!(result.iter(), 4);
         assert!(
             result.state.counts().residual_evals
@@ -443,7 +452,7 @@ fn cost_floor_checkpoint_preserves_the_numerical_stop() {
     let snapshot = |state: &PointState<Vec<f64>>| {
         (
             state.param().clone(),
-            state.cost(),
+            state.current_record().unwrap().cost.unwrap(),
             state.iter(),
             state.counts().residual_evals,
             state.counts().jacobian_evals,
@@ -511,10 +520,11 @@ fn scipy_reference_fixtures() {
         );
         let reference: f64 = case[8].parse().unwrap();
         assert!(
-            (result.cost() - reference).abs() < 1e-8 * reference.max(1.0),
+            (result.current_record().unwrap().cost.unwrap() - reference).abs()
+                < 1e-8 * reference.max(1.0),
             "{}: {} vs {reference}",
             case[0],
-            result.cost()
+            result.current_record().unwrap().cost.unwrap()
         );
         if case[1] == "1" {
             for (x, y) in result.param().iter().zip(numbers(7)) {
@@ -645,7 +655,9 @@ fn retry_exhaustion_preserves_the_current_state() {
     assert_eq!(result.state.counts().residual_evals, 2);
     assert_eq!(result.state.counts().jacobian_evals, 1);
     assert!(
-        (result.cost() - 0.5 * guarded_exp(-1.0).unwrap().powi(2)).abs()
+        (result.current_record().unwrap().cost.unwrap()
+            - 0.5 * guarded_exp(-1.0).unwrap().powi(2))
+        .abs()
             < 1e-15
     );
 }
@@ -664,7 +676,7 @@ fn equal_cost_alone_does_not_establish_numerical_no_progress() {
     .unwrap();
     assert_eq!(result.report.code(), TerminationCode::SolverFailed);
     assert_eq!(result.iter(), 4);
-    assert_eq!(result.cost(), 2.0);
+    assert_eq!(result.current_record().unwrap().cost.unwrap(), 2.0);
     assert_eq!(result.state.counts().residual_evals, 6);
     assert_eq!(result.state.counts().jacobian_evals, 5);
 }
@@ -693,7 +705,7 @@ fn collapsed_trials_after_invalid_or_worse_costs_remain_failures() {
         .unwrap();
         assert_eq!(result.report.code(), TerminationCode::SolverFailed);
         assert_eq!(result.param(), &[1.0]);
-        assert_eq!(result.cost(), 0.5);
+        assert_eq!(result.current_record().unwrap().cost.unwrap(), 0.5);
         assert_eq!(result.iter(), 0);
         assert_eq!(result.state.counts().jacobian_evals, 1);
         assert!(result.state.counts().residual_evals > 10);

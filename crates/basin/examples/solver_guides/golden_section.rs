@@ -42,8 +42,8 @@ fn main() {
         .unwrap();
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
-    let incumbent = result.incumbent_record().expect("expected an incumbent");
+    let incumbent = result.selected_record().expect("expected an incumbent");
     assert!((3.0..=5.0).contains(incumbent.param));
     assert!((incumbent.param - 3.0).abs() < 1e-6);
-    assert!((incumbent.cost - 1.0).abs() < 1e-6);
+    assert!((incumbent.cost.unwrap() - 1.0).abs() < 1e-6);
 }

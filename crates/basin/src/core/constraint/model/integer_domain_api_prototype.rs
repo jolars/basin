@@ -233,7 +233,7 @@ where
         let state = inner.solver().seed(&reduced);
         let outcome = inner.run(&mut adapted, state).map(|result| Refinement {
             point: adapted.inner().expand(result.state.param()),
-            cost: result.state.cost(),
+            cost: result.state.current_record().unwrap().cost.unwrap(),
             report: result.report,
         });
         (outcome, *adapted.counts())

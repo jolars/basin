@@ -65,26 +65,13 @@ impl State for MultiStartState {
     fn increment_iter(&mut self) {
         self.iter += 1;
     }
-    fn cost_evals(&self) -> u64 {
-        self.cost_evals
-    }
     fn param(&self) -> &Vec<f64> {
         &self.iterates[0]
     }
-    fn cost(&self) -> f64 {
-        self.costs[0]
-    }
-    fn best_param(&self) -> &Vec<f64> {
-        &self.iterates[0]
-    }
-    fn best_cost(&self) -> f64 {
-        self.best_cost
-    }
-    fn best_iter(&self) -> u64 {
-        self.best_iter
-    }
-    fn best_cost_evals(&self) -> u64 {
-        self.best_cost_evals
+    fn current_record(&self) -> Option<basin::CurrentRef<'_, Vec<f64>>> {
+        (self.cost_evals > 0).then(|| {
+            basin::CurrentRef::new(&self.iterates[0], Some(self.costs[0]), None)
+        })
     }
     fn update_best(&mut self) {
         let curr = self.costs[0];
@@ -102,6 +89,9 @@ impl State for MultiStartState {
 }
 
 impl CountsMirror for MultiStartState {
+    fn cost_evals(&self) -> u64 {
+        self.cost_evals
+    }
     fn mirror(&mut self, delta: &EvalCounts) {
         // Derivative-free outer: fold every kind of work into `cost_evals`.
         self.cost_evals = delta.total_work();
@@ -176,7 +166,7 @@ where
             // the outer's mid-iter return; consume everything else.
             if result.report.code().is_failure() {
                 // Restore a non-empty `iterates` so `state.param()` /
-                // `state.cost()` don't panic on the outer reason read.
+                // `state.current_record().unwrap().cost.unwrap()` don't panic on the outer reason read.
                 state.iterates = new_iterates;
                 state.costs = new_costs;
                 if state.iterates.is_empty() {
@@ -191,7 +181,7 @@ where
                 )));
             }
 
-            new_costs.push(result.cost());
+            new_costs.push(result.current_record().unwrap().cost.unwrap());
             new_iterates.push(result.param().clone());
         }
 
@@ -243,9 +233,9 @@ fn inner_executor_polishes_starts_to_booth_optimum() {
         .unwrap();
 
     assert!(
-        result.cost() < 1e-6,
+        result.current_record().unwrap().cost.unwrap() < 1e-6,
         "expected near-zero cost at Booth optimum (1, 3), got {}",
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
     let best = result.param();
     assert!(

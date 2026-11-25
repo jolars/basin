@@ -85,7 +85,7 @@ macro_rules! backend_checks {
                 assert_eq!(result.state.param()[0], start);
                 assert_eq!(result.state.gradient().unwrap()[0], start);
                 assert_eq!(
-                    result.state.cost(),
+                    result.state.current_record().unwrap().cost.unwrap(),
                     OffsetQuadratic.cost(&($vector_new)(start)).unwrap()
                 );
             }

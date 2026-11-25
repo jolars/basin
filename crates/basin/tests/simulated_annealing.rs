@@ -141,8 +141,8 @@ fn classical_metropolis_accepts_downhill_and_probabilistic_uphill_moves() {
         .run()
         .unwrap();
     assert_eq!(*accepted.param(), 1);
-    assert_eq!(*accepted.best_param(), 0);
-    assert_eq!(accepted.best_cost(), 0.0);
+    assert_eq!(*accepted.selected_record().unwrap().param, 0);
+    assert_eq!(accepted.selected_record().unwrap().cost.unwrap(), 0.0);
 
     let reject_uphill = SimulatedAnnealing::new_with_rng(
         |x: &i32, _: f64, _: &mut ConstantRng| x + 1,
@@ -204,7 +204,10 @@ fn seeded_runs_are_bit_reproducible() {
     let first = run();
     let second = run();
     assert_eq!(first.param(), second.param());
-    assert_eq!(first.best_param(), second.best_param());
+    assert_eq!(
+        first.selected_record().unwrap().param,
+        second.selected_record().unwrap().param
+    );
     assert_eq!(first.state.accepted_moves(), second.state.accepted_moves());
 }
 
@@ -410,7 +413,10 @@ fn non_finite_costs_follow_the_documented_policy() {
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert_eq!(result.iter(), 3);
-    assert_eq!(result.cost(), f64::NEG_INFINITY);
+    assert_eq!(
+        result.current_record().unwrap().cost.unwrap(),
+        f64::NEG_INFINITY
+    );
     assert_eq!(result.cost_evals(), 4);
     assert_eq!(result.state.accepted_moves(), 1);
     assert_eq!(result.state.rejected_moves(), 2);
@@ -499,7 +505,7 @@ fn f32_scalar_and_non_numeric_parameter_round_trip() {
         .run()
         .unwrap();
     assert_eq!(result.param(), &Label::Right);
-    assert_eq!(result.cost(), 0.0_f32);
+    assert_eq!(result.current_record().unwrap().cost.unwrap(), 0.0_f32);
 }
 
 #[test]
@@ -537,7 +543,7 @@ fn continuous_neighbor_reaches_the_analytic_sphere_minimum() {
         .run()
         .unwrap();
 
-    assert!(result.best_cost() < 1e-15);
+    assert!(result.selected_record().unwrap().cost.unwrap() < 1e-15);
 }
 
 #[test]
@@ -595,8 +601,8 @@ fn discrete_permutation_neighbor_improves_a_tour() {
         .run()
         .unwrap();
 
-    assert!(result.best_cost() < initial_cost);
-    assert_eq!(result.best_param().len(), 5);
+    assert!(result.selected_record().unwrap().cost.unwrap() < initial_cost);
+    assert_eq!(result.selected_record().unwrap().param.len(), 5);
 }
 
 #[test]

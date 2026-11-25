@@ -22,8 +22,11 @@ fn main() {
         .run()
         .unwrap();
 
-    assert!(result.cost() < 1e-6);
-    let incumbent = result.incumbent_record().expect("expected an incumbent");
-    assert!(incumbent.cost <= result.cost());
+    assert!(result.current_record().unwrap().cost.unwrap() < 1e-6);
+    let incumbent = result.selected_record().expect("expected an incumbent");
+    assert!(
+        incumbent.cost.unwrap()
+            <= result.current_record().unwrap().cost.unwrap()
+    );
     assert!(incumbent.param.iter().all(|v| v.abs() < 1e-3));
 }

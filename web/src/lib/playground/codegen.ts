@@ -124,7 +124,7 @@ export type RunOutput = {
     done: boolean;
     /** `result.param()` Debug-formatted by Rust (e.g. `[0.99, 0.98]`). */
     paramDebug: string;
-    /** `result.cost()` Display-formatted by Rust. */
+    /** `result.current_record().unwrap().cost.unwrap()` Display-formatted by Rust. */
     costDisplay: string;
 };
 
@@ -156,7 +156,7 @@ export function generateSnippet(cfg: PlaygroundConfig): string {
         `    let result = Executor::new(Rosenbrock, solver, state)`,
         `        .max_iter(${rustInt(cfg.maxIter)}).run().unwrap();`,
         "",
-        `    println!("${buildOutputLine("{:?}", "{}")}", result.param(), result.cost());`,
+        `    println!("${buildOutputLine("{:?}", "{}")}", result.param(), result.current_record().unwrap().cost.unwrap());`,
         "}",
         "",
     ].join("\n");

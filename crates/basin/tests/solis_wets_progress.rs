@@ -1,5 +1,6 @@
 //! Solis-Wets keeps its adaptive model across exact resumes and local-search segments.
 
+use basin::CountsMirror as _;
 use basin::{
     CostFunction, Executor, MaLsCh, PointState, Problem, ResumableInner,
     SolisWets, Solver, State, TerminationCode,
@@ -75,9 +76,12 @@ fn fresh_run_resets_progress_and_rebuilds_model_for_new_dimension() {
         .max_iter(0)
         .run_with_solver()
         .unwrap();
-    assert_eq!(initialized.state.cost(), 48.0);
+    assert_eq!(
+        initialized.state.current_record().unwrap().cost.unwrap(),
+        48.0
+    );
     assert_eq!(initialized.state.iter(), 0);
-    assert_eq!(initialized.state.best_iter(), 0);
+    assert_eq!(initialized.state.selected_record().unwrap().iter, 0);
     assert_eq!(initialized.counts.total_work(), 1);
     assert_eq!(initialized.solver.step_size(), 0.4);
     assert_eq!(initialized.solver.bias().unwrap(), &[0.0; 3]);
@@ -132,8 +136,8 @@ fn rejected_trials_do_not_create_cost_or_step_convergence() {
         .unwrap();
         assert_eq!(result.report.code(), TerminationCode::MaxIter);
         assert_eq!(result.state.iter(), 5);
-        assert_eq!(result.state.cost(), 0.0);
-        assert_eq!(result.state.best_iter(), 0);
+        assert_eq!(result.state.current_record().unwrap().cost.unwrap(), 0.0);
+        assert_eq!(result.state.selected_record().unwrap().iter, 0);
         assert_eq!(result.state.best_counts().unwrap().cost_evals, 1);
         assert_eq!(result.state.counts().cost_evals, 11);
     }

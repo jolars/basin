@@ -1,3 +1,4 @@
+use basin::CountsMirror as _;
 use basin::{
     Backtracking, CostFunction, Executor, FirstOrderState, Gradient,
     GradientDescent, GradientState, NelderMead, PointState, Problem,
@@ -319,7 +320,7 @@ fn target_objective_fires_when_cost_drops_to_target() {
 
     assert_eq!(result.report.code(), TerminationCode::TargetCost);
     assert!(result.iter() > 0 && result.iter() < 1_000);
-    assert!(result.state.cost() <= 1e-3);
+    assert!(result.state.current_record().unwrap().cost.unwrap() <= 1e-3);
 }
 
 #[test]

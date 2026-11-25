@@ -16,6 +16,15 @@ impl<S: crate::State, So, O: Observe<S>> ObserveSolver<S, So>
         self.0.observe_iter(state);
     }
 
+    fn observe_selection(
+        &mut self,
+        state: &S,
+        _solver: &So,
+        change: crate::SelectionChange,
+    ) {
+        self.0.observe_selection(state, change);
+    }
+
     fn observe_final(
         &mut self,
         state: &S,
@@ -38,6 +47,15 @@ where
 
     fn observe_iter(&mut self, state: &S, solver: &So) {
         (self.0)(state, solver, ObservationEvent::Iter);
+    }
+
+    fn observe_selection(
+        &mut self,
+        state: &S,
+        solver: &So,
+        change: crate::SelectionChange,
+    ) {
+        (self.0)(state, solver, ObservationEvent::SelectionChanged(change));
     }
 
     fn observe_final(

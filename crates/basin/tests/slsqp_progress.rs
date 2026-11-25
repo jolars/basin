@@ -105,11 +105,11 @@ fn public_records_validate_dimensions_and_preserve_pending_selections() {
         ))
     );
     assert_eq!(state.best_counts(), Some(&counts));
-    assert_eq!(state.best_cost_evals(), 7);
+    assert_eq!(state.selected_record().unwrap().counts.cost_evals, 7);
     assert_eq!(state.best_gradient_evals(), 8);
     state.increment_iter();
     state.update_best();
-    assert_eq!(state.best_iter(), 1);
+    assert_eq!(state.selected_record().unwrap().iter, 1);
     state.reset();
     assert!(state.current().is_none());
     assert!(state.best().is_none());
@@ -191,7 +191,7 @@ fn fresh_slsqp_rebuilds_diagnostics_and_reevaluates_progress() {
         .max_iter(5)
         .run_with_solver()
         .unwrap();
-    assert!(used.state.best_cost() > 0.99);
+    assert!(used.state.selected_record().unwrap().cost.unwrap() > 0.99);
     assert_eq!(used.state.current().unwrap().2, &vec![2.0, 0.0]);
     let mut state = used.state;
     state
@@ -219,7 +219,7 @@ fn fresh_slsqp_rebuilds_diagnostics_and_reevaluates_progress() {
                 )
         ))
     );
-    assert_eq!(fresh.state.best_iter(), 0);
+    assert_eq!(fresh.state.selected_record().unwrap().iter, 0);
     assert_eq!(fresh.iter(), 0);
     assert_eq!(fresh.state.counts(), &fresh.counts);
     assert_eq!(fresh.state.cost_evals(), 1);

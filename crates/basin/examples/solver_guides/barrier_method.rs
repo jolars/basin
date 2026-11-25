@@ -45,5 +45,7 @@ fn main() {
     assert!(x[0] + x[1] < 2.0);
     assert!((x[0] - 1.0).abs() < 1e-4);
     assert!((x[1] - 1.0).abs() < 1e-4);
-    assert!((result.cost() - 2.0).abs() < 1e-4);
+    assert!(
+        (result.current_record().unwrap().cost.unwrap() - 2.0).abs() < 1e-4
+    );
 }

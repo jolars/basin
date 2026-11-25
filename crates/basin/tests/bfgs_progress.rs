@@ -44,21 +44,26 @@ fn executor_results_expose_checked_incumbents() {
     // The squared objective overflows while the gradient stays finite.
     let result = run(1e200).run().unwrap();
     assert_eq!(result.report.termination, expected_limit);
-    assert_eq!(result.cost(), f64::INFINITY);
-    assert!(result.incumbent_record().is_none());
+    assert_eq!(
+        result.current_record().unwrap().cost.unwrap(),
+        f64::INFINITY
+    );
+    assert!(result.selected_record().is_none());
 
     let result = run(1e200).run_with_solver().unwrap();
     assert_eq!(result.report.termination, expected_limit);
-    assert_eq!(result.cost(), f64::INFINITY);
-    assert!(result.incumbent_record().is_none());
+    assert_eq!(
+        result.current_record().unwrap().cost.unwrap(),
+        f64::INFINITY
+    );
+    assert!(result.selected_record().is_none());
 
     let result = run(2.0).run().unwrap();
     let with_solver = run(2.0).run_with_solver().unwrap();
-    for incumbent in [result.incumbent_record(), with_solver.incumbent_record()]
-    {
+    for incumbent in [result.selected_record(), with_solver.selected_record()] {
         let incumbent = incumbent.unwrap();
         assert_eq!(incumbent.param.as_slice(), &[2.0]);
-        assert_eq!(incumbent.cost, 4.0);
+        assert_eq!(incumbent.cost.unwrap(), 4.0);
         assert_eq!(incumbent.iter, 0);
         assert_eq!(incumbent.counts, &result.counts);
         assert_eq!(incumbent.counts.cost_evals, 1);
@@ -82,7 +87,7 @@ fn model_lives_on_solver_and_fresh_reuse_resets_dimension_and_progress() {
         .run_with_solver()
         .unwrap();
     assert_eq!(fresh.state.iter(), 0);
-    assert_eq!(fresh.state.best_iter(), 0);
+    assert_eq!(fresh.state.selected_record().unwrap().iter, 0);
     assert_eq!(fresh.counts.cost_evals, 1);
     assert_eq!(fresh.counts.gradient_evals, 1);
     assert_eq!(fresh.state.counts(), &fresh.counts);
@@ -154,7 +159,7 @@ fn explicit_matrix_and_line_search_remain_available_without_clone() {
         .max_iter(1)
         .run_with_solver()
         .unwrap();
-    assert_eq!(result.state.cost(), 0.0);
+    assert_eq!(result.state.current_record().unwrap().cost.unwrap(), 0.0);
     assert!(result.solver.inverse_hessian().is_some());
     let _checkpoint = result.into_checkpoint();
 }
@@ -184,7 +189,7 @@ fn named_seed_supports_nonclone_matrix_without_entry_access() {
         .max_iter(1)
         .run_with_solver()
         .unwrap();
-    assert_eq!(result.state.cost(), 0.0);
+    assert_eq!(result.state.current_record().unwrap().cost.unwrap(), 0.0);
     assert_eq!(
         result.solver.inverse_hessian().unwrap().0,
         DenseMatrix::from_row_slice(2, 2, &[0.5, 0.0, 0.0, 0.5]),
@@ -322,7 +327,7 @@ fn more_thuente_expands_rounded_away_bfgs_step() {
     .unwrap();
 
     assert_eq!(result.report.code(), TerminationCode::TargetCost);
-    assert!(result.cost() <= target);
+    assert!(result.current_record().unwrap().cost.unwrap() <= target);
 }
 
 #[test]
@@ -421,7 +426,7 @@ fn assert_single_bfgs_evaluation_per_point(
     .unwrap();
 
     assert_eq!(result.state.param(), &vec![0.0]);
-    assert_eq!(result.cost(), 0.0);
+    assert_eq!(result.current_record().unwrap().cost.unwrap(), 0.0);
     assert_eq!(*problem.cost_points.borrow(), [1.0, 0.0]);
     assert_eq!(*problem.gradient_points.borrow(), [1.0, 0.0]);
 }

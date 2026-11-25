@@ -9,8 +9,7 @@ use crate::core::termination::TerminationReport;
 /// Print a one-line progress report on every fire.
 ///
 /// Each line carries the iteration counter, the current
-/// [`cost`](State::cost), and the best cost so far
-/// ([`best_cost`](State::best_cost)); the final line adds the
+/// current and selected costs when available. The final line adds the
 /// [`TerminationReport`]. Output goes to **stderr** (`eprintln!`) so it never
 /// interleaves with data a caller might be writing to stdout.
 ///
@@ -66,22 +65,25 @@ impl Report {
         S: State,
         S::Float: Display,
     {
-        if self.prefix.is_empty() {
-            eprintln!(
-                "[{tag}] iter {} cost {} best {}",
-                state.iter(),
-                state.cost(),
-                state.best_cost(),
-            );
+        let cost = state.current_record().and_then(|record| record.cost);
+        let selected = state.selected_record().and_then(|record| record.cost);
+        let display = |value: Option<S::Float>| {
+            value.map_or_else(
+                || "unavailable".to_owned(),
+                |cost| cost.to_string(),
+            )
+        };
+        let prefix = if self.prefix.is_empty() {
+            tag.to_owned()
         } else {
-            eprintln!(
-                "{} [{tag}] iter {} cost {} best {}",
-                self.prefix,
-                state.iter(),
-                state.cost(),
-                state.best_cost(),
-            );
-        }
+            format!("{} {tag}", self.prefix)
+        };
+        eprintln!(
+            "[{prefix}] iter {} cost {} selected {}",
+            state.iter(),
+            display(cost),
+            display(selected)
+        );
     }
 }
 
@@ -96,6 +98,18 @@ where
 
     fn observe_iter(&mut self, state: &S) {
         self.line("iter", state);
+    }
+
+    fn observe_selection(&mut self, state: &S, change: crate::SelectionChange) {
+        self.line(
+            match change {
+                crate::SelectionChange::ObjectiveImproved => {
+                    "objective improved"
+                }
+                crate::SelectionChange::SolverSelected => "solver selected",
+            },
+            state,
+        );
     }
 
     fn observe_final(

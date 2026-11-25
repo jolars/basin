@@ -352,8 +352,15 @@ fn same_seed_is_reproducible_and_sphere_converges() {
     let (a, b) = (run(), run());
 
     assert_eq!(a.param(), b.param());
-    assert_eq!(a.cost(), b.cost());
-    assert!(a.cost() < 1e-8, "final cost was {}", a.cost());
+    assert_eq!(
+        a.current_record().unwrap().cost.unwrap(),
+        b.current_record().unwrap().cost.unwrap()
+    );
+    assert!(
+        a.current_record().unwrap().cost.unwrap() < 1e-8,
+        "final cost was {}",
+        a.current_record().unwrap().cost.unwrap()
+    );
     assert_eq!(
         a.cost_evals(),
         GlobalBestPso::<Vec<f64>>::default_swarm_size(3) as u64 * 301
@@ -374,7 +381,7 @@ fn f32_state_solver_and_objective_round_trip() {
     .run_with_solver()
     .unwrap();
 
-    assert!(result.cost() < 1e-5);
+    assert!(result.current_record().unwrap().cost.unwrap() < 1e-5);
 }
 
 struct Rastrigin {
@@ -420,7 +427,11 @@ fn converges_on_a_multimodal_rastrigin_problem() {
     .run_with_solver()
     .unwrap();
 
-    assert!(result.cost() < 1e-8, "final cost was {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 1e-8,
+        "final cost was {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
 }
 
 struct PartialNan {
@@ -477,7 +488,7 @@ fn a_finite_evaluation_replaces_a_nan_personal_best() {
     .unwrap();
 
     assert_eq!(result.solver.personal_best_costs(), &[0.0, 0.0625]);
-    assert_eq!(result.cost(), 0.0);
+    assert_eq!(result.current_record().unwrap().cost.unwrap(), 0.0);
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

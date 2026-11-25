@@ -42,9 +42,9 @@ fn converges_on_sphere_d10() {
     .unwrap();
 
     assert!(
-        result.cost() < 1e-6,
+        result.current_record().unwrap().cost.unwrap() < 1e-6,
         "Sphere(D=10) final cost {} should be < 1e-6 within 20k evals",
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }
 
@@ -68,9 +68,9 @@ fn converges_on_rastrigin_d10() {
     .unwrap();
 
     assert!(
-        result.cost() < 1.0,
+        result.current_record().unwrap().cost.unwrap() < 1.0,
         "Rastrigin(D=10) final cost {} should be < 1.0 within 50k evals",
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }
 
@@ -93,7 +93,10 @@ fn same_seed_yields_identical_trajectory() {
     .max_iter(10)
     .run()
     .unwrap();
-    assert_eq!(result_a.cost(), result_b.cost());
+    assert_eq!(
+        result_a.current_record().unwrap().cost.unwrap(),
+        result_b.current_record().unwrap().cost.unwrap()
+    );
     assert_eq!(result_a.param(), result_b.param());
 }
 
@@ -224,7 +227,7 @@ fn cost_evals_overshoot_is_bounded() {
     );
 }
 
-/// Population invariants: sorted ascending by cost so `state.cost()`
+/// Population invariants: sorted ascending by cost so `state.current_record().unwrap().cost.unwrap()`
 /// always reports the best.
 #[test]
 fn population_stays_sorted_ascending() {

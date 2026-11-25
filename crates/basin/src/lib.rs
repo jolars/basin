@@ -53,7 +53,7 @@
 //! .max_iter(1_000)
 //! .run()
 //! .unwrap();
-//! assert!(result.cost() < 1e-12);
+//! assert!(result.current_record().unwrap().cost.unwrap() < 1e-12);
 //! ```
 //!
 //! # Seeding the initial state
@@ -398,14 +398,15 @@ pub use crate::core::problem::{
 pub use crate::core::run_control::RunControl;
 pub use crate::core::solver::{Solver, SolverStep};
 pub use crate::core::state::{
-    AcceptanceState, ConstraintViolationState, CountsMirror,
+    AcceptanceState, ConstraintViolationState, CountsMirror, CurrentRef,
     EvaluatedGradientState, EvaluatedState, ExactResumeState, FirstOrderState,
-    GradientDimensionMismatch, GradientState, IncumbentRef, IncumbentState,
-    IntoInitialSimplex, MeshState, ObjectiveIncumbentState, PointState,
-    PopulationProgress, PopulationShapeError, PopulationState, ProposalState,
-    RawEvaluationState, RhoState, SelectedFirstOrderState, SelectedState,
-    SimplexProgress, SimplexShapeError, SimplexState, State, ViolationMeasure,
-    ViolationReport, ViolationScaling, ViolationTransformation,
+    GradientDimensionMismatch, GradientState, IntoInitialSimplex, MeshState,
+    ObjectiveIncumbentState, PointState, PopulationProgress,
+    PopulationShapeError, PopulationState, ProposalState, RawEvaluationState,
+    RhoState, SelectedFirstOrderState, SelectedRef, SelectedState,
+    SelectionChange, SimplexProgress, SimplexShapeError, SimplexState, State,
+    ViolationMeasure, ViolationReport, ViolationScaling,
+    ViolationTransformation,
 };
 pub use crate::core::termination::{
     ApplicationStop, BinaryValue, Convergence, ConvergenceCriterion,

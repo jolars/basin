@@ -121,7 +121,9 @@ fn check<V, M, F, L, S>(
         );
     }
     assert!(
-        (result.cost() - F::from_f64(reference_cost).unwrap()).abs()
+        (result.current_record().unwrap().cost.unwrap()
+            - F::from_f64(reference_cost).unwrap())
+        .abs()
             <= tolerance
     );
 }

@@ -1,5 +1,6 @@
 //! Basin-hopping owns adaptation and publishes point-only progress.
 
+use basin::CountsMirror as _;
 use basin::{
     BasinHopping, CostFunction, Executor, Gradient, GradientDescent,
     PointState, State,
@@ -62,7 +63,10 @@ fn fresh_run_resets_progress_and_restarts_random_walk() {
         .run_with_solver()
         .unwrap();
     assert_eq!(restarted.state.param(), rebuilt.state.param());
-    assert_eq!(restarted.state.cost(), rebuilt.state.cost());
+    assert_eq!(
+        restarted.state.current_record().unwrap().cost.unwrap(),
+        rebuilt.state.current_record().unwrap().cost.unwrap()
+    );
     assert_eq!(restarted.counts, rebuilt.counts);
 }
 
@@ -197,7 +201,7 @@ fn rejected_hops_do_not_trigger_change_convergence() {
     .unwrap();
     assert_eq!(result.report.code(), basin::TerminationCode::MaxIter);
     assert_eq!(result.state.iter(), 5);
-    assert_eq!(result.state.best_iter(), 0);
+    assert_eq!(result.state.selected_record().unwrap().iter, 0);
     assert_eq!(result.state.best_counts().unwrap().cost_evals, 3);
     assert_eq!(result.state.counts().cost_evals, 18);
     assert_eq!(result.state.counts().gradient_evals, 18);

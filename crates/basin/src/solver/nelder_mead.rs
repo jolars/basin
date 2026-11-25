@@ -130,7 +130,7 @@ use crate::core::state::SimplexProgress;
 /// .max_iter(1_000)
 /// .run()
 /// .unwrap();
-/// assert!(result.cost() < 1e-6);
+/// assert!(result.current_record().unwrap().cost.unwrap() < 1e-6);
 /// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NelderMead<V, F: Scalar = f64, Mode = Unbounded> {

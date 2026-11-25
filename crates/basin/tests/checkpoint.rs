@@ -35,32 +35,8 @@ impl State for TestState {
         self.iter += 1;
     }
 
-    fn cost_evals(&self) -> u64 {
-        self.cost_evals
-    }
-
     fn param(&self) -> &Self::Param {
         &self.param
-    }
-
-    fn cost(&self) -> Self::Float {
-        0.0
-    }
-
-    fn best_param(&self) -> &Self::Param {
-        &self.param
-    }
-
-    fn best_cost(&self) -> Self::Float {
-        0.0
-    }
-
-    fn best_iter(&self) -> u64 {
-        0
-    }
-
-    fn best_cost_evals(&self) -> u64 {
-        0
     }
 
     fn update_best(&mut self) {}
@@ -69,6 +45,9 @@ impl State for TestState {
 }
 
 impl CountsMirror for TestState {
+    fn cost_evals(&self) -> u64 {
+        self.cost_evals
+    }
     fn mirror(&mut self, counts: &EvalCounts) {
         self.cost_evals = counts.cost_evals;
     }
@@ -287,7 +266,7 @@ mod file {
             .unwrap();
         let bytes = std::fs::read(&path).unwrap();
         assert_eq!(&bytes[..8], b"BASINEX\0");
-        assert_eq!(&bytes[8..12], &4_u32.to_le_bytes());
+        assert_eq!(&bytes[8..12], &5_u32.to_le_bytes());
         let header_len =
             u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as usize;
         let (header, rest): ((String, String, String), _) =
@@ -313,7 +292,7 @@ mod file {
         let path = checkpoint_path("unsupported-format");
         write_valid_checkpoint(&path);
         let original = std::fs::read(&path).unwrap();
-        for version in [0_u32, 1, 2, 3, 5, u32::MAX] {
+        for version in [0_u32, 1, 2, 3, 4, u32::MAX] {
             let mut bytes = original.clone();
             bytes[8..12].copy_from_slice(&version.to_le_bytes());
             std::fs::write(&path, &bytes).unwrap();

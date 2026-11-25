@@ -58,7 +58,7 @@ fn main() {
     println!(
         "  basin/nalg  {:>5} iters  cost={:.3e}  a={:.6}  b={:.6}  ({} residual-evals, {:?})",
         r.iter(),
-        r.cost(),
+        r.current_record().unwrap().cost.unwrap(),
         r.param()[0],
         r.param()[1],
         r.state.counts().residual_evals,
@@ -76,7 +76,7 @@ fn main() {
     println!(
         "  basin/faer  {:>5} iters  cost={:.3e}  a={:.6}  b={:.6}  ({} residual-evals, {:?})",
         r.iter(),
-        r.cost(),
+        r.current_record().unwrap().cost.unwrap(),
         r.param()[0],
         r.param()[1],
         r.state.counts().residual_evals,
@@ -112,7 +112,7 @@ fn main() {
     println!(
         "  basin/nalg  {:>5} iters  cost={:.3e}  x=[{:.2e}, {:.2e}, {:.2e}, {:.2e}]  ({} residual-evals, {:?})",
         r.iter(),
-        r.cost(),
+        r.current_record().unwrap().cost.unwrap(),
         p[0],
         p[1],
         p[2],
@@ -133,7 +133,7 @@ fn main() {
     println!(
         "  basin/faer  {:>5} iters  cost={:.3e}  x=[{:.2e}, {:.2e}, {:.2e}, {:.2e}]  ({} residual-evals, {:?})",
         r.iter(),
-        r.cost(),
+        r.current_record().unwrap().cost.unwrap(),
         p[0],
         p[1],
         p[2],
@@ -174,7 +174,7 @@ fn main() {
         println!(
             "  basin/nalg  {:>5} iters  cost={:.3e}  ‖x−1‖∞={:.2e}  ({} residual-evals, {:?})",
             r.iter(),
-            r.cost(),
+            r.current_record().unwrap().cost.unwrap(),
             r.param()
                 .iter()
                 .map(|&v| (v - 1.0).abs())
@@ -194,7 +194,7 @@ fn main() {
         println!(
             "  basin/faer  {:>5} iters  cost={:.3e}  ‖x−1‖∞={:.2e}  ({} residual-evals, {:?})",
             r.iter(),
-            r.cost(),
+            r.current_record().unwrap().cost.unwrap(),
             (0..n)
                 .map(|i| (r.param()[i] - 1.0).abs())
                 .fold(0.0, f64::max),
@@ -231,7 +231,7 @@ fn main() {
         println!(
             "  basin/nalg  {:>5} iters  cost={:.6e}  ‖x‖∞={:.2e}  ({} residual-evals, {:?})",
             r.iter(),
-            r.cost(),
+            r.current_record().unwrap().cost.unwrap(),
             r.param().iter().map(|&v| v.abs()).fold(0.0, f64::max),
             r.state.counts().residual_evals,
             r.report.code()
@@ -247,7 +247,7 @@ fn main() {
         println!(
             "  basin/faer  {:>5} iters  cost={:.6e}  ‖x‖∞={:.2e}  ({} residual-evals, {:?})",
             r.iter(),
-            r.cost(),
+            r.current_record().unwrap().cost.unwrap(),
             (0..n).map(|i| r.param()[i].abs()).fold(0.0, f64::max),
             r.state.counts().residual_evals,
             r.report.code()

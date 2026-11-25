@@ -182,12 +182,13 @@ fn check_iterate(
             diff
         );
     }
-    let f_diff = (state.cost() - expected.f).abs();
+    let f_diff =
+        (state.current_record().unwrap().cost.unwrap() - expected.f).abs();
     assert!(
         f_diff <= f_tol * expected.f.abs().max(1.0),
         "iter {} f: basin = {:.17e}, fortran = {:.17e}, diff = {:.3e}",
         k,
-        state.cost(),
+        state.current_record().unwrap().cost.unwrap(),
         expected.f,
         f_diff
     );

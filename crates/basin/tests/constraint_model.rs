@@ -66,7 +66,12 @@ where
     .run()
     .unwrap();
     let tolerance = F::from_f64(128.0).unwrap() * F::epsilon().sqrt();
-    assert!((result.best_cost() + F::from_f64(0.5).unwrap()).abs() < tolerance);
+    assert!(
+        (result.selected_record().unwrap().cost.unwrap()
+            + F::from_f64(0.5).unwrap())
+        .abs()
+            < tolerance
+    );
     assert_eq!(result.counts.cost_evals, result.counts.residual_evals);
 }
 #[test]
@@ -228,7 +233,7 @@ fn valid_infinities_and_fixed_coordinates_are_accepted() {
         .max_iter(100)
         .run()
         .unwrap();
-    assert!((result.best_param()[0] - 1.0).abs() < 1e-6);
+    assert!((result.selected_record().unwrap().param[0] - 1.0).abs() < 1e-6);
 }
 
 #[derive(Debug, PartialEq, Eq)]

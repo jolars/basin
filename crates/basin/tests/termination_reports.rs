@@ -291,7 +291,7 @@ fn completion_controls_iteration_observation_and_final_report_is_sticky() {
             panic!("expected stop")
         };
         assert_eq!(report.iteration, u64::from(completed));
-        assert_eq!(stepper.state().best_param(), &vec![1.]);
+        assert_eq!(stepper.state().selected_record().unwrap().param, &vec![1.]);
         assert_eq!(stepper.counts().cost_evals, 2);
         assert_eq!(
             &*events.borrow(),
@@ -465,6 +465,35 @@ impl Solver<Fit, PointState<Vec<f64>>> for PartialThenComplete {
 
 #[test]
 fn continuing_partial_steps_publish_work_without_iteration_observation() {
+    type SelectionEntry = (Option<basin::SelectionChange>, u64, u64);
+
+    #[derive(Clone, Default)]
+    struct SelectionSink(Rc<RefCell<Vec<SelectionEntry>>>);
+
+    impl<So> basin::CheckpointSink<So, PointState<Vec<f64>>> for SelectionSink {
+        fn save(
+            &mut self,
+            _: &So,
+            _: &PointState<Vec<f64>>,
+            _: &basin::EvalCounts,
+        ) {
+            panic!("executor supplies selection metadata to the sink");
+        }
+
+        fn save_with_selection(
+            &mut self,
+            _: &So,
+            state: &PointState<Vec<f64>>,
+            counts: &basin::EvalCounts,
+            change: Option<basin::SelectionChange>,
+        ) {
+            self.0
+                .borrow_mut()
+                .push((change, state.iter(), counts.cost_evals));
+        }
+    }
+
+    let sink = SelectionSink::default();
     let iterations = Rc::new(RefCell::new(Vec::new()));
     let output = iterations.clone();
     let mut stepper = Executor::new(
@@ -480,19 +509,31 @@ fn continuing_partial_steps_publish_work_without_iteration_observation() {
         },
         ObserverMode::Always,
     )
+    .checkpoint_with(sink.clone(), ObserverMode::SelectionChanged)
     .max_iter(1)
     .into_stepper()
     .unwrap();
     assert_eq!(stepper.step().unwrap(), StepOutcome::Continue);
     assert_eq!(stepper.state().param(), &vec![2.]);
-    assert_eq!(stepper.state().best_param(), &vec![2.]);
+    assert_eq!(stepper.state().selected_record().unwrap().param, &vec![2.]);
     assert_eq!(stepper.state().iter(), 0);
     assert_eq!(stepper.counts().cost_evals, 2);
     assert!(iterations.borrow().is_empty());
+    let improved = Some(basin::SelectionChange::ObjectiveImproved);
+    assert_eq!(*sink.0.borrow(), [(improved, 0, 1), (improved, 0, 2)]);
     assert_eq!(stepper.step().unwrap(), StepOutcome::Continue);
-    assert_eq!(stepper.state().best_param(), &vec![1.]);
+    assert_eq!(stepper.state().selected_record().unwrap().param, &vec![1.]);
     assert_eq!(stepper.state().iter(), 1);
     assert_eq!(stepper.counts().cost_evals, 3);
     assert_eq!(*iterations.borrow(), vec![1]);
     assert!(matches!(stepper.step().unwrap(), StepOutcome::Stopped(_)));
+    assert_eq!(
+        *sink.0.borrow(),
+        [
+            (improved, 0, 1),
+            (improved, 0, 2),
+            (improved, 1, 3),
+            (None, 1, 3)
+        ]
+    );
 }

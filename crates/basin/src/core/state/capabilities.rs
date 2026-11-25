@@ -6,7 +6,6 @@
 //! evaluated rejection with infinite cost is still an available record.
 
 use super::{State, ViolationReport};
-use crate::core::math::Scalar;
 use crate::core::problem::EvalCounts;
 
 /// Checked access to an evaluated current point and its matching cost.
@@ -22,12 +21,12 @@ use crate::core::problem::EvalCounts;
 /// returned values actually match.
 pub trait EvaluatedState: State {
     /// Borrow the complete current record's point and cost, if available.
-    fn current_record(&self) -> Option<(&Self::Param, Self::Float)>;
+    fn evaluated_record(&self) -> Option<(&Self::Param, Self::Float)>;
 }
 
 /// Checked access to a complete current point, cost, and gradient.
 ///
-/// Availability must agree with [`EvaluatedState::current_record`]. A
+/// Availability must agree with [`EvaluatedState::evaluated_record`]. A
 /// numerical check requiring a gradient must handle an unavailable record
 /// explicitly, rather than silently disabling itself. Attach publication
 /// validation to reject incomplete records before checks or observers run.
@@ -62,75 +61,11 @@ pub trait RawEvaluationState: State {
     fn raw_counts(&self) -> &EvalCounts;
 }
 
-/// A borrowed incumbent and the boundary that published its selection.
+/// Checked constraint-violation reports for current and selected points.
 ///
-/// Counts include all charged work before publication, rather than only work
-/// through the evaluation that found the point. This view owns no parameter
-/// storage and does not change a state's serialized representation.
-///
-/// External states construct this view with [`Self::new`]. Fields remain public
-/// for reading, moving, and assignment; destructuring must include `..`. Future
-/// optional metadata must default to behavior compatible with this constructor.
-#[derive(Debug)]
-#[non_exhaustive]
-pub struct IncumbentRef<'a, V, F: Scalar = f64> {
-    /// Selected point, matching `cost`.
-    pub param: &'a V,
-    /// Objective at the selected point.
-    pub cost: F,
-    /// Completed-iteration count at the selection's publication boundary.
-    pub iter: u64,
-    /// Raw counts at the selection's publication boundary.
-    pub counts: &'a EvalCounts,
-}
-
-impl<'a, V, F: Scalar> IncumbentRef<'a, V, F> {
-    /// Borrow a selected record and its publication metadata.
-    ///
-    /// Keep `param` and `cost` from the same selected record, and supply the
-    /// iteration and counts from the boundary that published the selection.
-    pub fn new(
-        param: &'a V,
-        cost: F,
-        iter: u64,
-        counts: &'a EvalCounts,
-    ) -> Self {
-        Self {
-            param,
-            cost,
-            iter,
-            counts,
-        }
-    }
-}
-
-/// Checked access to a solver's selected incumbent and publication metadata.
-///
-/// This capability does not imply objective ordering. A feasibility-first
-/// solver may select a higher-cost point. Its selection changes must be
-/// explicit events: observing or republishing the same selection must retain
-/// its original iteration and counts, including across mid-step publication.
-/// Iteration numbers alone do not identify a selection change.
-///
-/// Return `None` when no incumbent exists. When available, the record must
-/// agree with the state's existing best-point, best-cost, and best-iteration
-/// readers. Preserve the selected point separately if the current point or
-/// population can change independently.
-pub trait IncumbentState: State<Float: Scalar> {
-    /// Borrow the selected record, if one has been established.
-    fn incumbent_record(
-        &self,
-    ) -> Option<IncumbentRef<'_, Self::Param, Self::Float>>;
-}
-
-/// Checked constraint-violation reports for current and incumbent records.
-///
-/// Availability must agree with [`EvaluatedState::current_record`] and
-/// [`IncumbentState::incumbent_record`], respectively. Each report belongs to
-/// the same point as its corresponding record. Preserve an incumbent's full
-/// report when current progress changes, including a pending selection before
-/// publication. Reports describe evaluated values, including NaN and infinity;
-/// `None` must not stand in for an evaluated zero or a non-finite value.
+/// Each report belongs to the same point as its corresponding progress
+/// record. It can be available before the objective is evaluated.
+/// Reports preserve evaluated values, including NaN and infinity.
 ///
 /// Reading reports must not evaluate the problem or change state. The report's
 /// runtime metadata describes its measure, scaling, and transformation;
@@ -145,11 +80,17 @@ pub trait IncumbentState: State<Float: Scalar> {
 /// fn report<S: ConstraintViolationState>(_: &S) {}
 /// report(&PointState::new(vec![1.0]));
 /// ```
-pub trait ConstraintViolationState: EvaluatedState + IncumbentState {
-    /// Borrow the report matching the current evaluated point, or `None`.
+pub trait ConstraintViolationState: State {
+    /// Borrow the report matching the current point, or `None`.
     fn current_violation(&self) -> Option<&ViolationReport<Self::Float>>;
 
-    /// Borrow the report matching the selected incumbent, or `None`.
+    /// Borrow the report matching the selected point, including before its
+    /// objective has been evaluated.
+    fn selected_violation(&self) -> Option<&ViolationReport<Self::Float>> {
+        self.selected_record()?.violation
+    }
+
+    /// Borrow the report matching the selected point, or `None`.
     fn incumbent_violation(&self) -> Option<&ViolationReport<Self::Float>>;
 }
 
@@ -165,4 +106,4 @@ pub trait ConstraintViolationState: EvaluatedState + IncumbentState {
 ///
 /// Best tracking covers published candidates, not every problem evaluation.
 /// There is deliberately no blanket implementation for [`State`].
-pub trait ObjectiveIncumbentState: IncumbentState {}
+pub trait ObjectiveIncumbentState: State {}

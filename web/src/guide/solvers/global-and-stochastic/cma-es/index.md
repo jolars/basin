@@ -62,7 +62,7 @@ generation, then draws the next population from the updated distribution.
 
 The current result reports the distribution mean and its evaluated cost.
 The historical best considers both the sampled members and the mean, so
-The selected point from `incumbent_record()` can differ from `param()`. Neither sequence of mean costs
+The selected point from `selected_record()` can differ from `param()`. Neither sequence of mean costs
 nor the best member of each new generation must improve monotonically.
 
 ## Example

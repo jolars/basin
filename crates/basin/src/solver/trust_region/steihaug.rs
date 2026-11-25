@@ -742,9 +742,12 @@ mod tests {
         .target_objective(1e-6)
         .run_with_solver()
         .unwrap();
-        assert!(result.cost() <= 1e-6);
+        assert!(result.current_record().unwrap().cost.unwrap() <= 1e-6);
         assert!(result.counts.hessian_evals <= 4);
         let cost = Quadratic.cost(result.param()).unwrap();
-        assert!((cost - result.cost()).abs() < 1e-15);
+        assert!(
+            (cost - result.current_record().unwrap().cost.unwrap()).abs()
+                < 1e-15
+        );
     }
 }

@@ -25,9 +25,9 @@ fn converges_on_sphere_d10() {
     .unwrap();
 
     assert!(
-        result.cost() < 1e-6,
+        result.current_record().unwrap().cost.unwrap() < 1e-6,
         "Sphere(D=10) faer cost {} should be < 1e-6 within 20k evals",
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }
 
@@ -46,9 +46,9 @@ fn converges_on_rastrigin_d10() {
     .unwrap();
 
     assert!(
-        result.cost() < 1.0,
+        result.current_record().unwrap().cost.unwrap() < 1.0,
         "Rastrigin(D=10) faer cost {} should be < 1.0 within 50k evals",
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }
 

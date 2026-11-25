@@ -95,7 +95,10 @@ fn dogleg_uses_the_robust_model_and_reports_the_robust_objective() {
     let converged = make().max_iter(20).run().unwrap();
     assert_eq!(converged.report.code(), TerminationCode::GradientTolerance);
     assert!((converged.param()[0] - 2.0 / 3.0).abs() < 1e-8);
-    assert!((converged.cost() - 52.0 / 3.0).abs() < 1e-12);
+    assert!(
+        (converged.current_record().unwrap().cost.unwrap() - 52.0 / 3.0).abs()
+            < 1e-12
+    );
 }
 
 macro_rules! location_solver {
@@ -112,7 +115,11 @@ macro_rules! location_solver {
             .unwrap();
             assert_eq!(result.report.code(), TerminationCode::SolverConverged);
             assert!((result.param()[0] - 1.0 / 3.0).abs() < 1e-7);
-            assert!((result.cost() - 28.0 / 3.0).abs() < 1e-12);
+            assert!(
+                (result.current_record().unwrap().cost.unwrap() - 28.0 / 3.0)
+                    .abs()
+                    < 1e-12
+            );
         }
     };
 }
@@ -161,7 +168,9 @@ fn bounds_and_fixed_coordinates_use_the_robust_objective() {
         assert_eq!(result.report.code(), TerminationCode::SolverConverged);
         assert!((result.param()[0] - 0.2).abs() < 1e-6);
         assert!(
-            (result.cost() - problem.cost(result.param()).unwrap()).abs()
+            (result.current_record().unwrap().cost.unwrap()
+                - problem.cost(result.param()).unwrap())
+            .abs()
                 < 1e-12
         );
         if fixed {
@@ -256,7 +265,10 @@ fn checkpoint_and_fresh_reuse_preserve_the_objective_and_counts() {
         .run_with_solver()
         .unwrap();
         assert_eq!(reference.param(), resumed.param());
-        assert_eq!(reference.cost(), resumed.cost());
+        assert_eq!(
+            reference.current_record().unwrap().cost.unwrap(),
+            resumed.current_record().unwrap().cost.unwrap()
+        );
         assert_eq!(reference.counts, resumed.counts);
         let fresh = Executor::new(
             objective(),
@@ -267,7 +279,10 @@ fn checkpoint_and_fresh_reuse_preserve_the_objective_and_counts() {
         .run_with_solver()
         .unwrap();
         assert_eq!(reference.param(), fresh.param());
-        assert_eq!(reference.cost(), fresh.cost());
+        assert_eq!(
+            reference.current_record().unwrap().cost.unwrap(),
+            fresh.current_record().unwrap().cost.unwrap()
+        );
         assert_eq!(reference.counts, fresh.counts);
     }
     check(GaussNewton::new, basin::SamplingDomain::new);
@@ -361,7 +376,7 @@ fn rejected_trials_reuse_the_model_and_gauss_newton_fails_cleanly() {
         .run_with_solver()
         .unwrap();
         assert_eq!(result.param(), &vec![0.0]);
-        assert_eq!(result.cost(), 0.5);
+        assert_eq!(result.current_record().unwrap().cost.unwrap(), 0.5);
         assert_eq!(result.counts.residual_evals, 3);
         assert_eq!(result.counts.jacobian_evals, 1);
     }
@@ -371,7 +386,10 @@ fn rejected_trials_reuse_the_model_and_gauss_newton_fails_cleanly() {
             .run()
             .unwrap();
     assert_eq!(result.report.code(), TerminationCode::SolverFailed);
-    assert_eq!(result.cost(), f64::INFINITY);
+    assert_eq!(
+        result.current_record().unwrap().cost.unwrap(),
+        f64::INFINITY
+    );
 }
 
 struct CustomLoss;
@@ -427,6 +445,9 @@ fn squared_loss_preserves_quadratic_iterations_and_counts() {
     .run_with_solver()
     .unwrap();
     assert_eq!(ordinary.param(), robust.param());
-    assert_eq!(ordinary.cost(), robust.cost());
+    assert_eq!(
+        ordinary.current_record().unwrap().cost.unwrap(),
+        robust.current_record().unwrap().cost.unwrap()
+    );
     assert_eq!(ordinary.counts, robust.counts);
 }

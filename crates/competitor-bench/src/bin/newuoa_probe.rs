@@ -108,7 +108,7 @@ fn solve(case: Case, n: usize, library: &str, target: Option<f64>) -> Outcome {
         let result = executor.run().unwrap();
         Outcome {
             x: result.param().clone(),
-            f: result.cost(),
+            f: result.current_record().unwrap().cost.unwrap(),
             nf: result.cost_evals(),
             iterations: Some(result.iter()),
             status: format!("{:?}", result.report.code()),

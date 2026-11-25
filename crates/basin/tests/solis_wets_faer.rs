@@ -26,7 +26,10 @@ fn same_seed_yields_identical_trajectory() {
     };
     let result_a = run();
     let result_b = run();
-    assert_eq!(result_a.cost(), result_b.cost());
+    assert_eq!(
+        result_a.current_record().unwrap().cost.unwrap(),
+        result_b.current_record().unwrap().cost.unwrap()
+    );
     assert_eq!(result_a.param(), result_b.param());
 }
 
@@ -43,9 +46,9 @@ fn converges_on_sphere_5d_via_rho_tolerance() {
 
     assert_eq!(result.report.code(), TerminationCode::RhoTolerance);
     assert!(
-        result.cost() < 1e-6,
+        result.current_record().unwrap().cost.unwrap() < 1e-6,
         "sphere 5-D cost = {} (expected < 1e-6)",
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }
 

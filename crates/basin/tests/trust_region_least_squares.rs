@@ -397,7 +397,10 @@ fn keeps_cost_finite_when_the_squared_norm_overflows() {
     assert_eq!(result.report.code(), TerminationCode::GradientTolerance);
     assert_eq!(result.report.iteration, 1);
     assert_eq!(result.param(), &[0.0]);
-    assert!((result.cost() / 2e38 - 1.0).abs() <= f32::EPSILON);
+    assert!(
+        (result.current_record().unwrap().cost.unwrap() / 2e38 - 1.0).abs()
+            <= f32::EPSILON
+    );
 }
 
 struct GramOverflowAtRoot;
@@ -700,7 +703,7 @@ fn rank_deficient_dogleg_uses_the_cauchy_step() {
     .unwrap();
     assert_eq!(dogleg.state, cauchy.state);
     assert_eq!(dogleg.param(), &[1.0, 3.0]);
-    assert_eq!(dogleg.cost(), 0.0);
+    assert_eq!(dogleg.current_record().unwrap().cost.unwrap(), 0.0);
 }
 
 enum TrialIssue {

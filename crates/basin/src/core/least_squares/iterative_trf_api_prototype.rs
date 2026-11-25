@@ -911,7 +911,7 @@ fn dense_trf_still_accepts_problems_without_product_capabilities() {
     .max_iter(0)
     .run()
     .unwrap();
-    near(result.cost(), 2.125);
+    near(result.current_record().unwrap().cost.unwrap(), 2.125);
     let result = Executor::from_start(
         RobustLeastSquares::new(fixture(), SoftL1Loss).with_scale(0.7),
         TrustRegionReflective::new(),
@@ -924,7 +924,7 @@ fn dense_trf_still_accepts_problems_without_product_capabilities() {
         .iter()
         .map(|r| SoftL1Loss.evaluate_scaled(*r, 0.7).value)
         .sum();
-    near(result.cost(), expected);
+    near(result.current_record().unwrap().cost.unwrap(), expected);
 }
 
 #[test]

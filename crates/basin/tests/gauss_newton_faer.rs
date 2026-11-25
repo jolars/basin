@@ -16,7 +16,11 @@ fn gauss_newton_converges_on_rosenbrock_residuals() {
             .unwrap();
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
-    assert!(result.cost() < 1e-20, "cost = {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 1e-20,
+        "cost = {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-9,
         "x[0] = {}",

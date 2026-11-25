@@ -116,7 +116,7 @@ fn main() {
     workloads::verify_hs71(&hs71);
     eprintln!(
         "hs71: f={:.17e}, x={:?}, iterations={}, counts={:?}, status={:?}",
-        hs71.state.cost(),
+        hs71.state.current_record().unwrap().cost.unwrap(),
         hs71.state.param(),
         hs71.state.iter(),
         hs71.state.raw_counts(),

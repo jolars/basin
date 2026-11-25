@@ -39,5 +39,5 @@ fn main() {
         .run()
         .unwrap();
 
-    assert!(result.cost() < 1e-16);
+    assert!(result.current_record().unwrap().cost.unwrap() < 1e-16);
 }

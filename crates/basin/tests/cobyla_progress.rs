@@ -1,5 +1,6 @@
 //! COBYLA's selected progress, callback accounting, and model lifetime.
 
+use basin::CountsMirror as _;
 use basin::{
     Cobyla, CostFunction, Executor, Problem, SelectedState, Solver, State,
 };
@@ -77,7 +78,7 @@ fn selection_preserves_feasibility_and_stamps_only_changes() {
     .max_iter(100)
     .into_stepper()
     .unwrap();
-    let initial_cost = stepper.state().cost();
+    let initial_cost = stepper.state().current_record().unwrap().cost.unwrap();
     let mut unchanged = 0;
     while stepper.finished().is_none() {
         let previous = stepper.state().clone();
@@ -92,15 +93,20 @@ fn selection_preserves_feasibility_and_stamps_only_changes() {
         assert_eq!(state.counts().residual_evals, state.counts().cost_evals);
         if state.current() == previous.current() {
             unchanged += 1;
-            assert_eq!(state.best_iter(), previous.best_iter());
+            assert_eq!(
+                state.selected_record().unwrap().iter,
+                previous.selected_record().unwrap().iter
+            );
             assert_eq!(state.best_counts(), previous.best_counts());
         } else {
-            assert_eq!(state.best_iter(), state.iter());
+            assert_eq!(state.selected_record().unwrap().iter, state.iter());
             assert_eq!(state.best_counts(), Some(state.counts()));
         }
     }
     assert!(unchanged > 0);
-    assert!(stepper.state().cost() > initial_cost);
+    assert!(
+        stepper.state().current_record().unwrap().cost.unwrap() > initial_cost
+    );
     assert!(stepper.state().current().unwrap().2.value < 1e-8);
 }
 

@@ -2,8 +2,8 @@
 
 use super::progress::Incumbent;
 use super::{
-    CountsMirror, EvaluatedState, IncumbentRef, IncumbentState,
-    ObjectiveIncumbentState, PopulationState, RawEvaluationState, State,
+    CountsMirror, EvaluatedState, ObjectiveIncumbentState, PopulationState,
+    RawEvaluationState, State,
 };
 use crate::core::math::{Scalar, VectorLen};
 use crate::core::problem::EvalCounts;
@@ -374,6 +374,19 @@ fn best_index<F: Scalar>(costs: &[F]) -> Option<usize> {
 }
 
 impl<V: Clone, F: Scalar> State for PopulationProgress<V, F> {
+    fn current_record(&self) -> Option<crate::CurrentRef<'_, V, F>> {
+        let (param, cost) = self.evaluated_record()?;
+        Some(crate::CurrentRef::new(param, Some(cost), None))
+    }
+    fn selected_record(&self) -> Option<crate::SelectedRef<'_, V, F>> {
+        let best = self.best.as_ref()?;
+        Some(crate::SelectedRef::new(
+            crate::CurrentRef::new(&best.param, Some(best.cost), None),
+            best.iter,
+            &best.counts,
+        ))
+    }
+
     type Param = V;
     type Float = F;
     fn iter(&self) -> u64 {
@@ -382,40 +395,19 @@ impl<V: Clone, F: Scalar> State for PopulationProgress<V, F> {
     fn increment_iter(&mut self) {
         self.iter += 1;
     }
-    fn cost_evals(&self) -> u64 {
-        self.counts.cost_evals
-    }
     fn param(&self) -> &V {
         self.current()
             .map(|record| record.0)
             .or_else(|| self.seed())
             .expect("population has no members")
     }
-    fn cost(&self) -> F {
-        self.current().expect("population has not been evaluated").1
-    }
-    fn best_param(&self) -> &V {
-        &self
-            .best
-            .as_ref()
-            .expect("no incumbent has been selected")
-            .param
-    }
-    fn best_cost(&self) -> F {
-        self.best.as_ref().map_or(F::infinity(), |best| best.cost)
-    }
-    fn best_iter(&self) -> u64 {
-        self.best.as_ref().map_or(0, |best| best.iter)
-    }
-    fn best_cost_evals(&self) -> u64 {
-        self.best.as_ref().map_or(0, |best| best.counts.cost_evals)
-    }
     fn update_best(&mut self) {
-        let Some(current) = &self.current else {
-            return;
-        };
+        self.publish_selection();
+    }
+    fn publish_selection(&mut self) -> Option<crate::SelectionChange> {
+        let current = self.current.as_ref()?;
         let index = match current {
-            Current::Seed(_) => return,
+            Current::Seed(_) => return None,
             Current::Member(index) => *index,
             Current::Representative(_, _) => best_index(&self.costs)
                 .expect("representative requires evaluated members"),
@@ -430,19 +422,17 @@ impl<V: Clone, F: Scalar> State for PopulationProgress<V, F> {
                 cost = *representative_cost;
             }
         }
-        Incumbent::consider(
-            &mut self.best,
-            point,
-            cost,
-            self.iter,
-            self.counts,
-        );
+        Incumbent::consider(&mut self.best, point, cost, self.iter, self.counts)
+            .then_some(crate::SelectionChange::ObjectiveImproved)
     }
     fn reset_best(&mut self) {
         self.best = None;
     }
 }
 impl<V: Clone, F: Scalar> CountsMirror for PopulationProgress<V, F> {
+    fn cost_evals(&self) -> u64 {
+        self.counts.cost_evals
+    }
     fn mirror(&mut self, counts: &EvalCounts) {
         self.counts = *counts;
     }
@@ -456,23 +446,13 @@ impl<V: Clone, F: Scalar> PopulationState for PopulationProgress<V, F> {
     }
 }
 impl<V: Clone, F: Scalar> EvaluatedState for PopulationProgress<V, F> {
-    fn current_record(&self) -> Option<(&V, F)> {
+    fn evaluated_record(&self) -> Option<(&V, F)> {
         self.current()
     }
 }
 impl<V: Clone, F: Scalar> RawEvaluationState for PopulationProgress<V, F> {
     fn raw_counts(&self) -> &EvalCounts {
         &self.counts
-    }
-}
-impl<V: Clone, F: Scalar> IncumbentState for PopulationProgress<V, F> {
-    fn incumbent_record(&self) -> Option<IncumbentRef<'_, V, F>> {
-        self.best.as_ref().map(|best| IncumbentRef {
-            param: &best.param,
-            cost: best.cost,
-            iter: best.iter,
-            counts: &best.counts,
-        })
     }
 }
 impl<V: Clone, F: Scalar> ObjectiveIncumbentState for PopulationProgress<V, F> {}

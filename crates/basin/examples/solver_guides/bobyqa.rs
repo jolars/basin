@@ -48,11 +48,11 @@ fn main() {
         result.report.termination,
         Termination::Converged(_)
     ));
-    let incumbent = result.incumbent_record().expect("expected an incumbent");
+    let incumbent = result.selected_record().expect("expected an incumbent");
     let x = incumbent.param;
     assert!((-2.0..=1.0).contains(&x[0]));
     assert!((-3.0..=2.0).contains(&x[1]));
     assert!((x[0] - 1.0).abs() < 1e-6);
     assert!((x[1] + 1.0).abs() < 1e-6);
-    assert!((incumbent.cost - 1.0).abs() < 1e-10);
+    assert!((incumbent.cost.unwrap() - 1.0).abs() < 1e-10);
 }

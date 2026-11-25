@@ -297,7 +297,10 @@ fn wolfe_reuse_preserves_tnc_result_and_removes_duplicate_evaluations() {
         .run()
         .unwrap();
         assert_eq!(retained.param(), legacy.param());
-        assert_eq!(retained.cost(), legacy.cost());
+        assert_eq!(
+            retained.current_record().unwrap().cost.unwrap(),
+            legacy.current_record().unwrap().cost.unwrap()
+        );
         assert_eq!(retained.report, legacy.report);
         assert!(retained.counts.cost_evals < legacy.counts.cost_evals);
         assert_eq!(
@@ -330,7 +333,10 @@ fn exact_continuation_preserves_curvature_and_accounting() {
         .run()
         .unwrap();
     assert_eq!(resumed.param(), whole.param());
-    assert_eq!(resumed.cost(), whole.cost());
+    assert_eq!(
+        resumed.current_record().unwrap().cost.unwrap(),
+        whole.current_record().unwrap().cost.unwrap()
+    );
     assert_eq!(resumed.counts, whole.counts);
 }
 
@@ -380,7 +386,10 @@ fn fused_search_preserves_tnc_trajectory_and_exact_continuation() {
         .run()
         .unwrap();
     assert_eq!(complete.param(), separate.param());
-    assert_eq!(complete.cost(), separate.cost());
+    assert_eq!(
+        complete.current_record().unwrap().cost.unwrap(),
+        separate.current_record().unwrap().cost.unwrap()
+    );
     assert_eq!(complete.report, separate.report);
     let split = Executor::from_start(p(), solver(), vec![0.5; 3])
         .max_iter(2)
@@ -505,7 +514,11 @@ fn nonlinear_rosenbrock_converges_in_physical_coordinates() {
         .max_iter(1000)
         .run()
         .unwrap();
-    assert!(r.cost() < 1e-10, "{:?}", r.report);
+    assert!(
+        r.current_record().unwrap().cost.unwrap() < 1e-10,
+        "{:?}",
+        r.report
+    );
 }
 
 #[test]

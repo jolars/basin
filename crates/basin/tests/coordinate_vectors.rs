@@ -101,7 +101,10 @@ fn gbnm_accepts_coordinate_only_vectors() {
     .max_iter(100)
     .run()
     .unwrap();
-    assert!((result.best_param().get_scalar(0) - 0.25).abs() < 1e-4);
+    assert!(
+        (result.selected_record().unwrap().param.get_scalar(0) - 0.25).abs()
+            < 1e-4
+    );
 }
 
 #[test]

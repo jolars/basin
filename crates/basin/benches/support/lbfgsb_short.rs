@@ -5,6 +5,7 @@
 //! analytic solutions below provide independent checks without a native solver.
 
 use super::Vector;
+use basin::CountsMirror as _;
 use basin::{
     CostFunction, Executor, FirstOrderState, Gradient, GradientState, Lbfgsb,
     OptimizationResult, Solver, State, Stepper, TerminationCode,
@@ -182,7 +183,7 @@ impl<V: Vector> Short<V> {
             } else {
                 0.0
             };
-            let value = state.cost();
+            let value = state.current_record().unwrap().cost.unwrap();
             let old = previous.replace(value);
             if custom_stop
                 && state.iter() > 0
@@ -243,7 +244,11 @@ impl<V: Vector> Short<V> {
             self.lower.as_slice(),
             self.upper.as_slice(),
         );
-        (result.param().clone(), result.cost(), pg)
+        (
+            result.param().clone(),
+            result.current_record().unwrap().cost.unwrap(),
+            pg,
+        )
     }
 
     pub fn verify(&self, result: &OptimizationResult<FirstOrderState<V>>) {
@@ -270,7 +275,7 @@ impl<V: Vector> Short<V> {
         let mut gradient = vec![0.0; target.len()];
         let value = self.evaluate(result.param().as_slice(), &mut gradient);
         assert!((value - objective).abs() <= 1e-12);
-        assert_eq!(value, result.cost());
+        assert_eq!(value, result.current_record().unwrap().cost.unwrap());
         assert_eq!(gradient, result.state.gradient().unwrap().as_slice());
         assert!(
             projected_gradient(
@@ -281,9 +286,12 @@ impl<V: Vector> Short<V> {
             ) <= 1e-10
         );
         let incumbent =
-            result.incumbent_record().expect("expected an incumbent");
+            result.selected_record().expect("expected an incumbent");
         assert_eq!(incumbent.param.as_slice(), result.param().as_slice());
-        assert_eq!(incumbent.cost, result.cost());
+        assert_eq!(
+            incumbent.cost.unwrap(),
+            result.current_record().unwrap().cost.unwrap()
+        );
     }
 }
 

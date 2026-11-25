@@ -16,7 +16,7 @@
 //! aggregate, or a category-specific [`crate::EvaluationKind`] budget.
 //!
 //! All implement [`EvaluatedState`], [`RawEvaluationState`], and
-//! [`IncumbentState`]. [`PointState`], [`FirstOrderState`], and [`ProposalState`] implement
+//! [`State::selected_record`]. [`PointState`], [`FirstOrderState`], and [`ProposalState`] implement
 //! [`ObjectiveIncumbentState`]; [`FirstOrderState`] additionally implements
 //! [`EvaluatedGradientState`], and [`ProposalState`] implements [`AcceptanceState`]. These unsealed traits
 //! also support external states. Use `require_evaluated_state` to validate
@@ -97,22 +97,21 @@
 //!     .max_evaluations(basin::EvaluationKind::Gradient, 100)
 //!     .target_objective(0.01)
 //!     .max_iter(3).run().unwrap();
-//! assert_eq!(result.state.cost(), 0.0625);
+//! assert_eq!(result.state.current_record().unwrap().cost.unwrap(), 0.0625);
 //! assert_eq!(result.state.counts().gradient_evals, 4);
 //! ```
 
 use super::{
     AcceptanceState, ConstraintViolationState, CountsMirror,
-    EvaluatedGradientState, EvaluatedState, GradientState, IncumbentRef,
-    IncumbentState, ObjectiveIncumbentState, RawEvaluationState, State,
-    ViolationReport,
+    EvaluatedGradientState, EvaluatedState, GradientState,
+    ObjectiveIncumbentState, RawEvaluationState, State, ViolationReport,
 };
 use crate::core::math::{Scalar, VectorLen};
 use crate::core::problem::EvalCounts;
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-pub(super) struct Incumbent<V, F: Scalar> {
+pub(super) struct Incumbent<V, F> {
     pub(super) param: V,
     pub(super) cost: F,
     pub(super) iter: u64,
@@ -126,7 +125,7 @@ impl<V: Clone, F: Scalar> Incumbent<V, F> {
         cost: F,
         iter: u64,
         counts: EvalCounts,
-    ) {
+    ) -> bool {
         if !cost.is_nan()
             && cost != F::infinity()
             && best.as_ref().is_none_or(|best| cost < best.cost)
@@ -144,13 +143,15 @@ impl<V: Clone, F: Scalar> Incumbent<V, F> {
                     counts,
                 });
             }
+            return true;
         }
+        false
     }
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-struct Progress<V, D, F: Scalar> {
+struct Progress<V, D, F> {
     param: V,
     // Cost and derivatives become available together, including after reset.
     evaluated: Option<(F, D)>,
@@ -159,7 +160,7 @@ struct Progress<V, D, F: Scalar> {
     counts: EvalCounts,
 }
 
-impl<V, D, F: Scalar> Progress<V, D, F> {
+impl<V, D, F> Progress<V, D, F> {
     fn new(param: V) -> Self {
         Self {
             param,
@@ -184,9 +185,9 @@ impl<V, D, F: Scalar> Progress<V, D, F> {
 }
 
 impl<V: Clone, D, F: Scalar> Progress<V, D, F> {
-    fn update_best(&mut self) {
+    fn update_best(&mut self) -> bool {
         let Some((cost, _)) = self.evaluated.as_ref() else {
-            return;
+            return false;
         };
         Incumbent::consider(
             &mut self.best,
@@ -194,7 +195,7 @@ impl<V: Clone, D, F: Scalar> Progress<V, D, F> {
             *cost,
             self.iter,
             self.counts,
-        );
+        )
     }
 }
 
@@ -208,12 +209,10 @@ impl<V: Clone, D, F: Scalar> Progress<V, D, F> {
 /// not itself signal an unbounded problem.
 ///
 /// Before evaluation, [`current`](Self::current) and [`best`](Self::best)
-/// return `None`. [`State::cost`] panics without a current record, and
-/// [`State::best_param`] panics without an incumbent, including when all
-/// published costs are NaN or positive infinity. [`State::best_cost`] returns
-/// positive infinity in that case, and best iteration/evaluation readers
-/// return zero. These objective-only semantics are unsuitable for solvers
-/// whose incumbent selection prioritizes constraint feasibility.
+/// return `None`. If every published cost is NaN or positive infinity, the
+/// selected record remains unavailable. Use [`SelectedState`] for a selection
+/// policy that prioritizes constraint feasibility.
+///
 ///
 /// See the [module documentation](self) for initialization and continuation.
 /// With `serde`, serialization is available when `V` and `F` support it.
@@ -363,7 +362,7 @@ impl<V: Clone, F: Scalar> AcceptanceState for ProposalState<V, F> {
 }
 
 impl<V: Clone, F: Scalar> EvaluatedState for ProposalState<V, F> {
-    fn current_record(&self) -> Option<(&V, F)> {
+    fn evaluated_record(&self) -> Option<(&V, F)> {
         self.current()
     }
 }
@@ -557,6 +556,20 @@ macro_rules! impl_progress_state {
         }
 
         impl<V: Clone, F: Scalar> State for $state<V, F> {
+            fn current_record(&self) -> Option<crate::CurrentRef<'_, V, F>> {
+                let (param, cost) = self.evaluated_record()?;
+                Some(crate::CurrentRef::new(param, Some(cost), None))
+            }
+
+            fn selected_record(&self) -> Option<crate::SelectedRef<'_, V, F>> {
+                let best = self.progress.best.as_ref()?;
+                Some(crate::SelectedRef::new(
+                    crate::CurrentRef::new(&best.param, Some(best.cost), None),
+                    best.iter,
+                    &best.counts,
+                ))
+            }
+
             type Param = V;
             type Float = F;
 
@@ -566,45 +579,17 @@ macro_rules! impl_progress_state {
             fn increment_iter(&mut self) {
                 self.progress.iter += 1;
             }
-            fn cost_evals(&self) -> u64 {
-                $cost_work(&self.progress.counts)
-            }
             fn param(&self) -> &V {
                 &self.progress.param
             }
-            fn cost(&self) -> F {
-                self.progress
-                    .evaluated
-                    .as_ref()
-                    .expect("current point has not been evaluated")
-                    .0
-            }
-            fn best_param(&self) -> &V {
-                &self
-                    .progress
-                    .best
-                    .as_ref()
-                    .expect("no incumbent has been selected")
-                    .param
-            }
-            fn best_cost(&self) -> F {
-                self.progress
-                    .best
-                    .as_ref()
-                    .map_or(F::infinity(), |best| best.cost)
-            }
-            fn best_iter(&self) -> u64 {
-                self.progress.best.as_ref().map_or(0, |best| best.iter)
-            }
-            fn best_cost_evals(&self) -> u64 {
-                self.progress
-                    .best
-                    .as_ref()
-                    .map_or(0, |best| $cost_work(&best.counts))
-            }
             fn update_best(&mut self) {
-                self.progress.update_best();
+                self.publish_selection();
+            }
+
+            fn publish_selection(&mut self) -> Option<crate::SelectionChange> {
+                let improved = self.progress.update_best();
                 $(self.$publish();)?
+                improved.then_some(crate::SelectionChange::ObjectiveImproved)
             }
             fn reset_best(&mut self) {
                 self.progress.best = None;
@@ -612,6 +597,9 @@ macro_rules! impl_progress_state {
         }
 
         impl<V: Clone, F: Scalar> CountsMirror for $state<V, F> {
+            fn cost_evals(&self) -> u64 {
+                $cost_work(&self.progress.counts)
+            }
             fn mirror(&mut self, counts: &EvalCounts) {
                 self.progress.counts = *counts;
             }
@@ -623,17 +611,6 @@ macro_rules! impl_progress_state {
             }
         }
 
-        impl<V: Clone, F: Scalar> IncumbentState for $state<V, F> {
-            fn incumbent_record(&self) -> Option<IncumbentRef<'_, V, F>> {
-                let best = self.progress.best.as_ref()?;
-                Some(IncumbentRef {
-                    param: &best.param,
-                    cost: best.cost,
-                    iter: best.iter,
-                    counts: &best.counts,
-                })
-            }
-        }
 
         impl<V: Clone, F: Scalar> ObjectiveIncumbentState for $state<V, F> {}
     };
@@ -654,13 +631,13 @@ impl_progress_state!(
 );
 
 impl<V: Clone, F: Scalar> EvaluatedState for PointState<V, F> {
-    fn current_record(&self) -> Option<(&V, F)> {
+    fn evaluated_record(&self) -> Option<(&V, F)> {
         self.current()
     }
 }
 
 impl<V: Clone, F: Scalar> EvaluatedState for FirstOrderState<V, F> {
-    fn current_record(&self) -> Option<(&V, F)> {
+    fn evaluated_record(&self) -> Option<(&V, F)> {
         self.current().map(|(param, cost, _)| (param, cost))
     }
 }
@@ -738,7 +715,7 @@ impl<V: Clone, F: Scalar> GradientState for FirstOrderState<V, F> {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct SelectedState<V, F: Scalar = f64> {
-    progress: Box<Progress<V, ViolationReport<F>, F>>,
+    progress: Box<Progress<V, ViolationReport<F>, Option<F>>>,
     selected_violation: Option<ViolationReport<F>>,
     pending: Option<Selection<V, F>>,
 }
@@ -748,7 +725,7 @@ enum Selection<V, F: Scalar> {
     Current,
     // Most publications select the current record. Keep the uncommon snapshot
     // out of line so it does not enlarge every state passed through the solver.
-    Snapshot(Box<(V, F, ViolationReport<F>)>),
+    Snapshot(Box<(V, Option<F>, ViolationReport<F>)>),
 }
 
 #[cfg(all(test, feature = "serde"))]
@@ -758,7 +735,7 @@ fn boxed_selections_preserve_the_inline_wire_format() {
     #[serde(rename = "Selection")]
     enum InlineSelection {
         Current,
-        Snapshot(Vec<f64>, f64, ViolationReport),
+        Snapshot(Vec<f64>, Option<f64>, ViolationReport),
     }
 
     let current = Selection::<Vec<f64>, f64>::Current;
@@ -771,9 +748,12 @@ fn boxed_selections_preserve_the_inline_wire_format() {
         super::ViolationMeasure::Custom("weighted residuals".into()),
     ] {
         let report = ViolationReport::new(0.5, measure);
-        let snapshot =
-            Selection::Snapshot(Box::new((vec![2.0], 4.0, report.clone())));
-        let inline = InlineSelection::Snapshot(vec![2.0], 4.0, report);
+        let snapshot = Selection::Snapshot(Box::new((
+            vec![2.0],
+            Some(4.0),
+            report.clone(),
+        )));
+        let inline = InlineSelection::Snapshot(vec![2.0], Some(4.0), report);
         let bytes = postcard::to_allocvec(&inline).unwrap();
         assert_eq!(postcard::to_allocvec(&snapshot).unwrap(), bytes);
         let restored: Selection<Vec<f64>, f64> =
@@ -822,7 +802,7 @@ impl<'de, V: serde::Deserialize<'de>, F: Scalar + serde::Deserialize<'de>>
         #[serde(rename = "Selection")]
         enum Stored<V, F: Scalar> {
             Current,
-            Snapshot(V, F, ViolationReport<F>),
+            Snapshot(V, Option<F>, ViolationReport<F>),
         }
         Ok(match Stored::<V, F>::deserialize(deserializer)? {
             Stored::Current => Self::Current,
@@ -854,7 +834,7 @@ impl<V, F: Scalar> SelectedState<V, F> {
     /// Current evaluated point, objective, and violation report, or `None` for a seed.
     pub fn current(&self) -> Option<(&V, F, &ViolationReport<F>)> {
         let (cost, violation) = self.progress.evaluated.as_ref()?;
-        Some((&self.progress.param, *cost, violation))
+        Some((&self.progress.param, (*cost)?, violation))
     }
 
     /// Publish a complete current record without changing the selection.
@@ -864,6 +844,24 @@ impl<V, F: Scalar> SelectedState<V, F> {
         &mut self,
         param: V,
         cost: F,
+        violation: ViolationReport<F>,
+    ) {
+        self.replace_record(param, Some(cost), violation);
+    }
+
+    /// Publish a point and violation before evaluating its objective.
+    pub fn replace_without_cost(
+        &mut self,
+        param: V,
+        violation: ViolationReport<F>,
+    ) {
+        self.replace_record(param, None, violation);
+    }
+
+    fn replace_record(
+        &mut self,
+        param: V,
+        cost: Option<F>,
         violation: ViolationReport<F>,
     ) {
         let previous = std::mem::replace(&mut self.progress.param, param);
@@ -881,7 +879,7 @@ impl<V, F: Scalar> SelectedState<V, F> {
         let best = self.progress.best.as_ref()?;
         Some((
             &best.param,
-            best.cost,
+            best.cost?,
             self.selected_violation.as_ref().unwrap(),
         ))
     }
@@ -910,11 +908,11 @@ impl<V: Clone, F: Scalar> SelectedState<V, F> {
             self.replace(param.clone(), cost, violation);
         } else {
             self.progress.param.clone_from(param);
-            self.progress.evaluated = Some((cost, violation));
+            self.progress.evaluated = Some((Some(cost), violation));
         }
     }
 
-    /// Record an explicit selection event for the current evaluated record.
+    /// Record an explicit selection event for the current point and report.
     ///
     /// Returns `false` for an unevaluated seed without changing anything.
     /// Otherwise, the next executor publication replaces the incumbent and
@@ -931,6 +929,27 @@ impl<V: Clone, F: Scalar> SelectedState<V, F> {
 }
 
 impl<V: Clone, F: Scalar> State for SelectedState<V, F> {
+    fn current_record(&self) -> Option<crate::CurrentRef<'_, V, F>> {
+        let (cost, violation) = self.progress.evaluated.as_ref()?;
+        Some(crate::CurrentRef::new(
+            &self.progress.param,
+            *cost,
+            Some(violation),
+        ))
+    }
+    fn selected_record(&self) -> Option<crate::SelectedRef<'_, V, F>> {
+        let best = self.progress.best.as_ref()?;
+        Some(crate::SelectedRef::new(
+            crate::CurrentRef::new(
+                &best.param,
+                best.cost,
+                self.selected_violation.as_ref(),
+            ),
+            best.iter,
+            &best.counts,
+        ))
+    }
+
     type Param = V;
     type Float = F;
     fn iter(&self) -> u64 {
@@ -939,43 +958,14 @@ impl<V: Clone, F: Scalar> State for SelectedState<V, F> {
     fn increment_iter(&mut self) {
         self.progress.iter += 1;
     }
-    fn cost_evals(&self) -> u64 {
-        self.progress.counts.cost_evals
-    }
     fn param(&self) -> &V {
         &self.progress.param
     }
-    fn cost(&self) -> F {
-        self.progress
-            .evaluated
-            .as_ref()
-            .expect("current point has not been evaluated")
-            .0
-    }
-    fn best_param(&self) -> &V {
-        &self
-            .progress
-            .best
-            .as_ref()
-            .expect("no incumbent has been selected")
-            .param
-    }
-    fn best_cost(&self) -> F {
-        self.progress
-            .best
-            .as_ref()
-            .map_or(F::infinity(), |best| best.cost)
-    }
-    fn best_iter(&self) -> u64 {
-        self.progress.best.as_ref().map_or(0, |best| best.iter)
-    }
-    fn best_cost_evals(&self) -> u64 {
-        self.best_counts().map_or(0, |counts| counts.cost_evals)
-    }
     fn update_best(&mut self) {
-        let Some(selection) = self.pending.take() else {
-            return;
-        };
+        self.publish_selection();
+    }
+    fn publish_selection(&mut self) -> Option<crate::SelectionChange> {
+        let selection = self.pending.take()?;
         let (param, cost, violation) = match &selection {
             Selection::Current => {
                 let (cost, violation) =
@@ -1000,6 +990,7 @@ impl<V: Clone, F: Scalar> State for SelectedState<V, F> {
             });
         }
         self.selected_violation = Some(violation.clone());
+        Some(crate::SelectionChange::SolverSelected)
     }
     fn reset_best(&mut self) {
         self.progress.best = None;
@@ -1008,6 +999,9 @@ impl<V: Clone, F: Scalar> State for SelectedState<V, F> {
     }
 }
 impl<V: Clone, F: Scalar> CountsMirror for SelectedState<V, F> {
+    fn cost_evals(&self) -> u64 {
+        self.progress.counts.cost_evals
+    }
     fn mirror(&mut self, counts: &EvalCounts) {
         self.progress.counts = *counts;
     }
@@ -1018,19 +1012,8 @@ impl<V: Clone, F: Scalar> RawEvaluationState for SelectedState<V, F> {
     }
 }
 impl<V: Clone, F: Scalar> EvaluatedState for SelectedState<V, F> {
-    fn current_record(&self) -> Option<(&V, F)> {
+    fn evaluated_record(&self) -> Option<(&V, F)> {
         self.current().map(|(x, cost, _)| (x, cost))
-    }
-}
-impl<V: Clone, F: Scalar> IncumbentState for SelectedState<V, F> {
-    fn incumbent_record(&self) -> Option<IncumbentRef<'_, V, F>> {
-        let best = self.progress.best.as_ref()?;
-        Some(IncumbentRef {
-            param: &best.param,
-            cost: best.cost,
-            iter: best.iter,
-            counts: &best.counts,
-        })
     }
 }
 

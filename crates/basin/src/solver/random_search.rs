@@ -113,7 +113,7 @@ use crate::solver::cma_es::sort_population_ascending;
 /// .max_iter(500)
 /// .run()
 /// .unwrap();
-/// assert!(result.cost() < 1.0);
+/// assert!(result.current_record().unwrap().cost.unwrap() < 1.0);
 /// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RandomSearch {
@@ -192,7 +192,7 @@ where
         mut state: PopulationProgress<V, F>,
     ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
         // Snapshot the elite before resampling; this is what makes
-        // state.cost() monotone.
+        // state.current_record().unwrap().cost.unwrap() monotone.
         let elite_x = state.candidates[0].clone();
         let elite_c = state.costs[0];
 

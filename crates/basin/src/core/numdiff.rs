@@ -183,7 +183,7 @@ impl Method {
 /// .max_iter(1_000)
 /// .run()
 /// .unwrap();
-/// assert!(result.cost() < 1e-10);
+/// assert!(result.current_record().unwrap().cost.unwrap() < 1e-10);
 /// ```
 #[derive(Debug, Clone, Copy)]
 pub struct FiniteDiff<P, const SQUARE: bool = false, F: Scalar = f64, J = ()> {
@@ -251,7 +251,7 @@ impl<P, F: Scalar, J> FiniteDiff<P, false, F, J> {
     ///     TrustRegion::with_subproblem(Dogleg),
     ///     SVector::<f64, 2>::new(1.0, 2.0),
     /// ).max_iter(20).run().unwrap();
-    /// assert!(result.cost() < 1e-12);
+    /// assert!(result.current_record().unwrap().cost.unwrap() < 1e-12);
     /// # }
     /// ```
     pub fn with_square_hessian(self) -> FiniteDiff<P, true, F, J>
@@ -2387,7 +2387,11 @@ mod tests {
         .max_iter(100)
         .run()
         .unwrap();
-        assert!(result.cost() < 1e-10, "cost = {}", result.cost());
+        assert!(
+            result.current_record().unwrap().cost.unwrap() < 1e-10,
+            "cost = {}",
+            result.current_record().unwrap().cost.unwrap()
+        );
     }
 
     #[cfg(feature = "problems")]

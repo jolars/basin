@@ -72,7 +72,7 @@ macro_rules! precision {
                                     assert!(record.report.is_some());
                                 }
                             }
-                            outputs.push((result.state.param().clone(), result.state.cost(), result.report,
+                            outputs.push((result.state.param().clone(), result.state.current_record().unwrap().cost.unwrap(), result.report,
                                           result.counts, callback_points(&calls)));
                         }
                         assert_eq!(outputs[0], outputs[1]);

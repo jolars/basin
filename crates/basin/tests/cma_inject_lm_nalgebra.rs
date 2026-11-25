@@ -173,7 +173,7 @@ fn consumes_lm_no_progress_and_accounts_for_each_fresh_inner_run() {
     assert_eq!(result.report.code(), TerminationCode::MaxIter);
     assert_eq!(result.state.iter(), 4);
     assert!(result.param().iter().all(|value| value.is_finite()));
-    assert!(result.cost().is_finite());
+    assert!(result.current_record().unwrap().cost.unwrap().is_finite());
     // Each of the four inner runs exits after its first unchanged trial,
     // despite having a budget of fifty iterations.
     assert_eq!(result.state.counts().residual_evals, 8);

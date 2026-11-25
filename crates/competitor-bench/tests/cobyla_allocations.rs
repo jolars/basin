@@ -200,8 +200,14 @@ fn public_quadratic_iterations_reuse_trial_buffers() {
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert_eq!(result.cost_evals(), 61);
     assert_eq!(counts.callbacks.get(), 61);
-    assert!((result.best_cost() - 0.124_999_997_365_822).abs() < 1e-13);
     assert!(
-        result.best_param().iter().sum::<f64>() - 1.5 <= f64::EPSILON.sqrt()
+        (result.selected_record().unwrap().cost.unwrap()
+            - 0.124_999_997_365_822)
+            .abs()
+            < 1e-13
+    );
+    assert!(
+        result.selected_record().unwrap().param.iter().sum::<f64>() - 1.5
+            <= f64::EPSILON.sqrt()
     );
 }

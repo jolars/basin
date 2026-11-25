@@ -49,9 +49,9 @@ fn converges_on_ackley_d3_with_nm_inner() {
     .unwrap();
 
     assert!(
-        result.cost() < 0.1,
+        result.current_record().unwrap().cost.unwrap() < 0.1,
         "Ackley(D=3) cost {} (expected < 0.1)",
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }
 
@@ -149,7 +149,10 @@ fn same_seed_yields_identical_trajectory() {
     .run()
     .unwrap();
 
-    assert_eq!(result_a.cost(), result_b.cost());
+    assert_eq!(
+        result_a.current_record().unwrap().cost.unwrap(),
+        result_b.current_record().unwrap().cost.unwrap()
+    );
     assert_eq!(result_a.param(), result_b.param());
 }
 

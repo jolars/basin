@@ -37,7 +37,7 @@ fn fresh_simplex_run_resets_iteration_and_reevaluates_vertices() {
         .run_with_solver()
         .unwrap();
     assert_eq!(fresh.state.iter(), 0);
-    assert_eq!(fresh.state.best_iter(), 0);
+    assert_eq!(fresh.state.selected_record().unwrap().iter, 0);
     assert_eq!(fresh.counts.cost_evals, 3);
 }
 
@@ -99,7 +99,7 @@ fn reused_solver_rebuilds_scratch_and_adaptive_parameters_for_new_dimension() {
 
 #[test]
 fn simplex_replacements_preserve_historical_pairs_and_raw_metadata() {
-    use basin::{CountsMirror, EvalCounts, IncumbentState, SimplexProgress};
+    use basin::{CountsMirror, EvalCounts, SimplexProgress};
     let mut state = SimplexProgress::from_simplex(vec![vec![1.0], vec![2.0]]);
     assert!(state.current().is_none());
     assert!(state.evaluated_vertices().is_none());
@@ -139,7 +139,7 @@ fn simplex_replacements_preserve_historical_pairs_and_raw_metadata() {
     coherent(&state);
     assert_eq!(state.current(), Some((&vec![3.0], 9.0)));
     assert_eq!(state.best(), Some((&vec![1.0], 1.0)));
-    assert_eq!(state.incumbent_record().unwrap().iter, 0);
+    assert_eq!(state.selected_record().unwrap().iter, 0);
     assert_eq!(state.best_counts(), Some(&counts));
     state
         .replace(vec![vec![-1.0], vec![0.0]], vec![1.0, 0.0])
@@ -149,11 +149,11 @@ fn simplex_replacements_preserve_historical_pairs_and_raw_metadata() {
     state.mirror(&final_counts);
     // This boundary models a clean mid-step stop, with no completed iteration.
     state.update_best();
-    assert_eq!(state.best_iter(), 1);
+    assert_eq!(state.selected_record().unwrap().iter, 1);
     assert_eq!(state.best_counts(), Some(&final_counts));
     state.increment_iter();
     state.update_best();
-    assert_eq!(state.best_iter(), 1);
+    assert_eq!(state.selected_record().unwrap().iter, 1);
     state.reset();
     assert!(state.best().is_none());
     assert!(state.current().is_none());
@@ -205,7 +205,7 @@ fn nonfinite_costs_and_ties_have_stable_selection_semantics() {
     state.update_best();
     assert_eq!(state.current(), Some((&vec![-1.0], 1.0)));
     assert_eq!(state.best(), Some((&vec![1.0], 1.0)));
-    assert_eq!(state.best_iter(), 0);
+    assert_eq!(state.selected_record().unwrap().iter, 0);
     state
         .replace(vec![vec![0.0], vec![1.0]], vec![f64::NEG_INFINITY, 1.0])
         .unwrap();
@@ -360,6 +360,6 @@ fn external_simplex_updates_preserve_all_categories_at_midstep_publication() {
     });
     assert_eq!(result.state.counts(), &result.counts);
     assert_eq!(result.state.best_counts(), Some(&result.counts));
-    assert_eq!(result.state.cost_evals(), 5);
-    assert_eq!(result.state.best_iter(), 0);
+    assert_eq!(result.state.counts().cost_evals, 5);
+    assert_eq!(result.state.selected_record().unwrap().iter, 0);
 }

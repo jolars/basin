@@ -72,7 +72,10 @@ fn example_bounded_cma_inject_lm_on_booth_corner() {
     eprintln!("constrained min:   (1, 1)  (corner of the box)");
     eprintln!();
     eprintln!("final iterate:    ({:.10}, {:.10})", p[0], p[1]);
-    eprintln!("final cost:       {:e}", result.cost());
+    eprintln!(
+        "final cost:       {:e}",
+        result.current_record().unwrap().cost.unwrap()
+    );
     eprintln!("outer iters:      {}", result.iter());
     eprintln!(
         "cost evals:       {}  (rolls up LM residual + Jacobian calls)",

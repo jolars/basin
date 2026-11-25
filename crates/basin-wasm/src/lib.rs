@@ -410,15 +410,23 @@ impl Inner {
 
     fn cost(&self) -> f64 {
         match self {
-            Self::GdConstant(s) => s.state().cost(),
-            Self::GdBacktracking(s) => s.state().cost(),
-            Self::NelderMead(s) => s.state().cost(),
-            Self::Mads(s) => s.state().cost(),
-            Self::Lbfgs(s) => s.state().cost(),
-            Self::CmaEs(s) => s.state().cost(),
-            Self::De(s) => s.state().cost(),
-            Self::RandomSearch(s) => s.state().cost(),
-            Self::Ssga(s) => s.state().cost(),
+            Self::GdConstant(s) => {
+                s.state().current_record().unwrap().cost.unwrap()
+            }
+            Self::GdBacktracking(s) => {
+                s.state().current_record().unwrap().cost.unwrap()
+            }
+            Self::NelderMead(s) => {
+                s.state().current_record().unwrap().cost.unwrap()
+            }
+            Self::Mads(s) => s.state().current_record().unwrap().cost.unwrap(),
+            Self::Lbfgs(s) => s.state().current_record().unwrap().cost.unwrap(),
+            Self::CmaEs(s) => s.state().current_record().unwrap().cost.unwrap(),
+            Self::De(s) => s.state().current_record().unwrap().cost.unwrap(),
+            Self::RandomSearch(s) => {
+                s.state().current_record().unwrap().cost.unwrap()
+            }
+            Self::Ssga(s) => s.state().current_record().unwrap().cost.unwrap(),
         }
     }
 

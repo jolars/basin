@@ -79,7 +79,7 @@ pub struct Bounded;
 ///     .max_cost_evals(500)
 ///     .run()
 ///     .unwrap();
-/// let incumbent = result.incumbent_record().expect("expected an incumbent");
+/// let incumbent = result.selected_record().expect("expected an incumbent");
 /// assert!(incumbent.param[0].is_finite());
 /// ```
 ///
@@ -353,7 +353,7 @@ where
 
         // BOBYQA reports the least-F feasible point seen, so param/cost are
         // monotone and coincide with best_param/best_cost.
-        let mut best_f = state.cost();
+        let mut best_f = state.current_record().unwrap().cost.unwrap();
         for (xabs, f_new) in &out.evaluated {
             if *f_new < best_f {
                 best_f = *f_new;
@@ -437,10 +437,14 @@ mod tests {
         .max_cost_evals(500)
         .run()
         .unwrap();
-        let x = result.best_param();
+        let x = result.selected_record().unwrap().param;
         assert!((x[0] - 1.0).abs() < 1e-5, "x0 = {}", x[0]);
         assert!((x[1] + 2.0).abs() < 1e-5, "x1 = {}", x[1]);
-        assert!(result.best_cost() < 1e-9, "cost = {}", result.best_cost());
+        assert!(
+            result.selected_record().unwrap().cost.unwrap() < 1e-9,
+            "cost = {}",
+            result.selected_record().unwrap().cost.unwrap()
+        );
     }
 
     #[test]
@@ -461,9 +465,13 @@ mod tests {
             .max_cost_evals(500)
             .run()
             .unwrap();
-            assert!((result.best_param()[0] - 1.0).abs() < 1e-5);
-            assert!((result.best_param()[1] + 2.0).abs() < 1e-5);
-            assert!(result.best_cost() < 1e-9);
+            assert!(
+                (result.selected_record().unwrap().param[0] - 1.0).abs() < 1e-5
+            );
+            assert!(
+                (result.selected_record().unwrap().param[1] + 2.0).abs() < 1e-5
+            );
+            assert!(result.selected_record().unwrap().cost.unwrap() < 1e-9);
         }
     }
 
@@ -485,7 +493,7 @@ mod tests {
         .max_cost_evals(500)
         .run()
         .unwrap();
-        let x = result.best_param();
+        let x = result.selected_record().unwrap().param;
         assert!((x[0] - 1.0).abs() < 1e-3, "x0 = {}", x[0]);
         assert!((x[1] + 2.0).abs() < 1e-3, "x1 = {}", x[1]);
     }
@@ -507,7 +515,7 @@ mod tests {
         .max_cost_evals(500)
         .run()
         .unwrap();
-        let x = result.best_param();
+        let x = result.selected_record().unwrap().param;
         assert!((x[0] - 1.0).abs() < 1e-5, "x0 = {}", x[0]);
         assert!((x[1] + 2.0).abs() < 1e-5, "x1 = {}", x[1]);
     }
@@ -559,7 +567,7 @@ mod tests {
         .max_cost_evals(500)
         .run()
         .unwrap();
-        let x = result.best_param();
+        let x = result.selected_record().unwrap().param;
         assert!((x[0] - 2.0).abs() < 1e-5, "x0 = {}", x[0]);
         assert!((x[1] - 2.0).abs() < 1e-5, "x1 = {}", x[1]);
     }
@@ -610,9 +618,13 @@ mod tests {
         .max_cost_evals(2000)
         .run()
         .unwrap();
-        let x = result.best_param();
+        let x = result.selected_record().unwrap().param;
         assert!((x[0] - 1.0).abs() < 1e-3, "x0 = {}", x[0]);
         assert!((x[1] - 1.0).abs() < 1e-3, "x1 = {}", x[1]);
-        assert!(result.best_cost() < 1e-6, "cost = {}", result.best_cost());
+        assert!(
+            result.selected_record().unwrap().cost.unwrap() < 1e-6,
+            "cost = {}",
+            result.selected_record().unwrap().cost.unwrap()
+        );
     }
 }

@@ -13,7 +13,7 @@ pub fn check() {
         .max_iter(20)
         .run()
         .unwrap();
-    assert!(result.cost() < 1e-10);
+    assert!(result.current_record().unwrap().cost.unwrap() < 1e-10);
 }
 
 #[test]

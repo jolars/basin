@@ -68,7 +68,10 @@ fn rosenbrock_allocations_preserve_the_reference_work() {
     assert_eq!(reference.cost_evals(), 49);
     assert_eq!(reference.counts.gradient_evals, 36);
     assert!(
-        (reference.best_cost() - 1.543_632_681_658_564_5e-16).abs() < 1e-25
+        (reference.selected_record().unwrap().cost.unwrap()
+            - 1.543_632_681_658_564_5e-16)
+            .abs()
+            < 1e-25
     );
     let before_copy = REQUESTS.get();
     let copied = std::hint::black_box(reference.report.clone());
@@ -84,8 +87,11 @@ fn rosenbrock_allocations_preserve_the_reference_work() {
         "{requests} allocation requests, {bytes} requested bytes; one report copy: {report_requests} requests, {report_bytes} bytes"
     );
     result.verify();
-    assert_eq!(&result.x, reference.best_param());
-    assert_eq!(result.cost, reference.best_cost());
+    assert_eq!(&result.x, reference.selected_record().unwrap().param);
+    assert_eq!(
+        result.cost,
+        reference.selected_record().unwrap().cost.unwrap()
+    );
     assert_eq!(result.cost_evals, 49);
     assert_eq!(result.gradient_evals, 36);
     assert!((result.cost - 1.543_632_681_658_564_5e-16).abs() < 1e-25);

@@ -2,8 +2,8 @@
 
 use super::{
     ConstraintViolationState, CountsMirror, EvaluatedGradientState,
-    EvaluatedState, GradientDimensionMismatch, GradientState, IncumbentRef,
-    IncumbentState, RawEvaluationState, SelectedState, State, ViolationReport,
+    EvaluatedState, GradientDimensionMismatch, GradientState,
+    RawEvaluationState, SelectedState, State, ViolationReport,
 };
 use crate::{EvalCounts, Scalar, VectorLen};
 
@@ -115,6 +115,13 @@ impl<V: Clone, F: Scalar> SelectedFirstOrderState<V, F> {
     }
 }
 impl<V: Clone, F: Scalar> State for SelectedFirstOrderState<V, F> {
+    fn current_record(&self) -> Option<crate::CurrentRef<'_, V, F>> {
+        self.progress.current_record()
+    }
+    fn selected_record(&self) -> Option<crate::SelectedRef<'_, V, F>> {
+        self.progress.selected_record()
+    }
+
     type Param = V;
     type Float = F;
     fn iter(&self) -> u64 {
@@ -126,32 +133,20 @@ impl<V: Clone, F: Scalar> State for SelectedFirstOrderState<V, F> {
     fn param(&self) -> &V {
         self.progress.param()
     }
-    fn cost(&self) -> F {
-        self.progress.cost()
-    }
-    fn cost_evals(&self) -> u64 {
-        self.progress.cost_evals()
-    }
-    fn best_param(&self) -> &V {
-        self.progress.best_param()
-    }
-    fn best_cost(&self) -> F {
-        self.progress.best_cost()
-    }
-    fn best_iter(&self) -> u64 {
-        self.progress.best_iter()
-    }
-    fn best_cost_evals(&self) -> u64 {
-        self.progress.best_cost_evals()
-    }
     fn update_best(&mut self) {
-        self.progress.update_best();
+        self.publish_selection();
+    }
+    fn publish_selection(&mut self) -> Option<crate::SelectionChange> {
+        self.progress.publish_selection()
     }
     fn reset_best(&mut self) {
         self.progress.reset_best();
     }
 }
 impl<V: Clone, F: Scalar> CountsMirror for SelectedFirstOrderState<V, F> {
+    fn cost_evals(&self) -> u64 {
+        self.progress.cost_evals()
+    }
     fn mirror(&mut self, counts: &EvalCounts) {
         self.progress.mirror(counts);
     }
@@ -162,8 +157,8 @@ impl<V: Clone, F: Scalar> RawEvaluationState for SelectedFirstOrderState<V, F> {
     }
 }
 impl<V: Clone, F: Scalar> EvaluatedState for SelectedFirstOrderState<V, F> {
-    fn current_record(&self) -> Option<(&V, F)> {
-        self.progress.current_record()
+    fn evaluated_record(&self) -> Option<(&V, F)> {
+        self.progress.evaluated_record()
     }
 }
 impl<V: Clone, F: Scalar> EvaluatedGradientState
@@ -183,11 +178,6 @@ impl<V: Clone, F: Scalar> GradientState for SelectedFirstOrderState<V, F> {
     }
     fn best_gradient_evals(&self) -> u64 {
         self.best_counts().map_or(0, |c| c.gradient_evals)
-    }
-}
-impl<V: Clone, F: Scalar> IncumbentState for SelectedFirstOrderState<V, F> {
-    fn incumbent_record(&self) -> Option<IncumbentRef<'_, V, F>> {
-        self.progress.incumbent_record()
     }
 }
 

@@ -33,7 +33,11 @@ fn slack_bounds_recover_unconstrained_minimum() {
     .run()
     .unwrap();
 
-    assert!(result.cost() < 1e-6, "cost = {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 1e-6,
+        "cost = {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-3,
         "x[0] = {} (expected near 1)",
@@ -150,7 +154,11 @@ fn adaptive_projected_on_rastrigin_3d() {
 
     // Global optimum is 0 at origin. From a small basin around origin
     // NM should reach it. Generous threshold.
-    assert!(result.cost() < 1e-4, "cost = {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 1e-4,
+        "cost = {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
     for (i, &x) in result.param().iter().enumerate() {
         assert!(x.abs() < 1e-2, "x[{i}] = {x} (expected near 0)");
     }

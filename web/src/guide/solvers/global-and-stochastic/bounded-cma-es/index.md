@@ -99,7 +99,7 @@ solver contract.
 
 ### Keep raw objective values separate from search fitness
 
-The current objective and the objective from `incumbent_record()` exclude the boundary penalty.
+The current objective and the objective from `selected_record()` exclude the boundary penalty.
 Likewise, published population costs match their clipped points. Use
 `penalized_costs()` on a retained solver when inspecting selection order,
 and `genotypes()` for the corresponding unrestricted samples.

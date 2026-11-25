@@ -158,7 +158,7 @@ impl Residual for Deficient {
                         result.report.code(),
                         TerminationCode::SolverConverged
                     );
-                    assert!(result.cost() < tolerance * tolerance);
+                    assert!(result.current_record().unwrap().cost.unwrap() < tolerance * tolerance);
                     if insensitive {
                         assert!((result.param()[0] - 1.).abs() < tolerance);
                         assert_eq!(result.param()[1], 7.);
@@ -224,7 +224,7 @@ impl Residual for Insensitive {
                 );
                 assert!((result.param()[0] - 1.).abs() < tolerance);
                 assert_eq!(result.param()[1], inactive);
-                assert!(result.cost() < tolerance * tolerance);
+                assert!(result.current_record().unwrap().cost.unwrap() < tolerance * tolerance);
             }
 
             #[test]
@@ -241,7 +241,7 @@ impl Residual for Insensitive {
                 .run()
                 .unwrap();
                 assert_eq!(result.report.code(), TerminationCode::MaxIter);
-                assert_eq!(result.cost(), 0.);
+                assert_eq!(result.current_record().unwrap().cost.unwrap(), 0.);
                 assert_eq!(result.param()[0], 1.);
                 assert_eq!(result.param()[1], 2.);
             }
@@ -496,7 +496,10 @@ fn explicit_trust_region_matches_default_trajectories() {
                 let explicit =
                     run(($solver).with_damping(LmDamping::TrustRegion));
                 assert_eq!(default.param(), explicit.param());
-                assert_eq!(default.cost(), explicit.cost());
+                assert_eq!(
+                    default.current_record().unwrap().cost.unwrap(),
+                    explicit.current_record().unwrap().cost.unwrap()
+                );
                 assert_eq!(default.report.code(), explicit.report.code());
                 assert_eq!(
                     default.state.counts().residual_evals,
@@ -597,7 +600,7 @@ fn trust_qr_recovers_weak_linear_direction_with_relative_stopping() {
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!((result.param()[0] - 1.).abs() < 1e-8);
     assert!((result.param()[1] - 2.).abs() < 1e-8);
-    assert_eq!(result.cost(), 0.5);
+    assert_eq!(result.current_record().unwrap().cost.unwrap(), 0.5);
 }
 
 fn check_rejection_caching_and_reset<S>(mut solver: S)

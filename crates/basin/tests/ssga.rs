@@ -20,9 +20,9 @@ fn converges_on_low_dim_rastrigin() {
             .unwrap();
 
     assert!(
-        result.cost() < 5.0,
+        result.current_record().unwrap().cost.unwrap() < 5.0,
         "Rastrigin(D=5) cost {} (expected < 5.0)",
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }
 
@@ -49,7 +49,10 @@ fn same_seed_yields_identical_trajectory() {
     .max_iter(30)
     .run()
     .unwrap();
-    assert_eq!(result_a.cost(), result_b.cost());
+    assert_eq!(
+        result_a.current_record().unwrap().cost.unwrap(),
+        result_b.current_record().unwrap().cost.unwrap()
+    );
     assert_eq!(result_a.param(), result_b.param());
 }
 
@@ -76,7 +79,7 @@ fn different_seeds_yield_different_trajectories() {
     assert_ne!(result_a.param(), result_b.param());
 }
 
-/// Replace-worst means `state.cost()` is non-increasing across
+/// Replace-worst means `state.current_record().unwrap().cost.unwrap()` is non-increasing across
 /// generations; the elite at position 0 can only be replaced by a
 /// strictly better individual. Same monotonicity contract as
 /// `RandomSearch` so framework `CostTolerance`/`ParamTolerance` are
@@ -92,9 +95,9 @@ fn elite_keeps_cost_monotone_across_iterations() {
     .into_stepper()
     .unwrap();
 
-    let mut prev = stepper.state().cost();
+    let mut prev = stepper.state().current_record().unwrap().cost.unwrap();
     while let StepOutcome::Continue = stepper.step().unwrap() {
-        let curr = stepper.state().cost();
+        let curr = stepper.state().current_record().unwrap().cost.unwrap();
         assert!(
             curr <= prev,
             "cost increased: prev = {prev}, current = {curr}"

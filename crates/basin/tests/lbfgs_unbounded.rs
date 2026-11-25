@@ -64,7 +64,11 @@ fn rosenbrock_vec() {
     .run()
     .unwrap();
 
-    assert!(result.cost() < 1e-10, "cost = {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 1e-10,
+        "cost = {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-4
             && (result.param()[1] - 1.0).abs() < 1e-4,
@@ -123,7 +127,11 @@ fn rosenbrock_nalgebra() {
     .run()
     .unwrap();
 
-    assert!(result.cost() < 1e-10, "cost = {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 1e-10,
+        "cost = {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-4
             && (result.param()[1] - 1.0).abs() < 1e-4,
@@ -180,7 +188,11 @@ fn rosenbrock_faer() {
     .run()
     .unwrap();
 
-    assert!(result.cost() < 1e-10, "cost = {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 1e-10,
+        "cost = {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-4
             && (result.param()[1] - 1.0).abs() < 1e-4,
@@ -239,7 +251,11 @@ fn rosenbrock_ndarray() {
     .run()
     .unwrap();
 
-    assert!(result.cost() < 1e-10, "cost = {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 1e-10,
+        "cost = {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-4
             && (result.param()[1] - 1.0).abs() < 1e-4,

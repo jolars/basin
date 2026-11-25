@@ -139,7 +139,10 @@ where
     assert_eq!(result.iter(), 2);
     assert_eq!(result.report.code(), TerminationCode::MaxIter);
     assert_eq!(result.param(), old.param());
-    assert_eq!(result.cost(), old.cost());
+    assert_eq!(
+        result.current_record().unwrap().cost.unwrap(),
+        old.current_record().unwrap().cost.unwrap()
+    );
     assert_eq!(result.state.gradient(), old.state.gradient());
     assert_eq!(result.cost_evals(), 5);
     assert_eq!(result.state.gradient_evals(), 5);
@@ -153,8 +156,14 @@ where
 
     let expected_cost = start.norm_squared() * F::from_f64(1e-12).unwrap();
     let tolerance = F::from_f64(1e-3).unwrap() * expected_cost;
-    assert!((result.cost() - expected_cost).abs() <= tolerance);
-    assert_eq!(result.cost(), result.param().norm_squared());
+    assert!(
+        (result.current_record().unwrap().cost.unwrap() - expected_cost).abs()
+            <= tolerance
+    );
+    assert_eq!(
+        result.current_record().unwrap().cost.unwrap(),
+        result.param().norm_squared()
+    );
     let mut gradient = result.param().clone();
     gradient.scale_in_place(F::one() + F::one());
     assert_eq!(result.state.gradient(), Some(&gradient));
@@ -228,7 +237,7 @@ fn momentum_evaluates_the_actual_point() {
 
     // The second search accepts x0/4, but accumulated velocity lands at zero.
     assert_eq!(result.param(), &[0.0, 0.0]);
-    assert_eq!(result.cost(), 0.0);
+    assert_eq!(result.current_record().unwrap().cost.unwrap(), 0.0);
     assert_eq!(result.state.gradient().unwrap(), &[0.0, 0.0]);
     assert_eq!(calls.costs.borrow()[3], vec![0.25, 0.5]);
     assert_eq!(calls.costs.borrow()[4], vec![0.0, 0.0]);
@@ -249,7 +258,7 @@ fn zero_step_without_an_evaluation_keeps_a_complete_state() {
     .unwrap();
 
     assert_eq!(result.param(), &[0.0, 0.0]);
-    assert_eq!(result.cost(), 0.0);
+    assert_eq!(result.current_record().unwrap().cost.unwrap(), 0.0);
     assert_eq!(result.state.gradient().unwrap(), &[0.0, 0.0]);
     assert_eq!(result.cost_evals(), 2);
     assert_eq!(result.state.gradient_evals(), 2);
@@ -298,7 +307,7 @@ fn legacy_soft_failure_restores_cost_and_gradient() {
 
         assert_eq!(result.report.code(), TerminationCode::SolverFailed);
         assert_eq!(result.param(), &[1.0, 2.0]);
-        assert_eq!(result.cost(), 5.0);
+        assert_eq!(result.current_record().unwrap().cost.unwrap(), 5.0);
         assert_eq!(result.state.gradient().unwrap(), &[2.0, 4.0]);
         assert_eq!(result.cost_evals(), 1);
         assert_eq!(result.state.gradient_evals(), 1);

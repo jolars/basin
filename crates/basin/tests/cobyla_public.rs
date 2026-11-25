@@ -68,12 +68,12 @@ fn converges_to_disk_optimum() {
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
-        (result.best_cost() - (-0.5)).abs() < 1e-3,
+        (result.selected_record().unwrap().cost.unwrap() - (-0.5)).abs() < 1e-3,
         "f = {}",
-        result.best_cost()
+        result.selected_record().unwrap().cost.unwrap()
     );
     // The returned point is feasible: x0² + x1² ≤ 1.
-    let x = result.best_param();
+    let x = result.selected_record().unwrap().param;
     assert!(x[0] * x[0] + x[1] * x[1] <= 1.0 + 1e-6, "infeasible {x:?}");
     assert!(
         result.cost_evals() < 2000,
@@ -272,8 +272,14 @@ fn projected_callbacks_retain_their_hard_budget_and_box_feasibility() {
         .unwrap();
         assert_eq!(calls.get(), budget);
         assert_eq!(result.report.code(), TerminationCode::MaxCostEvals);
-        assert!(result.best_param()[0].abs() <= 1.0 + f64::EPSILON.sqrt());
-        assert!((result.best_cost() - 1.0).abs() < 1e-12);
+        assert!(
+            result.selected_record().unwrap().param[0].abs()
+                <= 1.0 + f64::EPSILON.sqrt()
+        );
+        assert!(
+            (result.selected_record().unwrap().cost.unwrap() - 1.0).abs()
+                < 1e-12
+        );
         if budget >= 2 {
             assert!(projected.get() > 0);
         }
@@ -365,11 +371,11 @@ fn backend_generic_nalgebra() {
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
-        (result.best_cost() - (-0.5)).abs() < 1e-3,
+        (result.selected_record().unwrap().cost.unwrap() - (-0.5)).abs() < 1e-3,
         "f = {}",
-        result.best_cost()
+        result.selected_record().unwrap().cost.unwrap()
     );
-    let x = result.best_param();
+    let x = result.selected_record().unwrap().param;
     assert!(x[0] * x[0] + x[1] * x[1] <= 1.0 + 1e-6, "infeasible {x:?}");
 }
 
@@ -435,11 +441,11 @@ fn backend_generic_ndarray() {
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
-        (result.best_cost() - (-0.5)).abs() < 1e-3,
+        (result.selected_record().unwrap().cost.unwrap() - (-0.5)).abs() < 1e-3,
         "f = {}",
-        result.best_cost()
+        result.selected_record().unwrap().cost.unwrap()
     );
-    let x = result.best_param();
+    let x = result.selected_record().unwrap().param;
     assert!(x[0] * x[0] + x[1] * x[1] <= 1.0 + 1e-6, "infeasible {x:?}");
 }
 
@@ -505,11 +511,11 @@ fn backend_generic_faer() {
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
-        (result.best_cost() - (-0.5)).abs() < 1e-3,
+        (result.selected_record().unwrap().cost.unwrap() - (-0.5)).abs() < 1e-3,
         "f = {}",
-        result.best_cost()
+        result.selected_record().unwrap().cost.unwrap()
     );
-    let x = result.best_param();
+    let x = result.selected_record().unwrap().param;
     assert!(x[0] * x[0] + x[1] * x[1] <= 1.0 + 1e-6, "infeasible {x:?}");
 }
 
@@ -569,17 +575,23 @@ fn reused_solver_resizes_scratch_and_keeps_best_snapshot_independent() {
             .init(&mut problem, SelectedState::new(vec![1.0; n]))
             .unwrap();
         state.update_best();
-        let snapshot = state.best_param().clone();
-        let snapshot_cost = state.best_cost();
+        let snapshot = state.selected_record().unwrap().param.clone();
+        let snapshot_cost = state.selected_record().unwrap().cost.unwrap();
         // Solver callbacks reuse their own parameter buffer. The selected
         // snapshot remains unchanged until the executor publishes the boundary.
         let (mut state, _, _) =
             solver.next_iter(&mut problem, state).unwrap().into_parts();
-        assert_eq!(state.best_param(), &snapshot);
-        assert_eq!(state.best_cost(), snapshot_cost);
+        assert_eq!(state.selected_record().unwrap().param, &snapshot);
+        assert_eq!(
+            state.selected_record().unwrap().cost.unwrap(),
+            snapshot_cost
+        );
         assert_eq!(state.param().len(), n);
         state.update_best();
-        assert_eq!(state.best_param(), state.param());
-        assert_eq!(state.best_cost(), state.cost());
+        assert_eq!(state.selected_record().unwrap().param, state.param());
+        assert_eq!(
+            state.selected_record().unwrap().cost.unwrap(),
+            state.current_record().unwrap().cost.unwrap()
+        );
     }
 }

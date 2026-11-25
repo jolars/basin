@@ -228,5 +228,5 @@ fn acceptance_stall_criterion_retains_absolute_history_on_resume() {
 
     assert_eq!(result.report.code(), TerminationCode::NoAcceptedMove);
     assert_eq!(result.iter(), 7);
-    assert_eq!(result.best_iter(), 0);
+    assert_eq!(result.selected_record().unwrap().iter, 0);
 }

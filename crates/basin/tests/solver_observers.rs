@@ -1,5 +1,6 @@
 #[path = "support/solver_observer.rs"]
 mod support;
+use basin::CountsMirror as _;
 use basin::ObserveSolver;
 use basin::{
     CancellationToken, Executor, Observe, ObserverMode, PointState, State,
@@ -42,7 +43,7 @@ fn record(log: &Log, s: &PointState<f64>, value: f64, event: Event) {
     log.borrow_mut().push(Record {
         event,
         iter: s.iter(),
-        cost: s.cost(),
+        cost: s.current_record().unwrap().cost.unwrap(),
         evals: s.cost_evals(),
         diagnostic: value,
     });
@@ -603,7 +604,7 @@ fn state_and_solver_may_borrow_local_data_with_mixed_observers() {
         move |state, solver, _| {
             assert_eq!(*solver.0, 2.0);
             assert_eq!(**state.param(), 3.0);
-            assert_eq!(state.cost(), 6.0);
+            assert_eq!(state.current_record().unwrap().cost.unwrap(), 6.0);
             output.set(output.get() + 1);
         },
         ObserverMode::Always,

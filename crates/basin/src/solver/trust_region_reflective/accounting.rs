@@ -65,7 +65,10 @@ fn check<F: Scalar>() {
         stepper.step().unwrap();
         assert_eq!(residuals.get(), 1);
         assert_eq!(stepper.state().param(), &x);
-        assert_eq!(stepper.state().cost(), F::from_f64(0.125).unwrap());
+        assert_eq!(
+            stepper.state().current_record().unwrap().cost.unwrap(),
+            F::from_f64(0.125).unwrap()
+        );
         let observations = stepper.solver().least_squares_observations();
         if enabled {
             assert!(observations.iter().any(|o| o.event == "construction"

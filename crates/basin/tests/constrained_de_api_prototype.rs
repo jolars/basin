@@ -15,9 +15,9 @@ use std::{
 use basin::{
     BoxBounds, ConstraintDescription, ConstraintSet, ConstraintSolveError,
     Constraints, CostFunction, CountsMirror, De, EvalCounts, EvaluatedState,
-    EvaluationKind, Executor, IncumbentState, InitialState, MemeticInner,
-    NumericalFailure, Problem, RawEvaluationState, Scalar, Solver, SolverStep,
-    State, Termination, TerminationStage, VectorLen, WarmStart,
+    EvaluationKind, Executor, InitialState, MemeticInner, NumericalFailure,
+    Problem, RawEvaluationState, Scalar, Solver, SolverStep, State,
+    Termination, TerminationStage, VectorLen, WarmStart,
 };
 use prototype::{
     ConstrainedDeInjectPrototype, ConstrainedDePrototype, PopulationMember,
@@ -273,7 +273,7 @@ where
             .into_stepper()
             .unwrap();
     let initial = stepper.state();
-    assert_eq!(initial.cost(), F::zero());
+    assert_eq!(initial.current_record().unwrap().cost.unwrap(), F::zero());
     assert_eq!(
         initial
             .members()
@@ -292,11 +292,14 @@ where
     );
     stepper.step().unwrap();
     let selected = stepper.state();
-    assert_eq!(selected.cost(), F::one());
-    assert_eq!(selected.best_cost(), F::one());
+    assert_eq!(selected.current_record().unwrap().cost.unwrap(), F::one());
+    assert_eq!(selected.selected_record().unwrap().cost.unwrap(), F::one());
     assert!(selected.best().unwrap().feasible());
-    assert_eq!(selected.best_iter(), 1);
-    assert_eq!(selected.best_param(), &make(&[F::one(), F::zero()]));
+    assert_eq!(selected.selected_record().unwrap().iter, 1);
+    assert_eq!(
+        selected.selected_record().unwrap().param,
+        &make(&[F::one(), F::zero()])
+    );
     assert_eq!(
         selected.members().unwrap()[3].param(),
         &make(&[num(-1.0), num(4.0)])
@@ -305,9 +308,9 @@ where
     assert_eq!(selected.raw_counts().residual_evals, 8);
     stepper.step().unwrap();
     let state = stepper.state();
-    assert_eq!(state.best_iter(), 1);
-    assert_eq!(state.incumbent_record().unwrap().counts.cost_evals, 2);
-    assert_eq!(state.current_record().unwrap().1, F::one());
+    assert_eq!(state.selected_record().unwrap().iter, 1);
+    assert_eq!(state.selected_record().unwrap().counts.cost_evals, 2);
+    assert_eq!(state.evaluated_record().unwrap().1, F::one());
     assert_eq!(state.best().unwrap().violations(), &[F::zero(), F::zero()]);
     let outer = ConstrainedDePrototype::new(De::<F>::new(42), script(make))
         .with_infeasible_objective();
@@ -321,8 +324,11 @@ where
     .max_iter(3)
     .run()
     .unwrap();
-    assert_eq!(result.best_param(), &make(&[F::one(), F::zero()]));
-    assert_eq!(result.best_cost(), F::one());
+    assert_eq!(
+        result.selected_record().unwrap().param,
+        &make(&[F::one(), F::zero()])
+    );
+    assert_eq!(result.selected_record().unwrap().cost.unwrap(), F::one());
     assert_eq!(result.state.raw_counts(), &result.counts);
 }
 
@@ -372,7 +378,7 @@ fn componentwise_replacement_is_not_total_violation_ranking() {
 fn storage_updates_are_atomic_and_pending_selections_own_their_records() {
     let mut state =
         SelectedPopulationProgress::from_population(vec![vec![0.0, 0.0]]);
-    assert!(state.current_record().is_none());
+    assert!(state.evaluated_record().is_none());
     assert!(state.members().is_none());
     assert!(!state.select_current());
     state
@@ -432,20 +438,20 @@ fn storage_updates_are_atomic_and_pending_selections_own_their_records() {
     counts.hessian_product_evals = 13;
     state.mirror(&counts);
     state.update_best();
-    assert_eq!(state.best_param(), &[0.0, 0.0]);
+    assert_eq!(state.selected_record().unwrap().param, &[0.0, 0.0]);
     assert_eq!(state.best().unwrap().violations(), &[1.0, 0.0]);
-    assert_eq!(state.incumbent_record().unwrap().counts, &counts);
+    assert_eq!(state.selected_record().unwrap().counts, &counts);
     state.increment_iter();
     state.update_best();
-    assert_eq!(state.best_iter(), 0);
+    assert_eq!(state.selected_record().unwrap().iter, 0);
     state.select_current();
     state.update_best();
-    assert_eq!(state.best_cost(), 4.0);
+    assert_eq!(state.selected_record().unwrap().cost.unwrap(), 4.0);
     state
         .replace(vec![member(3.0, Some(9.0), &[0.0, 0.0])], 0)
         .unwrap();
     state.update_best();
-    assert_eq!(state.best_param(), &[2.0, 0.0]);
+    assert_eq!(state.selected_record().unwrap().param, &[2.0, 0.0]);
     state.reset();
     assert_eq!(state.param(), &[3.0, 0.0]);
     assert!(state.current().is_none() && state.best().is_none());
@@ -465,7 +471,7 @@ fn evaluated_nonfinite_costs_are_distinct_from_missing_costs() {
                 0,
             )
             .unwrap();
-        let (_, observed) = state.current_record().unwrap();
+        let (_, observed) = state.evaluated_record().unwrap();
         assert_eq!(observed.to_bits(), value.to_bits());
         assert!(state.members().unwrap()[1].cost().is_none());
     }
@@ -641,7 +647,7 @@ fn local_search_rechecks_feasibility_and_repairs_before_evaluation() {
     .max_iter(1)
     .run()
     .unwrap();
-    assert_eq!(result.best_param(), &[1.0, 0.0]);
+    assert_eq!(result.selected_record().unwrap().param, &[1.0, 0.0]);
     assert!(result.state.best().unwrap().feasible());
     // The repaired result remains infeasible and is rejected; no clipped objective is needed.
     let p = fixture();
@@ -654,7 +660,7 @@ fn local_search_rechecks_feasibility_and_repairs_before_evaluation() {
     .max_iter(1)
     .run()
     .unwrap();
-    assert_eq!(result.best_param(), &[1.0, 0.0]);
+    assert_eq!(result.selected_record().unwrap().param, &[1.0, 0.0]);
     assert!(trace.borrow().contains(&(1, vec![5.0, 5.0])));
     assert!(!trace.borrow().contains(&(0, vec![5.0, 5.0])));
 }
@@ -675,8 +681,8 @@ fn local_search_can_improve_an_infeasible_member_without_objective_ordering() {
     .max_iter(1)
     .run()
     .unwrap();
-    assert_eq!(result.best_param(), &[0.5, 0.0]);
-    assert_eq!(result.best_cost(), 0.25);
+    assert_eq!(result.selected_record().unwrap().param, &[0.5, 0.0]);
+    assert_eq!(result.selected_record().unwrap().cost.unwrap(), 0.25);
     assert_eq!(result.state.best().unwrap().violations(), &[0.5, 0.0]);
     assert!(!result.state.best().unwrap().feasible());
     assert_eq!(result.counts.cost_evals, 5);
@@ -850,9 +856,9 @@ fn fresh_explicit_populations_can_change_dimension_and_reset_script_position() {
         .unwrap();
     assert_eq!(result.solver.position(), 1);
     assert_eq!(result.state.iter(), 0);
-    assert_eq!(result.state.best_iter(), 0);
-    assert_eq!(result.best_param(), &[5.0, 0.0, 2.0]);
-    assert_eq!(result.best_cost(), 29.0);
+    assert_eq!(result.state.selected_record().unwrap().iter, 0);
+    assert_eq!(result.selected_record().unwrap().param, &[5.0, 0.0, 2.0]);
+    assert_eq!(result.selected_record().unwrap().cost.unwrap(), 29.0);
     assert_eq!(result.counts.cost_evals, 1);
     assert_eq!(result.counts.residual_evals, 2);
 }
@@ -881,12 +887,12 @@ fn partial_refinement_failure_publishes_prior_selection_and_all_work() {
             .run()
             .unwrap();
     assert_eq!(result.iter(), 0);
-    assert_eq!(result.best_param(), &[1.0, 0.0]);
+    assert_eq!(result.selected_record().unwrap().param, &[1.0, 0.0]);
     assert_eq!(result.counts.cost_evals, 9);
     assert_eq!(result.counts.residual_evals, 9);
     assert_eq!(result.state.raw_counts(), &result.counts);
     assert_eq!(
-        result.state.incumbent_record().unwrap().counts,
+        result.state.selected_record().unwrap().counts,
         &result.counts
     );
     assert_eq!(
@@ -984,7 +990,7 @@ fn fresh_runs_and_exact_checkpoints_preserve_the_right_history() {
             .collect::<Vec<_>>(),
         final_members
     );
-    assert_eq!(warm.state.best_iter(), 0);
+    assert_eq!(warm.state.selected_record().unwrap().iter, 0);
 }
 
 #[cfg(feature = "serde")]
@@ -1011,8 +1017,8 @@ fn f32_injection_checkpoint_round_trips_optional_costs_and_selection() {
         .max_iter(3)
         .run()
         .unwrap();
-    assert_eq!(resumed.best_param(), &[1.0, 0.0]);
-    assert_eq!(resumed.best_cost(), 1.0);
+    assert_eq!(resumed.selected_record().unwrap().param, &[1.0, 0.0]);
+    assert_eq!(resumed.selected_record().unwrap().cost.unwrap(), 1.0);
 }
 
 #[test]
@@ -1040,7 +1046,7 @@ fn standalone_checkpoints_resume_the_script_and_observers_do_no_work() {
         .max_iter(3)
         .observe_solver(
             move |state, _, _| {
-                assert!(state.current_record().is_some());
+                assert!(state.evaluated_record().is_some());
                 assert!(state.members().is_some());
                 calls.set(calls.get() + 1);
             },
@@ -1084,7 +1090,7 @@ fn zero_objective_progress_is_observable_and_resumes_exactly() {
     .run()
     .unwrap();
     assert_eq!(expected.iter(), 3);
-    assert_eq!(expected.incumbent_record().unwrap().cost, 1.0);
+    assert_eq!(expected.selected_record().unwrap().cost, Some(1.0));
     assert_eq!(
         expected.report.termination,
         Termination::Limit(vec![ExecutionLimit::Evaluations {
@@ -1103,7 +1109,7 @@ fn zero_objective_progress_is_observable_and_resumes_exactly() {
         SelectedPopulationProgress::empty(),
     )
     .max_evaluations(EvaluationKind::Residual, 6);
-    for mode in [ObserverMode::Always, ObserverMode::NewBest] {
+    for mode in [ObserverMode::Always, ObserverMode::SelectionChanged] {
         let observations = observations.clone();
         executor = executor.observe_solver(
             move |state, _, event| {
@@ -1111,6 +1117,9 @@ fn zero_objective_progress_is_observable_and_resumes_exactly() {
                 let boundary = match event {
                     ObservationEvent::Init => "init",
                     ObservationEvent::Iter => "iter",
+                    ObservationEvent::SelectionChanged(
+                        basin::SelectionChange::SolverSelected,
+                    ) => "selection",
                     ObservationEvent::Final(_) => "final",
                     _ => unreachable!(),
                 };
@@ -1123,8 +1132,8 @@ fn zero_objective_progress_is_observable_and_resumes_exactly() {
                     selection.member.violations(),
                     &[1.0 - selection.member.param()[0], 0.0]
                 );
-                assert!(state.current_record().is_none());
-                assert!(state.incumbent_record().is_none());
+                assert!(state.evaluated_record().is_none());
+                assert_eq!(state.selected_record().unwrap().cost, None);
                 assert_eq!(state.raw_counts().cost_evals, 0);
                 observations.borrow_mut().push((
                     mode,
@@ -1138,7 +1147,8 @@ fn zero_objective_progress_is_observable_and_resumes_exactly() {
         );
     }
     let stopped = executor.run_with_solver().unwrap();
-    assert!(stopped.incumbent_record().is_none());
+    assert_eq!(stopped.selected_record().unwrap().cost, None);
+    assert_eq!(stopped.selected_record().unwrap().counts.residual_evals, 4);
     assert_eq!(stopped.report.stage, TerminationStage::Boundary);
     assert_eq!(
         stopped.report.termination,
@@ -1152,12 +1162,13 @@ fn zero_objective_progress_is_observable_and_resumes_exactly() {
         *observations.borrow(),
         [
             (ObserverMode::Always, "init", 0, 0, 2),
-            (ObserverMode::NewBest, "init", 0, 0, 2),
+            (ObserverMode::SelectionChanged, "init", 0, 0, 2),
+            (ObserverMode::SelectionChanged, "selection", 0, 0, 2),
             (ObserverMode::Always, "iter", 1, 1, 4),
-            (ObserverMode::NewBest, "iter", 1, 1, 4),
+            (ObserverMode::SelectionChanged, "selection", 1, 1, 4),
             (ObserverMode::Always, "iter", 2, 1, 4),
             (ObserverMode::Always, "final", 2, 1, 4),
-            (ObserverMode::NewBest, "final", 2, 1, 4),
+            (ObserverMode::SelectionChanged, "final", 2, 1, 4),
         ]
     );
     assert!(prefix.borrow().iter().all(|(kind, _)| *kind == 1));
@@ -1191,6 +1202,8 @@ fn partial_step_publishes_constraint_selection_after_missing_inner_incumbent() {
         inner,
     )
     .with_k(2);
+    let changes = Rc::new(RefCell::new(Vec::new()));
+    let observed = changes.clone();
     let result = Executor::new(
         feasible_only(),
         solver,
@@ -1212,9 +1225,29 @@ fn partial_step_publishes_constraint_selection_after_missing_inner_incumbent() {
         },
         basin::ObserverMode::Always,
     )
+    .observe_solver(
+        move |state, _, event| {
+            if let basin::ObservationEvent::SelectionChanged(change) = event {
+                let record = state.selected_record().unwrap();
+                observed.borrow_mut().push((
+                    change,
+                    record.iter,
+                    record.counts.residual_evals,
+                ));
+            }
+        },
+        basin::ObserverMode::SelectionChanged,
+    )
     .run()
     .unwrap();
-    assert!(result.incumbent_record().is_none());
+    assert_eq!(
+        *changes.borrow(),
+        [
+            (basin::SelectionChange::SolverSelected, 0, 2),
+            (basin::SelectionChange::SolverSelected, 0, 8),
+        ]
+    );
+    assert_eq!(result.selected_record().unwrap().cost, None);
     assert_eq!(result.counts.cost_evals, 0);
     assert_eq!(result.counts.residual_evals, 8);
     assert!(matches!(

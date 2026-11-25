@@ -1,7 +1,7 @@
 # Migrating from Argmin
 
 This guide is for applications that use Argmin 0.11 as an optimization framework
-and want to move their problem definitions and solver runs to Basin 3.0. The
+and want to move their problem definitions and solver runs to Basin 4.0. The
 frameworks share the same broad vocabulary—a problem, solver, state, and
 executor—but differ in where initialization, stopping rules, errors, and
 constraints live.
@@ -20,7 +20,7 @@ Migrate this project's Argmin integration to Basin while preserving its
 optimization behavior.
 
 Read https://basin.rs/guide/migrating-from-argmin/ first. It covers Argmin 0.11
-to Basin 3.0; check the project's versions before applying its examples.
+to Basin 4.0; check the project's versions before applying its examples.
 Use https://docs.rs/basin/ for the API matching the selected Basin release.
 
 1. Inventory Argmin dependencies, backend versions, solvers, problem traits,
@@ -48,7 +48,7 @@ Plain `Vec<f64>` needs no backend feature:
 
 ```toml
 [dependencies]
-basin = "3"
+basin = "4"
 ```
 
 For a linear-algebra backend, select the Basin feature matching the version
@@ -57,17 +57,17 @@ name the same release.
 
   | Parameter type | Backend dependency                                                                    | Basin dependency                                           |
   | -------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-  | `Vec<f64>`     | —                                                                                     | `basin = "3"`                                              |
-  | nalgebra 0.32  | `nalgebra = "0.32"`                                                                   | `basin = { version = "3", features = ["nalgebra_v0_32"] }` |
-  | nalgebra 0.33  | `nalgebra = "0.33"`                                                                   | `basin = { version = "3", features = ["nalgebra_v0_33"] }` |
-  | nalgebra 0.34  | `nalgebra = "0.34"`                                                                   | `basin = { version = "3", features = ["nalgebra_v0_34"] }` |
-  | nalgebra 0.35  | `nalgebra = "0.35"`                                                                   | `basin = { version = "3", features = ["nalgebra_v0_35"] }` |
-  | ndarray 0.15   | `ndarray = "0.15"`                                                                    | `basin = { version = "3", features = ["ndarray_v0_15"] }`  |
-  | ndarray 0.16   | `ndarray = "0.16"`                                                                    | `basin = { version = "3", features = ["ndarray_v0_16"] }`  |
-  | ndarray 0.17   | `ndarray = "0.17"`                                                                    | `basin = { version = "3", features = ["ndarray_v0_17"] }`  |
-  | faer 0.22      | `faer = { version = "0.22", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "3", features = ["faer_v0_22"] }`     |
-  | faer 0.23      | `faer = { version = "0.23", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "3", features = ["faer_v0_23"] }`     |
-  | faer 0.24      | `faer = { version = "0.24", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "3", features = ["faer_v0_24"] }`     |
+  | `Vec<f64>`     | —                                                                                     | `basin = "4"`                                              |
+  | nalgebra 0.32  | `nalgebra = "0.32"`                                                                   | `basin = { version = "4", features = ["nalgebra_v0_32"] }` |
+  | nalgebra 0.33  | `nalgebra = "0.33"`                                                                   | `basin = { version = "4", features = ["nalgebra_v0_33"] }` |
+  | nalgebra 0.34  | `nalgebra = "0.34"`                                                                   | `basin = { version = "4", features = ["nalgebra_v0_34"] }` |
+  | nalgebra 0.35  | `nalgebra = "0.35"`                                                                   | `basin = { version = "4", features = ["nalgebra_v0_35"] }` |
+  | ndarray 0.15   | `ndarray = "0.15"`                                                                    | `basin = { version = "4", features = ["ndarray_v0_15"] }`  |
+  | ndarray 0.16   | `ndarray = "0.16"`                                                                    | `basin = { version = "4", features = ["ndarray_v0_16"] }`  |
+  | ndarray 0.17   | `ndarray = "0.17"`                                                                    | `basin = { version = "4", features = ["ndarray_v0_17"] }`  |
+  | faer 0.22      | `faer = { version = "0.22", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "4", features = ["faer_v0_22"] }`     |
+  | faer 0.23      | `faer = { version = "0.23", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "4", features = ["faer_v0_23"] }`     |
+  | faer 0.24      | `faer = { version = "0.24", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "4", features = ["faer_v0_24"] }`     |
 
 The moving aliases `nalgebra`, `ndarray`, and `faer` are convenient for new
 applications. The `*_latest` spellings remain as deprecated synonyms. Exact
@@ -159,8 +159,8 @@ fn main() {
     .run()
     .unwrap();
 
-    println!("x = {:?}, f = {}", result.param(), result.cost());
-    assert!(result.cost() < 1e-8);
+    println!("x = {:?}, f = {}", result.param(), result.current_record().unwrap().cost.unwrap());
+    assert!(result.current_record().unwrap().cost.unwrap() < 1e-8);
 }
 ```
 
@@ -173,7 +173,7 @@ starting point supplies the mean, and the solver configures the initial scale.
 
 ## Common API mappings
 
-  | Argmin 0.11                                                                       | Basin 3.x                                                                                                                                                   |
+  | Argmin 0.11                                                                       | Basin 4.x                                                                                                                                                   |
   | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
   | `Executor::new(problem, solver).configure(\|state\| state.param(x).max_iters(n))` | `Executor::from_start(problem, solver, x).max_iter(n)`                                                                                                      |
   | `NelderMead::new(simplex).with_sd_tolerance(tol)`                                 | `NelderMead::new().with_absolute_simplex_size_tolerance(tol_x).with_absolute_simplex_cost_tolerance(tol_f)`                                                 |
@@ -265,7 +265,7 @@ fn main() {
     .run()
     .unwrap();
 
-    assert!(result.cost() < 1e-12);
+    assert!(result.current_record().unwrap().cost.unwrap() < 1e-12);
 }
 ```
 
@@ -321,7 +321,7 @@ fn main() {
         .run()
         .unwrap();
 
-    assert!(result.cost() < 1e-20);
+    assert!(result.current_record().unwrap().cost.unwrap() < 1e-20);
 }
 ```
 
@@ -372,7 +372,7 @@ fn main() -> Result<(), ObjectiveError> {
     .max_iter(200)
     .run()?;
 
-    assert!(result.cost() < 1e-8);
+    assert!(result.current_record().unwrap().cost.unwrap() < 1e-8);
     Ok(())
 }
 ```
@@ -419,7 +419,7 @@ fn main() {
     .run()
     .unwrap();
 
-    assert!(result.cost() < 1e-12);
+    assert!(result.current_record().unwrap().cost.unwrap() < 1e-12);
 }
 ```
 
@@ -562,7 +562,7 @@ fn main() {
             .run()
             .unwrap();
 
-    assert!(result.cost() < 1e-6);
+    assert!(result.current_record().unwrap().cost.unwrap() < 1e-6);
 }
 ```
 
@@ -655,7 +655,7 @@ struct Progress {
 
 impl<S: State<Float = f64>> Observe<S> for Progress {
     fn observe_iter(&mut self, state: &S) {
-        println!("iteration {}, cost {}", state.iter(), state.cost());
+        println!("iteration {}, cost {}", state.iter(), state.current_record().unwrap().cost.unwrap());
         if state.iter() >= 5 {
             self.cancel.cancel();
         }
@@ -722,7 +722,7 @@ fn main() {
     .max_iter(300)
     .run()
     .unwrap();
-    assert!(result.cost() < 1e-10);
+    assert!(result.current_record().unwrap().cost.unwrap() < 1e-10);
 }
 ```
 
@@ -758,7 +758,7 @@ fn main() {
     .max_iter(300)
     .run()
     .unwrap();
-    assert!(result.cost() < 1e-10);
+    assert!(result.current_record().unwrap().cost.unwrap() < 1e-10);
 }
 ```
 
@@ -794,7 +794,7 @@ fn main() {
     .max_iter(300)
     .run()
     .unwrap();
-    assert!(result.cost() < 1e-10);
+    assert!(result.current_record().unwrap().cost.unwrap() < 1e-10);
 }
 ```
 
@@ -830,7 +830,7 @@ fn main() {
     .max_iter(300)
     .run()
     .unwrap();
-    assert!(result.cost() < 1e-10);
+    assert!(result.current_record().unwrap().cost.unwrap() < 1e-10);
 }
 ```
 

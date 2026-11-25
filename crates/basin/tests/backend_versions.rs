@@ -35,7 +35,8 @@ macro_rules! dense_checks {
         [(0, 2), (3, 2), (3, 2), (1, 2), (0, 2)]
     };
     ($vector:ty, $matrix:ty, $scalar:ty, $make:expr, $storage:ident) => {{
-        use basin::{
+        use basin::CountsMirror as _;
+use basin::{
             Bfgs, CostFunction, Executor, FactorizePivotedQr,
             FirstOrderState, Gradient, Lbfgs, LinearSolveSpd, MatVec,
             MatrixIdentity, NormSquared, RegularizedQrSolve, ScaleInPlace,
@@ -268,11 +269,11 @@ impl Quadratic  {
                 .run_with_solver()
                 .unwrap();
                 assert_eq!(
-                    result.state.cost(),
+                    result.state.current_record().unwrap().cost.unwrap(),
                     NormSquared::norm_squared(result.state.param())
                 );
                 assert!(
-                    (result.state.cost() - $target).abs()
+                    (result.state.current_record().unwrap().cost.unwrap() - $target).abs()
                         < 8.0 * F::EPSILON.sqrt()
                 );
                 assert_eq!(result.state.counts(), &result.counts);
@@ -343,7 +344,7 @@ impl Quadratic  {
                         }
                     }
                 }
-                assert!(result.state.best_cost() < 0.01);
+                assert!(result.state.selected_record().unwrap().cost.unwrap() < 0.01);
                 assert_eq!(result.state.counts(), &result.counts);
                 assert_eq!(result.state.cost_evals(), result.counts.cost_evals);
                 result
@@ -397,7 +398,7 @@ impl Quadratic  {
                 {
                     assert_eq!(cost, NormSquared::norm_squared(point));
                 }
-                assert!(result.state.best_cost() < 0.2);
+                assert!(result.state.selected_record().unwrap().cost.unwrap() < 0.2);
                 assert_eq!(result.state.counts(), &result.counts);
                 assert_eq!(result.state.cost_evals(), result.counts.cost_evals);
             }};
@@ -449,7 +450,7 @@ impl Quadratic  {
             .with_inner_max_iter(10)
             .with_refine_every(3)
         );
-        assert!(injected.state.best_cost() < 128.0 * F::EPSILON);
+        assert!(injected.state.selected_record().unwrap().cost.unwrap() < 128.0 * F::EPSILON);
         assert!(injected.counts.gradient_evals > 0);
         assert_eq!(injected.state.cost_evals(), injected.counts.cost_evals);
         let swarm = Executor::new(
@@ -461,7 +462,7 @@ impl Quadratic  {
         .max_iter(150)
         .run_with_solver()
         .unwrap();
-        assert!(swarm.state.best_cost() < 128.0 * F::EPSILON);
+        assert!(swarm.state.selected_record().unwrap().cost.unwrap() < 128.0 * F::EPSILON);
         assert_eq!(swarm.state.cost_evals(), 16 * 151);
         assert_eq!(swarm.state.counts(), &swarm.counts);
         assert_eq!(swarm.solver.velocities().len(), 16);
@@ -504,7 +505,7 @@ impl Quadratic  {
         .max_iter(200)
         .run()
         .unwrap();
-        assert!(simplex.best_cost() < 128.0 * F::EPSILON);
+        assert!(simplex.selected_record().unwrap().cost.unwrap() < 128.0 * F::EPSILON);
         assert_eq!(
             simplex.state.counts().total_work(),
             simplex.state.counts().cost_evals
@@ -522,7 +523,7 @@ impl Quadratic  {
         .max_iter(200)
         .run()
         .unwrap();
-        assert!(projected_simplex.best_cost() < 128.0 * F::EPSILON);
+        assert!(projected_simplex.selected_record().unwrap().cost.unwrap() < 128.0 * F::EPSILON);
         assert_eq!(
             projected_simplex.state.counts().total_work(),
             projected_simplex.state.counts().cost_evals
@@ -535,7 +536,7 @@ impl Quadratic  {
         .max_iter(50)
         .run()
         .unwrap();
-        assert!(bfgs.cost() < 128.0 * F::EPSILON);
+        assert!(bfgs.current_record().unwrap().cost.unwrap() < 128.0 * F::EPSILON);
         let seeded = Executor::from_start(
             problem(),
             Bfgs::<_, F>::with_line_search(basin::Wolfe::<F>::new()),
@@ -544,7 +545,7 @@ impl Quadratic  {
         .max_iter(50)
         .run()
         .unwrap();
-        assert!(seeded.cost() < 128.0 * F::EPSILON);
+        assert!(seeded.current_record().unwrap().cost.unwrap() < 128.0 * F::EPSILON);
         dense_checks!(@dynamic_checks $storage, V, F, make);
         let lbfgs = Executor::new(
             boxed(problem()),
@@ -555,7 +556,7 @@ impl Quadratic  {
         .max_iter(50)
         .run()
         .unwrap();
-        assert!(lbfgs.cost() < 128.0 * F::EPSILON);
+        assert!(lbfgs.current_record().unwrap().cost.unwrap() < 128.0 * F::EPSILON);
         let unbounded = Executor::from_start(
             problem(),
             Lbfgs::<_, F>::new().unbounded().with_m_capacity(5),
@@ -565,7 +566,7 @@ impl Quadratic  {
         .max_iter(50)
         .run()
         .unwrap();
-        assert!(unbounded.cost() < 128.0 * F::EPSILON);
+        assert!(unbounded.current_record().unwrap().cost.unwrap() < 128.0 * F::EPSILON);
         let descent = Executor::from_start(
             problem(),
             basin::GradientDescent::new(0.25).with_momentum(0.2),
@@ -575,7 +576,7 @@ impl Quadratic  {
         .max_iter(50)
         .run()
         .unwrap();
-        assert!(descent.cost() < 128.0 * F::EPSILON);
+        assert!(descent.current_record().unwrap().cost.unwrap() < 128.0 * F::EPSILON);
         let hopping = Executor::from_start(
             problem(),
             basin::BasinHopping::new(basin::GradientDescent::new(0.25), 73)
@@ -587,7 +588,7 @@ impl Quadratic  {
         .max_iter(3)
         .run()
         .unwrap();
-        assert!(hopping.cost() < 128.0 * F::EPSILON);
+        assert!(hopping.current_record().unwrap().cost.unwrap() < 128.0 * F::EPSILON);
         assert_eq!(hopping.state.counts().cost_evals, 104);
         assert_eq!(hopping.state.counts().gradient_evals, 104);
         let constrained = Executor::from_start(
@@ -710,7 +711,7 @@ impl Quadratic  {
         .max_iter(30)
         .run_with_solver()
         .unwrap();
-        assert!(annealing.cost() < 128.0 * F::EPSILON);
+        assert!(annealing.current_record().unwrap().cost.unwrap() < 128.0 * F::EPSILON);
         assert_eq!(annealing.state.accepted_moves(), 30);
         assert_eq!(annealing.state.rejected_moves(), 0);
         assert_eq!(annealing.state.last_accepted_iter(), 30);
@@ -726,7 +727,7 @@ impl Quadratic  {
         .max_iter(50)
         .run()
         .unwrap();
-        assert!(stochastic.cost() < 128.0 * F::EPSILON);
+        assert!(stochastic.current_record().unwrap().cost.unwrap() < 128.0 * F::EPSILON);
         assert_eq!(stochastic.state.counts().gradient_evals, 50);
         assert_eq!(stochastic.state.counts().cost_evals, 17);
         let random_walk = Executor::from_start(
@@ -738,7 +739,7 @@ impl Quadratic  {
         .max_iter(500)
         .run()
         .unwrap();
-        assert!(random_walk.cost() < 1e-4);
+        assert!(random_walk.current_record().unwrap().cost.unwrap() < 1e-4);
         let projected = Executor::from_start(
             boxed(problem()),
             basin::ProjectedGradientDescent::new(0.25),
@@ -748,7 +749,7 @@ impl Quadratic  {
         .max_iter(50)
         .run()
         .unwrap();
-        assert!(projected.cost() < 128.0 * F::EPSILON);
+        assert!(projected.current_record().unwrap().cost.unwrap() < 128.0 * F::EPSILON);
         let exact = Executor::from_start(
             problem(),
             basin::TrustRegion::with_subproblem(basin::Steihaug::new()),
@@ -758,7 +759,7 @@ impl Quadratic  {
         .max_iter(50)
         .run()
         .unwrap();
-        assert!(exact.cost() < 128.0 * F::EPSILON);
+        assert!(exact.current_record().unwrap().cost.unwrap() < 128.0 * F::EPSILON);
         let matrix_free = Executor::from_start(
             problem(),
             basin::TrustRegion::matrix_free_with(basin::Steihaug::new()),
@@ -768,7 +769,7 @@ impl Quadratic  {
         .max_iter(50)
         .run()
         .unwrap();
-        assert!(matrix_free.cost() < 128.0 * F::EPSILON);
+        assert!(matrix_free.current_record().unwrap().cost.unwrap() < 128.0 * F::EPSILON);
     }};
 }
 
@@ -953,7 +954,7 @@ macro_rules! sparse_problem_checks {
         .max_iter(10)
         .run()
         .unwrap();
-        assert!(result.cost() < 1e-10);
+        assert!(result.current_record().unwrap().cost.unwrap() < 1e-10);
     }};
 }
 #[cfg(any(feature = "nalgebra_all", feature = "faer_all"))]
@@ -1197,7 +1198,7 @@ macro_rules! nalgebra_checks {
                 .unwrap();
                 let _: &backend::SMatrix<F, N, N> =
                     result.solver.inverse_hessian().unwrap();
-                assert!(result.cost() < 1e-12);
+                assert!(result.current_record().unwrap().cost.unwrap() < 1e-12);
             }
 
             struct FixedQuadratic<const N: usize>;
@@ -1310,7 +1311,7 @@ macro_rules! nalgebra_checks {
                             TrustRegion::with_subproblem($strategy).with_evaluation_buffers(),
                             x,
                         ).max_iter(30).run().unwrap();
-                        assert!(result.cost() < 1e-12);
+                        assert!(result.current_record().unwrap().cost.unwrap() < 1e-12);
                     };
                 }
                 solve!(Dogleg);

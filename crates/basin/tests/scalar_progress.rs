@@ -1,5 +1,6 @@
 //! Scalar solvers use the same checked records and lifecycle as vector solvers.
 
+use basin::CountsMirror as _;
 use basin::{
     Brent, BrentDerivative, CostFunction, EvalCounts, Executor,
     FirstOrderState, GoldenSection, Gradient, GradientState, PointState,
@@ -71,7 +72,7 @@ where
     assert_eq!(fresh.state.iter(), 0);
     assert!(fresh.counts.cost_evals > 0);
     assert_eq!(fresh.state.counts(), &fresh.counts);
-    assert_eq!(fresh.state.best_iter(), 0);
+    assert_eq!(fresh.state.selected_record().unwrap().iter, 0);
 }
 
 #[test]

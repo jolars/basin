@@ -82,8 +82,8 @@ struct OwnedState {
     point: Box<f64>,
     cost: f64,
     iter: u64,
-    work: u64,
-    best: (f64, f64, u64, u64),
+    counts: EvalCounts,
+    best: (f64, f64, u64, EvalCounts),
 }
 
 impl OwnedState {
@@ -92,8 +92,8 @@ impl OwnedState {
             point: Box::new(8.0),
             cost: f64::INFINITY,
             iter: 0,
-            work: 0,
-            best: (8.0, f64::INFINITY, 0, 0),
+            counts: EvalCounts::default(),
+            best: (8.0, f64::INFINITY, 0, EvalCounts::default()),
         }
     }
 }
@@ -105,43 +105,43 @@ impl State for OwnedState {
     fn param(&self) -> &f64 {
         &self.point
     }
-    fn cost(&self) -> f64 {
-        self.cost
-    }
     fn iter(&self) -> u64 {
         self.iter
     }
     fn increment_iter(&mut self) {
         self.iter += 1;
     }
-    fn cost_evals(&self) -> u64 {
-        self.work
+    fn current_record(&self) -> Option<basin::CurrentRef<'_, f64>> {
+        (self.counts.cost_evals > 0).then(|| {
+            basin::CurrentRef::new(self.point.as_ref(), Some(self.cost), None)
+        })
     }
-    fn best_param(&self) -> &f64 {
-        &self.best.0
-    }
-    fn best_cost(&self) -> f64 {
-        self.best.1
-    }
-    fn best_iter(&self) -> u64 {
-        self.best.2
-    }
-    fn best_cost_evals(&self) -> u64 {
-        self.best.3
+    fn selected_record(&self) -> Option<basin::SelectedRef<'_, f64>> {
+        let (param, cost, iter, counts) = &self.best;
+        (*cost < f64::INFINITY).then(|| {
+            basin::SelectedRef::new(
+                basin::CurrentRef::new(param, Some(*cost), None),
+                *iter,
+                counts,
+            )
+        })
     }
     fn update_best(&mut self) {
         if self.cost < self.best.1 {
-            self.best = (*self.point, self.cost, self.iter, self.work);
+            self.best = (*self.point, self.cost, self.iter, self.counts);
         }
     }
     fn reset_best(&mut self) {
-        self.best = (*self.point, f64::INFINITY, 0, 0);
+        self.best = (*self.point, f64::INFINITY, 0, EvalCounts::default());
     }
 }
 
 impl CountsMirror for OwnedState {
+    fn cost_evals(&self) -> u64 {
+        self.counts.total_work()
+    }
     fn mirror(&mut self, counts: &EvalCounts) {
-        self.work = counts.total_work();
+        self.counts = *counts;
     }
 }
 
@@ -299,13 +299,28 @@ fn owned_completion_matches_ordinary_results_and_callbacks() {
             };
         assert_eq!(*log.borrow(), *ordinary_log.borrow());
         assert_eq!(result.param(), ordinary.param());
-        assert_eq!(result.cost(), ordinary.cost());
+        assert_eq!(
+            result.current_record().unwrap().cost.unwrap(),
+            ordinary.current_record().unwrap().cost.unwrap()
+        );
         assert_eq!(result.iter(), ordinary.iter());
         assert_eq!(result.cost_evals(), ordinary.cost_evals());
-        assert_eq!(result.best_param(), ordinary.best_param());
-        assert_eq!(result.best_cost(), ordinary.best_cost());
-        assert_eq!(result.best_iter(), ordinary.best_iter());
-        assert_eq!(result.best_cost_evals(), ordinary.best_cost_evals());
+        assert_eq!(
+            result.selected_record().unwrap().param,
+            ordinary.selected_record().unwrap().param
+        );
+        assert_eq!(
+            result.selected_record().unwrap().cost.unwrap(),
+            ordinary.selected_record().unwrap().cost.unwrap()
+        );
+        assert_eq!(
+            result.selected_record().unwrap().iter,
+            ordinary.selected_record().unwrap().iter
+        );
+        assert_eq!(
+            result.selected_record().unwrap().counts.cost_evals,
+            ordinary.selected_record().unwrap().counts.cost_evals
+        );
         assert_eq!(result.report.code(), ordinary.report.code());
         assert_eq!(result.counts, counts(3));
         assert_ne!(result.cost_evals(), result.counts.cost_evals);
@@ -363,9 +378,12 @@ fn clean_mid_step_stop_extracts_charged_counts_without_incrementing_iteration()
     let result = stepper.run_to_end_with_solver().unwrap();
     assert_eq!(result.report.code(), TerminationCode::UserRequested);
     assert_eq!(result.iter(), 0);
-    assert_eq!(result.cost(), 16.0);
+    assert_eq!(result.current_record().unwrap().cost.unwrap(), 16.0);
     assert_eq!(result.counts, counts(1));
-    assert_eq!(result.best_cost_evals(), counts(1).total_work());
+    assert_eq!(
+        result.selected_record().unwrap().counts.cost_evals,
+        counts(1).cost_evals
+    );
     let checkpoint = result.into_checkpoint();
     assert_eq!(checkpoint.state().iter(), 0);
     assert_eq!(*checkpoint.counts(), counts(1));
@@ -469,22 +487,30 @@ where
             let expected = reference.step().unwrap();
             assert_eq!(resumed.step().unwrap(), expected);
             assert_eq!(resumed.state().param(), reference.state().param());
-            assert_eq!(resumed.state().cost(), reference.state().cost());
             assert_eq!(
-                resumed.state().best_param(),
-                reference.state().best_param()
+                resumed.state().current_record().unwrap().cost.unwrap(),
+                reference.state().current_record().unwrap().cost.unwrap()
             );
             assert_eq!(
-                resumed.state().best_cost(),
-                reference.state().best_cost()
+                resumed.state().selected_record().unwrap().param,
+                reference.state().selected_record().unwrap().param
             );
             assert_eq!(
-                resumed.state().best_iter(),
-                reference.state().best_iter()
+                resumed.state().selected_record().unwrap().cost.unwrap(),
+                reference.state().selected_record().unwrap().cost.unwrap()
             );
             assert_eq!(
-                resumed.state().best_cost_evals(),
-                reference.state().best_cost_evals()
+                resumed.state().selected_record().unwrap().iter,
+                reference.state().selected_record().unwrap().iter
+            );
+            assert_eq!(
+                resumed.state().selected_record().unwrap().counts.cost_evals,
+                reference
+                    .state()
+                    .selected_record()
+                    .unwrap()
+                    .counts
+                    .cost_evals
             );
             assert_eq!(resumed.counts(), reference.counts());
             if let StepOutcome::Stopped(reason) = expected {

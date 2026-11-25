@@ -195,7 +195,7 @@ use crate::core::state::{PointState, State};
 ///     .max_iter(2_000)
 ///     .run()
 ///     .unwrap();
-/// assert!(result.cost() < 1e-6);
+/// assert!(result.current_record().unwrap().cost.unwrap() < 1e-6);
 /// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Sgd<V, F: Scalar = f64> {
@@ -693,7 +693,7 @@ mod tests {
         .run()
         .unwrap();
         assert_eq!(
-            result.cost(),
+            result.current_record().unwrap().cost.unwrap(),
             problem_5_centers().cost(result.param()).unwrap()
         );
     }
@@ -710,16 +710,16 @@ mod tests {
         let mut p = Problem::new(problem);
         let state =
             sgd.init(&mut p, PointState::new(vec![10.0, 10.0])).unwrap();
-        assert_eq!(state.cost(), initial_cost);
+        assert_eq!(state.current_record().unwrap().cost.unwrap(), initial_cost);
         let (state, _, _) = sgd.next_iter(&mut p, state).unwrap().into_parts();
         assert_eq!(
-            state.cost(),
+            state.current_record().unwrap().cost.unwrap(),
             initial_cost,
             "default schedule must retain the evaluated record within an epoch",
         );
         let (state, _, _) = sgd.next_iter(&mut p, state).unwrap().into_parts();
         assert_ne!(
-            state.cost(),
+            state.current_record().unwrap().cost.unwrap(),
             initial_cost,
             "default schedule must refresh at the epoch boundary (iter 2)",
         );
@@ -737,7 +737,7 @@ mod tests {
             sgd.init(&mut p, PointState::new(vec![10.0, 10.0])).unwrap();
         let (state, _, _) = sgd.next_iter(&mut p, state).unwrap().into_parts();
         assert_ne!(
-            state.cost(),
+            state.current_record().unwrap().cost.unwrap(),
             initial_cost,
             "with_cost_eval_every(1) must refresh state.cost after every step",
         );

@@ -40,7 +40,11 @@ fn main() {
     .max_iter(MAX_ITERS)
     .run()
     .unwrap();
-    println!("  basin   {:>4} iters  cost={:.6e}", r.iter(), r.cost());
+    println!(
+        "  basin   {:>4} iters  cost={:.6e}",
+        r.iter(),
+        r.current_record().unwrap().cost.unwrap()
+    );
 
     let ls: MoreThuenteLineSearch<Vec<f64>, Vec<f64>, f64> =
         MoreThuenteLineSearch::new();
@@ -68,7 +72,11 @@ fn main() {
     .max_iter(MAX_ITERS)
     .run()
     .unwrap();
-    println!("  basin   {:>4} iters  cost={:.6e}", r.iter(), r.cost());
+    println!(
+        "  basin   {:>4} iters  cost={:.6e}",
+        r.iter(),
+        r.current_record().unwrap().cost.unwrap()
+    );
 
     // Hand argmin the *exact* simplex basin builds (relative step 0.05),
     // and an sd-tolerance of 0 to disable its standard-deviation stop.

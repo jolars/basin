@@ -78,7 +78,7 @@ where
         // arc is complete (init shows iter 0).
         self.records.borrow_mut().push((
             state.iter(),
-            state.cost(),
+            state.current_record().unwrap().cost.unwrap(),
             l2_norm(state.gradient().expect("gradient seeded by Solver::init")),
         ));
     }
@@ -86,7 +86,7 @@ where
     fn observe_iter(&mut self, state: &S) {
         self.records.borrow_mut().push((
             state.iter(),
-            state.cost(),
+            state.current_record().unwrap().cost.unwrap(),
             l2_norm(state.gradient().expect("gradient set by next_iter")),
         ));
     }
@@ -111,7 +111,7 @@ impl<S: State<Float = f64>> Observe<S> for ProgressLogger {
         println!(
             "  start    iter={:>4}  cost={:>14.6e}",
             state.iter(),
-            state.cost()
+            state.current_record().unwrap().cost.unwrap()
         );
     }
 
@@ -119,7 +119,7 @@ impl<S: State<Float = f64>> Observe<S> for ProgressLogger {
         println!(
             "  step     iter={:>4}  cost={:>14.6e}",
             state.iter(),
-            state.cost()
+            state.current_record().unwrap().cost.unwrap()
         );
     }
 
@@ -131,7 +131,7 @@ impl<S: State<Float = f64>> Observe<S> for ProgressLogger {
         println!(
             "  stopped  iter={:>4}  cost={:>14.6e}  reason={:?}",
             state.iter(),
-            state.cost(),
+            state.current_record().unwrap().cost.unwrap(),
             reason
         );
     }
@@ -175,7 +175,7 @@ fn example_observer_on_quadratic() {
     //    gradient tolerance well inside the budget.
     // -----------------------------------------------------------------
     assert_eq!(result.report.code(), TerminationCode::GradientTolerance);
-    assert!(result.cost() < 1e-15);
+    assert!(result.current_record().unwrap().cost.unwrap() < 1e-15);
 
     // -----------------------------------------------------------------
     // 4. Trajectory: one record at init (iter 0) plus one per completed

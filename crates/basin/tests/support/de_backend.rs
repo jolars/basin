@@ -1,3 +1,4 @@
+use basin::CountsMirror as _;
 use std::{
     convert::Infallible,
     ops::{Index, IndexMut},
@@ -75,12 +76,15 @@ where
                     .max_iter(200)
                     .into_stepper()
                     .unwrap();
-            let mut previous = stepper.state().cost();
+            let mut previous =
+                stepper.state().current_record().unwrap().cost.unwrap();
             for _ in 0..200 {
                 stepper.step().unwrap();
                 let state = stepper.state();
-                assert!(state.cost() <= previous);
-                previous = state.cost();
+                assert!(
+                    state.current_record().unwrap().cost.unwrap() <= previous
+                );
+                previous = state.current_record().unwrap().cost.unwrap();
                 assert!(
                     state.costs().windows(2).all(|pair| pair[0] <= pair[1])
                 );
@@ -98,9 +102,10 @@ where
                 num(1e-12)
             };
             assert!(
-                stepper.state().cost() < tolerance,
+                stepper.state().current_record().unwrap().cost.unwrap()
+                    < tolerance,
                 "{mutation:?} {crossover:?}: {:?}",
-                stepper.state().cost()
+                stepper.state().current_record().unwrap().cost.unwrap()
             );
             assert_eq!(stepper.state().cost_evals(), 24 * 201);
         }

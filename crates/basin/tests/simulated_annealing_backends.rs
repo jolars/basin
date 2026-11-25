@@ -46,7 +46,7 @@ fn nalgebra_parameter_runs() {
     .max_iter(1)
     .run()
     .unwrap();
-    assert_eq!(result.cost(), 1.25);
+    assert_eq!(result.current_record().unwrap().cost.unwrap(), 1.25);
 }
 
 #[cfg(feature = "ndarray_all")]
@@ -84,7 +84,7 @@ fn ndarray_parameter_runs() {
             .max_iter(1)
             .run()
             .unwrap();
-    assert_eq!(result.cost(), 1.25);
+    assert_eq!(result.current_record().unwrap().cost.unwrap(), 1.25);
 }
 
 #[cfg(feature = "faer_all")]
@@ -125,7 +125,7 @@ fn faer_parameter_runs() {
     .max_iter(1)
     .run()
     .unwrap();
-    assert_eq!(result.cost(), 1.25);
+    assert_eq!(result.current_record().unwrap().cost.unwrap(), 1.25);
 }
 
 #[path = "support/backend_aliases.rs"]

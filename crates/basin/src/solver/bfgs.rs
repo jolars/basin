@@ -89,7 +89,7 @@ pub use initial_inverse_hessian::{
 /// .max_iter(100)
 /// .run()
 /// .unwrap();
-/// assert!(result.cost() < 1e-8);
+/// assert!(result.current_record().unwrap().cost.unwrap() < 1e-8);
 /// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Bfgs<

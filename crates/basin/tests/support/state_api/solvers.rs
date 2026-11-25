@@ -648,9 +648,11 @@ where
                 .propose(state.param(), temperature, &mut self.rng)?;
         let cost = problem.cost(&candidate)?;
         if !cost.is_nan() && cost != F::infinity() {
-            let accept = cost <= state.cost()
+            let accept = cost <= state.current_record().unwrap().cost.unwrap()
                 || F::from_f64(self.rng.random::<f64>()).unwrap()
-                    < (-(cost - state.cost()) / temperature).exp();
+                    < (-(cost - state.current_record().unwrap().cost.unwrap())
+                        / temperature)
+                        .exp();
             if accept {
                 state.replace(candidate, cost);
             }

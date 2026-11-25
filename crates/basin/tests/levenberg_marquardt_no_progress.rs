@@ -68,7 +68,10 @@ where
             let result = result.unwrap();
             assert_eq!(result.report.code(), TerminationCode::MaxIter);
             assert_eq!(result.param(), &[1.]);
-            assert_eq!(result.cost(), if value == 0. { 0. } else { 0.5 });
+            assert_eq!(
+                result.current_record().unwrap().cost.unwrap(),
+                if value == 0. { 0. } else { 0.5 }
+            );
             assert_eq!(result.state.counts().residual_evals, 2);
         }
     }
@@ -182,7 +185,7 @@ where
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert_eq!(result.state.counts().residual_evals, 2);
     assert_eq!(result.param(), &[1.]);
-    assert_eq!(result.cost(), 0.5);
+    assert_eq!(result.current_record().unwrap().cost.unwrap(), 0.5);
 }
 
 #[test]

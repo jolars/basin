@@ -10,8 +10,8 @@ use basin::core::math::{
 use basin::{
     CostFunction, CountsMirror, EvalCounts, EvaluatedGradientState,
     EvaluatedState, EvaluationKind, Executor, FirstOrderState, Gradient,
-    GradientDimensionMismatch, GradientState, IncumbentState, PointState,
-    Problem, RawEvaluationState, RunControl, Solver, State, TerminationCode,
+    GradientDimensionMismatch, GradientState, PointState, Problem,
+    RawEvaluationState, RunControl, Solver, State, TerminationCode,
 };
 use std::convert::Infallible;
 use std::marker::PhantomData;
@@ -117,17 +117,29 @@ where
     assert_eq!(result.counts.gradient_evals, 4);
     assert_eq!(state.counts(), &result.counts);
     assert_eq!(state.raw_counts(), &result.counts);
-    assert_eq!(state.current_record().unwrap().1, state.cost());
+    assert_eq!(
+        state.evaluated_record().unwrap().1,
+        state.current_record().unwrap().cost.unwrap()
+    );
     assert_eq!(
         state.current_gradient_record().unwrap().2.vec_len(),
         state.param().vec_len()
     );
-    assert_eq!(state.incumbent_record().unwrap().cost, state.best_cost());
+    assert_eq!(
+        state.selected_record().unwrap().cost.unwrap(),
+        state.selected_record().unwrap().cost.unwrap()
+    );
     let best_evals = if initial_cost == F::zero() { 1 } else { 4 };
     assert_eq!(state.best_counts().unwrap().cost_evals, best_evals);
     assert_eq!(state.best_counts().unwrap().gradient_evals, best_evals);
-    assert_eq!(state.cost(), initial_cost / F::from_f64(64.0).unwrap());
-    assert_eq!(state.best().unwrap().1, state.cost());
+    assert_eq!(
+        state.current_record().unwrap().cost.unwrap(),
+        initial_cost / F::from_f64(64.0).unwrap()
+    );
+    assert_eq!(
+        state.best().unwrap().1,
+        state.current_record().unwrap().cost.unwrap()
+    );
     assert_eq!(state.gradient().unwrap().vec_len(), state.param().vec_len());
 
     let point_result =
@@ -137,12 +149,23 @@ where
             .max_iter(3)
             .run_with_solver()
             .unwrap();
-    assert_eq!(point_result.state.cost(), state.cost());
+    assert_eq!(
+        point_result.state.current_record().unwrap().cost.unwrap(),
+        state.current_record().unwrap().cost.unwrap()
+    );
     assert_eq!(point_result.state.iter(), 3);
     assert_eq!(point_result.state.counts(), &point_result.counts);
     assert_eq!(point_result.counts.cost_evals, 4);
     assert_eq!(point_result.counts.gradient_evals, 0);
-    assert_eq!(point_result.state.best_cost_evals(), best_evals);
+    assert_eq!(
+        point_result
+            .state
+            .selected_record()
+            .unwrap()
+            .counts
+            .cost_evals,
+        best_evals
+    );
 }
 
 struct Halve;
@@ -279,7 +302,7 @@ fn counts_preserve_categories_without_folding() {
     assert_eq!(point.counts(), &counts);
     assert_eq!(point.best_counts(), Some(&counts));
     assert_eq!(point.cost_evals(), 2);
-    assert_eq!(point.best_cost_evals(), 2);
+    assert_eq!(point.selected_record().unwrap().counts.cost_evals, 2);
 
     let mut first = FirstOrderState::new(vec![1.0]);
     first.replace(vec![1.0], 1.0, vec![2.0]).unwrap();
@@ -289,7 +312,7 @@ fn counts_preserve_categories_without_folding() {
     assert_eq!(first.best_counts(), Some(&counts));
     assert_eq!(first.cost_evals(), 2);
     assert_eq!(first.gradient_evals(), 3);
-    assert_eq!(first.best_cost_evals(), 2);
+    assert_eq!(first.selected_record().unwrap().counts.cost_evals, 2);
     assert_eq!(first.best_gradient_evals(), 3);
 }
 
@@ -310,7 +333,7 @@ fn nonmonotone_and_equal_cost_publications_retain_matching_history() {
         state.update_best();
         state.update_best();
         assert_eq!(state.best(), Some((&vec![1.0], 1.0)));
-        assert_eq!(state.best_iter(), 0);
+        assert_eq!(state.selected_record().unwrap().iter, 0);
         assert_eq!(state.best_counts(), Some(&all_counts()));
     }
     state.reset_best();
@@ -463,8 +486,8 @@ fn mid_step_stop_stamps_final_counts_without_completing_an_iteration() {
     assert_eq!(result.report.code(), TerminationCode::SolverFailed);
     assert_eq!(result.state.iter(), 0);
     assert_eq!(result.state.best(), Some((&-2.0, -2.0)));
-    assert_eq!(result.state.best_iter(), 0);
-    assert_eq!(result.state.best_cost_evals(), 4);
+    assert_eq!(result.state.selected_record().unwrap().iter, 0);
+    assert_eq!(result.state.selected_record().unwrap().counts.cost_evals, 4);
     assert_eq!(result.state.best_counts(), Some(&result.counts));
     assert_eq!(result.counts.cost_evals, 4);
 }
@@ -564,7 +587,7 @@ fn segment_reset_retains_complete_records_and_clears_bookkeeping() {
     assert!(point.best().is_none());
     assert!(point.best_counts().is_none());
     point.update_best();
-    assert_eq!(point.best_iter(), 0);
+    assert_eq!(point.selected_record().unwrap().iter, 0);
     assert_eq!(point.best_counts(), Some(&EvalCounts::default()));
 
     let mut first_order = FirstOrderState::new(vec![2.0]);

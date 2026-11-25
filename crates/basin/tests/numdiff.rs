@@ -28,7 +28,11 @@ fn gradient_descent_on_finite_diff_sphere_converges() {
     .unwrap();
 
     assert_eq!(result.report.code(), TerminationCode::GradientTolerance);
-    assert!(result.cost() < 1e-12, "cost = {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 1e-12,
+        "cost = {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
     for (i, &xi) in result.param().iter().enumerate() {
         assert!(xi.abs() < 1e-6, "x[{i}] = {xi} (expected near 0)");
     }
@@ -61,7 +65,11 @@ mod nalgebra {
         .run()
         .unwrap();
 
-        assert!(result.cost() < 1e-8, "cost = {}", result.cost());
+        assert!(
+            result.current_record().unwrap().cost.unwrap() < 1e-8,
+            "cost = {}",
+            result.current_record().unwrap().cost.unwrap()
+        );
         assert!((result.param()[0] - 1.0).abs() < 1e-3);
         assert!((result.param()[1] - 1.0).abs() < 1e-3);
     }
@@ -92,7 +100,11 @@ mod nalgebra {
         .unwrap();
 
         assert_eq!(fd.report.code(), TerminationCode::SolverConverged);
-        assert!(fd.cost() < 1e-12, "fd cost = {}", fd.cost());
+        assert!(
+            fd.current_record().unwrap().cost.unwrap() < 1e-12,
+            "fd cost = {}",
+            fd.current_record().unwrap().cost.unwrap()
+        );
         assert!(
             (fd.param()[0] - 1.0).abs() < 1e-6,
             "x[0] = {}",
@@ -133,7 +145,11 @@ mod faer {
         .unwrap();
 
         assert_eq!(fd.report.code(), TerminationCode::SolverConverged);
-        assert!(fd.cost() < 1e-12, "fd cost = {}", fd.cost());
+        assert!(
+            fd.current_record().unwrap().cost.unwrap() < 1e-12,
+            "fd cost = {}",
+            fd.current_record().unwrap().cost.unwrap()
+        );
         assert!(
             (fd.param()[0] - 1.0).abs() < 1e-6,
             "x[0] = {}",

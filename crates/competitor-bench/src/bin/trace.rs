@@ -106,10 +106,13 @@ where
     let t0 = Instant::now();
     let mut stepper = exec.max_iter(max_iter).into_stepper().unwrap();
     let mut pts = Vec::with_capacity(max_iter as usize + 1);
-    pts.push((0u128, stepper.state().cost()));
+    pts.push((
+        0u128,
+        stepper.state().current_record().unwrap().cost.unwrap(),
+    ));
     loop {
         let outcome = stepper.step().unwrap();
-        let cost = stepper.state().cost();
+        let cost = stepper.state().current_record().unwrap().cost.unwrap();
         pts.push((t0.elapsed().as_nanos(), cost));
         if outcome != StepOutcome::Continue || (0.0..=1e-10).contains(&cost) {
             break;

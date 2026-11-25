@@ -172,7 +172,7 @@ fn run<P, S, F>(
         Ok(result) => {
             let quality = Quality::at(fixture, result.param())
                 .unwrap_or_else(|_| Quality::invalid());
-            let rss = 2.0 * result.cost();
+            let rss = 2.0 * result.current_record().unwrap().cost.unwrap();
             let counts = &result.counts;
             println!(
                 "{route},{policy},{},{},{:?},{},{},{},{:e},{:e},{:e},{:e},{:e},{:e},{}",

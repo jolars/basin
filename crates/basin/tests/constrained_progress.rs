@@ -68,10 +68,10 @@ fn selected_incumbent_can_increase_objective_to_improve_feasibility() {
     .run()
     .unwrap();
     assert!(
-        result.best_param()[0] > 0.99,
+        result.selected_record().unwrap().param[0] > 0.99,
         "infeasible zero-cost seed remained selected"
     );
-    assert!(result.best_cost() > 0.98);
+    assert!(result.selected_record().unwrap().cost.unwrap() > 0.98);
 }
 
 type EqualitySolver = AugmentedLagrangianMethod<
@@ -135,7 +135,7 @@ fn augmented_lagrangian_fresh_and_exact_lifecycles() {
         .unwrap();
     coherent(&initialized.state);
     assert_eq!(initialized.state.iter(), 0);
-    assert_eq!(initialized.state.best_iter(), 0);
+    assert_eq!(initialized.state.selected_record().unwrap().iter, 0);
     assert_eq!(initialized.counts.cost_evals, 1);
     assert_eq!(initialized.counts.total_work(), 1);
     let restarted = Executor::resume_from_checkpoint(
@@ -156,7 +156,7 @@ fn augmented_lagrangian_fresh_and_exact_lifecycles() {
 
 #[test]
 fn explicit_selection_stamps_once_and_keeps_its_own_record() {
-    use basin::{CountsMirror, EvalCounts, IncumbentState, SelectedState};
+    use basin::{CountsMirror, EvalCounts, SelectedState};
     let mut state = SelectedState::new(vec![0.0]);
     assert!(state.current().is_none());
     assert!(!state.select_current());
@@ -239,11 +239,11 @@ fn explicit_selection_stamps_once_and_keeps_its_own_record() {
             &ViolationReport::new(0.0, ViolationMeasure::L2)
         ))
     );
-    assert_eq!(state.best_iter(), 0);
+    assert_eq!(state.selected_record().unwrap().iter, 0);
     assert_eq!(state.best_counts(), Some(&second));
-    let best = state.incumbent_record().unwrap();
+    let best = state.selected_record().unwrap();
     assert_eq!(best.param, &vec![1.0]);
-    assert_eq!(best.cost, 1.0);
+    assert_eq!(best.cost.unwrap(), 1.0);
     assert_eq!(best.counts, &second);
     state.reset();
     assert_eq!(state.param(), &vec![3.0]);

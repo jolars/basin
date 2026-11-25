@@ -127,7 +127,7 @@ where
                 result.report.code(),
                 TerminationCode::GradientTolerance,
                 "update={update:?}, cost={:?}, iter={}",
-                result.cost(),
+                result.current_record().unwrap().cost.unwrap(),
                 result.iter()
             );
             let (x, cost, gradient) = result.state.current().unwrap();

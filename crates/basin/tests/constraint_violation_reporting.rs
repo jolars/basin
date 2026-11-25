@@ -2,9 +2,9 @@
 
 use basin::{
     ConstraintViolationState, CountsMirror, EvalCounts, EvaluatedState,
-    IncumbentRef, IncumbentState, Observe, Scalar, SelectedFirstOrderState,
-    SelectedState, State, VectorLen, ViolationMeasure, ViolationReport,
-    ViolationScaling, ViolationTransformation,
+    Observe, Scalar, SelectedFirstOrderState, SelectedState, State, VectorLen,
+    ViolationMeasure, ViolationReport, ViolationScaling,
+    ViolationTransformation,
 };
 
 use std::{
@@ -457,10 +457,10 @@ fn records<
     assert_eq!(state.incumbent_violation(), Some(&original));
     assert_eq!(state.current().unwrap().2, &later);
     assert_eq!(state.best().unwrap().2, &original);
-    assert_eq!(state.incumbent_record().unwrap().cost, zero);
+    assert_eq!(state.selected_record().unwrap().cost.unwrap(), zero);
     state.increment_iter();
     state.update_best();
-    assert_eq!(state.best_iter(), 0);
+    assert_eq!(state.selected_record().unwrap().iter, 0);
     assert_eq!(state.best_counts(), Some(&counts));
     state.select_current();
     state.reset_best();
@@ -593,38 +593,15 @@ impl State for ExternalState {
         0
     }
     fn increment_iter(&mut self) {}
-    fn cost_evals(&self) -> u64 {
-        self.counts.cost_evals
-    }
     fn param(&self) -> &f64 {
         &self.point
-    }
-    fn cost(&self) -> f64 {
-        1.0
-    }
-    fn best_param(&self) -> &f64 {
-        &self.point
-    }
-    fn best_cost(&self) -> f64 {
-        1.0
-    }
-    fn best_iter(&self) -> u64 {
-        0
-    }
-    fn best_cost_evals(&self) -> u64 {
-        self.counts.cost_evals
     }
     fn update_best(&mut self) {}
     fn reset_best(&mut self) {}
 }
 impl EvaluatedState for ExternalState {
-    fn current_record(&self) -> Option<(&f64, f64)> {
+    fn evaluated_record(&self) -> Option<(&f64, f64)> {
         Some((&self.point, 1.0))
-    }
-}
-impl IncumbentState for ExternalState {
-    fn incumbent_record(&self) -> Option<IncumbentRef<'_, f64>> {
-        Some(IncumbentRef::new(&self.point, 1.0, 0, &self.counts))
     }
 }
 impl ConstraintViolationState for ExternalState {
@@ -710,4 +687,39 @@ fn serialization_preserves_custom_and_pending_report_metadata() {
     }
     round_trip::<f32>();
     round_trip::<f64>();
+}
+
+#[test]
+fn selection_keeps_violation_only_record_after_current_replacement() {
+    use basin::SelectionChange;
+
+    let mut state = basin::SelectedState::new(vec![3.0]);
+    assert!(state.current_record().is_none());
+    assert!(!state.select_current());
+
+    state.replace_without_cost(
+        vec![2.0],
+        ViolationReport::new(2.0, ViolationMeasure::L1),
+    );
+    assert!(state.select_current());
+    state.replace(
+        vec![1.0],
+        f64::INFINITY,
+        ViolationReport::new(1.0, ViolationMeasure::L1),
+    );
+    let mut counts = basin::EvalCounts::default();
+    counts.cost_evals = 1;
+    counts.residual_evals = 2;
+    basin::CountsMirror::mirror(&mut state, &counts);
+    assert_eq!(
+        state.publish_selection(),
+        Some(SelectionChange::SolverSelected)
+    );
+    assert_eq!(state.current_record().unwrap().cost, Some(f64::INFINITY));
+    let selected = state.selected_record().unwrap();
+    assert_eq!(selected.param, &[2.0]);
+    assert_eq!(selected.cost, None);
+    assert_eq!(selected.violation.unwrap().value, 2.0);
+    assert_eq!(selected.counts, &counts);
+    assert_eq!(state.publish_selection(), None);
 }

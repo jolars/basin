@@ -9,7 +9,7 @@ use basin::core::state::CountsMirror;
 use basin::solver::lbfgs::Unbounded;
 use basin::{
     CostFunction, EvaluationKind, Executor, FirstOrderState, Gradient,
-    IncumbentState, InnerExecutor, Jacobian, Lbfgs, Lbfgsb, LevenbergMarquardt,
+    InnerExecutor, Jacobian, Lbfgs, Lbfgsb, LevenbergMarquardt,
     LmDamping, MoreThuente, PointState, Problem, Residual, Solver, State,
     Stepper, TerminationReport,
 };
@@ -195,7 +195,7 @@ fn timing(reps: usize) {
                     .into_stepper()
                     .unwrap();
                     loop {
-                        let cost = stepper.state().best_cost();
+                        let cost = stepper.state().selected_record().unwrap().cost.unwrap();
                         let stop = step(&mut stepper, TerminationReport::code);
                         if let Some((point, _)) = stepper
                             .state()
@@ -225,7 +225,7 @@ fn timing(reps: usize) {
                     .unwrap();
                     black_box((
                         result.iter(),
-                        result.best_cost(),
+                        result.selected_record().unwrap().cost.unwrap(),
                         result.report.code(),
                     ));
                 });
@@ -244,7 +244,7 @@ fn timing(reps: usize) {
                         if let Some(code) = stop {
                             black_box((
                                 stepper.iter(),
-                                stepper.state().best_cost(),
+                                stepper.state().selected_record().unwrap().cost.unwrap(),
                                 code,
                             ));
                             break;
@@ -266,7 +266,7 @@ fn verify<P, S, So>(
     charge_prefix: impl Fn(&mut Problem<P>),
     objective: impl Fn(&S::Param) -> f64,
 ) where
-    S: IncumbentState<Float = f64> + CountsMirror + PartialEq + Debug,
+    S: State<Float = f64> + CountsMirror + PartialEq + Debug,
     S::Param: Debug,
     So: Solver<P, S, Error = Infallible>,
 {
@@ -302,10 +302,10 @@ fn verify<P, S, So>(
         assert_eq!(manual.state, reference.state);
         assert_eq!(manual.counts, reference.counts);
         assert_eq!(manual.report, reference.report);
-        let best = manual.incumbent_record().unwrap();
+        let best = manual.selected_record().unwrap();
         let expected = objective(best.param);
         assert!(
-            (best.cost - expected).abs()
+            (best.cost.unwrap() - expected).abs()
                 <= 16.0 * f64::EPSILON * expected.abs()
         );
 

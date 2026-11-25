@@ -68,7 +68,11 @@ fn unbounded_rosenbrock_2d_converges() {
     .run()
     .unwrap();
 
-    assert!(result.cost() < 1e-10, "cost = {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 1e-10,
+        "cost = {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-4
             && (result.param()[1] - 1.0).abs() < 1e-4,
@@ -104,9 +108,9 @@ fn booth_at_corner_converges() {
         result.param()[1]
     );
     assert!(
-        (result.cost() - 20.0).abs() < 1e-8,
+        (result.current_record().unwrap().cost.unwrap() - 20.0).abs() < 1e-8,
         "cost = {}",
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }
 
@@ -135,7 +139,11 @@ fn booth_slack_bounds_recover_unconstrained_minimum() {
         result.param()[0],
         result.param()[1]
     );
-    assert!(result.cost() < 1e-8, "cost = {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 1e-8,
+        "cost = {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
 }
 
 /// On the unbounded Rosenbrock, L-Bfgs-B with `m = 10` should
@@ -172,14 +180,14 @@ fn lbfgsb_matches_bfgs_more_thuente_on_unbounded_rosenbrock() {
     .unwrap();
 
     assert!(
-        bfgs_result.cost() < 1e-12,
+        bfgs_result.current_record().unwrap().cost.unwrap() < 1e-12,
         "Bfgs cost = {}",
-        bfgs_result.cost()
+        bfgs_result.current_record().unwrap().cost.unwrap()
     );
     assert!(
-        lbfgsb_result.cost() < 1e-10,
+        lbfgsb_result.current_record().unwrap().cost.unwrap() < 1e-10,
         "Lbfgsb cost = {}",
-        lbfgsb_result.cost()
+        lbfgsb_result.current_record().unwrap().cost.unwrap()
     );
     // L-Bfgs-B's per-iteration extra cost+grad eval (the
     // re-evaluation at the accepted step, see `next_iter`) inflates

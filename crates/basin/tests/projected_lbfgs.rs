@@ -159,7 +159,10 @@ fn exact_continuation_preserves_every_search_and_retention_choice() {
                     .run()
                     .unwrap();
                 assert_eq!(resumed.param(), fresh.param());
-                assert_eq!(resumed.cost(), fresh.cost());
+                assert_eq!(
+                    resumed.current_record().unwrap().cost.unwrap(),
+                    fresh.current_record().unwrap().cost.unwrap()
+                );
                 assert_eq!(resumed.state.counts(), fresh.state.counts());
                 assert_eq!(resumed.report, fresh.report);
             }

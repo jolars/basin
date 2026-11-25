@@ -33,7 +33,10 @@ fn same_seed_yields_identical_trajectory() {
     .run()
     .unwrap();
 
-    assert_eq!(result_a.cost(), result_b.cost());
+    assert_eq!(
+        result_a.current_record().unwrap().cost.unwrap(),
+        result_b.current_record().unwrap().cost.unwrap()
+    );
     assert_eq!(result_a.param(), result_b.param());
 }
 
@@ -66,7 +69,10 @@ fn with_stds_ones_matches_default() {
     .run()
     .unwrap();
 
-    assert_eq!(default.cost(), with_ones.cost());
+    assert_eq!(
+        default.current_record().unwrap().cost.unwrap(),
+        with_ones.current_record().unwrap().cost.unwrap()
+    );
     assert_eq!(default.param(), with_ones.param());
     assert_eq!(default.report.code(), with_ones.report.code());
 }

@@ -382,8 +382,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::CountsMirror;
     use crate::core::executor::Executor;
-    use crate::core::state::State;
 
     struct Quadratic {
         lo: f64,
@@ -490,11 +490,15 @@ mod tests {
         .unwrap();
         assert_eq!(r.report.code(), crate::TerminationCode::SolverConverged);
         assert!(
-            (r.best_param() - 1.0).abs() < 1e-6,
+            (r.selected_record().unwrap().param - 1.0).abs() < 1e-6,
             "x = {}",
-            r.best_param()
+            r.selected_record().unwrap().param
         );
-        assert!((r.best_cost() + 2.0).abs() < 1e-10, "f = {}", r.best_cost());
+        assert!(
+            (r.selected_record().unwrap().cost.unwrap() + 2.0).abs() < 1e-10,
+            "f = {}",
+            r.selected_record().unwrap().cost.unwrap()
+        );
         // Derivative information should make this converge in few evals on a
         // smooth cubic; guard against a real regression.
         assert!(
@@ -522,9 +526,9 @@ mod tests {
         // |f'(x)| = 3|x²−1| ≈ 6|x−1| near the optimum, so |f'| ≤ 1e-4 puts the
         // best iterate within ~2e-5 of x = 1.
         assert!(
-            (r.best_param() - 1.0).abs() < 1e-3,
+            (r.selected_record().unwrap().param - 1.0).abs() < 1e-3,
             "best_x = {}",
-            r.best_param()
+            r.selected_record().unwrap().param
         );
     }
 
@@ -543,22 +547,26 @@ mod tests {
         .run()
         .unwrap();
         assert!(
-            (r.best_param() - 1.0).abs() < 1e-5,
+            (r.selected_record().unwrap().param - 1.0).abs() < 1e-5,
             "best_x = {}, reason = {:?}",
-            r.best_param(),
+            r.selected_record().unwrap().param,
             r.report.code()
         );
         assert!(
-            (r.best_cost() + 2.0).abs() < 1e-9,
+            (r.selected_record().unwrap().cost.unwrap() + 2.0).abs() < 1e-9,
             "best_cost = {}, reason = {:?}",
-            r.best_cost(),
+            r.selected_record().unwrap().cost.unwrap(),
             r.report.code()
         );
-        assert!(r.best_iter() > 0, "best_iter = {}", r.best_iter());
         assert!(
-            r.best_cost_evals() > 0,
+            r.selected_record().unwrap().iter > 0,
+            "best_iter = {}",
+            r.selected_record().unwrap().iter
+        );
+        assert!(
+            r.selected_record().unwrap().counts.cost_evals > 0,
             "best_cost_evals = {}",
-            r.best_cost_evals()
+            r.selected_record().unwrap().counts.cost_evals
         );
     }
 }

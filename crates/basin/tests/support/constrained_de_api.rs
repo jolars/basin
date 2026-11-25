@@ -9,9 +9,9 @@ use std::ops::{Index, IndexMut};
 use basin::{
     BoxBounds, ConstraintAxis, ConstraintBlock, ConstraintError, ConstraintSet,
     ConstraintSolveError, Constraints, CostFunction, CountsMirror, De,
-    EvalCounts, EvaluatedState, IncumbentRef, IncumbentState, InnerExecutor,
-    MemeticInner, NoLinearConstraints, NoNonlinearBlock, NonlinearBlock,
-    NonlinearBlocks, NonlinearInequalityValues, PartialResultPolicy, Problem,
+    EvalCounts, EvaluatedState, InnerExecutor, MemeticInner,
+    NoLinearConstraints, NoNonlinearBlock, NonlinearBlock, NonlinearBlocks,
+    NonlinearInequalityValues, PartialResultPolicy, Problem,
     RawEvaluationState, Scalar, Solver, SolverStep, State, VectorLen,
 };
 
@@ -191,40 +191,37 @@ impl<V: Clone, F: Scalar> State for SelectedPopulationProgress<V, F> {
     fn increment_iter(&mut self) {
         self.iter += 1;
     }
-    fn cost_evals(&self) -> u64 {
-        self.counts.cost_evals
-    }
     fn param(&self) -> &V {
         self.current()
             .or_else(|| self.members.first())
             .expect("population has no seed")
             .param()
     }
-    fn cost(&self) -> F {
-        self.current()
-            .and_then(|m| m.cost)
-            .expect("representative has not been evaluated")
+    fn current_record(&self) -> Option<basin::CurrentRef<'_, V, F>> {
+        let m = self.current()?;
+        Some(basin::CurrentRef::new(&m.param, m.cost, None))
     }
-    fn best_param(&self) -> &V {
-        self.best().expect("no selected incumbent").param()
-    }
-    fn best_cost(&self) -> F {
-        self.best().and_then(|m| m.cost).unwrap_or(F::infinity())
-    }
-    fn best_iter(&self) -> u64 {
-        self.best.as_ref().map_or(0, |s| s.iter)
-    }
-    fn best_cost_evals(&self) -> u64 {
-        self.best.as_ref().map_or(0, |s| s.counts.cost_evals)
+    fn selected_record(&self) -> Option<basin::SelectedRef<'_, V, F>> {
+        let s = self.best.as_ref()?;
+        Some(basin::SelectedRef::new(
+            basin::CurrentRef::new(&s.member.param, s.member.cost, None),
+            s.iter,
+            &s.counts,
+        ))
     }
     fn update_best(&mut self) {
+        self.publish_selection();
+    }
+    fn publish_selection(&mut self) -> Option<basin::SelectionChange> {
         if let Some(member) = self.pending.take() {
             self.best = Some(Selection {
                 member,
                 iter: self.iter,
                 counts: self.counts,
             });
+            return Some(basin::SelectionChange::SolverSelected);
         }
+        None
     }
     fn reset_best(&mut self) {
         self.best = None;
@@ -232,6 +229,9 @@ impl<V: Clone, F: Scalar> State for SelectedPopulationProgress<V, F> {
     }
 }
 impl<V: Clone, F: Scalar> CountsMirror for SelectedPopulationProgress<V, F> {
+    fn cost_evals(&self) -> u64 {
+        self.counts.cost_evals
+    }
     fn mirror(&mut self, counts: &EvalCounts) {
         self.counts = *counts;
     }
@@ -244,20 +244,9 @@ impl<V: Clone, F: Scalar> RawEvaluationState
     }
 }
 impl<V: Clone, F: Scalar> EvaluatedState for SelectedPopulationProgress<V, F> {
-    fn current_record(&self) -> Option<(&V, F)> {
+    fn evaluated_record(&self) -> Option<(&V, F)> {
         let m = self.current()?;
         Some((&m.param, m.cost?))
-    }
-}
-impl<V: Clone, F: Scalar> IncumbentState for SelectedPopulationProgress<V, F> {
-    fn incumbent_record(&self) -> Option<IncumbentRef<'_, V, F>> {
-        let s = self.best.as_ref()?;
-        Some(IncumbentRef::new(
-            &s.member.param,
-            s.member.cost?,
-            s.iter,
-            &s.counts,
-        ))
     }
 }
 impl<V: Clone, F: Scalar> SelectedPopulationState
@@ -676,7 +665,7 @@ where
             I::State,
             Error = ConstraintSolveError<<P as CostFunction>::Error>,
         >,
-    I::State: IncumbentState<Param = V, Float = F> + CountsMirror,
+    I::State: State<Param = V, Float = F> + CountsMirror,
 {
     type Error = ConstraintSolveError<<P as CostFunction>::Error>;
     fn init(
@@ -721,7 +710,11 @@ where
             {
                 return Ok(SolverStep::stopped(state, stop));
             }
-            let Some(incumbent) = result.state.incumbent_record() else {
+            let Some(incumbent) = result
+                .state
+                .selected_record()
+                .filter(|record| record.cost.is_some())
+            else {
                 continue;
             };
             // Rechecking after box repair prevents an inner result from bypassing selection.

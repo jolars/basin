@@ -467,7 +467,9 @@ where
         _problem: &Problem<P>,
         state: &PointState<V, F>,
     ) -> Option<Termination<F>> {
-        self.check_native_convergence(state.cost())
+        self.check_native_convergence(
+            state.current_record().unwrap().cost.unwrap(),
+        )
     }
     fn init(
         &mut self,
@@ -522,7 +524,9 @@ where
         _problem: &Problem<RobustLeastSquares<P, L, F, RW>>,
         state: &PointState<V, F>,
     ) -> Option<Termination<F>> {
-        self.check_native_convergence(state.cost())
+        self.check_native_convergence(
+            state.current_record().unwrap().cost.unwrap(),
+        )
     }
     fn init(
         &mut self,
@@ -749,7 +753,7 @@ impl<F: Scalar, W> TrustRegionReflective<F, W> {
         if work.failed {
             if let Some(trace) = &mut self.trace {
                 let index = trace.event(
-                    state.cost(),
+                    state.current_record().unwrap().cost.unwrap(),
                     "construction",
                     "invalid_initial_model",
                 );
@@ -761,7 +765,7 @@ impl<F: Scalar, W> TrustRegionReflective<F, W> {
         let Some(model) = work.model(state.param()) else {
             if let Some(trace) = &mut self.trace {
                 let index = trace.event(
-                    state.cost(),
+                    state.current_record().unwrap().cost.unwrap(),
                     "construction",
                     "invalid_scaling",
                 );
@@ -781,7 +785,7 @@ impl<F: Scalar, W> TrustRegionReflective<F, W> {
         let Some(svd) = DenseSvd::factor(m + n, n, augmented) else {
             if let Some(trace) = &mut self.trace {
                 let index = trace.event(
-                    state.cost(),
+                    state.current_record().unwrap().cost.unwrap(),
                     "construction",
                     "factorization_failed",
                 );
@@ -803,7 +807,7 @@ impl<F: Scalar, W> TrustRegionReflective<F, W> {
             .map(|&i| state.param().get_scalar(i))
             .collect();
         let theta = number::<F>(0.995).max(F::one() - work.optimality);
-        let old_cost = state.cost();
+        let old_cost = state.current_record().unwrap().cost.unwrap();
         for _ in 0..self.max_inner_attempts {
             let result = svd.trust_step(
                 &rhs,
@@ -1036,7 +1040,7 @@ impl<F: Scalar, W> TrustRegionReflective<F, W> {
                 if work.failed {
                     if let Some(trace) = &mut self.trace {
                         trace.event(
-                            state.cost(),
+                            state.current_record().unwrap().cost.unwrap(),
                             "construction",
                             "invalid_retained_model",
                         );

@@ -179,7 +179,8 @@ fn write_result<B: Backend>(
             let native = B::values(result.param());
             let parameters: Vec<_> =
                 native.iter().copied().map(number).collect();
-            let state_rss = 2.0 * number(result.cost());
+            let state_rss =
+                2.0 * number(result.current_record().unwrap().cost.unwrap());
             let quality =
                 quality_at(&parameters).unwrap_or_else(|_| Quality::invalid());
             let valid = state_rss.is_finite()

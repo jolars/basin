@@ -121,7 +121,7 @@ macro_rules! stopping_backend {
                 .max_iter(5)
                 .run()
                 .unwrap();
-                assert!(increased.cost() > 0.125);
+                assert!(increased.current_record().unwrap().cost.unwrap() > 0.125);
                 assert_eq!(increased.report.code(), TerminationCode::RelativeCostTolerance);
                 let stationary = Executor::new(
                     Quadratic::new(),
@@ -261,8 +261,8 @@ fn uncached_nonfinite_trials_preserve_the_last_finite_iterate_in_both_modes() {
                 };
                 assert_eq!(result.report.code(), TerminationCode::SolverFailed);
                 assert_eq!(result.param(), &[1.]);
-                assert_eq!(result.best_param(), &[1.]);
-                assert_eq!(result.cost(), 0.5);
+                assert_eq!(result.selected_record().unwrap().param, &[1.]);
+                assert_eq!(result.current_record().unwrap().cost.unwrap(), 0.5);
                 assert_eq!(
                     basin::GradientState::gradient(&result.state),
                     Some(&vec![1.])

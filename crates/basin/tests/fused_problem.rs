@@ -120,7 +120,11 @@ fn gradient_descent_runs_with_no_opt_in() {
     .max_iter(200)
     .run()
     .unwrap();
-    assert!(result.cost() < 1e-8, "got cost {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 1e-8,
+        "got cost {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
 }
 
 // ---------------------------------------------------------------------
@@ -192,7 +196,11 @@ fn solver_calls_fused_override() {
         calls >= expected_min,
         "expected at least {expected_min} fused calls, got {calls}"
     );
-    assert!(result.cost() < 1e-8, "got cost {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 1e-8,
+        "got cost {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
 }
 
 #[test]
@@ -212,7 +220,7 @@ fn gradient_descent_reuses_the_fused_line_search_evaluation() {
     .unwrap();
 
     assert_eq!(result.param(), &[0.0, 0.0]);
-    assert_eq!(result.cost(), 0.0);
+    assert_eq!(result.current_record().unwrap().cost.unwrap(), 0.0);
     assert_eq!(counter.get(), 2);
     assert_eq!(result.cost_evals(), 2);
 }

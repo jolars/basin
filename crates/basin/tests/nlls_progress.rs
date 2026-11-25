@@ -1,5 +1,6 @@
 //! Least-squares solvers publish shared points and preserve raw work categories.
 
+use basin::CountsMirror as _;
 use basin::{
     DenseMatrix, EvaluationKind, Executor, GaussNewton, Jacobian,
     LevenbergMarquardt, LevenbergMarquardtQr, PointState, Residual, Solver,
@@ -53,7 +54,7 @@ fn check<So: Solver<Linear, PointState<Vec<f64>>, Error = Infallible>>(
         .run_with_solver()
         .unwrap();
     assert_eq!(fresh.state.iter(), 0);
-    assert_eq!(fresh.state.best_iter(), 0);
+    assert_eq!(fresh.state.selected_record().unwrap().iter, 0);
     assert_eq!(fresh.counts.residual_evals, 1);
     assert_eq!(fresh.counts.jacobian_evals, 1);
     assert_eq!(fresh.state.counts(), &fresh.counts);

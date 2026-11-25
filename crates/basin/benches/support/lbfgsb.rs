@@ -6,6 +6,7 @@
 #[path = "lbfgsb_short.rs"]
 pub mod short;
 
+use basin::CountsMirror as _;
 use basin::{
     CostFunction, Executor, FirstOrderState, Gradient, GradientState, Lbfgsb,
     OptimizationResult, Solver, State,
@@ -159,7 +160,7 @@ impl<V: Vector> Driver<V> {
         )
         .max_iter(2000)
         .stop_when(move |state: &FirstOrderState<V>| {
-            let value = state.cost();
+            let value = state.current_record().unwrap().cost.unwrap();
             let old = previous.replace(value);
             let pg = state
                 .param()
@@ -225,16 +226,19 @@ impl<V: Vector> Driver<V> {
         // Independent verification calls are outside the solve's counters/timer.
         let cost = self.evaluate(result.param().as_slice(), &mut gradient);
         assert!((cost - objective).abs() <= objective_tolerance);
-        assert_eq!(cost, result.cost());
+        assert_eq!(cost, result.current_record().unwrap().cost.unwrap());
         assert_eq!(&gradient, result.state.gradient().unwrap().as_slice());
         assert!(
             self.projected_gradient(result.param().as_slice(), &gradient)
                 <= pg_limit
         );
         let incumbent =
-            result.incumbent_record().expect("expected an incumbent");
+            result.selected_record().expect("expected an incumbent");
         assert_eq!(incumbent.param.as_slice(), result.param().as_slice());
-        assert_eq!(incumbent.cost, result.cost());
+        assert_eq!(
+            incumbent.cost.unwrap(),
+            result.current_record().unwrap().cost.unwrap()
+        );
     }
 }
 

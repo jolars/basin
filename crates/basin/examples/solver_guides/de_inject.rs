@@ -32,7 +32,7 @@ fn main() {
             .run()
             .unwrap();
 
-    let incumbent = result.incumbent_record().expect("expected an incumbent");
-    assert!(incumbent.cost < 1e-4);
+    let incumbent = result.selected_record().expect("expected an incumbent");
+    assert!(incumbent.cost.unwrap() < 1e-4);
     assert!(incumbent.param.iter().all(|v| v.abs() < 0.01));
 }

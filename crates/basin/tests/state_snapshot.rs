@@ -81,7 +81,7 @@ mod file {
             read_state_snapshot(&path).unwrap();
         let bytes = std::fs::read(&path).unwrap();
         assert_eq!(&bytes[..8], b"BASINST\0");
-        assert_eq!(&bytes[8..12], &1_u32.to_le_bytes());
+        assert_eq!(&bytes[8..12], &2_u32.to_le_bytes());
         assert_eq!(&bytes[12..], postcard::to_allocvec(&reloaded).unwrap());
         let error = read_checkpoint::<u8, u8>(&path).unwrap_err();
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
@@ -103,7 +103,12 @@ mod file {
         for (a, b) in resumed.param().iter().zip(reference.param()) {
             assert!((a - b).abs() < 1e-12, "resumed {a} vs reference {b}");
         }
-        assert!((resumed.cost() - reference.cost()).abs() < 1e-12);
+        assert!(
+            (resumed.current_record().unwrap().cost.unwrap()
+                - reference.current_record().unwrap().cost.unwrap())
+            .abs()
+                < 1e-12
+        );
 
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -126,9 +131,9 @@ mod file {
     fn invalid_postcard_state_snapshots_are_rejected() {
         let path = std::env::temp_dir()
             .join(format!("basin-invalid-{}.ckpt", std::process::id()));
-        let prefix = [b"BASINST\0".as_slice(), &1_u32.to_le_bytes()].concat();
+        let prefix = [b"BASINST\0".as_slice(), &2_u32.to_le_bytes()].concat();
         let mut unsupported = prefix.clone();
-        unsupported[8..12].copy_from_slice(&2_u32.to_le_bytes());
+        unsupported[8..12].copy_from_slice(&1_u32.to_le_bytes());
 
         for bytes in [
             vec![],

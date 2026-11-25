@@ -332,7 +332,7 @@ impl<V, F: Scalar> sealed::Sealed for StepChecks<V, F> {}
 impl<P, S, V, F> Check<P, S> for StepChecks<V, F>
 where
     F: Scalar,
-    S: State<Param = V, Float = F>,
+    S: crate::CountsMirror<Param = V, Float = F>,
     V: Clone + ScaledAdd<F> + NormSquared<F>,
 {
     fn reset(&mut self) {
@@ -439,7 +439,7 @@ impl<F: Scalar> sealed::Sealed for CostChecks<F> {}
 impl<P, S, F> Check<P, S> for CostChecks<F>
 where
     F: Scalar,
-    S: State<Float = F>,
+    S: crate::CountsMirror<Float = F>,
 {
     fn reset(&mut self) {
         self.cache = None;
@@ -464,11 +464,14 @@ where
                 return result.clone();
             }
         }
-        if !state.cost().is_finite() {
+        let Some(current) = state
+            .current_record()
+            .and_then(|record| record.cost)
+            .filter(|cost| cost.is_finite())
+        else {
             <Self as Check<P, S>>::reset(self);
             return None;
-        }
-        let current = state.cost();
+        };
         let absolute = self.absolute.as_mut().and_then(|check| {
             let last = check.last.replace(current)?;
             let value = (last - current).abs();

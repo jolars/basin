@@ -100,12 +100,12 @@ fn converges_to_disk_optimum() {
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
-        (result.best_cost() - (-0.5)).abs() < 1e-2,
+        (result.selected_record().unwrap().cost.unwrap() - (-0.5)).abs() < 1e-2,
         "f = {}",
-        result.best_cost()
+        result.selected_record().unwrap().cost.unwrap()
     );
     // The returned point is feasible and the reported violation is ~0.
-    let x = result.best_param();
+    let x = result.selected_record().unwrap().param;
     assert!(x[0] * x[0] + x[1] * x[1] <= 1.0 + 1e-6, "infeasible {x:?}");
     assert!(
         result.state.current().unwrap().2.value <= 1e-12,
@@ -133,15 +133,15 @@ fn infeasible_start_reaches_feasible_optimum() {
     .unwrap();
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
-    let x = result.best_param();
+    let x = result.selected_record().unwrap().param;
     assert!(
         x[0] * x[0] + x[1] * x[1] <= 1.0 + 1e-6,
         "did not reach feasibility: {x:?}"
     );
     assert!(
-        (result.best_cost() - (-0.5)).abs() < 1e-2,
+        (result.selected_record().unwrap().cost.unwrap() - (-0.5)).abs() < 1e-2,
         "f = {}",
-        result.best_cost()
+        result.selected_record().unwrap().cost.unwrap()
     );
 }
 
@@ -222,11 +222,11 @@ fn backend_generic_nalgebra() {
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
-        (result.best_cost() - (-0.5)).abs() < 1e-2,
+        (result.selected_record().unwrap().cost.unwrap() - (-0.5)).abs() < 1e-2,
         "f = {}",
-        result.best_cost()
+        result.selected_record().unwrap().cost.unwrap()
     );
-    let x = result.best_param();
+    let x = result.selected_record().unwrap().param;
     assert!(x[0] * x[0] + x[1] * x[1] <= 1.0 + 1e-6, "infeasible {x:?}");
 }
 
@@ -289,11 +289,11 @@ fn backend_generic_ndarray() {
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
-        (result.best_cost() - (-0.5)).abs() < 1e-2,
+        (result.selected_record().unwrap().cost.unwrap() - (-0.5)).abs() < 1e-2,
         "f = {}",
-        result.best_cost()
+        result.selected_record().unwrap().cost.unwrap()
     );
-    let x = result.best_param();
+    let x = result.selected_record().unwrap().param;
     assert!(x[0] * x[0] + x[1] * x[1] <= 1.0 + 1e-6, "infeasible {x:?}");
 }
 
@@ -353,11 +353,11 @@ fn backend_generic_faer() {
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
-        (result.best_cost() - (-0.5)).abs() < 1e-2,
+        (result.selected_record().unwrap().cost.unwrap() - (-0.5)).abs() < 1e-2,
         "f = {}",
-        result.best_cost()
+        result.selected_record().unwrap().cost.unwrap()
     );
-    let x = result.best_param();
+    let x = result.selected_record().unwrap().param;
     assert!(x[0] * x[0] + x[1] * x[1] <= 1.0 + 1e-6, "infeasible {x:?}");
 }
 

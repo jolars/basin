@@ -72,7 +72,7 @@ fn main() {
         .unwrap();
 
     println!("x = {:?}", result.param());
-    println!("f = {}", result.cost());
+    println!("f = {}", result.current_record().unwrap().cost.unwrap());
     println!("stopped: {:?}", result.report.termination);
 }
 ```

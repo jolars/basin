@@ -44,7 +44,7 @@ use crate::solver::cma_es::sort_population_ascending;
 ///    "standard replacement strategy").
 ///
 /// The member and cost arrays in [`PopulationProgress`] are re-sorted
-/// ascending at the end of each iteration so `state.cost()` always
+/// ascending at the end of each iteration so `state.current_record().unwrap().cost.unwrap()` always
 /// reports the current best.
 ///
 /// # Default parameters
@@ -94,7 +94,7 @@ use crate::solver::cma_es::sort_population_ascending;
 /// [`max_time`](crate::Executor::max_time),
 /// [`with_absolute_cost_change_tolerance`](Self::with_absolute_cost_change_tolerance), or
 /// [`with_absolute_step_tolerance`](Self::with_absolute_step_tolerance).
-/// Replace-worst ensures `state.cost()` is non-increasing, so the
+/// Replace-worst ensures `state.current_record().unwrap().cost.unwrap()` is non-increasing, so the
 /// change tests compare generation representatives, including unchanged elites.
 ///
 /// # Backends

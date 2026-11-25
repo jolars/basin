@@ -373,17 +373,19 @@ macro_rules! state_impl {
             type Float = F;
             fn iter(&self) -> u64 { self.core.iter }
             fn increment_iter(&mut self) { self.core.iter += 1; }
-            fn cost_evals(&self) -> u64 { self.core.counts.cost_evals }
             fn param(&self) -> &V { self.core.param.as_ref().expect("point unavailable during update") }
-            fn cost(&self) -> F { self.core.cost.expect("point has not been evaluated") }
-            fn best_param(&self) -> &V { &self.core.best.as_ref().expect("no incumbent").param }
-            fn best_cost(&self) -> F { self.core.best.as_ref().map_or(F::infinity(), |b| b.cost) }
-            fn best_iter(&self) -> u64 { self.core.best.as_ref().map_or(0, |b| b.iter) }
-            fn best_cost_evals(&self) -> u64 { self.core.best.as_ref().map_or(0, |b| b.counts.cost_evals) }
+            fn current_record(&self) -> Option<basin::CurrentRef<'_, V, F>> {
+                Some(basin::CurrentRef::new(self.core.param.as_ref()?, Some(self.core.cost?), None))
+            }
+            fn selected_record(&self) -> Option<basin::SelectedRef<'_, V, F>> {
+                let best = self.core.best.as_ref()?;
+                Some(basin::SelectedRef::new(basin::CurrentRef::new(&best.param, Some(best.cost), None), best.iter, &best.counts))
+            }
             fn update_best(&mut self) { self.record_best(); }
             fn reset_best(&mut self) { self.core.best = None; self.core.changed = false; }
         }
         impl<$($generics)*> CountsMirror for $ty where V: Clone + VectorLen, F: Scalar {
+            fn cost_evals(&self) -> u64 { self.core.counts.cost_evals }
             fn mirror(&mut self, counts: &EvalCounts) { self.core.counts = *counts; }
         }
         impl<$($generics)*> Progress for $ty where V: Clone + VectorLen, F: Scalar {

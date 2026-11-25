@@ -43,7 +43,7 @@ fn main() {
             .run()
             .unwrap();
 
-    assert!(result.cost() < 0.05);
+    assert!(result.current_record().unwrap().cost.unwrap() < 0.05);
     assert!((-5.0..=5.0).contains(&result.param()[0]));
     assert!((-5.0..=5.0).contains(&result.param()[1]));
 }

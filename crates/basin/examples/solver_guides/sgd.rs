@@ -49,5 +49,7 @@ fn main() {
         .unwrap();
 
     assert!((result.param()[0] - 2.0).abs() < 0.05);
-    assert!((result.cost() - 0.625).abs() < 0.0025);
+    assert!(
+        (result.current_record().unwrap().cost.unwrap() - 0.625).abs() < 0.0025
+    );
 }

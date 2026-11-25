@@ -1,5 +1,6 @@
 //! Shared population records and fresh versus exact stochastic runs.
 
+use basin::CountsMirror as _;
 use basin::{
     CostFunction, De, Executor, PopulationProgress, RandomSearch, Solver, Ssga,
     State,
@@ -55,7 +56,7 @@ where
         .run_with_solver()
         .unwrap();
     assert_eq!(fresh.iter(), 0);
-    assert_eq!(fresh.state.best_iter(), 0);
+    assert_eq!(fresh.state.selected_record().unwrap().iter, 0);
     assert_eq!(fresh.counts.cost_evals, 4);
     assert_eq!(fresh.state.candidates(), members);
 }
@@ -137,7 +138,7 @@ fn coherent(state: &PopulationProgress<Vec<f64>>) {
 
 #[test]
 fn member_order_storage_and_historical_pairs_survive_complete_replacement() {
-    use basin::{CountsMirror, EvalCounts, IncumbentState};
+    use basin::{CountsMirror, EvalCounts};
     let mut state =
         PopulationProgress::from_population(vec![vec![2.0], vec![1.0]]);
     assert!(state.current().is_none());
@@ -179,7 +180,7 @@ fn member_order_storage_and_historical_pairs_survive_complete_replacement() {
     coherent(&state);
     assert_eq!(state.best(), Some((&vec![1.0], 1.0)));
     assert_eq!(state.current(), Some((&vec![3.0], 9.0)));
-    assert_eq!(state.incumbent_record().unwrap().iter, 0);
+    assert_eq!(state.selected_record().unwrap().iter, 0);
     assert_eq!(state.best_counts(), Some(&counts));
     state.replace(vec![vec![0.0]], vec![0.0]).unwrap();
     let mut final_counts = counts;
@@ -188,7 +189,7 @@ fn member_order_storage_and_historical_pairs_survive_complete_replacement() {
     state.update_best();
     state.increment_iter();
     state.update_best();
-    assert_eq!(state.best_iter(), 1);
+    assert_eq!(state.selected_record().unwrap().iter, 1);
     assert_eq!(state.best_counts(), Some(&final_counts));
     assert_eq!(state.cost_evals(), 5);
     state.reset();
@@ -217,7 +218,7 @@ fn means_compete_with_members_without_changing_their_order() {
     assert_eq!(state.candidates(), &[vec![2.0], vec![1.0]]);
     assert_eq!(state.costs(), &[4.0, 1.0]);
     assert_eq!(state.best(), Some((&vec![0.5], 0.25)));
-    assert_eq!(state.best_iter(), 1);
+    assert_eq!(state.selected_record().unwrap().iter, 1);
     state
         .replace(vec![vec![4.0], vec![3.0]], vec![16.0, 9.0])
         .unwrap();
@@ -267,7 +268,7 @@ fn ties_and_nonfinite_costs_do_not_corrupt_incumbents() {
     state.increment_iter();
     state.update_best();
     assert_eq!(state.best(), Some((&vec![1.0], 1.0)));
-    assert_eq!(state.best_iter(), 0);
+    assert_eq!(state.selected_record().unwrap().iter, 0);
     state
         .replace(
             vec![vec![1.0], vec![0.0]],
@@ -362,7 +363,7 @@ where
         .run_with_solver()
         .unwrap();
     assert_eq!(fresh.iter(), 0);
-    assert_eq!(fresh.state.best_iter(), 0);
+    assert_eq!(fresh.state.selected_record().unwrap().iter, 0);
     assert_eq!(fresh.counts.cost_evals, 4);
     assert_eq!(fresh.state.candidates(), expected.state.candidates());
 }
@@ -492,7 +493,7 @@ fn external_solver_preserves_every_category_at_a_midstep_stop() {
     assert_eq!(result.state.counts(), &result.counts);
     assert_eq!(result.state.best_counts(), Some(&result.counts));
     assert_eq!(result.state.cost_evals(), 5);
-    assert_eq!(result.state.best_iter(), 0);
+    assert_eq!(result.state.selected_record().unwrap().iter, 0);
 }
 
 #[derive(Default)]

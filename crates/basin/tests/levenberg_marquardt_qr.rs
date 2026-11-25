@@ -255,7 +255,7 @@ fn actual_augmented_rank_loss_recovers_with_more_damping() {
             assert_eq!(result.state.counts().residual_evals, 1);
         } else {
             assert_eq!(result.report.code(), TerminationCode::SolverConverged);
-            assert!(result.cost() < 1e-16);
+            assert!(result.current_record().unwrap().cost.unwrap() < 1e-16);
             assert!((result.param()[0] - 0.5).abs() < 1e-8);
             assert!((result.param()[1] - 0.5).abs() < 1e-8);
             assert_eq!(result.state.counts().residual_evals, 2);
@@ -341,7 +341,7 @@ fn nonlinear_and_deficient_problems() {
     .run()
     .unwrap();
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
-    assert!(result.cost() < 1e-15);
+    assert!(result.current_record().unwrap().cost.unwrap() < 1e-15);
     let result = Executor::new(
         PowellSingular::<Vec<f64>>::new(),
         LevenbergMarquardt::new().with_pivoted_qr(),
@@ -351,7 +351,7 @@ fn nonlinear_and_deficient_problems() {
     .run()
     .unwrap();
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
-    assert!(result.cost() < 1e-10);
+    assert!(result.current_record().unwrap().cost.unwrap() < 1e-10);
 }
 
 #[path = "support/backend_aliases.rs"]
@@ -413,8 +413,13 @@ macro_rules! scaled_gradient_checks {
                 if max_iter == 1 {
                     // The damped step is independent of residual scale.
                     assert!((out.param()[0] - 1. / (1. + tau)).abs() < tol);
-                    assert!(out.cost().is_finite());
-                    assert!(out.cost() < 0.5 * residual.norm_squared());
+                    assert!(
+                        out.current_record().unwrap().cost.unwrap().is_finite()
+                    );
+                    assert!(
+                        out.current_record().unwrap().cost.unwrap()
+                            < 0.5 * residual.norm_squared()
+                    );
                 } else {
                     assert_eq!(
                         out.report.code(),

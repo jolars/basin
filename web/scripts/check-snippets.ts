@@ -57,7 +57,7 @@ function checkMigrationDependencyVersions(): void {
     // Versionary bumps the manifest in its release PR, after main already
     // documents the new API. The upgrade guide names that API's target version.
     const upgradePage = readFileSync(
-        resolve(webDir, "src/guide/migrating-to-v3/index.md"),
+        resolve(webDir, "src/guide/migrating-to-v4/index.md"),
         "utf8",
     );
     const expectedMajor = upgradePage.match(

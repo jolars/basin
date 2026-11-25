@@ -44,7 +44,7 @@ fn tnc_with_parameter_transform_f32() {
     .max_iter(200)
     .run()
     .unwrap();
-    let cost: f32 = result.cost();
+    let cost: f32 = result.current_record().unwrap().cost.unwrap();
     let physical: Vec<f32> = transform.decode(result.param()).unwrap();
     let expected = transform.get_ref().inner().cost(&physical).unwrap();
     assert!(matches!(
@@ -89,7 +89,7 @@ fn tnc_logarithmic_f32_preserves_narrow_physical_intervals() {
             .run()
             .unwrap();
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
-    assert_eq!(result.cost(), 0.0);
+    assert_eq!(result.current_record().unwrap().cost.unwrap(), 0.0);
     assert_eq!(transform.decode(result.param()).unwrap(), vec![target]);
 }
 
@@ -314,10 +314,16 @@ fn cobyla_f32_round_trips_small_and_cached_inverse_paths() {
         .run()
         .unwrap();
         assert_eq!(result.report.code(), TerminationCode::SolverConverged);
-        let x = result.best_param();
+        let x = result.selected_record().unwrap().param;
         assert!(x.iter().all(|v| v.is_finite() && (*v - 1.0).abs() < 5e-4));
-        assert!((result.best_cost() - n as f32).abs() < 5e-3);
-        assert_eq!(result.best_cost(), x.iter().map(|v| v * v).sum::<f32>());
+        assert!(
+            (result.selected_record().unwrap().cost.unwrap() - n as f32).abs()
+                < 5e-3
+        );
+        assert_eq!(
+            result.selected_record().unwrap().cost.unwrap(),
+            x.iter().map(|v| v * v).sum::<f32>()
+        );
     }
 }
 
@@ -421,7 +427,7 @@ fn cobyla_f32_round_trips_full_form_constraints() {
     .unwrap();
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
-    let x = result.best_param();
+    let x = result.selected_record().unwrap().param;
     let expected = [1.0, 0.5, 0.25, 0.75, 3.0];
     for (value, target) in x.iter().zip(expected) {
         assert!((value - target).abs() < 2e-3, "x = {x:?}");
@@ -431,9 +437,11 @@ fn cobyla_f32_round_trips_full_form_constraints() {
     assert!((x[2] - 0.25).abs() < 1e-3);
     assert!(x[3] <= 0.75 + 1e-3);
     assert!(x[4] >= 3.0 - 1e-3);
-    assert!((result.best_cost() - 8.875).abs() < 1e-2);
+    assert!(
+        (result.selected_record().unwrap().cost.unwrap() - 8.875).abs() < 1e-2
+    );
     assert_eq!(
-        result.best_cost(),
+        result.selected_record().unwrap().cost.unwrap(),
         x.iter().map(|value| (value - 2.0).powi(2)).sum::<f32>()
     );
 }
@@ -452,7 +460,7 @@ fn gbnm_f32_round_trips_solver_state_and_bounds() {
         .run_with_solver()
         .unwrap();
 
-    assert!(result.state.best_cost() < 1e-5);
+    assert!(result.state.selected_record().unwrap().cost.unwrap() < 1e-5);
     assert!(
         result
             .solver
@@ -618,8 +626,11 @@ fn configured_steihaug_f32_runs_in_both_modes() {
         .target_objective(1e-8_f32)
         .run()
         .unwrap();
-        assert!(exact.cost() <= 1e-8_f32);
-        assert_eq!(exact.cost(), free.cost());
+        assert!(exact.current_record().unwrap().cost.unwrap() <= 1e-8_f32);
+        assert_eq!(
+            exact.current_record().unwrap().cost.unwrap(),
+            free.current_record().unwrap().cost.unwrap()
+        );
         assert_eq!(exact.param(), free.param());
     }
 }
@@ -645,7 +656,7 @@ fn solis_wets_f32_round_trips_state_solver_termination() {
     .run()
     .unwrap();
 
-    let final_x = result.state.best_param();
+    let final_x = result.state.selected_record().unwrap().param;
     assert!((final_x[0] - 1.0).abs() < 1e-1);
     assert!((final_x[1] - 2.0).abs() < 1e-1);
     assert!((final_x[2] - 3.0).abs() < 1e-1);

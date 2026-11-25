@@ -3,10 +3,9 @@
 use basin::{
     Checkpoint, CostFunction, CountsMirror, EvalCounts, EvaluatedGradientState,
     EvaluatedState, EvaluationKind, Executor, FirstOrderState, Gradient,
-    Hessian, HessianProduct, IncumbentRef, IncumbentState, InnerExecutor,
-    Jacobian, ObjectiveIncumbentState, Observe, ObserverMode, PointState,
-    Problem, RawEvaluationState, Residual, RunControl, Solver, State,
-    TerminationCode, run_loop_with_control,
+    Hessian, HessianProduct, InnerExecutor, Jacobian, ObjectiveIncumbentState,
+    Observe, ObserverMode, PointState, Problem, RawEvaluationState, Residual,
+    RunControl, Solver, State, TerminationCode, run_loop_with_control,
 };
 use std::cell::Cell;
 use std::convert::Infallible;
@@ -83,15 +82,15 @@ fn generic_records_distinguish_seeds_rejections_and_incumbents() {
     fn current<S: EvaluatedState<Float = f64, Param = f64>>(
         s: &S,
     ) -> Option<f64> {
-        s.current_record().map(|(_, cost)| cost)
+        s.evaluated_record().map(|(_, cost)| cost)
     }
     let mut state = PointState::new(5.0);
     assert_eq!(current(&state), None);
-    assert!(state.incumbent_record().is_none());
+    assert!(state.selected_record().is_none());
     state.replace(5.0, f64::INFINITY);
     state.update_best();
     assert_eq!(current(&state), Some(f64::INFINITY));
-    assert!(state.incumbent_record().is_none());
+    assert!(state.selected_record().is_none());
     state.replace(5.0, 5.0);
     state.mirror(&{
         let mut counts = EvalCounts::default();
@@ -107,13 +106,13 @@ fn generic_records_distinguish_seeds_rejections_and_incumbents() {
         counts
     });
     state.update_best();
-    let best = state.incumbent_record().unwrap();
-    assert_eq!((*best.param, best.cost, best.iter), (5.0, 5.0, 0));
+    let best = state.selected_record().unwrap();
+    assert_eq!((*best.param, best.cost.unwrap(), best.iter), (5.0, 5.0, 0));
     assert_eq!(best.counts.cost_evals, 2);
     assert_eq!(state.raw_counts().cost_evals, 3);
 
     let mut first = FirstOrderState::new(vec![2.0]);
-    assert!(first.current_record().is_none());
+    assert!(first.evaluated_record().is_none());
     assert!(first.current_gradient_record().is_none());
     first.replace(vec![2.0], 4.0, vec![4.0]).unwrap();
     let (x, cost, gradient) = first.current_gradient_record().unwrap();
@@ -122,7 +121,7 @@ fn generic_records_distinguish_seeds_rejections_and_incumbents() {
         (&[2.0][..], 4.0, &[4.0][..])
     );
     assert!(first.replace(vec![3.0], 9.0, vec![]).is_err());
-    assert_eq!(first.current_record(), Some((&vec![2.0], 4.0)));
+    assert_eq!(first.evaluated_record(), Some((&vec![2.0], 4.0)));
 }
 
 struct CountObservers(Rc<Cell<usize>>);
@@ -544,7 +543,7 @@ fn every_raw_budget_counts_fused_and_batch_work_without_folding() {
         expected.add(&work_counts());
         assert_eq!(result.state.raw_counts(), &expected);
         assert_eq!(result.counts, expected);
-        assert_eq!(result.state.incumbent_record().unwrap().counts, &expected);
+        assert_eq!(result.state.selected_record().unwrap().counts, &expected);
     }
 }
 
@@ -557,8 +556,8 @@ fn clean_stops_stamp_all_counts_and_errors_keep_charged_batch_work() {
         .unwrap();
     assert_eq!(result.iter(), 0);
     assert_eq!(result.report.code(), TerminationCode::UserRequested);
-    let best = result.state.incumbent_record().unwrap();
-    assert_eq!((*best.param, best.cost, best.iter), (0.0, 0.0, 0));
+    let best = result.state.selected_record().unwrap();
+    assert_eq!((*best.param, best.cost.unwrap(), best.iter), (0.0, 0.0, 0));
     assert_eq!(best.counts, &result.counts);
     assert_eq!(best.counts.total_work(), 46);
 
@@ -594,6 +593,17 @@ impl Selected {
 }
 
 impl State for Selected {
+    fn current_record(&self) -> Option<basin::CurrentRef<'_, f64>> {
+        self.current.current_record()
+    }
+    fn selected_record(&self) -> Option<basin::SelectedRef<'_, f64>> {
+        let (param, cost, iter, counts) = self.best.as_ref()?;
+        Some(basin::SelectedRef::new(
+            basin::CurrentRef::new(param, Some(*cost), None),
+            *iter,
+            counts,
+        ))
+    }
     type Param = f64;
     type Float = f64;
     fn iter(&self) -> u64 {
@@ -602,32 +612,14 @@ impl State for Selected {
     fn increment_iter(&mut self) {
         self.current.increment_iter();
     }
-    fn cost_evals(&self) -> u64 {
-        self.current.cost_evals()
-    }
     fn param(&self) -> &f64 {
         self.current.param()
-    }
-    fn cost(&self) -> f64 {
-        self.current.cost()
-    }
-    fn best_param(&self) -> &f64 {
-        &self.best.as_ref().unwrap().0
-    }
-    fn best_cost(&self) -> f64 {
-        self.best.as_ref().map_or(f64::INFINITY, |best| best.1)
-    }
-    fn best_iter(&self) -> u64 {
-        self.best.as_ref().map_or(0, |best| best.2)
-    }
-    fn best_cost_evals(&self) -> u64 {
-        self.best.as_ref().map_or(0, |best| best.3.total_work())
     }
     fn update_best(&mut self) {
         if std::mem::take(&mut self.pending) {
             self.best = Some((
                 *self.param(),
-                self.cost(),
+                self.current_record().unwrap().cost.unwrap(),
                 self.iter(),
                 *self.raw_counts(),
             ));
@@ -641,6 +633,9 @@ impl State for Selected {
 }
 
 impl CountsMirror for Selected {
+    fn cost_evals(&self) -> u64 {
+        self.current.cost_evals()
+    }
     fn mirror(&mut self, counts: &EvalCounts) {
         self.current.mirror(counts);
     }
@@ -653,15 +648,8 @@ impl RawEvaluationState for Selected {
 }
 
 impl EvaluatedState for Selected {
-    fn current_record(&self) -> Option<(&f64, f64)> {
-        self.current.current_record()
-    }
-}
-
-impl IncumbentState for Selected {
-    fn incumbent_record(&self) -> Option<IncumbentRef<'_, f64>> {
-        let (param, cost, iter, counts) = self.best.as_ref()?;
-        Some(IncumbentRef::new(param, *cost, *iter, counts))
+    fn evaluated_record(&self) -> Option<(&f64, f64)> {
+        self.current.evaluated_record()
     }
 }
 
@@ -683,8 +671,8 @@ fn external_selection_is_explicit_and_does_not_claim_objective_ordering() {
     later.add(&work_counts());
     state.mirror(&later);
     state.update_best();
-    assert_eq!(*state.incumbent_record().unwrap().param, 1.0);
-    assert_eq!(state.incumbent_record().unwrap().cost, 10.0);
+    assert_eq!(*state.selected_record().unwrap().param, 1.0);
+    assert_eq!(state.selected_record().unwrap().cost.unwrap(), 10.0);
     let published_counts = later;
     for _ in 0..2 {
         state.increment_iter();
@@ -692,8 +680,8 @@ fn external_selection_is_explicit_and_does_not_claim_objective_ordering() {
         later.add(&work_counts());
         state.mirror(&later);
         state.update_best();
-        let IncumbentRef { iter, counts, .. } =
-            state.incumbent_record().unwrap();
+        let basin::SelectedRef { iter, counts, .. } =
+            state.selected_record().unwrap();
         assert_eq!(iter, 0);
         assert_eq!(counts, &published_counts);
     }

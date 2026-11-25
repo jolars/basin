@@ -73,9 +73,9 @@ fn pre_cancelled_executor_returns_an_initialized_state() {
 
     assert_eq!(result.report.code(), TerminationCode::Cancelled);
     assert_eq!(result.iter(), 0);
-    assert_eq!(result.cost(), 25.0);
-    assert_eq!(result.best_param(), &vec![3.0, 4.0]);
-    assert_eq!(result.best_cost(), 25.0);
+    assert_eq!(result.current_record().unwrap().cost.unwrap(), 25.0);
+    assert_eq!(result.selected_record().unwrap().param, &vec![3.0, 4.0]);
+    assert_eq!(result.selected_record().unwrap().cost.unwrap(), 25.0);
     assert_eq!(result.cost_evals(), 1);
 }
 
@@ -104,11 +104,11 @@ struct ScriptedState {
     param: Vec<f64>,
     cost: f64,
     iter: u64,
-    cost_evals: u64,
+    counts: EvalCounts,
     best_param: Vec<f64>,
     best_cost: f64,
     best_iter: u64,
-    best_cost_evals: u64,
+    best_counts: EvalCounts,
 }
 
 impl ScriptedState {
@@ -117,11 +117,11 @@ impl ScriptedState {
             param,
             cost: f64::INFINITY,
             iter: 0,
-            cost_evals: 0,
+            counts: EvalCounts::default(),
             best_param: Vec::new(),
             best_cost: f64::INFINITY,
             best_iter: 0,
-            best_cost_evals: 0,
+            best_counts: EvalCounts::default(),
         }
     }
 }
@@ -138,40 +138,33 @@ impl State for ScriptedState {
         self.iter += 1;
     }
 
-    fn cost_evals(&self) -> u64 {
-        self.cost_evals
-    }
-
     fn param(&self) -> &Vec<f64> {
         &self.param
     }
 
-    fn cost(&self) -> f64 {
-        self.cost
+    fn current_record(&self) -> Option<basin::CurrentRef<'_, Vec<f64>>> {
+        (self.counts.cost_evals > 0)
+            .then(|| basin::CurrentRef::new(&self.param, Some(self.cost), None))
     }
-
-    fn best_param(&self) -> &Vec<f64> {
-        &self.best_param
+    fn selected_record(&self) -> Option<basin::SelectedRef<'_, Vec<f64>>> {
+        (!self.best_param.is_empty()).then(|| {
+            basin::SelectedRef::new(
+                basin::CurrentRef::new(
+                    &self.best_param,
+                    Some(self.best_cost),
+                    None,
+                ),
+                self.best_iter,
+                &self.best_counts,
+            )
+        })
     }
-
-    fn best_cost(&self) -> f64 {
-        self.best_cost
-    }
-
-    fn best_iter(&self) -> u64 {
-        self.best_iter
-    }
-
-    fn best_cost_evals(&self) -> u64 {
-        self.best_cost_evals
-    }
-
     fn update_best(&mut self) {
         if self.best_param.is_empty() || self.cost < self.best_cost {
             self.best_param = self.param.clone();
             self.best_cost = self.cost;
             self.best_iter = self.iter;
-            self.best_cost_evals = self.cost_evals;
+            self.best_counts = self.counts;
         }
     }
 
@@ -179,13 +172,16 @@ impl State for ScriptedState {
         self.best_param.clear();
         self.best_cost = f64::INFINITY;
         self.best_iter = 0;
-        self.best_cost_evals = 0;
+        self.best_counts = EvalCounts::default();
     }
 }
 
 impl CountsMirror for ScriptedState {
+    fn cost_evals(&self) -> u64 {
+        self.counts.cost_evals
+    }
     fn mirror(&mut self, delta: &EvalCounts) {
-        self.cost_evals = delta.cost_evals;
+        self.counts = *delta;
     }
 }
 
@@ -261,7 +257,7 @@ fn stepper_cancels_between_iterations_without_rewinding_state() {
     assert_eq!(stepper.step().unwrap(), StepOutcome::Continue);
     assert_eq!(stepper.iter(), 2);
     assert_eq!(stepper.state().param(), &vec![10.0]);
-    assert_eq!(stepper.state().best_param(), &vec![0.0]);
+    assert_eq!(stepper.state().selected_record().unwrap().param, &vec![0.0]);
 
     let stopped = stepper.step().unwrap();
     assert_eq!(stopped.report().unwrap().code(), TerminationCode::Cancelled);
@@ -273,8 +269,14 @@ fn stepper_cancels_between_iterations_without_rewinding_state() {
     );
     assert_eq!(stepper.iter(), 2);
     assert_eq!(stepper.state().param(), &vec![10.0]);
-    assert_eq!(stepper.state().cost(), 100.0);
-    assert_eq!(stepper.state().best_param(), &vec![0.0]);
-    assert_eq!(stepper.state().best_cost(), 0.0);
+    assert_eq!(
+        stepper.state().current_record().unwrap().cost.unwrap(),
+        100.0
+    );
+    assert_eq!(stepper.state().selected_record().unwrap().param, &vec![0.0]);
+    assert_eq!(
+        stepper.state().selected_record().unwrap().cost.unwrap(),
+        0.0
+    );
     assert_eq!(*final_reason.borrow(), Some(TerminationCode::Cancelled));
 }

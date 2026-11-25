@@ -3,7 +3,7 @@
 use crate::core::observer::Observe;
 use crate::core::state::State;
 
-/// Record `(iter, cost, best_cost)` at init and on every observed iteration.
+/// Record `(iter, cost, selected_cost)` at init and on every observed iteration.
 ///
 /// [`OptimizationResult`](crate::core::executor::OptimizationResult) keeps only
 /// the *final* iterate and the best-so-far; `History` fills the gap when you
@@ -54,11 +54,11 @@ use crate::core::state::State;
 /// assert_eq!(history.0.borrow().records().len(), 1 + 5); // init + 5 iters
 /// ```
 #[derive(Clone, Debug)]
-pub struct History<F = f64> {
-    records: Vec<(u64, F, F)>,
+pub struct History<F: crate::Scalar = f64> {
+    records: Vec<(u64, Option<F>, Option<F>)>,
 }
 
-impl<F> Default for History<F> {
+impl<F: crate::Scalar> Default for History<F> {
     fn default() -> Self {
         Self {
             records: Vec::new(),
@@ -66,20 +66,20 @@ impl<F> Default for History<F> {
     }
 }
 
-impl<F> History<F> {
+impl<F: crate::Scalar> History<F> {
     /// An empty history.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// The recorded `(iter, cost, best_cost)` triples, in fire order. The
+    /// The recorded `(iter, cost, selected_cost)` triples, in fire order. The
     /// first entry is the init snapshot at `iter == 0`.
-    pub fn records(&self) -> &[(u64, F, F)] {
+    pub fn records(&self) -> &[(u64, Option<F>, Option<F>)] {
         &self.records
     }
 
     /// Drop the recorded trajectory, returning the owned vector.
-    pub fn into_records(self) -> Vec<(u64, F, F)> {
+    pub fn into_records(self) -> Vec<(u64, Option<F>, Option<F>)> {
         self.records
     }
 }
@@ -90,12 +90,22 @@ where
     S::Float: Copy,
 {
     fn observe_init(&mut self, state: &S) {
-        self.records
-            .push((state.iter(), state.cost(), state.best_cost()));
+        self.records.push((
+            state.iter(),
+            state.current_record().and_then(|record| record.cost),
+            state.selected_record().and_then(|record| record.cost),
+        ));
     }
 
     fn observe_iter(&mut self, state: &S) {
-        self.records
-            .push((state.iter(), state.cost(), state.best_cost()));
+        self.observe_init(state);
+    }
+
+    fn observe_selection(
+        &mut self,
+        state: &S,
+        _change: crate::SelectionChange,
+    ) {
+        self.observe_init(state);
     }
 }

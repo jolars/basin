@@ -58,9 +58,14 @@ where
         .run()
         .unwrap();
         assert!(
-            result.best_param()[0] >= lower && result.best_param()[0] <= upper
+            result.selected_record().unwrap().param[0] >= lower
+                && result.selected_record().unwrap().param[0] <= upper
         );
-        assert!(result.best_cost() < 1e-8, "cost = {}", result.best_cost());
+        assert!(
+            result.selected_record().unwrap().cost.unwrap() < 1e-8,
+            "cost = {}",
+            result.selected_record().unwrap().cost.unwrap()
+        );
     }
 
     for (lower, upper, expected) in [

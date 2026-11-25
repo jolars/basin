@@ -73,15 +73,11 @@ use workspace::Distribution;
 /// # Result: mean vs best sample
 ///
 /// CMA-ES's recommended solution is the distribution mean (pycma's
-/// `xfavorite`), so [`State::param`](crate::State::param) /
-/// [`State::cost`](crate::State::cost) on [`PopulationProgress`] return `m` and
-/// `f(m)`; the solver evaluates `f(m)` once per generation (so the
-/// per-generation cost budget is `λ + 1`, not `λ`). The best evaluated
-/// point ever seen (`xbest`) is available via
-/// [`State::best_param`](crate::State::best_param) /
-/// [`State::best_cost`](crate::State::best_cost), so an
-/// [`OptimizationResult`](crate::core::executor::OptimizationResult)
-/// surfaces both.
+/// `xfavorite`), which [`State::current_record`](crate::State::current_record)
+/// exposes with its matching cost. The solver evaluates the mean once per
+/// generation in addition to the population. The retained incumbent
+/// (`xbest`) is available through
+/// [`State::selected_record`](crate::State::selected_record).
 ///
 /// # Default parameters
 ///
@@ -161,8 +157,8 @@ use workspace::Distribution;
 ///     CmaEs::<_, DenseMatrix>::new(42, 0.3),
 ///     PopulationProgress::from_point(vec![1.0, 2.0]),
 /// ).max_iter(100).run()?;
-/// let incumbent = result.incumbent_record().expect("expected an incumbent");
-/// assert!(incumbent.cost < 1e-6);
+/// let incumbent = result.selected_record().expect("expected an incumbent");
+/// assert!(incumbent.cost.unwrap() < 1e-6);
 /// # Ok::<(), std::convert::Infallible>(())
 /// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -852,14 +848,6 @@ where
     /// generation) persists—that's the chain.
     fn prepare_resume(&self, state: &mut Self::State) {
         state.reset_segment_iter();
-    }
-
-    fn segment_incumbent<'a>(
-        &self,
-        state: &'a Self::State,
-    ) -> Option<(&'a V, F)> {
-        crate::IncumbentState::incumbent_record(state)
-            .map(|record| (record.param, record.cost))
     }
 
     fn configure_segment(

@@ -67,15 +67,15 @@ fn converges_to_projection() {
     .unwrap();
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
-    let x = result.best_param();
+    let x = result.selected_record().unwrap().param;
     assert!(
         (x[0] - 1.0).abs() < 1e-3 && (x[1] - 1.0).abs() < 1e-3,
         "x = {x:?}"
     );
     assert!(
-        (result.best_cost() - 2.0).abs() < 1e-3,
+        (result.selected_record().unwrap().cost.unwrap() - 2.0).abs() < 1e-3,
         "f = {}",
-        result.best_cost()
+        result.selected_record().unwrap().cost.unwrap()
     );
     // The returned point is feasible: x0 + x1 ≤ 2.
     assert!(x[0] + x[1] <= 2.0 + 1e-6, "infeasible point {x:?}");
@@ -106,7 +106,7 @@ fn converges_with_two_active_constraints() {
     .run_with_solver()
     .unwrap();
 
-    let x = result.best_param();
+    let x = result.selected_record().unwrap().param;
     assert!(
         (x[0] - 1.0).abs() < 1e-3 && (x[1] - 1.0).abs() < 1e-3,
         "x = {x:?}"
@@ -161,7 +161,7 @@ fn box_bounds_fold_and_converge_to_corner() {
     .run_with_solver()
     .unwrap();
 
-    let x = result.best_param();
+    let x = result.selected_record().unwrap().param;
     assert!(
         (x[0] - 1.0).abs() < 1e-3 && (x[1] - 1.0).abs() < 1e-3,
         "x = {x:?}"
@@ -223,7 +223,7 @@ fn equality_folds_and_converges_to_projection() {
     .run_with_solver()
     .unwrap();
 
-    let x = result.best_param();
+    let x = result.selected_record().unwrap().param;
     assert!(
         (x[0] - 1.0).abs() < 1e-2 && (x[1] - 1.0).abs() < 1e-2,
         "x = {x:?}"
@@ -340,7 +340,7 @@ fn backend_generic_nalgebra() {
     .unwrap();
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
-    let x = result.best_param();
+    let x = result.selected_record().unwrap().param;
     assert!(
         (x[0] - 1.0).abs() < 1e-3 && (x[1] - 1.0).abs() < 1e-3,
         "x = {x:?}"
@@ -404,7 +404,7 @@ fn backend_generic_ndarray() {
     .unwrap();
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
-    let x = result.best_param();
+    let x = result.selected_record().unwrap().param;
     assert!(
         (x[0] - 1.0).abs() < 1e-3 && (x[1] - 1.0).abs() < 1e-3,
         "x = {x:?}"
@@ -464,7 +464,7 @@ fn backend_generic_faer() {
     .unwrap();
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
-    let x = result.best_param();
+    let x = result.selected_record().unwrap().param;
     assert!(
         (x[0] - 1.0).abs() < 1e-3 && (x[1] - 1.0).abs() < 1e-3,
         "x = {x:?}"

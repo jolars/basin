@@ -155,7 +155,7 @@ where
     match result {
         Ok(run) => Outcome {
             point: Some(run.param().as_slice().to_vec()),
-            rss: Some(2.0 * run.cost()),
+            rss: Some(2.0 * run.current_record().unwrap().cost.unwrap()),
             iterations: Some(run.iter()),
             residual_calls: Some(run.counts.residual_evals),
             jacobian_calls: Some(run.counts.jacobian_evals),

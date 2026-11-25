@@ -110,7 +110,7 @@ where
                 TerminationCode::SolverConverged
             }
         );
-        assert_eq!(result.cost(), 0.0);
+        assert_eq!(result.current_record().unwrap().cost.unwrap(), 0.0);
         assert_eq!(result.counts.residual_evals, 1);
         assert_eq!(result.counts.jacobian_evals, 1);
         assert_eq!(result.counts.cost_evals, 0);
@@ -151,7 +151,10 @@ where
     .unwrap();
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!((result.param().iter().sum::<f64>() - 1.0 / 3.0).abs() < 1e-7);
-    assert!((result.cost() - 28.0 / 3.0).abs() < 1e-12);
+    assert!(
+        (result.current_record().unwrap().cost.unwrap() - 28.0 / 3.0).abs()
+            < 1e-12
+    );
 }
 
 #[test]
@@ -228,7 +231,8 @@ fn check_extreme_scales<F: Scalar>(large: F, small: F) {
         );
         assert!(result.param()[0].abs() <= tolerance, "scale={scale:?}");
         assert!(
-            result.cost() <= half * tolerance * tolerance,
+            result.current_record().unwrap().cost.unwrap()
+                <= half * tolerance * tolerance,
             "scale={scale:?}"
         );
     }

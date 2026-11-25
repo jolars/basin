@@ -1,3 +1,4 @@
+use basin::CountsMirror as _;
 use basin::core::parallel::{MaybeSend, MaybeSync};
 use basin::{
     CostFunction, Direct, Executor, PointState, Scalar, State, TerminationCode,
@@ -82,10 +83,13 @@ where
             result.report.code(),
             TerminationCode::TargetCost,
             "cost={:?}",
-            result.cost()
+            result.current_record().unwrap().cost.unwrap()
         );
-        assert!(result.cost() <= num(1e-6));
-        assert_eq!(result.state.current().unwrap().1, result.state.best_cost());
+        assert!(result.current_record().unwrap().cost.unwrap() <= num(1e-6));
+        assert_eq!(
+            result.state.current().unwrap().1,
+            result.state.selected_record().unwrap().cost.unwrap()
+        );
         assert_eq!(result.state.counts().gradient_evals, 0);
         assert_eq!(result.state.counts().cost_evals, result.state.cost_evals());
     }

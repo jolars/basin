@@ -187,7 +187,7 @@ fn main() {
     .run()
     .unwrap();
 
-    println!("x = {:?}, f = {}", result.param(), result.cost());
+    println!("x = {:?}, f = {}", result.param(), result.current_record().unwrap().cost.unwrap());
 }
 ```
 

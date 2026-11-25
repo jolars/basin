@@ -32,7 +32,10 @@ fn same_seed_yields_identical_trajectory() {
     .run()
     .unwrap();
 
-    assert_eq!(result_a.cost(), result_b.cost());
+    assert_eq!(
+        result_a.current_record().unwrap().cost.unwrap(),
+        result_b.current_record().unwrap().cost.unwrap()
+    );
     assert_eq!(result_a.param(), result_b.param());
 }
 
@@ -81,9 +84,9 @@ fn converges_on_sphere_5d() {
     .unwrap();
 
     assert!(
-        result.cost() < 1e-6,
+        result.current_record().unwrap().cost.unwrap() < 1e-6,
         "sphere 5-D cost = {}, expected < 1e-6",
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }
 
@@ -161,7 +164,10 @@ fn with_stds_ones_matches_default() {
     .run()
     .unwrap();
 
-    assert_eq!(default.cost(), with_ones.cost());
+    assert_eq!(
+        default.current_record().unwrap().cost.unwrap(),
+        with_ones.current_record().unwrap().cost.unwrap()
+    );
     assert_eq!(default.param(), with_ones.param());
     assert_eq!(default.report.code(), with_ones.report.code());
 }
@@ -184,9 +190,9 @@ fn with_stds_anisotropic_converges_on_sphere() {
     .unwrap();
 
     assert!(
-        result.cost() < 1e-6,
+        result.current_record().unwrap().cost.unwrap() < 1e-6,
         "anisotropic sphere 5-D cost = {}, expected < 1e-6",
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }
 
@@ -231,9 +237,9 @@ fn with_stds_preconditions_ill_scaled_quadratic() {
     .unwrap();
 
     assert!(
-        result.cost() < 1e-6,
+        result.current_record().unwrap().cost.unwrap() < 1e-6,
         "preconditioned ill-scaled quadratic cost = {}, expected < 1e-6",
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }
 

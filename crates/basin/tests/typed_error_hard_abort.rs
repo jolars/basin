@@ -158,5 +158,9 @@ fn soft_reject_via_infinity_does_not_abort() {
     .expect("soft-reject must never produce Err");
 
     // Should have walked toward the interior optimum.
-    assert!(result.cost() < 0.5, "cost = {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 0.5,
+        "cost = {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
 }

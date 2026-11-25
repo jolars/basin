@@ -128,7 +128,7 @@ where
         .unwrap();
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
-    let x = result.best_param();
+    let x = result.selected_record().unwrap().param;
     let expected = [1.0, 0.5, 0.25, 0.75, 3.0];
     for (i, target) in expected.into_iter().enumerate() {
         assert!((x[i] - target).abs() < 1e-3, "x[{i}] = {}", x[i]);
@@ -138,7 +138,9 @@ where
     assert!((x[2] - 0.25).abs() < 1e-6);
     assert!(x[3] <= 0.75 + 1e-6);
     assert!(x[4] >= 3.0 - 1e-6);
-    assert!((result.best_cost() - 8.875).abs() < 1e-3);
+    assert!(
+        (result.selected_record().unwrap().cost.unwrap() - 8.875).abs() < 1e-3
+    );
     let violation = result.state.best().unwrap().2;
     let expected_violation = [
         (x[0] * x[0] - 1.0).max(0.0),
@@ -157,7 +159,7 @@ where
         basin::ViolationTransformation::PrimaModeration
     );
     assert_eq!(
-        result.best_cost(),
+        result.selected_record().unwrap().cost.unwrap(),
         (0..5).map(|i| (x[i] - 2.0).powi(2)).sum::<f64>()
     );
 }
@@ -263,8 +265,14 @@ fn agrees_with_hand_expanded_legacy_constraints() {
 
     assert_eq!(folded.report.code(), expanded.report.code());
     assert_eq!(folded.cost_evals(), expanded.cost_evals());
-    assert_eq!(folded.best_cost(), expanded.best_cost());
-    assert_eq!(folded.best_param(), expanded.best_param());
+    assert_eq!(
+        folded.selected_record().unwrap().cost.unwrap(),
+        expanded.selected_record().unwrap().cost.unwrap()
+    );
+    assert_eq!(
+        folded.selected_record().unwrap().param,
+        expanded.selected_record().unwrap().param
+    );
 }
 
 #[derive(Debug, PartialEq)]
@@ -539,17 +547,26 @@ fn reused_solver_handles_changing_dimensions_and_empty_constraint_blocks() {
             .init(&mut problem, SelectedState::new(vec![1.0; n]))
             .unwrap();
         state.update_best();
-        let snapshot = state.best_param().clone();
-        let snapshot_cost = state.best_cost();
+        let snapshot = state.selected_record().unwrap().param.clone();
+        let snapshot_cost = state.selected_record().unwrap().cost.unwrap();
         let (mut state, _, _) =
             solver.next_iter(&mut problem, state).unwrap().into_parts();
 
         assert_eq!(state.param().len(), n);
-        assert_eq!(state.best_param(), &snapshot);
-        assert_eq!(state.best_cost(), snapshot_cost);
-        assert_eq!(state.cost(), state.param().iter().map(|v| v * v).sum());
+        assert_eq!(state.selected_record().unwrap().param, &snapshot);
+        assert_eq!(
+            state.selected_record().unwrap().cost.unwrap(),
+            snapshot_cost
+        );
+        assert_eq!(
+            state.current_record().unwrap().cost.unwrap(),
+            state.param().iter().map(|v| v * v).sum()
+        );
         state.update_best();
-        assert_eq!(state.best_param(), state.param());
-        assert_eq!(state.best_cost(), state.cost());
+        assert_eq!(state.selected_record().unwrap().param, state.param());
+        assert_eq!(
+            state.selected_record().unwrap().cost.unwrap(),
+            state.current_record().unwrap().cost.unwrap()
+        );
     }
 }

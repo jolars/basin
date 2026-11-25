@@ -24,10 +24,10 @@ fn gradient_descent_decreases_rosenbrock_cost() {
     assert_eq!(result.iter(), 10_000, "should hit max_iter");
     assert_eq!(result.report.code(), TerminationCode::MaxIter);
     assert!(
-        result.cost() < initial_cost * 0.1,
+        result.current_record().unwrap().cost.unwrap() < initial_cost * 0.1,
         "expected cost to drop by >10x: initial={}, final={}",
         initial_cost,
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }
 
@@ -51,10 +51,10 @@ fn gradient_descent_with_momentum_decreases_rosenbrock_cost() {
     .unwrap();
 
     assert!(
-        result.cost() < initial_cost * 0.1,
+        result.current_record().unwrap().cost.unwrap() < initial_cost * 0.1,
         "expected cost to drop by >10x with momentum: initial={}, final={}",
         initial_cost,
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }
 
@@ -74,9 +74,9 @@ fn gradient_descent_with_backtracking_decreases_rosenbrock_cost() {
     .unwrap();
 
     assert!(
-        result.cost() < initial_cost * 0.1,
+        result.current_record().unwrap().cost.unwrap() < initial_cost * 0.1,
         "expected cost to drop by >10x: initial={}, final={}",
         initial_cost,
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }

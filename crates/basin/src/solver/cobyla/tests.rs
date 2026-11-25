@@ -63,9 +63,9 @@ fn problem_b_disk_min_product() {
         .run()
         .unwrap();
     assert!(
-        (result.best_cost() - (-0.5)).abs() < 1e-3,
+        (result.selected_record().unwrap().cost.unwrap() - (-0.5)).abs() < 1e-3,
         "F = {}",
-        result.best_cost()
+        result.selected_record().unwrap().cost.unwrap()
     );
     assert_eq!(
         result.report.code(),
@@ -90,9 +90,10 @@ fn problem_c_ellipsoid_min_product3() {
         .run()
         .unwrap();
     assert!(
-        (result.best_cost() - (-0.078567)).abs() < 1e-3,
+        (result.selected_record().unwrap().cost.unwrap() - (-0.078567)).abs()
+            < 1e-3,
         "F = {}",
-        result.best_cost()
+        result.selected_record().unwrap().cost.unwrap()
     );
 }
 
@@ -113,12 +114,14 @@ fn problem_f_fletcher() {
         .run()
         .unwrap();
     assert!(
-        (result.best_cost() - (-2.0_f64.sqrt())).abs() < 1e-3,
+        (result.selected_record().unwrap().cost.unwrap() - (-2.0_f64.sqrt()))
+            .abs()
+            < 1e-3,
         "F = {}",
-        result.best_cost()
+        result.selected_record().unwrap().cost.unwrap()
     );
     // Feasibility at the reported point.
-    let x = result.best_param();
+    let x = result.selected_record().unwrap().param;
     assert!(x[0] * x[0] - x[1] <= 1e-4);
     assert!(x[0] * x[0] + x[1] * x[1] - 1.0 <= 1e-4);
 }
@@ -149,9 +152,9 @@ fn problem_g_fletcher() {
         .run()
         .unwrap();
     assert!(
-        (result.best_cost() - (-3.0)).abs() < 1e-2,
+        (result.selected_record().unwrap().cost.unwrap() - (-3.0)).abs() < 1e-2,
         "F = {}",
-        result.best_cost()
+        result.selected_record().unwrap().cost.unwrap()
     );
 }
 
@@ -171,5 +174,9 @@ fn unconstrained_rosenbrock_like() {
         .max_cost_evals(5000)
         .run()
         .unwrap();
-    assert!(result.best_cost() < 1e-3, "F = {}", result.best_cost());
+    assert!(
+        result.selected_record().unwrap().cost.unwrap() < 1e-3,
+        "F = {}",
+        result.selected_record().unwrap().cost.unwrap()
+    );
 }

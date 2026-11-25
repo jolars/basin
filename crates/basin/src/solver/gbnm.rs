@@ -165,8 +165,8 @@ struct BoxGeometry<'a, V> {
 ///         .max_cost_evals(2_000)
 ///         .run()
 ///         .unwrap();
-/// let incumbent = result.incumbent_record().expect("expected an incumbent");
-/// assert!(incumbent.cost < 1e-4);
+/// let incumbent = result.selected_record().expect("expected an incumbent");
+/// assert!(incumbent.cost.unwrap() < 1e-4);
 /// ```
 ///
 /// # References
@@ -719,13 +719,13 @@ where
 
     fn terminate(&self, state: &PointState<V, F>) -> Option<Termination<F>> {
         self.fixed_box.then(|| {
-            if state.cost().is_finite() {
+            if state.current_record().unwrap().cost.unwrap().is_finite() {
                 Termination::custom(
                     "gbnm.fixed_box",
                     "The box has exactly one feasible point with a finite objective.",
                     vec![crate::Measurement {
                         name: "cost".into(),
-                        value: state.cost(),
+                        value: state.current_record().unwrap().cost.unwrap(),
                     }],
                 )
             } else {

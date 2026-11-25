@@ -173,7 +173,7 @@ pub enum PsoVelocityLimit<F: Scalar = f64> {
 /// .max_iter(300)
 /// .run()
 /// .unwrap();
-/// assert!(result.cost() < 1e-6);
+/// assert!(result.current_record().unwrap().cost.unwrap() < 1e-6);
 /// ```
 ///
 /// # References

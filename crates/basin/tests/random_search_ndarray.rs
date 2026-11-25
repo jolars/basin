@@ -27,7 +27,10 @@ fn same_seed_yields_identical_trajectory() {
     .run()
     .unwrap();
 
-    assert_eq!(result_a.cost(), result_b.cost());
+    assert_eq!(
+        result_a.current_record().unwrap().cost.unwrap(),
+        result_b.current_record().unwrap().cost.unwrap()
+    );
     assert_eq!(result_a.param(), result_b.param());
 }
 
@@ -71,9 +74,9 @@ fn elite_keeps_cost_monotone_across_iterations() {
     .into_stepper()
     .unwrap();
 
-    let mut prev = stepper.state().cost();
+    let mut prev = stepper.state().current_record().unwrap().cost.unwrap();
     while let StepOutcome::Continue = stepper.step().unwrap() {
-        let current = stepper.state().cost();
+        let current = stepper.state().current_record().unwrap().cost.unwrap();
         assert!(current <= prev, "cost increased: {prev} → {current}");
         prev = current;
     }

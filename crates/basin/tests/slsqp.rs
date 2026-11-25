@@ -1,3 +1,4 @@
+use basin::CountsMirror as _;
 use basin::{
     CostFunction, DenseMatrix, Executor, Gradient, GradientState,
     RawEvaluationState, SelectedFirstOrderState, Slsqp, State, TerminationCode,
@@ -90,7 +91,10 @@ fn analytic_equality_solution_and_records() {
     let x = result.state.param();
     assert!(x[0].abs() < 1e-7, "{x:?}");
     assert!((x[1] - 1.0).abs() < 1e-7, "{x:?}");
-    assert!((result.state.cost() - 2.0).abs() < 1e-10);
+    assert!(
+        (result.state.current_record().unwrap().cost.unwrap() - 2.0).abs()
+            < 1e-10
+    );
     assert_eq!(
         result.state.gradient().unwrap(),
         &EqualityQuadratic.gradient(x).unwrap()
@@ -381,9 +385,10 @@ fn hs71_reference_accepted_trajectory_and_exact_continuation() {
         let state = stepper.state();
         assert_eq!(state.iter(), i as u64);
         assert!(
-            (state.cost() - row[1]).abs() < 2e-8,
+            (state.current_record().unwrap().cost.unwrap() - row[1]).abs()
+                < 2e-8,
             "step {i}: {} != {}",
-            state.cost(),
+            state.current_record().unwrap().cost.unwrap(),
             row[1]
         );
         for (a, b) in state.param().iter().zip(&row[2..]) {
@@ -393,8 +398,11 @@ fn hs71_reference_accepted_trajectory_and_exact_continuation() {
             state.gradient().unwrap(),
             &p.gradient(state.param()).unwrap()
         );
-        assert_eq!(state.best_param(), state.param());
-        assert_eq!(state.best_cost(), state.cost());
+        assert_eq!(state.selected_record().unwrap().param, state.param());
+        assert_eq!(
+            state.selected_record().unwrap().cost.unwrap(),
+            state.current_record().unwrap().cost.unwrap()
+        );
         assert_eq!(state.raw_counts().gradient_evals, i as u64 + 1);
         if i == 2 {
             let checkpoint = stepper.into_checkpoint().unwrap();
@@ -446,7 +454,10 @@ fn checkpoint_rebuilds_scratch_for_exact_continuation() {
                 .unwrap();
         assert_eq!(resumed.report.code(), expected.report.code());
         assert_eq!(resumed.state.param(), expected.state.param());
-        assert_eq!(resumed.state.cost(), expected.state.cost());
+        assert_eq!(
+            resumed.state.current_record().unwrap().cost.unwrap(),
+            expected.state.current_record().unwrap().cost.unwrap()
+        );
         assert_eq!(resumed.state.gradient(), expected.state.gradient());
         assert_eq!(resumed.counts, expected.counts);
         assert_eq!(resumed.state.iter(), expected.state.iter());
@@ -646,7 +657,7 @@ fn all_fixed_bounds_with_disabled_accuracy_reach_iteration_limit() {
     assert_eq!(r.solver.failure(), None);
     assert_eq!(r.state.iter(), 10);
     assert_eq!(r.state.param(), &vec![1.]);
-    assert_eq!(r.state.cost(), 1.);
+    assert_eq!(r.state.current_record().unwrap().cost.unwrap(), 1.);
     assert_eq!(r.state.gradient(), Some(&vec![2.]));
     assert_eq!(r.solver.constraint_violation(), Some(0.));
     assert_eq!(r.state.raw_counts().cost_evals, 1);
@@ -707,7 +718,11 @@ fn numerical_constraint_derivatives_solve_hs71() {
     .run_with_solver()
     .unwrap();
     assert_eq!(r.report.code(), TerminationCode::SolverConverged);
-    assert!((r.state.cost() - 17.014017289134).abs() < 1e-7);
+    assert!(
+        (r.state.current_record().unwrap().cost.unwrap() - 17.014017289134)
+            .abs()
+            < 1e-7
+    );
     assert!(r.solver.constraint_violation().unwrap() < 1e-8);
 }
 #[test]
@@ -730,7 +745,10 @@ fn scipy_and_nlopt_final_output_agreement() {
             .skip(2)
             .map(|v| v.parse().unwrap())
             .collect();
-        assert!((r.state.cost() - row[0]).abs() < 1e-8);
+        assert!(
+            (r.state.current_record().unwrap().cost.unwrap() - row[0]).abs()
+                < 1e-8
+        );
         for (a, b) in r.state.param().iter().zip(&row[1..5]) {
             assert!((a - b).abs() < 1e-7);
         }
@@ -887,12 +905,15 @@ fn nonfinite_callbacks_fail_without_publishing_a_partial_trial() {
         .unwrap();
         assert_eq!(r.report.code(), TerminationCode::SolverFailed);
         assert_eq!(r.state.param(), &vec![3., -1.]);
-        assert_eq!(r.state.best_param(), &vec![3., -1.]);
-        assert_eq!(r.state.cost(), 13.);
+        assert_eq!(r.state.selected_record().unwrap().param, &vec![3., -1.]);
+        assert_eq!(r.state.current_record().unwrap().cost.unwrap(), 13.);
         assert_eq!(r.state.gradient(), Some(&vec![4., -6.]));
         assert_eq!(r.state.iter(), 0);
-        assert_eq!(r.state.best_cost_evals(), 1);
-        assert!(r.state.cost_evals() > r.state.best_cost_evals());
+        assert_eq!(r.state.selected_record().unwrap().counts.cost_evals, 1);
+        assert!(
+            r.state.cost_evals()
+                > r.state.selected_record().unwrap().counts.cost_evals
+        );
     }
 }
 #[test]
@@ -1117,7 +1138,7 @@ fn unconstrained_rosenbrock_exercises_repeated_bfgs_and_backtracking() {
         r.solver.failure()
     );
     assert!(r.state.param().iter().all(|x| (x - 1.).abs() < 1e-5));
-    assert!(r.state.cost() < 1e-10);
+    assert!(r.state.current_record().unwrap().cost.unwrap() < 1e-10);
 }
 
 #[test]

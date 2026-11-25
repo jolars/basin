@@ -23,10 +23,10 @@ fn gradient_descent_with_ndarray_array1() {
     .unwrap();
 
     assert!(
-        result.cost() < initial_cost * 0.1,
+        result.current_record().unwrap().cost.unwrap() < initial_cost * 0.1,
         "expected cost to drop by >10x: initial={}, final={}",
         initial_cost,
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }
 
@@ -46,10 +46,10 @@ fn gradient_descent_with_ndarray_array1_and_backtracking() {
     .unwrap();
 
     assert!(
-        result.cost() < initial_cost * 0.1,
+        result.current_record().unwrap().cost.unwrap() < initial_cost * 0.1,
         "expected cost to drop by >10x: initial={}, final={}",
         initial_cost,
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }
 
@@ -67,7 +67,11 @@ fn nelder_mead_with_ndarray_array1() {
     .run()
     .unwrap();
 
-    assert!(result.cost() < 1e-6, "cost = {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 1e-6,
+        "cost = {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
 }
 
 #[path = "support/backend_aliases.rs"]

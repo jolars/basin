@@ -103,8 +103,7 @@ impl<S: State> From<(S, Option<Termination<S::Float>>)> for SolverStep<S> {
 ///   loop ordering.
 /// - **Implementor must:** populate every state field termination
 ///   criteria might read before returning from
-///   [`init`](Self::init): at minimum [`State::cost`] for any state
-///   whose `cost()` panics on missing data, and
+///   [`init`](Self::init), including the objective when a check requires it and
 ///   [`GradientState::gradient`](crate::core::state::GradientState::gradient)
 ///   for first-order solvers. After every successful
 ///   [`next_iter`](Self::next_iter), the same fields must again
@@ -122,7 +121,7 @@ impl<S: State> From<(S, Option<Termination<S::Float>>)> for SolverStep<S> {
 /// [`EvalCounts`](crate::core::problem::EvalCounts) on the wrapper
 /// before delegating to the user's problem. The
 /// [`Executor`](crate::core::executor::Executor) mirrors those counts
-/// onto the state's [`State::cost_evals`]/
+/// onto the state's [`crate::CountsMirror::cost_evals`]/
 /// [`GradientState::gradient_evals`](crate::core::state::GradientState::gradient_evals)
 /// after every successful [`init`](Self::init)/
 /// [`next_iter`](Self::next_iter); see
@@ -150,8 +149,8 @@ pub trait Solver<P, S: State> {
     ///
     /// - **Implementor must:** seed every state field that termination
     ///   criteria or downstream
-    ///   [`next_iter`](Self::next_iter) calls will read at iter 0: at
-    ///   minimum [`State::cost`], plus
+    ///   [`next_iter`](Self::next_iter) calls will read at iteration zero.
+    ///   This includes
     ///   [`GradientState::gradient`](crate::core::state::GradientState::gradient)
     ///   for first-order solvers and the parallel cost array for
     ///   [`SimplexState`](crate::core::state::SimplexState) solvers.
@@ -181,7 +180,7 @@ pub trait Solver<P, S: State> {
     /// # Contract
     ///
     /// - **Implementor must:** return a state whose
-    ///   [`State::param`], [`State::cost`], and (if `S: GradientState`)
+    ///   [`State::current_record`], [`State::param`], and (if `S: GradientState`)
     ///   [`GradientState::gradient`](crate::core::state::GradientState::gradient)
     ///   are mutually consistent at the new iterate. Termination
     ///   criteria evaluated *before* the next iteration assume these

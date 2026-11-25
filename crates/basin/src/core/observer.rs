@@ -51,7 +51,7 @@
 //!
 //! # Lifecycle
 //!
-//! Three hooks, called in this order during a run:
+//! Hooks fire in the following order at each applicable boundary.
 //!
 //! 1. [`observe_init`](Observe::observe_init) fires once after
 //!    [`Solver::init`](crate::core::solver::Solver::init) returns and the
@@ -62,16 +62,20 @@
 //!    completed iteration, after the iteration counter is incremented. On
 //!    the first call of a fresh run the state shows `iter() == 1`. Gated by
 //!    [`ObserverMode`].
-//! 3. [`observe_final`](Observe::observe_final) fires once when the run
+//! 3. [`observe_selection`](Observe::observe_selection) fires for each new
+//!    selection under [`ObserverMode::SelectionChanged`], including during
+//!    initialization and partial steps. Exact continuation preserves the
+//!    selection and its original timestamp.
+//! 4. [`observe_final`](Observe::observe_final) fires once when the run
 //!    stops cleanly with a [`TerminationReport`]. The state shows the iter
 //!    count of the last fully-completed iteration.
 //!
 //! # Edge cases
 //!
 //! - **Stopping steps.** A step with `completed: false` leaves the iteration
-//!   count unchanged and fires only the final hook. A stopping step with
-//!   `completed: true` increments the count and fires the gated iteration hook
-//!   followed by the final hook. Both receive the same coherent progress.
+//!   count unchanged. A completed stopping step increments the count and
+//!   fires any gated iteration hooks. Selection hooks run for a newly
+//!   published selection, followed by the final hook.
 //! - **Hard error from the problem.** If `next_iter` returns `Err(_)`, the
 //!   state is consumed by the failing call and there's nothing to observe;
 //!   [`observe_final`](Observe::observe_final) does *not* fire and the
@@ -117,7 +121,7 @@ pub use state_snapshot::{StateSnapshotWriter, read_state_snapshot};
 /// Hooks fired around the iteration loop. See the
 /// [module docs](self) for lifecycle and edge cases.
 ///
-/// All three methods default to no-ops, so an implementor fills in only what
+/// All methods default to no-ops, so an implementor fills in only what
 /// they need. Bind on the minimum state shape required (`S: State`,
 /// `S: GradientState`, `S: SimplexState`, …) so a mismatch with the solver is
 /// a compile error rather than a runtime no-op.
@@ -127,8 +131,7 @@ pub trait Observe<S: crate::State> {
     /// state's counter mirror has been refreshed. A fresh run has iteration
     /// zero; exact continuation observes the restored boundary instead.
     ///
-    /// Always fires regardless of the observer's [`ObserverMode`]; modes
-    /// gate iteration callbacks only.
+    /// Always fires regardless of the observer's [`ObserverMode`].
     fn observe_init(&mut self, _state: &S) {}
 
     /// Fired after each successfully completed iteration, after
@@ -139,6 +142,14 @@ pub trait Observe<S: crate::State> {
     /// Gated by [`ObserverMode`]: `Never` skips, `Always` fires every iter,
     /// `Every(n)` fires when `state.iter() % n == 0`.
     fn observe_iter(&mut self, _state: &S) {}
+
+    /// Fired for a new selection with selection-change observation enabled.
+    fn observe_selection(
+        &mut self,
+        _state: &S,
+        _change: crate::SelectionChange,
+    ) {
+    }
 
     /// Fired once when the run stops with a clean
     /// [`TerminationReport`]. `state` is the final iterate; `reason` is what
@@ -203,6 +214,15 @@ pub trait ObserveSolver<S: crate::State, So> {
     /// incumbent publication are updated. Gated by [`ObserverMode`].
     fn observe_iter(&mut self, _state: &S, _solver: &So) {}
 
+    /// Fired for a new selection with selection-change observation enabled.
+    fn observe_selection(
+        &mut self,
+        _state: &S,
+        _solver: &So,
+        _change: crate::SelectionChange,
+    ) {
+    }
+
     /// Fired once on a clean stop, regardless of [`ObserverMode`].
     ///
     /// A partial-step stop refreshes counts without incrementing the iteration
@@ -227,6 +247,8 @@ pub enum ObservationEvent<'a, F: crate::Scalar = f64> {
     Init,
     /// A completed iteration selected by [`ObserverMode`].
     Iter,
+    /// A newly published selection.
+    SelectionChanged(crate::SelectionChange),
     /// A clean stop, including a partial-step stop. Hard errors do not emit
     /// an event. Repeated stepping after termination does not repeat it.
     Final(&'a TerminationReport<F>),
@@ -234,7 +256,7 @@ pub enum ObservationEvent<'a, F: crate::Scalar = f64> {
 
 /// Per-registration policy for [`observe_iter`](Observe::observe_iter).
 ///
-/// Every variant gates the iteration callback only: `observe_init` and
+/// Modes gate iteration and selection callbacks. `observe_init` and
 /// `observe_final` always fire. A user who wants to fully disable an observer
 /// should simply not register it. The same policy applies to [`ObserveSolver`]
 /// and [`ObservationEvent::Iter`] callbacks.
@@ -255,16 +277,11 @@ pub enum ObserverMode {
     /// `iter % n == 0` rule because `n == 0` would divide-by-zero; the
     /// executor checks for `n != 0` before the modulus).
     Every(u64),
-    /// Fire [`observe_iter`](Observe::observe_iter) only on iterations that
-    /// strictly improved the best cost so far, i.e. where
-    /// [`State::best_iter`](crate::core::state::State::best_iter) equals
-    /// [`State::iter`](crate::core::state::State::iter). Ties (a new iterate
-    /// merely equal to the incumbent) do *not* fire, matching the strict
-    /// `<` test in [`State::update_best`](crate::core::state::State::update_best).
-    ///
-    /// Pairs naturally with observers that only care about progress, such as
-    /// logging or checkpointing the incumbent whenever it moves.
+    /// Fire [`observe_iter`](Observe::observe_iter) on completed steps
+    /// that publish the first eligible objective or a strict improvement.
     NewBest,
+    /// Observe each new selection, including initialization and partial steps.
+    SelectionChanged,
 }
 
 impl ObserverMode {
@@ -282,7 +299,7 @@ impl ObserverMode {
     /// best cost (only [`NewBest`](Self::NewBest) consults it).
     pub(crate) fn fires_on(&self, iter: u64, is_new_best: bool) -> bool {
         match *self {
-            ObserverMode::Never => false,
+            ObserverMode::Never | ObserverMode::SelectionChanged => false,
             ObserverMode::Always => true,
             ObserverMode::Every(n) => n != 0 && iter % n == 0,
             ObserverMode::NewBest => is_new_best,

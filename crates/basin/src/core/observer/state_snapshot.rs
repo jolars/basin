@@ -16,7 +16,7 @@ use crate::core::state::State;
 use crate::core::termination::TerminationReport;
 
 const MAGIC: &[u8; 8] = b"BASINST\0";
-const FORMAT_VERSION: u32 = 1;
+const FORMAT_VERSION: u32 = 2;
 
 /// Write the current state to a file with [`postcard`], overwriting the
 /// previous snapshot.
@@ -120,6 +120,14 @@ where
         self.try_write(state);
     }
 
+    fn observe_selection(
+        &mut self,
+        state: &S,
+        _change: crate::SelectionChange,
+    ) {
+        self.try_write(state);
+    }
+
     fn observe_final(
         &mut self,
         state: &S,
@@ -134,7 +142,7 @@ where
 /// Pass the concrete state to [`Executor::new`](crate::Executor::new) to warm
 /// start a fresh run.
 ///
-/// Reads postcard state format version 1 without modifying the file. Missing
+/// Reads postcard state format version 2 without modifying the file. Missing
 /// format markers, unsupported versions, malformed data, and trailing bytes
 /// return [`io::ErrorKind::InvalidData`].
 ///

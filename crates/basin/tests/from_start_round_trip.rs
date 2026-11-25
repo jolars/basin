@@ -126,7 +126,10 @@ fn gradient_descent_basic_state() {
     .run()
     .unwrap();
     assert_eq!(a.param(), b.param());
-    assert_eq!(a.cost(), b.cost());
+    assert_eq!(
+        a.current_record().unwrap().cost.unwrap(),
+        b.current_record().unwrap().cost.unwrap()
+    );
 }
 
 #[test]
@@ -148,9 +151,12 @@ fn trust_region_basic_state_second_order() {
     .run()
     .unwrap();
     assert_eq!(a.param(), b.param());
-    assert_eq!(a.cost(), b.cost());
+    assert_eq!(
+        a.current_record().unwrap().cost.unwrap(),
+        b.current_record().unwrap().cost.unwrap()
+    );
     // Sanity: the second-order solver actually converged on the quadratic.
-    assert!(a.cost() < 1e-12);
+    assert!(a.current_record().unwrap().cost.unwrap() < 1e-12);
 }
 
 #[test]
@@ -165,7 +171,10 @@ fn nelder_mead_simplex_state() {
             .run()
             .unwrap();
     assert_eq!(a.param(), b.param());
-    assert_eq!(a.cost(), b.cost());
+    assert_eq!(
+        a.current_record().unwrap().cost.unwrap(),
+        b.current_record().unwrap().cost.unwrap()
+    );
 }
 
 #[test]
@@ -183,7 +192,10 @@ fn lbfgs_unbounded_history_state() {
     .run()
     .unwrap();
     assert_eq!(a.param(), b.param());
-    assert_eq!(a.cost(), b.cost());
+    assert_eq!(
+        a.current_record().unwrap().cost.unwrap(),
+        b.current_record().unwrap().cost.unwrap()
+    );
 }
 
 #[test]
@@ -203,7 +215,10 @@ fn bfgs_quasi_newton_state_vec_backend() {
     .run()
     .unwrap();
     assert_eq!(a.param(), b.param());
-    assert_eq!(a.cost(), b.cost());
+    assert_eq!(
+        a.current_record().unwrap().cost.unwrap(),
+        b.current_record().unwrap().cost.unwrap()
+    );
 }
 
 #[test]
@@ -221,7 +236,10 @@ fn levenberg_marquardt_nlls_state() {
             .run()
             .unwrap();
     assert_eq!(a.param(), b.param());
-    assert_eq!(a.cost(), b.cost());
+    assert_eq!(
+        a.current_record().unwrap().cost.unwrap(),
+        b.current_record().unwrap().cost.unwrap()
+    );
 }
 
 #[test]
@@ -235,7 +253,10 @@ fn newuoa_state() {
         .run()
         .unwrap();
     assert_eq!(a.param(), b.param());
-    assert_eq!(a.cost(), b.cost());
+    assert_eq!(
+        a.current_record().unwrap().cost.unwrap(),
+        b.current_record().unwrap().cost.unwrap()
+    );
 }
 
 #[test]
@@ -249,7 +270,10 @@ fn mads_state() {
         .run()
         .unwrap();
     assert_eq!(a.param(), b.param());
-    assert_eq!(a.cost(), b.cost());
+    assert_eq!(
+        a.current_record().unwrap().cost.unwrap(),
+        b.current_record().unwrap().cost.unwrap()
+    );
 }
 
 /// BFGS now seeds uniformly across every backend it runs on. The `Vec<f64>`
@@ -305,8 +329,11 @@ fn bfgs_from_start_nalgebra_backend() {
             .run()
             .unwrap();
     assert_eq!(a.param(), b.param());
-    assert_eq!(a.cost(), b.cost());
-    assert!(a.cost() < 1e-12);
+    assert_eq!(
+        a.current_record().unwrap().cost.unwrap(),
+        b.current_record().unwrap().cost.unwrap()
+    );
+    assert!(a.current_record().unwrap().cost.unwrap() < 1e-12);
 }
 
 #[cfg(feature = "faer_all")]
@@ -352,8 +379,11 @@ fn bfgs_from_start_faer_backend() {
             .run()
             .unwrap();
     assert_eq!(a.param(), b.param());
-    assert_eq!(a.cost(), b.cost());
-    assert!(a.cost() < 1e-12);
+    assert_eq!(
+        a.current_record().unwrap().cost.unwrap(),
+        b.current_record().unwrap().cost.unwrap()
+    );
+    assert!(a.current_record().unwrap().cost.unwrap() < 1e-12);
 }
 
 /// `from_start` is fully scalar-generic: it round-trips at `F = f32` over the
@@ -411,7 +441,10 @@ fn from_start_round_trips_at_f32() {
     .run()
     .unwrap();
     assert_eq!(a.param(), b.param());
-    assert_eq!(a.cost(), b.cost());
+    assert_eq!(
+        a.current_record().unwrap().cost.unwrap(),
+        b.current_record().unwrap().cost.unwrap()
+    );
 }
 
 #[path = "support/backend_aliases.rs"]

@@ -58,6 +58,39 @@ a 3.x run exactly, open the checkpoint with the Basin version that wrote it.
 To start a new run in Basin 4.0, export the saved point with that version and
 pass it to `Executor::from_start` with a newly configured solver.
 
-State snapshots can seed a fresh run through `read_state_snapshot` and
-`Executor::new` when the concrete state's serialized layout matches. If the
-layout differs, use the original version to load and export the point.
+Open older native state snapshots with the version that wrote them. Export
+the saved point and pass it to `Executor::from_start` for a fresh run in
+Basin 4.0. The native state snapshot format is now version 2, and the exact
+checkpoint format is version 5.
+
+## Checked progress records
+
+Use `current_record()` for the last published point and `selected_record()`
+for the point retained by the solver's selection policy. An unevaluated seed
+has no record. An available record can have a violation report and no objective
+value. An evaluated NaN or infinity remains an available objective value.
+
+For a selected record, read `iter` and `counts` for the completed iteration
+and raw evaluation counts at publication. These counts include all callback
+requests charged through that boundary. Use the selected record’s optional
+`cost` field to check whether the objective has been evaluated.
+
+| Basin 3.x reader | Basin 4.0 replacement |
+| --- | --- |
+| `cost()` | `current_record().and_then(\|record\| record.cost)` |
+| `incumbent_record()` | `selected_record()`, with an optional `cost` |
+| `best_param()` | `selected_record().map(\|record\| record.param)` |
+| `best_cost()` | `selected_record().and_then(\|record\| record.cost)` |
+| `best_iter()` | `selected_record().map(\|record\| record.iter)` |
+| `best_cost_evals()` | `selected_record().map(\|record\| record.counts.cost_evals)` |
+
+Custom states implement the mapped `cost_evals()` reader on `CountsMirror`.
+Use `result.counts` for authoritative run counts.
+
+Register with `ObserverMode::SelectionChanged` to observe new selections
+during initialization and partial or completed steps. Implement
+`observe_selection` for a trait observer, match
+`ObservationEvent::SelectionChanged` in a closure, or override
+`CheckpointSink::save_with_selection` to inspect the reason in a sink.
+Custom states report the reason from `State::publish_selection`.
+Use `EvaluatedState::evaluated_record()` for a complete evaluated iterate.

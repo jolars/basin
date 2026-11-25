@@ -221,7 +221,7 @@ fn failed_conjugate_search_retries_same_point_with_steepest_descent() {
 }
 
 #[test]
-fn exhausted_recovery_preserves_current_record_and_counts() {
+fn exhausted_recovery_preserves_evaluated_record_and_counts() {
     let (result, trace) = recorded_steps(None, vec![1, 2]);
     assert_eq!(result.report.code(), TerminationCode::SolverFailed);
     assert_eq!(result.iter(), 1);
@@ -638,7 +638,11 @@ fn solutions_agree_with_cg_descent_c_1_2() {
         .run()
         .unwrap();
         assert_eq!(result.report.code(), TerminationCode::GradientTolerance);
-        assert!((result.cost() - reference_cost).abs() < 1e-12);
+        assert!(
+            (result.current_record().unwrap().cost.unwrap() - reference_cost)
+                .abs()
+                < 1e-12
+        );
         for (&actual, &expected) in result.param().iter().zip(&reference_point)
         {
             assert!((actual - expected).abs() < 5e-7);

@@ -78,7 +78,7 @@ fn fresh_barrier_resets_progress() {
         .run_with_solver()
         .unwrap();
     assert_eq!(fresh.state.iter(), 0);
-    assert_eq!(fresh.state.best_iter(), 0);
+    assert_eq!(fresh.state.selected_record().unwrap().iter, 0);
 }
 
 #[test]

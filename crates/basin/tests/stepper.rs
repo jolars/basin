@@ -37,10 +37,13 @@ fn stepper_run_to_end_matches_executor_run() {
     assert_eq!(direct.iter(), via_stepper.iter());
     assert_eq!(direct.report.code(), via_stepper.report.code());
     assert!(
-        (direct.cost() - via_stepper.cost()).abs() < 1e-12,
+        (direct.current_record().unwrap().cost.unwrap()
+            - via_stepper.current_record().unwrap().cost.unwrap())
+        .abs()
+            < 1e-12,
         "direct cost {} != stepper cost {}",
-        direct.cost(),
-        via_stepper.cost()
+        direct.current_record().unwrap().cost.unwrap(),
+        via_stepper.current_record().unwrap().cost.unwrap()
     );
 }
 
@@ -146,7 +149,7 @@ fn stepper_state_is_observable_between_steps() {
     }
 
     assert_eq!(trajectory.len(), 51, "iter 0 + 50 advances");
-    let final_cost = stepper.state().cost();
+    let final_cost = stepper.state().current_record().unwrap().cost.unwrap();
     assert!(
         final_cost < initial_cost,
         "cost should decrease: {} -> {}",

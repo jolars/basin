@@ -54,8 +54,8 @@ fn main() {
         result.report.termination,
         Termination::Converged(_)
     ));
-    let incumbent = result.incumbent_record().expect("expected an incumbent");
+    let incumbent = result.selected_record().expect("expected an incumbent");
     assert!((incumbent.param - 1.0).abs() < 1e-6);
-    assert!((incumbent.cost + 2.0).abs() < 1e-10);
+    assert!((incumbent.cost.unwrap() + 2.0).abs() < 1e-10);
     assert_eq!(result.counts.cost_evals, result.counts.gradient_evals);
 }

@@ -193,7 +193,7 @@ pub fn run(library: Library) -> Run {
                 .unwrap();
             (
                 result.param().as_slice().to_vec(),
-                result.cost(),
+                result.current_record().unwrap().cost.unwrap(),
                 model.residual_calls.get(),
                 model.jacobian_calls.get(),
                 format!("{:?}", result.report.code()),

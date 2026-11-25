@@ -92,8 +92,8 @@ use driver::{CobylaWork, Transition};
 ///     .max_cost_evals(500)
 ///     .run()
 ///     .unwrap();
-/// let incumbent = result.incumbent_record().expect("expected an incumbent");
-/// assert!((incumbent.cost - (-0.5)).abs() < 1e-3);
+/// let incumbent = result.selected_record().expect("expected an incumbent");
+/// assert!((incumbent.cost.unwrap() - (-0.5)).abs() < 1e-3);
 /// ```
 ///
 /// # Configuration

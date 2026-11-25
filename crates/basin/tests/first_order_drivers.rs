@@ -1,5 +1,6 @@
 //! First-order progress stays coherent across fresh runs, rejection, and continuation.
 
+use basin::CountsMirror as _;
 use basin::{
     CostFunction, DenseMatrix, Executor, FirstOrderState, Gradient,
     GradientDescent, GradientState, Hessian, HessianProduct,
@@ -126,7 +127,7 @@ macro_rules! lifecycle {
             .unwrap();
             consistent(&initialized.state);
             assert_eq!(initialized.state.iter(), 0);
-            assert_eq!(initialized.state.best_iter(), 0);
+            assert_eq!(initialized.state.selected_record().unwrap().iter, 0);
             assert_eq!(initialized.counts.cost_evals, 1);
             assert_eq!(initialized.counts.gradient_evals, 1);
             assert_eq!(initialized.counts.total_work(), 2);

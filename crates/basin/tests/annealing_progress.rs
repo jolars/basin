@@ -70,7 +70,7 @@ fn fresh_annealing_reevaluates_and_resets_progress() {
         .unwrap();
     assert_eq!(fresh.state.iter(), 0);
     assert_eq!(fresh.counts.cost_evals, 1);
-    assert_eq!(fresh.state.best_iter(), 0);
+    assert_eq!(fresh.state.selected_record().unwrap().iter, 0);
     assert_eq!(fresh.state.accepted_moves(), 0);
     assert_eq!(fresh.state.rejected_moves(), 0);
 }
@@ -198,7 +198,7 @@ fn independently_seeded_chains_ignore_live_rng_and_neighbor_history() {
 
 #[test]
 fn proposal_metadata_uses_publication_counts_and_iteration() {
-    use basin::{CountsMirror, EvalCounts, IncumbentState, ProposalState};
+    use basin::{CountsMirror, EvalCounts, ProposalState};
     let mut state = ProposalState::new(vec![1.0]);
     assert!(state.current().is_none());
     assert!(state.best().is_none());
@@ -222,7 +222,7 @@ fn proposal_metadata_uses_publication_counts_and_iteration() {
     state.update_best();
     assert_eq!(state.last_accepted_iter(), 1);
     assert_eq!(state.best_counts(), Some(&counts));
-    assert_eq!(state.incumbent_record().unwrap().iter, 1);
+    assert_eq!(state.selected_record().unwrap().iter, 1);
     state.reject_proposal();
     state.increment_iter();
     state.mirror(&{
@@ -241,7 +241,7 @@ fn proposal_metadata_uses_publication_counts_and_iteration() {
     state.update_best();
     assert_eq!(state.last_accepted_iter(), 2);
     assert_eq!(state.best_counts(), Some(&counts));
-    assert_eq!(state.best_iter(), 2);
+    assert_eq!(state.selected_record().unwrap().iter, 2);
     assert_eq!(state.accepted_moves(), 2);
     assert_eq!(state.rejected_moves(), 1);
     state.reset();

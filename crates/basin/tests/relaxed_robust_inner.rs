@@ -86,7 +86,10 @@ macro_rules! relaxed_solver {
             .run()
             .unwrap();
             assert!((result.param()[0] - 0.2).abs() < 1e-7);
-            assert!((result.cost() - 5.76).abs() < 1e-12);
+            assert!(
+                (result.current_record().unwrap().cost.unwrap() - 5.76).abs()
+                    < 1e-12
+            );
             assert_eq!(result.param(), reference.param());
             assert_eq!(result.counts, reference.counts);
             assert_eq!(result.report.code(), reference.report.code());
@@ -127,7 +130,10 @@ macro_rules! injected_solver {
             .run()
             .unwrap();
             assert!((result.param()[0] - 0.2).abs() < 1e-4);
-            assert!((result.cost() - 5.76).abs() < 1e-8);
+            assert!(
+                (result.current_record().unwrap().cost.unwrap() - 5.76).abs()
+                    < 1e-8
+            );
             assert!(result.counts.jacobian_evals > 0);
             assert!(result.counts.cost_evals > 0);
             assert_eq!(

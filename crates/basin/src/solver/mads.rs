@@ -121,8 +121,8 @@ pub struct Constrained;
 ///     .max_cost_evals(5_000)
 ///     .run()
 ///     .unwrap();
-/// let incumbent = result.incumbent_record().expect("expected an incumbent");
-/// assert!(incumbent.cost < 1e-6);
+/// let incumbent = result.selected_record().expect("expected an incumbent");
+/// assert!(incumbent.cost.unwrap() < 1e-6);
 /// ```
 ///
 /// # Configuration
@@ -449,7 +449,7 @@ where
         // Fold the step's improving evaluation into the running best (the
         // reported iterate). MADS accepts only improving mesh points, so
         // param/cost are monotone and coincide with best_param/best_cost.
-        let mut best_f = state.cost();
+        let mut best_f = state.current_record().unwrap().cost.unwrap();
         for (xabs, f_new) in &out.evaluated {
             if *f_new < best_f {
                 best_f = *f_new;
@@ -749,7 +749,7 @@ where
             work.step(&mut eval)?
         };
 
-        let mut best_f = state.cost();
+        let mut best_f = state.current_record().unwrap().cost.unwrap();
         for (xabs, f_new) in &out.evaluated {
             if *f_new < best_f {
                 best_f = *f_new;

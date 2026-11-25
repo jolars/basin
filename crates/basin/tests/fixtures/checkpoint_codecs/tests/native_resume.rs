@@ -33,33 +33,8 @@ impl State for Progress {
         self.iter += 1;
     }
 
-    fn cost_evals(&self) -> u64 {
-        self.cost_evals
-    }
-
     fn param(&self) -> &f64 {
         &self.point
-    }
-
-    fn cost(&self) -> f64 {
-        self.cost
-    }
-
-    // Every published step strictly lowers the positive point and its cost.
-    fn best_param(&self) -> &f64 {
-        &self.point
-    }
-
-    fn best_cost(&self) -> f64 {
-        self.cost
-    }
-
-    fn best_iter(&self) -> u64 {
-        self.iter
-    }
-
-    fn best_cost_evals(&self) -> u64 {
-        self.cost_evals
     }
 
     fn update_best(&mut self) {}
@@ -67,6 +42,9 @@ impl State for Progress {
 }
 
 impl CountsMirror for Progress {
+    fn cost_evals(&self) -> u64 {
+        self.cost_evals
+    }
     fn mirror(&mut self, counts: &EvalCounts) {
         self.cost_evals = counts.cost_evals;
     }

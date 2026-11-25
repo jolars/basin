@@ -2,9 +2,8 @@
 
 use super::progress::Incumbent;
 use super::{
-    CountsMirror, EvaluatedState, IncumbentRef, IncumbentState,
-    IntoInitialSimplex, ObjectiveIncumbentState, RawEvaluationState,
-    SimplexState, State,
+    CountsMirror, EvaluatedState, IntoInitialSimplex, ObjectiveIncumbentState,
+    RawEvaluationState, SimplexState, State,
 };
 use crate::core::math::{Scalar, VectorLen};
 use crate::core::problem::EvalCounts;
@@ -287,6 +286,19 @@ impl<V, F: Scalar> SimplexProgress<V, F> {
     }
 }
 impl<V: Clone, F: Scalar> State for SimplexProgress<V, F> {
+    fn current_record(&self) -> Option<crate::CurrentRef<'_, V, F>> {
+        let (param, cost) = self.evaluated_record()?;
+        Some(crate::CurrentRef::new(param, Some(cost), None))
+    }
+    fn selected_record(&self) -> Option<crate::SelectedRef<'_, V, F>> {
+        let best = self.best.as_ref()?;
+        Some(crate::SelectedRef::new(
+            crate::CurrentRef::new(&best.param, Some(best.cost), None),
+            best.iter,
+            &best.counts,
+        ))
+    }
+
     type Param = V;
     type Float = F;
     fn iter(&self) -> u64 {
@@ -295,50 +307,35 @@ impl<V: Clone, F: Scalar> State for SimplexProgress<V, F> {
     fn increment_iter(&mut self) {
         self.iter += 1;
     }
-    fn cost_evals(&self) -> u64 {
-        self.counts.cost_evals
-    }
     fn param(&self) -> &V {
         self.vertices
             .first()
             .expect("simplex storage has been moved out")
     }
-    fn cost(&self) -> F {
-        self.current().expect("simplex has not been evaluated").1
-    }
-    fn best_param(&self) -> &V {
-        &self
-            .best
-            .as_ref()
-            .expect("no incumbent has been selected")
-            .param
-    }
-    fn best_cost(&self) -> F {
-        self.best.as_ref().map_or(F::infinity(), |best| best.cost)
-    }
-    fn best_iter(&self) -> u64 {
-        self.best.as_ref().map_or(0, |best| best.iter)
-    }
-    fn best_cost_evals(&self) -> u64 {
-        self.best.as_ref().map_or(0, |best| best.counts.cost_evals)
-    }
     fn update_best(&mut self) {
-        if !self.vertices.is_empty() && self.vertices.len() == self.costs.len()
-        {
-            Incumbent::consider(
-                &mut self.best,
-                &self.vertices[0],
-                self.costs[0],
-                self.iter,
-                self.counts,
-            );
+        self.publish_selection();
+    }
+    fn publish_selection(&mut self) -> Option<crate::SelectionChange> {
+        if self.vertices.is_empty() || self.vertices.len() != self.costs.len() {
+            return None;
         }
+        Incumbent::consider(
+            &mut self.best,
+            &self.vertices[0],
+            self.costs[0],
+            self.iter,
+            self.counts,
+        )
+        .then_some(crate::SelectionChange::ObjectiveImproved)
     }
     fn reset_best(&mut self) {
         self.best = None;
     }
 }
 impl<V: Clone, F: Scalar> CountsMirror for SimplexProgress<V, F> {
+    fn cost_evals(&self) -> u64 {
+        self.counts.cost_evals
+    }
     fn mirror(&mut self, counts: &EvalCounts) {
         self.counts = *counts;
     }
@@ -352,23 +349,13 @@ impl<V: Clone, F: Scalar> SimplexState for SimplexProgress<V, F> {
     }
 }
 impl<V: Clone, F: Scalar> EvaluatedState for SimplexProgress<V, F> {
-    fn current_record(&self) -> Option<(&V, F)> {
+    fn evaluated_record(&self) -> Option<(&V, F)> {
         self.current()
     }
 }
 impl<V: Clone, F: Scalar> RawEvaluationState for SimplexProgress<V, F> {
     fn raw_counts(&self) -> &EvalCounts {
         &self.counts
-    }
-}
-impl<V: Clone, F: Scalar> IncumbentState for SimplexProgress<V, F> {
-    fn incumbent_record(&self) -> Option<IncumbentRef<'_, V, F>> {
-        self.best.as_ref().map(|best| IncumbentRef {
-            param: &best.param,
-            cost: best.cost,
-            iter: best.iter,
-            counts: &best.counts,
-        })
     }
 }
 impl<V: Clone, F: Scalar> ObjectiveIncumbentState for SimplexProgress<V, F> {}

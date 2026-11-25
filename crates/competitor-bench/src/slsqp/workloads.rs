@@ -225,7 +225,10 @@ pub fn verify_hs71(result: &Result) {
     let x = result.state.param();
     assert!(x.iter().all(|v| v.is_finite() && (1.0..=5.0).contains(v)));
     let cost = Case::Hs71.objective(x);
-    assert!((cost - result.state.cost()).abs() < 1e-12);
+    assert!(
+        (cost - result.state.current_record().unwrap().cost.unwrap()).abs()
+            < 1e-12
+    );
     assert!((cost - 17.014_017_289_156).abs() < 1e-8);
     assert!(Case::equality(x, None).abs() < 1e-9);
     assert!(Case::Hs71.inequality(x, None) < 1e-9);

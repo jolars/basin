@@ -3,6 +3,7 @@ mod backend;
 #[path = "support/backend_aliases.rs"]
 mod backend_aliases;
 
+use basin::CountsMirror as _;
 use basin::{
     CostFunction, Direct, EvaluationKind, Executor, PointState, Problem,
     Solver, State, TerminationCode,
@@ -120,7 +121,7 @@ fn f32_mixed_magnitude_costs_refine_the_best_rectangle() {
     .max_iter(4)
     .run()
     .unwrap();
-    assert_eq!(result.cost(), -2e-9);
+    assert_eq!(result.current_record().unwrap().cost.unwrap(), -2e-9);
     assert_eq!(result.report.code(), TerminationCode::MaxIter);
 }
 
@@ -166,7 +167,7 @@ fn midpoint_then_first_cross_and_budget_overshoot() {
             .into_stepper()
             .unwrap();
     assert_eq!(stepper.state().param(), &[3.0, 2.0, 0.0]);
-    assert_eq!(stepper.state().cost(), 3.0);
+    assert_eq!(stepper.state().current_record().unwrap().cost.unwrap(), 3.0);
     assert_eq!(stepper.state().counts().cost_evals, 1);
     let result = stepper.run_to_end().unwrap();
     assert_eq!(result.report.code(), TerminationCode::MaxEvaluations);
@@ -186,8 +187,14 @@ fn midpoint_then_first_cross_and_budget_overshoot() {
             assert!((a - b).abs() < 1e-14);
         }
     }
-    assert_eq!(result.cost(), result.param()[0] + 2.0 * result.param()[2]);
-    assert_eq!(result.state.best_cost(), result.cost());
+    assert_eq!(
+        result.current_record().unwrap().cost.unwrap(),
+        result.param()[0] + 2.0 * result.param()[2]
+    );
+    assert_eq!(
+        result.state.selected_record().unwrap().cost.unwrap(),
+        result.current_record().unwrap().cost.unwrap()
+    );
 }
 
 #[test]
@@ -278,7 +285,7 @@ fn rejected_midpoint_can_recover_and_all_rejections_do_not_converge() {
                 .run()
                 .unwrap();
         assert_eq!(result.report.code(), TerminationCode::TargetCost);
-        assert!(result.cost().is_finite());
+        assert!(result.current_record().unwrap().cost.unwrap().is_finite());
         let problem = Objective {
             lower: vec![0.0],
             upper: vec![1.0],
@@ -335,8 +342,14 @@ fn negative_infinity_and_typed_errors() {
                 .run()
                 .unwrap();
         assert_eq!(result.report.code(), TerminationCode::SolverConverged);
-        assert_eq!(result.cost(), f64::NEG_INFINITY);
-        assert_eq!(result.state.best_cost(), result.cost());
+        assert_eq!(
+            result.current_record().unwrap().cost.unwrap(),
+            f64::NEG_INFINITY
+        );
+        assert_eq!(
+            result.state.selected_record().unwrap().cost.unwrap(),
+            result.current_record().unwrap().cost.unwrap()
+        );
     }
 }
 
@@ -460,7 +473,10 @@ fn checkpoint_continuation_and_fresh_reset() {
     let reset = solver.init(&mut problem, state).unwrap();
     assert_eq!(reset.iter(), 0);
     assert_eq!(reset.param(), &[0.0, 0.0]);
-    assert_eq!(reset.cost(), sphere(&[0.0, 0.0]).unwrap());
+    assert_eq!(
+        reset.current_record().unwrap().cost.unwrap(),
+        sphere(&[0.0, 0.0]).unwrap()
+    );
     assert_eq!(problem.counts().cost_evals, 1);
 }
 
@@ -516,7 +532,7 @@ fn scipy_solution_quality_and_evaluation_counts() {
         .max_iter(1000)
         .run()
         .unwrap();
-        let gap = result.cost() - minimum;
+        let gap = result.current_record().unwrap().cost.unwrap() - minimum;
         eprintln!(
             "{name}: Basin gap={gap:.8e}, evaluations={}; SciPy gap={:.8e}, evaluations={reference_count}",
             result.state.cost_evals(),
@@ -532,7 +548,10 @@ fn scipy_solution_quality_and_evaluation_counts() {
             result.state.cost_evals() <= 2 * reference_count,
             "{name}: excessive final sweep"
         );
-        assert_eq!(reference_cost(name, result.param()), result.cost());
+        assert_eq!(
+            reference_cost(name, result.param()),
+            result.current_record().unwrap().cost.unwrap()
+        );
     }
 }
 

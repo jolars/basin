@@ -72,7 +72,7 @@ convergence was reached.
 
 The two-dimensional Ackley function has a global minimum at the origin
 and many surrounding local minima. Nelder–Mead refines each proposal,
-while the outer walk explores other basins. Read `incumbent_record()` because the last accepted point can be uphill from an
+while the outer walk explores other basins. Read `selected_record()` because the last accepted point can be uphill from an
 earlier solution.
 
 <<< ../../../../../../crates/basin/examples/solver_guides/basin_hopping.rs

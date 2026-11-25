@@ -86,7 +86,7 @@ use crate::solver::solis_wets::SolisWets;
 /// .max_cost_evals(10_000)
 /// .run()
 /// .unwrap();
-/// assert!(result.cost() < 1e-6);
+/// assert!(result.current_record().unwrap().cost.unwrap() < 1e-6);
 /// ```
 pub type MaLsChSw<V, F = f64> = MaLsCh<V, SolisWets<V, F>, F>;
 

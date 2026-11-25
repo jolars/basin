@@ -62,8 +62,12 @@ fn slack_bounds_recover_unconstrained_minimum() {
     .run()
     .unwrap();
 
-    assert!(result.best_cost() < 1e-6, "cost = {}", result.best_cost());
-    let x = result.best_param();
+    assert!(
+        result.selected_record().unwrap().cost.unwrap() < 1e-6,
+        "cost = {}",
+        result.selected_record().unwrap().cost.unwrap()
+    );
+    let x = result.selected_record().unwrap().param;
     assert!(
         (x[0] - 1.0).abs() < 1e-3,
         "x[0] = {} (expected near 1)",
@@ -97,7 +101,7 @@ fn tight_bounds_converge_to_box_corner() {
     .run()
     .unwrap();
 
-    let x = result.best_param();
+    let x = result.selected_record().unwrap().param;
     assert!(
         (x[0] - 1.0).abs() < 1e-4,
         "x[0] = {} (expected pinned at upper bound 1)",

@@ -88,7 +88,7 @@ fn main() {
     println!(
         "x = {:?}, f = {}, stopped: {:?}",
         result.param(),
-        result.cost(),
+        result.current_record().unwrap().cost.unwrap(),
         result.report.termination
     );
 }

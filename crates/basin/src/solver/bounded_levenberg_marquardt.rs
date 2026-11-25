@@ -184,7 +184,7 @@ use super::least_squares_diagnostics::{
 /// unscaled `Σ rᵢ²` form (e.g.
 /// [`BoothBoxedResiduals`](https://docs.rs/basin/latest/basin/problems/booth/struct.BoothBoxedResiduals.html),
 /// available with the `problems` feature) will
-/// see `state.cost()` differ from `problem.cost(state.param())` by a
+/// see `state.current_record().unwrap().cost.unwrap()` differ from `problem.cost(state.param())` by a
 /// factor of two; both go to zero at the optimum.
 ///
 /// # Examples
@@ -549,7 +549,7 @@ where
         if self.failed {
             if let Some(trace) = &mut self.trace {
                 trace.event(
-                    state.cost(),
+                    state.current_record().unwrap().cost.unwrap(),
                     "construction",
                     "invalid_initial_model",
                 );
@@ -576,7 +576,7 @@ where
                     self.failed = true;
                     if let Some(trace) = &mut self.trace {
                         trace.event(
-                            state.cost(),
+                            state.current_record().unwrap().cost.unwrap(),
                             "construction",
                             "invalid_residual_model",
                         );
@@ -597,7 +597,7 @@ where
             self.failed = true;
             if let Some(trace) = &mut self.trace {
                 let index = trace.event(
-                    state.cost(),
+                    state.current_record().unwrap().cost.unwrap(),
                     "construction",
                     "invalid_gradient",
                 );
@@ -626,7 +626,9 @@ where
         );
 
         if let Some(trace) = &mut self.trace {
-            let mut row = LeastSquaresObservation::model(state.cost());
+            let mut row = LeastSquaresObservation::model(
+                state.current_record().unwrap().cost.unwrap(),
+            );
             let collect = self.trace_vector.unwrap();
             row.gradient = collect(&g);
             row.diagonal = collect(&d_sq);
@@ -693,8 +695,11 @@ where
             ($outcome:literal, $message:literal) => {{
                 self.failed = true;
                 if let Some(trace) = &mut self.trace {
-                    let index =
-                        trace.event(state.cost(), "selection", $outcome);
+                    let index = trace.event(
+                        state.current_record().unwrap().cost.unwrap(),
+                        "selection",
+                        $outcome,
+                    );
                     let row = &mut trace.observations[index];
                     row.damping = Some(mu);
                     row.damping_after = Some(mu);
@@ -740,7 +745,9 @@ where
             a_damped.add_diagonal_vector_in_place(&damping_vec);
             let result = a_damped.solve_spd(&neg_g);
             let solve_record = self.trace.as_mut().map(|trace| {
-                let mut row = LeastSquaresObservation::model(state.cost());
+                let mut row = LeastSquaresObservation::model(
+                    state.current_record().unwrap().cost.unwrap(),
+                );
                 let collect = self.trace_vector.unwrap();
                 row.event = "subproblem";
                 row.outcome =
@@ -830,7 +837,7 @@ where
         {
             if let Some(trace) = &mut self.trace {
                 let index = trace.event(
-                    state.cost(),
+                    state.current_record().unwrap().cost.unwrap(),
                     "selection",
                     "nonfinite_prediction",
                 );
@@ -853,7 +860,9 @@ where
         let mut x_trial = state.param().clone();
         x_trial.scaled_add(alpha, &h);
         let trial_record = self.trace.as_mut().map(|trace| {
-            let mut row = LeastSquaresObservation::model(state.cost());
+            let mut row = LeastSquaresObservation::model(
+                state.current_record().unwrap().cost.unwrap(),
+            );
             let collect = self.trace_vector.unwrap();
             row.event = "trial";
             row.trial = true;
@@ -877,7 +886,7 @@ where
         }
         let f_trial = problem.cost(&r_trial, |r| half * r.norm_squared());
 
-        let prev_cost = state.cost();
+        let prev_cost = state.current_record().unwrap().cost.unwrap();
         let actual = prev_cost - f_trial - half_s_t_c_s;
 
         let rho = if predicted > F::zero() {

@@ -49,6 +49,9 @@ fn main() {
 
     println!("final iter:    {}", result.iter());
     println!("final param:   {:?}", result.param());
-    println!("final cost:    {}", result.cost());
+    println!(
+        "final cost:    {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
     println!("termination:   {:?}", result.report.code());
 }

@@ -23,10 +23,10 @@ fn gradient_descent_with_nalgebra_dvector() {
     .unwrap();
 
     assert!(
-        result.cost() < initial_cost * 0.1,
+        result.current_record().unwrap().cost.unwrap() < initial_cost * 0.1,
         "expected cost to drop by >10x: initial={}, final={}",
         initial_cost,
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }
 
@@ -46,10 +46,10 @@ fn gradient_descent_with_nalgebra_dvector_and_backtracking() {
     .unwrap();
 
     assert!(
-        result.cost() < initial_cost * 0.1,
+        result.current_record().unwrap().cost.unwrap() < initial_cost * 0.1,
         "expected cost to drop by >10x: initial={}, final={}",
         initial_cost,
-        result.cost()
+        result.current_record().unwrap().cost.unwrap()
     );
 }
 
@@ -67,7 +67,11 @@ fn nelder_mead_with_nalgebra_dvector() {
     .run()
     .unwrap();
 
-    assert!(result.cost() < 1e-6, "cost = {}", result.cost());
+    assert!(
+        result.current_record().unwrap().cost.unwrap() < 1e-6,
+        "cost = {}",
+        result.current_record().unwrap().cost.unwrap()
+    );
 }
 
 #[path = "support/backend_aliases.rs"]

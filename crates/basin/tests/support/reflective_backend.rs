@@ -122,7 +122,7 @@ where
         );
         assert_eq!(result.param().get_scalar(0), num(0.5));
         if deficient {
-            assert!(result.cost() < num(1e-6));
+            assert!(result.current_record().unwrap().cost.unwrap() < num(1e-6));
         } else {
             assert!(
                 (result.param().get_scalar(1) - F::one()).abs() < num(1e-3)
@@ -130,7 +130,11 @@ where
             assert!(
                 (result.param().get_scalar(2) + num(2.0)).abs() < num(1e-3)
             );
-            assert!((result.cost() - num(2.125)).abs() < num(1e-3));
+            assert!(
+                (result.current_record().unwrap().cost.unwrap() - num(2.125))
+                    .abs()
+                    < num(1e-3)
+            );
         }
     }
     check_small_radius(make);
@@ -286,7 +290,7 @@ where
     assert!((h0.hypot(h1) - num(2.0)).abs() < num(1e-5));
     assert!((h0 - F::one()).abs() < num(0.02));
     assert!((h1 - num::<F>(3.0).sqrt()).abs() < num(0.02));
-    assert!(result.cost() < num(1e-4));
+    assert!(result.current_record().unwrap().cost.unwrap() < num(1e-4));
 }
 
 fn check_cost_floor<V, F>(make: fn(&[F]) -> V)
@@ -319,7 +323,7 @@ where
     .unwrap();
     assert_eq!(result.report.code(), TerminationCode::NumericalNoProgress);
     assert!(result.native_convergence_tests().is_empty());
-    assert_eq!(result.cost(), num(2.0));
+    assert_eq!(result.current_record().unwrap().cost.unwrap(), num(2.0));
     let x = result.param().get_scalar(0);
     let y = result.param().get_scalar(1);
     let error = (x - num(0.3)).abs().max((y - num(0.7)).abs());

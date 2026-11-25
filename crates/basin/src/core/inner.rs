@@ -145,14 +145,13 @@ where
 
     /// Borrow the segment's selected point and cost, if available.
     ///
-    /// The default uses the legacy best readers. Implementations with checked
-    /// incumbent access can override this method to report absence directly.
     fn segment_incumbent<'a>(
         &self,
         state: &'a Self::State,
     ) -> Option<(&'a V, F)> {
-        let cost = state.best_cost();
-        (cost < F::infinity()).then(|| (state.best_param(), cost))
+        let record = state.selected_record()?;
+        let cost = record.cost?;
+        (cost < F::infinity()).then_some((record.param, cost))
     }
 
     /// Configure execution stops or solver settings for a new chain segment.
@@ -211,7 +210,7 @@ where
 ///      the *same* wrapper as the outer's, so aggregation happens
 ///      transparently. No explicit roll-up; the outer state's
 ///      [`CountsMirror`] impl decides how the counts surface on its
-///      [`State::cost_evals`]/
+///      [`crate::CountsMirror::cost_evals`]/
 ///      [`GradientState::gradient_evals`](crate::core::state::GradientState::gradient_evals).
 ///    - **Adapter-problem inner** (the outer builds a fresh
 ///      `Problem::new(adapter)` per outer iter, e.g. the barrier and
@@ -350,7 +349,7 @@ impl<S: State + CountsMirror, So> InnerExecutor<S, So> {
     /// the final inner state and termination reason. Reusable: call once
     /// per outer iter.
     ///
-    /// The inner state's [`State::cost_evals`] reflects only per-run
+    /// The inner state's [`crate::CountsMirror::cost_evals`] reflects only per-run
     /// work (snapshot-relative against the wrapper count at entry), not
     /// cumulative across calls. The wrapper itself accumulates
     /// monotonically: for same-problem composition the outer reads
