@@ -16,26 +16,26 @@ for 4.0.0.
   higher-cost feasible replacement. Migrate result consumers to checked
   incumbent access where available, including composed solvers that may
   receive no inner incumbent.
-- [x] **Exercise Jacobian products through the executor.** The
-  [iterative-TRF prototype](#iterative-trf-api-prototype) charges attempted
-  products through `Problem` and checks budgets, state mirrors, nested counts,
-  and exact checkpoints. Finite-difference probes stay outside request counts.
-  Tests cover typed scratch reuse with residual-only and operator-only robust
-  problems, a custom Jacobian, and overlapping callbacks.
-- [x] **Prototype explicit serial and threaded evaluation.** The
-  [downstream fixture](crates/basin/tests/fixtures/evaluation_unification)
-  runs local finite differences and population evaluation after feature
-  unification enables `parallel`. A configured factory crosses threads before
-  creating the executor and its local hooks. Forward and central
-  Hessian-vector products exercise overlapping gradient calls.
+- [x] **Exercise Jacobian products through the executor.** The [iterative-TRF
+  prototype](#iterative-trf-api-prototype) charges attempted products
+  through `Problem` and checks budgets, state mirrors, nested counts, and
+  exact checkpoints. Finite-difference probes stay outside request counts.
+  Tests cover typed scratch reuse with residual-only and operator-only
+  robust problems, a custom Jacobian, and overlapping callbacks.
+- [x] **Prototype explicit serial and threaded evaluation.** The [downstream
+  fixture](crates/basin/tests/fixtures/evaluation_unification) runs local
+  finite differences and population evaluation after feature unification
+  enables `parallel`. A configured factory crosses threads before creating
+  the executor and its local hooks. Forward and central Hessian-vector
+  products exercise overlapping gradient calls.
 - [x] **Test line searches with objectives defined only inside their bounds.**
-  The [line-search API prototype](#line-search-api-prototype) exercises custom
-  bounded strategies and projected Armijo through the executor.
+  The [line-search API prototype](#line-search-api-prototype) exercises
+  custom bounded strategies and projected Armijo through the executor.
 - [x] **Prepare the square Hessian default.** `FiniteDiff::with_square_hessian`
-  supports reusable output on dynamic backends. Tests cover owned and in-place
-  Hessians, `f32` constructor inference, and rectangular Jacobians. Custom
-  backends can select the Hessian supplied by `DenseMatrixFromFn` with
-  `FiniteDiff::with_dense_hessian`.
+  supports reusable output on dynamic backends. Tests cover owned and
+  in-place Hessians, `f32` constructor inference, and rectangular Jacobians.
+  Custom backends can select the Hessian supplied by `DenseMatrixFromFn`
+  with `FiniteDiff::with_dense_hessian`.
 - [x] **Test CMA-ES refresh policies.** Add a fixed refresh-period option to
   bounded CMA-ES and its wrappers. Extend the [CMA-ES comparison
   harness](crates/competitor-bench/src/bin/verify_cmaes.rs) to compare fixed
@@ -51,13 +51,13 @@ for 4.0.0.
   [step-overhead experiment](crates/basin/benches/step_overhead/README.md)
   compares both changes separately against `main` on the small
   Levenberg–Marquardt and unbounded L-BFGS workloads from
-  [#140](https://github.com/jolars/basin/issues/140).
-  It checks standalone and composed runs, initialization stops, continuing
-  partial steps, exact resume, incumbent counts, and LM's numerical safeguards.
-  The driver keeps attempted counts when a callback fails and discards the
-  partial state before publication or checkpointing.
-- [x] **Use competitor comparisons to test diagnostics.** The
-  [diagnostics audit](crates/basin/benches/benchmarking.md#constrained-and-least-squares-diagnostics)
+  [#140](https://github.com/jolars/basin/issues/140). It checks standalone
+  and composed runs, initialization stops, continuing partial steps, exact
+  resume, incumbent counts, and LM's numerical safeguards. The driver keeps
+  attempted counts when a callback fails and discards the partial state
+  before publication or checkpointing.
+- [x] **Use competitor comparisons to test diagnostics.** The [diagnostics
+  audit](crates/basin/benches/benchmarking.md#constrained-and-least-squares-diagnostics)
   compares native and reconstructed feasibility, stationarity, and
   complementarity. It checks when callers can capture the Jacobian at the
   accepted fit or need to reevaluate it.
@@ -74,16 +74,17 @@ whether to adopt the conditional changes below.
   `best_cost()`, `best_iter()`, and `best_cost_evals()` on both executor
   result types with a checked record accessor. Revisit `incumbent_record()`
   as the general name. Consider `selected_record()` for a record that can
-  carry a point and its constraint violation before its objective is evaluated.
-  Document record availability and raw publication counts. Publish selection
-  changes explicitly so observers and checkpoint sinks can distinguish
-  feasibility-first selection from strict objective improvement. Keep objective
-  targets and stalls tied to an eligible objective incumbent.
+  carry a point and its constraint violation before its objective is
+  evaluated. Document record availability and raw publication counts.
+  Publish selection changes explicitly so observers and checkpoint sinks can
+  distinguish feasibility-first selection from strict objective improvement.
+  Keep objective targets and stalls tied to an eligible objective incumbent.
 - [ ] **Define which inner results composed solvers can consume.** Decide
   whether feasibility-aware outer solvers may reevaluate and use a selected
-  point from an inner run that has no objective incumbent. The constrained-DE
-  prototype keeps the existing member in this case. Replace the legacy
-  cost-sentinel fallback in `segment_incumbent` with checked access.
+  point from an inner run that has no objective incumbent. The
+  constrained-DE prototype keeps the existing member in this case. Replace
+  the legacy cost-sentinel fallback in `segment_incumbent` with checked
+  access.
 - [ ] **Make threaded evaluation opt-in at the call site.** Have `parallel`
   enable threaded execution and keep serial APIs usable when a dependency
   enables the feature. Apply thread-safety bounds to the threaded path.
@@ -97,8 +98,8 @@ whether to adopt the conditional changes below.
 - [ ] **Decide how to consolidate the line-search contract.** Use the
   [line-search API prototype](#line-search-api-prototype) to decide what an
   accepted result must carry, how to enforce feasible trials, and how
-  projected gradient descent should select its search. Preserve typed callback
-  errors and evaluation counts.
+  projected gradient descent should select its search. Preserve typed
+  callback errors and evaluation counts.
 - [ ] **Use authoritative counts for raw budgets.** Drive raw budgets from the
   problem wrapper's authoritative counts and make numeric inner budgets
   serializable. Document how legacy budget callers migrate. Retire
@@ -112,12 +113,37 @@ whether to adopt the conditional changes below.
   features. Document the feature migration and exact-version checks. Verify
   that a run resumed from Postcard matches an uninterrupted run and that the
   default WASM build still works.
+- [ ] **Validate the checkpoint representation with another codec.** Use the
+  existing checkpoint types to compare Postcard, MessagePack via `rmp-serde`
+  in tuple and named-field modes, and bincode-next through Serde. Save BFGS
+  on ndarray after inverse Hessian updates and seeded CMA-ES after several
+  generations. Decode and resume in a fresh executor. Compare the remaining
+  trajectory, final state, termination, and cumulative evaluation counts
+  with uninterrupted runs. Check signed zero, infinities, and NaN bits for
+  `f32` and `f64`. Measure in-memory encode time, decode time, and payload
+  size across representative dimensions. Use the [Rust serialization
+  benchmark](https://github.com/djkoloski/rust_serialization_benchmark) for
+  measurement ideas. Keep the prototype in tests and benchmarks. Prototype
+  native bincode-next fingerprinting on a live checkpoint and record what
+  support it needs beyond the Serde path. Document which compatibility
+  checks callers own when serializing directly. Consider a separate wire
+  schema if checkpoints need versioning independent of solver types or a
+  caller needs native codec traits for live solver state, such as
+  bincode-next fingerprinting.
+- [ ] **Use `Checkpoint` for exact continuation.** Rename `ExactCheckpoint` to
+  `Checkpoint`, `ExactCheckpointWriter` to `CheckpointWriter`, and
+  `read_exact_checkpoint` to `read_checkpoint`. Document the 4.0 name
+  changes together with the state-only API migration.
+- [ ] **Give state-only snapshots explicit names.** Rename the existing
+  `CheckpointWriter` to `StateSnapshotWriter` and the existing
+  `read_checkpoint` to `read_state_snapshot`. Document how to load a
+  snapshot and start a fresh run with `Executor::new`.
 - [ ] **Decide when to expose Jacobian-product accounting.** Add separate
   counters for Jacobian and transpose-Jacobian products in 4.0 or alongside
   iterative TRF. Preserve attempted-request counting through budgets, nested
   runs, and exact resume. If the serialized layout changes, decide whether
-  older six-counter checkpoints need a migration path or an explicit
-  version rejection.
+  older six-counter checkpoints need a migration path or an explicit version
+  rejection.
 - [ ] **Make square finite-difference Hessians the default.** Infer the square
   matrix from the parameter backend while keeping Jacobian rows tied to the
   residual or constraint count. Document migration for callers that name or
@@ -405,8 +431,9 @@ compatibility and numerical behavior still need verification.
   stationarity, and complementarity where available.
 
   - [ ] **Compare bounded BOBYQA against NLopt.**
-  - [x] **Compare constrained SLSQP against NLopt.** The
-    [HS71 and constrained quadratic comparison](crates/basin/benches/benchmarking.md#slsqp-against-nlopt)
+  - [x] **Compare constrained SLSQP against NLopt.** The [HS71 and constrained
+    quadratic
+    comparison](crates/basin/benches/benchmarking.md#slsqp-against-nlopt)
     validates the returned points and compares KKT evidence.
   - [x] **Compare BFGS against argmin.** Published 100-variable Rosenbrock
     traces with matched identity seeds and Moré–Thuente settings, callback
@@ -430,11 +457,11 @@ compatibility and numerical behavior still need verification.
   - [ ] **Add the `slsqp` crate as another Rust reference.** Record its shared
     NLopt lineage.
 
-- [x] **Add bounded least squares against `rmpfit`.** The
-  [MPFIT comparison](crates/basin/benches/benchmarking.md#least-squares-against-mpfit)
+- [x] **Add bounded least squares against `rmpfit`.** The [MPFIT
+  comparison](crates/basin/benches/benchmarking.md#least-squares-against-mpfit)
   covers Basin's LM, bounded LM, and TRF on the NIST fits and uses analytic
-  fits to test active bounds, fixed coordinates, and Jacobian recovery.
-  It compares RSS and records the scaling and stopping tests for each method.
+  fits to test active bounds, fixed coordinates, and Jacobian recovery. It
+  compares RSS and records the scaling and stopping tests for each method.
 
 ### Additional Rust packages
 
@@ -640,10 +667,10 @@ scalar types.
   central HVPs. Include expensive analytic gradients and synthesized
   gradients to expose nested overhead. Explicitly address compatibility
   before adding `Send` or `Sync` bounds to the currently unrestricted HVP
-  free functions, and retain the zero-direction shortcut. The
-  [downstream fixture](crates/basin/tests/fixtures/evaluation_unification)
-  verifies overlap and nested finite-difference dispatch for both stencils.
-  Use the timing comparison to decide whether to adopt the threaded path.
+  free functions, and retain the zero-direction shortcut. The [downstream
+  fixture](crates/basin/tests/fixtures/evaluation_unification) verifies
+  overlap and nested finite-difference dispatch for both stencils. Use the
+  timing comparison to decide whether to adopt the threaded path.
 - [ ] **Evaluate parallelism within central stencils.** Expose the positive and
   negative gradient and Jacobian probes, and the four off-diagonal Hessian
   probes, as separate tasks when the existing column or entry tasks cannot
@@ -657,11 +684,12 @@ The [bounded L-BFGS-B tests](crates/basin/tests/lbfgsb_line_search_bounds.rs)
 use custom strategies that probe the same feasible trial. Including
 initialization, the step-only strategy uses three cost and two gradient
 requests. The solver reevaluates the cost because the strategy returns only the
-step. Returning the full evaluation uses two cost and two gradient requests.
-A soft failure after the trial cost uses two cost and one gradient request,
+step. Returning the full evaluation uses two cost and two gradient requests. A
+soft failure after the trial cost uses two cost and one gradient request,
 preserves the current and best records, and completes zero iterations.
 
-The [test-only projected descent driver](crates/basin/src/solver/projected_gradient_descent/line_search_api_prototype.rs)
+The [test-only projected descent
+driver](crates/basin/src/solver/projected_gradient_descent/line_search_api_prototype.rs)
 uses the existing projected Armijo kernel. On a quadratic defined only inside
 the box, the current PGD backtracking path sends an out-of-box point to the
 objective. Projected Armijo skips duplicate projected trials, tests sufficient
@@ -675,14 +703,14 @@ trial reaches the caller with its original type.
 Questions for 4.0:
 
 - Should acceptance carry the actual trial point in both search geometries?
-  Should a strategy also be able to retain a cost without a gradient and let
-  the solver request only the missing derivative?
+  Should a strategy also be able to retain a cost without a gradient and let the
+  solver request only the missing derivative?
 - Should bounded-ray and projected searches require distinct capabilities, or
   should the solver supply a trial evaluator that constructs feasible points
   before any callback? The existing bounded-ray interface gives strategies a
   step limit and relies on them to honor it.
-- Should PGD use projected Armijo by default when a line search is selected,
-  or should callers choose it explicitly? How should PGD distinguish projected
+- Should PGD use projected Armijo by default when a line search is selected, or
+  should callers choose it explicitly? How should PGD distinguish projected
   stationarity from exhaustion without moving convergence policy into the
   strategy?
 
@@ -716,9 +744,9 @@ vector operations, without `Jacobian`, `MatrixIndex`, `ScaleRowsInPlace`, matrix
 factorization, or matrix-entry access. This experiment implements model
 preparation and operator consumption. A deterministic test driver exercises the
 executor lifecycle. Production LSMR tolerances, iteration limits, and
-regularization must be explicit algorithm controls. Automatic Jacobian-column scaling would require
-a separate capability or explicit user scales; it must not introduce a hidden
-matrix-entry requirement.
+regularization must be explicit algorithm controls. Automatic Jacobian-column
+scaling would require a separate capability or explicit user scales; it must not
+introduce a hidden matrix-entry requirement.
 
 The prototype establishes these contracts:
 
@@ -820,19 +848,19 @@ The prototype establishes these contracts:
   it.
 - An injection inner must accept the original constrained problem. Seeds follow
   the representative ranking. A consumable run with an objective incumbent
-  supplies a point for box repair and reevaluation under the same trial selection
-  rule. A run without an objective incumbent leaves the member in place.
-  The prototype permits infeasible local starts and partial results; it does not
-  permit a local solver to discard nonlinear blocks.
+  supplies a point for box repair and reevaluation under the same trial
+  selection rule. A run without an objective incumbent leaves the member in
+  place. The prototype permits infeasible local starts and partial results; it
+  does not permit a local solver to discard nonlinear blocks.
 - Nonempty nonlinear callback attempts charge `residual_evals`, including
   failures and malformed output. Zero-count blocks skip callbacks. Objective and
   derivative calls preserve their existing categories. Same-problem inner
   execution shares the outer wrapper and never adds its counts twice.
 - Fresh initialization reevaluates member seeds and resets script position and
   bookkeeping. Exact checkpoints preserve the script position, members,
-  refinement schedule, inner solver, selection metadata, and counts. A checkpoint
-  taken before the first objective call resumes with the same callback sequence
-  and selection history as an uninterrupted run. Tests cover
+  refinement schedule, inner solver, selection metadata, and counts. A
+  checkpoint taken before the first objective call resumes with the same
+  callback sequence and selection history as an uninterrupted run. Tests cover
   both precisions on all four dense backends and serialized `Vec` checkpoints.
 
 The fixture exercises finite boxes and nonlinear inequalities. Other constraint
