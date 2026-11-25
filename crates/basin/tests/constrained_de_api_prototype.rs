@@ -125,6 +125,7 @@ impl<V: VectorLen + Index<usize, Output = F>, F: Scalar>
 struct ScriptedInner<V, F: Scalar = f64> {
     returned: V,
     evaluate_infeasible: bool,
+    publish_selection: bool,
     stop_on_seed: Option<F>,
     stop: Option<Termination<F>>,
 }
@@ -133,6 +134,7 @@ impl<V, F: Scalar> ScriptedInner<V, F> {
         Self {
             returned,
             evaluate_infeasible: true,
+            publish_selection: true,
             stop_on_seed: None,
             stop: None,
         }
@@ -180,7 +182,9 @@ where
             );
         }
         state.replace(vec![member], 0).unwrap();
-        state.select_current();
+        if self.publish_selection {
+            state.select_current();
+        }
         Ok(state)
     }
     fn next_iter(
@@ -209,7 +213,9 @@ where
             );
         }
         state.replace(vec![member], 0).unwrap();
-        state.select_current();
+        if self.publish_selection {
+            state.select_current();
+        }
         if stop {
             if let Some(reason) = &self.stop {
                 return Ok(SolverStep::stopped(state, reason.clone()));
@@ -1192,8 +1198,9 @@ fn zero_objective_progress_is_observable_and_resumes_exactly() {
 }
 
 #[test]
-fn partial_step_publishes_constraint_selection_after_missing_inner_incumbent() {
-    let mut inner = ScriptedInner::new(vec![0.0, 0.0]);
+fn partial_step_publishes_constraint_selection_after_feasibility_only_refinement()
+ {
+    let mut inner = ScriptedInner::new(vec![0.75, 0.0]);
     inner.evaluate_infeasible = false;
     inner.stop_on_seed = Some(-1.0);
     inner.stop = Some(failure());
@@ -1217,8 +1224,8 @@ fn partial_step_publishes_constraint_selection_after_missing_inner_incumbent() {
                     TerminationStage::Step { completed: false }
                 );
                 let selected = state.selection().unwrap();
-                assert_eq!(selected.member.param(), &[0.5, 0.0]);
-                assert_eq!(selected.member.violations(), &[0.5, 0.0]);
+                assert_eq!(selected.member.param(), &[0.75, 0.0]);
+                assert_eq!(selected.member.violations(), &[0.25, 0.0]);
                 assert_eq!(selected.iter, 0);
                 assert_eq!(&selected.counts, state.raw_counts());
             }
@@ -1244,14 +1251,57 @@ fn partial_step_publishes_constraint_selection_after_missing_inner_incumbent() {
         *changes.borrow(),
         [
             (basin::SelectionChange::SolverSelected, 0, 2),
-            (basin::SelectionChange::SolverSelected, 0, 8),
+            (basin::SelectionChange::SolverSelected, 0, 9),
         ]
     );
     assert_eq!(result.selected_record().unwrap().cost, None);
     assert_eq!(result.counts.cost_evals, 0);
-    assert_eq!(result.counts.residual_evals, 8);
+    assert_eq!(result.counts.residual_evals, 9);
     assert!(matches!(
         result.report.termination,
         Termination::Failed(NumericalFailure::Inner { .. })
     ));
+}
+
+#[test]
+fn feasibility_only_refinement_uses_outer_trial_rules() {
+    for (returned, publish_selection, expected, rechecked) in [
+        (vec![-0.5, 0.0], true, vec![0.5, 0.0], true),
+        (vec![0.75, 0.0], false, vec![0.5, 0.0], false),
+        (vec![2.0, 2.0], true, vec![2.0, 1.0], true),
+    ] {
+        let mut problem = feasible_only();
+        problem.upper[1] = 1.0;
+        let trace = problem.trace.clone();
+        let mut inner = ScriptedInner::new(returned);
+        inner.evaluate_infeasible = false;
+        inner.publish_selection = publish_selection;
+        let result = Executor::new(
+            problem,
+            ConstrainedDeInjectPrototype::with_inner_solver(
+                delayed_feasibility(),
+                inner,
+            ),
+            SelectedPopulationProgress::empty(),
+        )
+        .max_iter(1)
+        .run()
+        .unwrap();
+
+        let selected = result.selected_record().unwrap();
+        assert_eq!(selected.param, &expected);
+        assert_eq!(result.counts.residual_evals, 6 + u64::from(rechecked));
+        let trace = trace.borrow();
+        if expected[0] >= 1.0 {
+            assert_eq!(selected.cost, Some(5.0));
+            assert_eq!(result.counts.cost_evals, 1);
+            assert_eq!(
+                trace[5..],
+                [(1, vec![2.0, 2.0]), (1, expected.clone()), (0, expected)]
+            );
+        } else {
+            assert_eq!(selected.cost, None);
+            assert_eq!(result.counts.cost_evals, 0);
+        }
+    }
 }

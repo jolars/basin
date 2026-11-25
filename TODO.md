@@ -72,10 +72,9 @@ whether to adopt the conditional changes below.
   Selection notifications identify how the point was chosen and preserve the
   raw counts at publication. Objective targets and stalls use an eligible
   objective incumbent. See the [Basin 4.0 migration guide](web/src/guide/migrating-to-v4/index.md#checked-progress-records).
-- [ ] **Define which inner results composed solvers can consume.** Decide
-  whether feasibility-aware outer solvers may reevaluate and use a selected
-  point from an inner run that has no objective incumbent. The
-  constrained-DE prototype keeps the existing member in this case.
+- [x] **Define which inner results composed solvers can consume.** The
+  constrained-DE prototype repairs and reevaluates selected inner points,
+  including selections made before the first objective evaluation.
 - [ ] **Make threaded evaluation opt-in at the call site.** Have `parallel`
   enable threaded execution and keep serial APIs usable when a dependency
   enables the feature. Apply thread-safety bounds to the threaded path.
@@ -845,11 +844,11 @@ The prototype establishes these contracts:
   The state exposes checked selections. It has no objective-ordered selection
   or population capability, so objective targets and stalls cannot attach to it.
 - An injection inner must accept the original constrained problem. Seeds follow
-  the representative ranking. A consumable run with an objective incumbent
-  supplies a point for box repair and reevaluation under the same trial
-  selection rule. A run without an objective incumbent leaves the member in
-  place. The prototype permits infeasible local starts and partial results; it
-  does not permit a local solver to discard nonlinear blocks.
+  the representative ranking. A consumable run can supply a selected point
+  with or without an objective. The outer solver repairs it to the box,
+  rechecks feasibility, evaluates the objective if feasible, and applies the
+  same trial selection rule. With no selection, the existing member stays in
+  place. The inner must honor the nonlinear blocks.
 - Nonempty nonlinear callback attempts charge `residual_evals`, including
   failures and malformed output. Zero-count blocks skip callbacks. Objective and
   derivative calls preserve their existing categories. Same-problem inner

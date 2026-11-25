@@ -710,17 +710,13 @@ where
             {
                 return Ok(SolverStep::stopped(state, stop));
             }
-            let Some(incumbent) = result
-                .state
-                .selected_record()
-                .filter(|record| record.cost.is_some())
-            else {
+            let Some(selection) = result.state.selected_record() else {
                 continue;
             };
             // Rechecking after box repair prevents an inner result from bypassing selection.
             let refined = self
                 .outer
-                .evaluate_repaired(problem, vec![incumbent.param.clone()])?
+                .evaluate_repaired(problem, vec![selection.param.clone()])?
                 .remove(0);
             if accepts(&refined, &state.members().unwrap()[i]) {
                 let mut members = state.members().unwrap().to_vec();

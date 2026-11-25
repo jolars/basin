@@ -98,7 +98,7 @@ pub trait InitialState<V> {
 /// - **Caller (the outer solver) must:** bound the operator's
 ///   `Solver` impl at its own impl site
 ///   (`LS: Solver<P, LS::State, Error = P::Error>`), never via a
-///   supertrait here; and follow the three composition contracts on
+///   supertrait here; and follow the composition contracts on
 ///   [`InnerExecutor`] (eval aggregation, history reset, failure
 ///   routing) when driving the chain segment.
 pub trait ResumableInner<V, F = f64>: Sized
@@ -195,7 +195,7 @@ where
 ///
 /// # Composition contracts
 ///
-/// Three rules outer solvers must follow when consuming the result of
+/// Four rules outer solvers must follow when consuming the result of
 /// [`run`](Self::run); see also `CONTRIBUTING.md` "Solver composition":
 ///
 /// 1. **Eval aggregation.** The [`Problem`] wrapper bumps
@@ -238,6 +238,13 @@ where
 ///    the nested report; cancellation and application stops propagate.
 ///    An algorithm may explicitly reject a failed local candidate and continue,
 ///    as basin hopping does. Inner convergence never certifies outer convergence.
+///
+/// 4. **Candidate eligibility.** After routing the stop, the outer algorithm
+///    decides which progress records it can use. A feasibility-aware outer
+///    solver can take the parameter from [`State::selected_record`] even when
+///    its objective is missing, reevaluate it under the outer problem's rules,
+///    and apply its own acceptance test. Consumers that need an evaluated
+///    objective must check that the corresponding record carries one.
 pub struct InnerExecutor<S: State, So> {
     solver: So,
     control: crate::RunControl<S>,
