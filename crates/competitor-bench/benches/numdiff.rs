@@ -3,14 +3,14 @@
 #[path = "support/numdiff.rs"]
 mod support;
 
-use basin::MatrixIndex;
+use basin::{DenseMatrixFromFn, MatrixIndex};
 use criterion::{Criterion, criterion_group, criterion_main};
 use support::{BenchVector, Fixture, Function};
 
 fn backend<V>(c: &mut Criterion, backend: &str)
 where
     V: BenchVector,
-    V::Matrix: MatrixIndex,
+    <V as DenseMatrixFromFn>::Matrix: MatrixIndex,
 {
     let mut group = c.benchmark_group(format!("numdiff/{backend}"));
     for case in support::cases() {

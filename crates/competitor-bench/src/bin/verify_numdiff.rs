@@ -13,8 +13,8 @@ use std::{
 };
 
 use basin::{
-    CostFunction, DenseMatrixFromFn, Gradient, MatrixIndex, Residual,
-    VectorIndex, VectorLen,
+    CostFunction, DenseBackend, DenseMatrixFromFn, Gradient, MatrixIndex,
+    Residual, VectorIndex, VectorLen,
 };
 use support::{BenchVector, Fixture, Function};
 
@@ -56,7 +56,7 @@ impl<V: VectorIndex> VectorIndex for CloneCounted<V> {
 }
 
 impl<V: DenseMatrixFromFn> DenseMatrixFromFn for CloneCounted<V> {
-    type Matrix = V::Matrix;
+    type Matrix = <V as DenseMatrixFromFn>::Matrix;
 
     fn dense_from_fn<G: FnMut(usize, usize) -> f64>(
         rows: usize,
@@ -74,6 +74,10 @@ impl<V: DenseMatrixFromFn> DenseMatrixFromFn for CloneCounted<V> {
     ) {
         V::dense_from_fn_into(rows, cols, f, out);
     }
+}
+
+impl<V: DenseBackend> DenseBackend for CloneCounted<V> {
+    type Matrix = V::Matrix;
 }
 
 impl<V: BenchVector> BenchVector for CloneCounted<V> {
@@ -273,7 +277,7 @@ impl Options {
 fn backend<V>(options: &Options, mode: &str, backend: &str) -> usize
 where
     V: BenchVector,
-    V::Matrix: MatrixIndex,
+    <V as DenseMatrixFromFn>::Matrix: MatrixIndex,
 {
     let mut checked = 0;
     for case in support::cases() {

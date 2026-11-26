@@ -403,8 +403,8 @@ pub trait MatrixFromDiagonal<V> {
 /// Maps a vector backend to its canonical dense matrix type and builds a
 /// matrix of that type from a per-entry closure. Implemented on the
 /// *vector* type so that finite differences can select the Jacobian or
-/// Hessian matrix from the parameter backend. The Jacobian can have a
-/// different number of rows and columns when the residual type or length
+/// an explicitly selected dense Hessian from the parameter backend. The Jacobian
+/// can have a different number of rows and columns when the residual type or length
 /// differs from the parameter's.
 ///
 /// # Contract
@@ -670,7 +670,8 @@ impl core::error::Error for LinearSolveError {}
 
 /// The default dense matrix paired with a vector backend.
 ///
-/// Solvers such as [`crate::Bfgs`] use this association to infer their model
+/// [`crate::FiniteDiff`] uses this association for its default Hessian.
+/// Solvers such as [`crate::Bfgs`] use it to infer their model
 /// storage from the starting point. Every enabled backend version has its own
 /// implementation. The association selects a default, not an extra numerical
 /// capability: algorithms still require only the matrix operations they use.

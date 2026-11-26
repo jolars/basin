@@ -144,10 +144,11 @@ whether to adopt the conditional changes below.
   runs, and exact resume. If the serialized layout changes, decide whether
   older six-counter checkpoints need a migration path or an explicit version
   rejection.
-- [ ] **Make square finite-difference Hessians the default.** Infer the square
+- [x] **Make square finite-difference Hessians the default.** Infer the square
   matrix from the parameter backend while keeping Jacobian rows tied to the
-  residual or constraint count. Document migration for callers that name or
-  store the old dynamic-row Hessian and for custom matrix builders.
+  residual or constraint count. See the [Basin 4.0 migration
+  guide](web/src/guide/migrating-to-v4/index.md#finite-difference-hessian-matrices)
+  for dynamic-row Hessians and custom matrix builders.
 - [ ] **Make evaluation buffer reuse automatic.** Use typed storage by default
   once the 3.x probes confirm that it preserves callback dispatch,
   evaluation counts, fresh initialization, and exact continuation. Preserve

@@ -1,5 +1,6 @@
 use basin::{
-    BoundedFiniteDiff, CostFunction, Gradient, Jacobian, Method, Residual,
+    BoundedFiniteDiff, CostFunction, DenseBackend, Gradient, Jacobian, Method,
+    Residual, SquareMatrixFromFn,
 };
 
 struct Domain;
@@ -424,8 +425,13 @@ fn faer_derivatives() {
 
 fn check_unbounded_matrix_derivatives<V>(make: fn(&[f64]) -> V)
 where
-    V: Clone + VectorIndex + VectorLen + DenseMatrixFromFn + Sync + Send,
-    V::Matrix: MatrixIndex,
+    V: Clone
+        + VectorIndex
+        + VectorLen
+        + DenseMatrixFromFn<Matrix: MatrixIndex>
+        + DenseBackend<Matrix: MatrixIndex + SquareMatrixFromFn>
+        + Sync
+        + Send,
 {
     use basin::Hessian;
     struct Smooth<V> {

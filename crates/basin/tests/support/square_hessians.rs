@@ -60,7 +60,6 @@ where
     for (method, probes) in [(Method::Forward, 6), (Method::Central, 9)] {
         let adapter = |fail_mixed| {
             FiniteDiff::new_with_scalar(problem(fail_mixed))
-                .with_square_hessian()
                 .hessian_method(method)
                 .with_step(number(0.125))
         };

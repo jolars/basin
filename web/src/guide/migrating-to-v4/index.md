@@ -164,3 +164,31 @@ Custom solvers can call `Problem::cost_batch_parallel` for a threaded batch.
 Threaded batches require a shareable problem and parameters, and sendable
 outputs and errors. A serial batch can use local callbacks and errors even
 when another dependency enables `parallel`.
+
+## Finite-difference Hessian matrices
+
+`FiniteDiff::new`, `FiniteDiff::new_with_scalar`, and the standalone
+`central_difference_hessian` and `forward_difference_hessian` functions
+now use the square matrix associated with the parameter backend.
+
+For nalgebra `SVector<F, N>` parameters, change named Hessian types and stored
+output buffers from `OMatrix<F, Dyn, Const<N>>` to `SMatrix<F, N, N>`.
+To keep the dynamic-row Hessian, use
+`FiniteDiff::new(problem).with_dense_hessian()`. If you previously called
+`FiniteDiff::<_, false, F>::new_with_scalar(problem)`, construct with
+`FiniteDiff::<_, true, F>::new_with_scalar(problem)` and add
+`.with_dense_hessian()` when you need the old type. When migrating a standalone
+call to that builder, select the same stencil with `.hessian_method(...)`,
+set the same `.function_precision(...)`, and apply `.with_step(...)` if you
+passed a fixed step. Evaluate with `Hessian::hessian`.
+
+Native array parameters `[F; N]` produce `[[F; N]; N]` Hessians by default.
+Residual and constraint Jacobians still take their row counts from the
+residual or nonlinear constraint count. For native array residual Jacobians,
+specify the row count with `.with_array_jacobian::<M>()`.
+
+For a custom parameter type, implement `DenseBackend<F>` on the vector and
+`SquareMatrixFromFn<F>` on its associated matrix to use the new default.
+Implement `square_from_fn_into` if you want to reuse existing output storage.
+You can keep an existing `DenseMatrixFromFn<F>` builder and select it with
+`.with_dense_hessian()`.

@@ -126,18 +126,21 @@ impl Method {
 /// # Backends
 ///
 /// [`Gradient`] and [`HessianProduct`] are backend-generic (any `V: Clone +
-/// VectorLen + VectorIndex`, including native arrays `[F; N]`). [`Jacobian`] and
-/// the default [`Hessian`] additionally require `V: DenseMatrixFromFn`, so they are
-/// available for `Vec<F>`/`DenseMatrix`, nalgebra `DVector<F>`/`DMatrix`,
-/// ndarray `Array1<F>`/`Array2`, and faer `Col<F>`/`Mat` with `F` equal
-/// to `f32` or `f64`. Nalgebra `SVector<F, N>` parameters use
-/// `OMatrix<F, Dyn, Const<N>>` and may be paired with `SVector<F, M>` or
-/// `DVector<F>` residuals. The Jacobian row count comes from the residual length.
-/// Use [`FiniteDiff::with_array_jacobian`] to set the row count for native array
-/// parameters. Use [`FiniteDiff::with_square_hessian`] to select the matrix
-/// associated with the parameter vector by [`DenseBackend`], or
-/// [`FiniteDiff::with_dense_hessian`] to explicitly select the
-/// [`DenseMatrixFromFn`] matrix used by default.
+/// VectorLen + VectorIndex`, including native arrays `[F; N]`).
+/// [`Hessian`] uses the parameter vector's [`DenseBackend`] matrix, built
+/// with [`SquareMatrixFromFn`]. For `F = f32` or `f64`, this yields
+/// `DenseMatrix<F>` for `Vec<F>`, `DMatrix<F>` for nalgebra `DVector<F>`,
+/// `Array2<F>` for ndarray `Array1<F>`, and `Mat<F>` for faer `Col<F>`.
+/// Native arrays `[F; N]` use `[[F; N]; N]` and nalgebra `SVector<F, N>`
+/// uses `SMatrix<F, N, N>`. Use [`FiniteDiff::with_dense_hessian`] to select
+/// the matrix from [`DenseMatrixFromFn`].
+///
+/// [`Jacobian`] uses [`DenseMatrixFromFn`] and takes its row count from the
+/// residual length. Nalgebra `SVector<F, N>` parameters produce
+/// `OMatrix<F, Dyn, Const<N>>` with either `SVector<F, M>` or `DVector<F>`
+/// residuals. Use [`FiniteDiff::with_array_jacobian`] to set the row count
+/// for native array parameters.
+///
 /// [`crate::ConstraintJacobian`] uses the parameter backend's dense matrix,
 /// with one row per nonlinear constraint, independently of the linear block
 /// matrices.
@@ -186,7 +189,7 @@ impl Method {
 /// assert!(result.current_record().unwrap().cost.unwrap() < 1e-10);
 /// ```
 #[derive(Debug, Clone, Copy)]
-pub struct FiniteDiff<P, const SQUARE: bool = false, F: Scalar = f64, J = ()> {
+pub struct FiniteDiff<P, const SQUARE: bool = true, F: Scalar = f64, J = ()> {
     jacobian: std::marker::PhantomData<fn() -> J>,
     problem: P,
     gradient_method: Method,
@@ -205,7 +208,7 @@ impl<P> FiniteDiff<P> {
     }
 }
 
-impl<P, F: Scalar> FiniteDiff<P, false, F> {
+impl<P, F: Scalar> FiniteDiff<P, true, F> {
     /// Wrap a problem with the default stencils and machine epsilon for `F`.
     pub fn new_with_scalar(problem: P) -> Self {
         Self {
@@ -220,8 +223,8 @@ impl<P, F: Scalar> FiniteDiff<P, false, F> {
     }
 }
 
-impl<P, F: Scalar, J> FiniteDiff<P, false, F, J> {
-    /// Use the parameter backend's square matrix for the Hessian.
+impl<P, const SQUARE: bool, F: Scalar, J> FiniteDiff<P, SQUARE, F, J> {
+    /// Explicitly select the parameter backend's default square Hessian.
     ///
     /// Dynamic backends use `DenseMatrix` for `Vec`, `DMatrix` for nalgebra
     /// `DVector`, `Array2` for ndarray `Array1`, and `Mat` for faer `Col`.
@@ -247,7 +250,7 @@ impl<P, F: Scalar, J> FiniteDiff<P, false, F, J> {
     /// }
     ///
     /// let result = Executor::from_start(
-    ///     FiniteDiff::new(Sphere).with_square_hessian(),
+    ///     FiniteDiff::new(Sphere),
     ///     TrustRegion::with_subproblem(Dogleg),
     ///     SVector::<f64, 2>::new(1.0, 2.0),
     /// ).max_iter(20).run().unwrap();
@@ -288,7 +291,6 @@ impl<P, const SQUARE: bool, F: Scalar, J> FiniteDiff<P, SQUARE, F, J> {
     /// Use the matrix associated with the parameter vector by
     /// [`DenseMatrixFromFn`] for the Hessian.
     ///
-    /// This selects the default Hessian representation.
     /// Custom backends can supply this Hessian through [`DenseMatrixFromFn`].
     /// The Jacobian selection and finite-difference settings carry over.
     pub fn with_dense_hessian(self) -> FiniteDiff<P, false, F, J> {
@@ -1487,15 +1489,20 @@ impl HessianTriangle {
 /// four-point stencil `(f₊₊ − f₊₋ − f₋₊ + f₋₋) / 4hᵢhⱼ`. Symmetric `n × n`
 /// by construction (the upper triangle is mirrored). `~2n²` cost
 /// evaluations. Returns `Err` if any probe's `cost` does.
+/// The matrix type comes from the parameter vector’s [`DenseBackend`].
 pub fn central_difference_hessian<P, V>(
     problem: &P,
     x: &V,
     function_precision: f64,
     fixed_step: Option<f64>,
-) -> Result<<V as DenseMatrixFromFn>::Matrix, P::Error>
+) -> Result<<V as DenseBackend>::Matrix, P::Error>
 where
     P: CostFunction<Param = V, Output = f64> + MaybeSync,
-    V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + MaybeSync,
+    V: Clone
+        + VectorLen
+        + VectorIndex
+        + DenseBackend<Matrix: SquareMatrixFromFn>
+        + MaybeSync,
     P::Error: MaybeSend,
 {
     let f0 = problem.cost(x)?;
@@ -1506,7 +1513,7 @@ where
         fixed_step,
         f0,
         |triangle, values| {
-            V::dense_from_fn(x.vec_len(), x.vec_len(), |i, j| {
+            V::Matrix::square_from_fn(x.vec_len(), |i, j| {
                 values[triangle.symmetric_index(i, j)]
             })
         },
@@ -1575,15 +1582,20 @@ where
 /// diagonal as the `i = j` case (`f(x+2hᵢeᵢ)`). Symmetric `n × n` by
 /// construction; `1 + n + n(n+1)/2` cost evaluations. Returns `Err` if any
 /// probe's `cost` does.
+/// The matrix type comes from the parameter vector’s [`DenseBackend`].
 pub fn forward_difference_hessian<P, V>(
     problem: &P,
     x: &V,
     function_precision: f64,
     fixed_step: Option<f64>,
-) -> Result<<V as DenseMatrixFromFn>::Matrix, P::Error>
+) -> Result<<V as DenseBackend>::Matrix, P::Error>
 where
     P: CostFunction<Param = V, Output = f64> + MaybeSync,
-    V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + MaybeSync,
+    V: Clone
+        + VectorLen
+        + VectorIndex
+        + DenseBackend<Matrix: SquareMatrixFromFn>
+        + MaybeSync,
     P::Error: MaybeSend,
 {
     forward_hessian(
@@ -1593,7 +1605,7 @@ where
         fixed_step,
         None,
         |triangle, values| {
-            V::dense_from_fn(x.vec_len(), x.vec_len(), |i, j| {
+            V::Matrix::square_from_fn(x.vec_len(), |i, j| {
                 values[triangle.symmetric_index(i, j)]
             })
         },

@@ -1,9 +1,9 @@
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 
 use basin::{
-    BoundedFiniteDiff, CostFunction, DenseMatrixFromFn, FiniteDiff, Gradient,
-    Hessian, MatrixIndex, MatrixShape, Method, Problem, Scalar, VectorIndex,
-    VectorLen,
+    BoundedFiniteDiff, CostFunction, DenseBackend, DenseMatrixFromFn,
+    FiniteDiff, Gradient, Hessian, MatrixIndex, MatrixShape, Method, Problem,
+    Scalar, SquareMatrixFromFn, VectorIndex, VectorLen,
 };
 
 struct Quadratic<V, F> {
@@ -81,8 +81,12 @@ fn same_vector<V: VectorLen + VectorIndex<F>, F: Scalar>(a: &V, b: &V) {
 
 fn check_unbounded<V>(make: fn(&[f64]) -> V)
 where
-    V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + Send + Sync,
-    V::Matrix: MatrixIndex,
+    V: Clone
+        + VectorLen
+        + VectorIndex
+        + DenseBackend<Matrix: MatrixIndex + SquareMatrixFromFn>
+        + Send
+        + Sync,
 {
     for values in [&[][..], &[0.25][..], &[-0.75, 0.25, 0.0, 1.25][..]] {
         let x = make(values);
@@ -144,7 +148,8 @@ where
                     // Exercise replacement of wrong shapes and reuse the resized outputs.
                     for size in [0, n + 1, n] {
                         let mut g = make(&vec![99.0; size]);
-                        let mut h = V::dense_from_fn(size, size, |_, _| 99.0);
+                        let mut h =
+                            V::Matrix::square_from_fn(size, |_, _| 99.0);
                         fd.get_ref().reset();
                         let f = fd.cost_and_gradient_into(&x, &mut g).unwrap();
                         fd.get_ref().check_calls(1 + gradient_probes);
@@ -179,7 +184,7 @@ where
     }
 }
 
-fn check_hessian<V: DenseMatrixFromFn>(
+fn check_hessian<V: DenseBackend>(
     actual: &V::Matrix,
     expected: &V::Matrix,
     n: usize,

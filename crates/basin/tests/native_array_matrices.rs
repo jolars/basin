@@ -2,7 +2,7 @@ use basin::{
     Bfgs, BoundedCmaEs, BoundedCmaInject, BoundedLevenbergMarquardt, BoxBounds,
     CauchyPoint, CmaEs, CmaInject, Constant, Constrained, ConstraintSet,
     CostFunction, Dogleg, Executor, FactorizePivotedQr, FiniteDiff,
-    GaussNewton, Gradient, GramMatrix, HuberLoss, Jacobian, Lbfgs,
+    GaussNewton, Gradient, GramMatrix, Hessian, HuberLoss, Jacobian, Lbfgs,
     LevenbergMarquardt, LevenbergMarquardtQr, LinearSolveError, LinearSolveSpd,
     MaLsChCma, MatTransposeVec, MatVec, MatrixIndex, MatrixShape, Method,
     MoreSorensen, PopulationProgress, QrSolveError, RegularizedQrSolve,
@@ -97,6 +97,9 @@ fn least_squares<F: Scalar + Send + Sync>() {
         let finite = FiniteDiff::new_with_scalar(Fit(target[0]))
             .with_array_jacobian::<3>()
             .jacobian_method(method);
+        let hessian: [[F; 2]; 2] = finite.hessian(&target).unwrap();
+        check_point(&hessian[0], [n(2.0), F::zero()], tolerance);
+        check_point(&hessian[1], [F::zero(), n(4.0)], tolerance);
         let mut jac = [[F::zero(); 2]; 3];
         finite.jacobian_into(&start, &mut jac).unwrap();
         for (actual, expected) in jac.iter().zip(analytic) {
@@ -178,8 +181,7 @@ fn seeded_bfgs<F: Scalar>() {
 
 fn trust_region<F: Scalar + Send + Sync>() {
     let target = [n::<F>(0.25), n(0.5)];
-    let problem =
-        || FiniteDiff::new_with_scalar(Fit(target[0])).with_square_hessian();
+    let problem = || FiniteDiff::new_with_scalar(Fit(target[0]));
     let start = [F::zero(); 2];
     macro_rules! check {
         ($solver:expr) => {{
@@ -251,6 +253,16 @@ fn f64_solvers() {
     seeded_bfgs::<f64>();
     trust_region::<f64>();
     population::<f64>();
+    let fit = Fit(0.25);
+    let point = [0.25, 0.5];
+    for hessian in [
+        basin::forward_difference_hessian,
+        basin::central_difference_hessian,
+    ] {
+        let output: [[f64; 2]; 2] =
+            hessian(&fit, &point, f64::EPSILON, Some(0.125)).unwrap();
+        assert_eq!(output, [[2.0, 0.0], [0.0, 4.0]]);
+    }
 }
 
 struct DynamicResidual<const N: usize>(usize);

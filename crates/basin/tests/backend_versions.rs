@@ -1262,19 +1262,31 @@ macro_rules! nalgebra_checks {
                     }
                 }
 
+                impl basin::NonlinearInequalityValues for Quadratic<2> {
+                    type Param = backend::SVector<f64, 2>;
+                    type Values = backend::DVector<f64>;
+                    type Error = &'static str;
+
+                    fn nonlinear_inequalities(&self, x: &Self::Param) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>> {
+                        Ok(backend::DVector::from_vec(vec![x[0] + 2.0 * x[1]]))
+                    }
+                }
+
                 type Matrix = backend::SMatrix<f64, 2, 2>;
                 type DynamicRows = backend::OMatrix<f64, backend::Dyn, backend::Const<2>>;
                 let problem = || Quadratic::<2> { calls: AtomicUsize::new(0), fail: false };
                 let x = backend::SVector::<f64, 2>::new(1.0, -2.0);
                 let expected = Matrix::new(4.0, 2.0, 2.0, 4.0);
                 for (method, probes) in [(Method::Forward, 6), (Method::Central, 9)] {
-                    let default = FiniteDiff::new(problem()).hessian_method(method).with_step(0.125);
-                    let square = FiniteDiff::new(problem()).hessian_method(method).with_step(0.125)
-                        .with_square_hessian();
-                    let old: DynamicRows = default.hessian(&x).unwrap();
+                    let square = FiniteDiff::new(problem()).hessian_method(method).with_step(0.125);
                     let actual: Matrix = square.hessian(&x).unwrap();
                     assert_eq!(actual, expected);
-                    assert_eq!(actual.as_slice(), old.as_slice());
+                    assert_eq!(square.get_ref().calls.swap(0, Relaxed), probes);
+                    let standalone: Matrix = match method {
+                        Method::Forward => basin::forward_difference_hessian(square.get_ref(), &x, f64::EPSILON, Some(0.125)),
+                        _ => basin::central_difference_hessian(square.get_ref(), &x, f64::EPSILON, Some(0.125)),
+                    }.unwrap();
+                    assert_eq!(standalone, expected);
                     assert_eq!(square.get_ref().calls.swap(0, Relaxed), probes);
                     let mut out = Matrix::repeat(f64::NAN);
                     square.hessian_into(&x, &mut out).unwrap();
@@ -1290,15 +1302,23 @@ macro_rules! nalgebra_checks {
 
                     let jac: DynamicRows = square.jacobian(&x).unwrap();
                     assert_eq!(jac.shape(), (3, 2));
+                    let constrained = FiniteDiff::new(basin::Constrained::new(
+                        problem(), basin::ConstraintSet::new().with_nonlinear_inequalities(1),
+                    )).jacobian_method(method).with_step(0.125);
+                    let constraint_jacobian: DynamicRows =
+                        basin::ConstraintJacobian::constraint_jacobian(&constrained, &x).unwrap();
+                    assert_eq!(constraint_jacobian.shape(), (1, 2));
+                    assert_eq!(constraint_jacobian.as_slice(), &[1.0, 2.0]);
+
                     let explicit: DynamicRows = square.with_dense_hessian().hessian(&x).unwrap();
-                    assert_eq!(explicit, old);
+                    assert_eq!(explicit.as_slice(), expected.as_slice());
                     let failing = FiniteDiff::new(Quadratic { fail: true, ..problem() })
-                        .with_square_hessian().hessian_method(method);
+                        .hessian_method(method);
                     assert_eq!(failing.hessian_into(&backend::SVector::zeros(), &mut out), Err("mixed probe"));
                     assert_eq!(out, expected);
 
                     let empty = FiniteDiff::new(Quadratic::<0> { calls: AtomicUsize::new(0), fail: false })
-                        .with_square_hessian().hessian_method(method);
+                        .hessian_method(method);
                     let h: backend::SMatrix<f64, 0, 0> = empty.hessian(&backend::SVector::zeros()).unwrap();
                     assert_eq!(h.shape(), (0, 0));
                     assert_eq!(empty.get_ref().calls.load(Relaxed), 1);
@@ -1307,7 +1327,7 @@ macro_rules! nalgebra_checks {
                 macro_rules! solve {
                     ($strategy:expr) => {
                         let result = Executor::from_start(
-                            FiniteDiff::new(problem()).with_square_hessian(),
+                            FiniteDiff::new(problem()),
                             TrustRegion::with_subproblem($strategy).with_evaluation_buffers(),
                             x,
                         ).max_iter(30).run().unwrap();

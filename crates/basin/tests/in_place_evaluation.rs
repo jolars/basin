@@ -3,11 +3,11 @@
 use std::sync::{Arc, Mutex};
 
 use basin::{
-    Bfgs, BoxBounds, Constrained, ConstraintSet, CostFunction,
+    Bfgs, BoxBounds, Constrained, ConstraintSet, CostFunction, DenseBackend,
     DenseMatrixFromFn, Executor, FirstOrderState, Gradient, GradientDescent,
     Hessian, HessianProduct, Jacobian, MatrixIndex, MatrixShape,
-    MiniBatchGradient, Problem, Residual, SamplingDomain, Scalar, Sgd, State,
-    VectorIndex, VectorLen,
+    MiniBatchGradient, Problem, Residual, SamplingDomain, Scalar, Sgd,
+    SquareMatrixFromFn, State, VectorIndex, VectorLen,
 };
 
 #[path = "support/backend_aliases.rs"]
@@ -519,8 +519,13 @@ fn check_continuation<V, F, So>(
 
 fn check_unbounded_fd<V>(vector: fn(&[f64]) -> V, address: fn(&V) -> usize)
 where
-    V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + Send + Sync,
-    V::Matrix: MatrixIndex,
+    V: Clone
+        + VectorLen
+        + VectorIndex
+        + DenseMatrixFromFn<Matrix: MatrixIndex + SquareMatrixFromFn>
+        + DenseBackend<Matrix = <V as DenseMatrixFromFn>::Matrix>
+        + Send
+        + Sync,
 {
     let make = || Probe {
         vector,

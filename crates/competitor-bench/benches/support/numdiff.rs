@@ -3,14 +3,21 @@
 use std::{convert::Infallible, hint::black_box, marker::PhantomData};
 
 use basin::{
-    BoundedFiniteDiff, CostFunction, DenseMatrixFromFn, FiniteDiff, Gradient,
-    Hessian, HessianProduct, HessianProductScratch, Jacobian, MatrixIndex,
-    MatrixShape, Method, Residual, VectorIndex, VectorLen,
-    central_difference_hessian_product, forward_difference_hessian_product,
+    BoundedFiniteDiff, CostFunction, DenseBackend, DenseMatrixFromFn,
+    FiniteDiff, Gradient, Hessian, HessianProduct, HessianProductScratch,
+    Jacobian, MatrixIndex, MatrixShape, Method, Residual, SquareMatrixFromFn,
+    VectorIndex, VectorLen, central_difference_hessian_product,
+    forward_difference_hessian_product,
 };
 
 pub trait BenchVector:
-    Clone + VectorLen + VectorIndex + DenseMatrixFromFn + Send + Sync
+    Clone
+    + VectorLen
+    + VectorIndex
+    + DenseMatrixFromFn<Matrix: SquareMatrixFromFn>
+    + DenseBackend<Matrix = <Self as DenseMatrixFromFn>::Matrix>
+    + Send
+    + Sync
 {
     fn from_fn(n: usize, f: impl FnMut(usize) -> f64) -> Self;
     fn fill(n: usize, f: impl FnMut(usize) -> f64, out: &mut Self);
@@ -415,14 +422,14 @@ pub struct Fixture<V: BenchVector, P> {
     gradient: V,
     product_scratch: HessianProductScratch<V>,
     residual: V,
-    matrix: V::Matrix,
+    matrix: <V as DenseMatrixFromFn>::Matrix,
     cost: f64,
 }
 
 impl<V, P> Fixture<V, P>
 where
     V: BenchVector,
-    V::Matrix: MatrixIndex,
+    <V as DenseMatrixFromFn>::Matrix: MatrixIndex,
     P: Clone
         + Send
         + Sync

@@ -3,9 +3,9 @@
 use std::marker::PhantomData;
 
 use basin::{
-    CostFunction, DenseMatrixFromFn, FiniteDiff, Hessian, MatrixIndex,
-    MatrixShape, Method, VectorIndex, VectorLen, central_difference_hessian,
-    forward_difference_hessian,
+    CostFunction, DenseBackend, DenseMatrixFromFn, FiniteDiff, Hessian,
+    MatrixIndex, MatrixShape, Method, SquareMatrixFromFn, VectorIndex,
+    VectorLen, central_difference_hessian, forward_difference_hessian,
 };
 
 struct Function<V> {
@@ -138,8 +138,13 @@ fn check_matrix<M: MatrixIndex>(actual: &M, expected: &[Vec<f64>]) {
 
 fn check<V>(make: fn(&[f64]) -> V)
 where
-    V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + Send + Sync,
-    V::Matrix: MatrixIndex,
+    V: Clone
+        + VectorLen
+        + VectorIndex
+        + DenseMatrixFromFn<Matrix: MatrixIndex + SquareMatrixFromFn>
+        + DenseBackend<Matrix = <V as DenseMatrixFromFn>::Matrix>
+        + Send
+        + Sync,
 {
     for n in [0, 1, 2, 3, 9, 33] {
         let values: Vec<_> =

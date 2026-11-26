@@ -2,9 +2,9 @@ use std::convert::Infallible;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use basin::{
-    CostFunction, DenseMatrixFromFn, FiniteDiff, Gradient, Hessian,
-    HessianProduct, HessianProductScratch, Jacobian, MatrixIndex, MatrixShape,
-    Method, Residual, VectorIndex, VectorLen,
+    CostFunction, DenseBackend, DenseMatrixFromFn, FiniteDiff, Gradient,
+    Hessian, HessianProduct, HessianProductScratch, Jacobian, MatrixIndex,
+    MatrixShape, Method, Residual, SquareMatrixFromFn, VectorIndex, VectorLen,
 };
 
 use basin::{ConstraintSolveError, NonlinearInequalityValues};
@@ -47,10 +47,10 @@ where
     V: Clone
         + VectorLen
         + VectorIndex<f32>
-        + DenseMatrixFromFn<f32>
+        + DenseMatrixFromFn<f32, Matrix: MatrixIndex<f32>>
+        + DenseBackend<f32, Matrix: MatrixIndex<f32> + SquareMatrixFromFn<f32>>
         + Send
         + Sync,
-    V::Matrix: MatrixIndex<f32>,
 {
     x.set_scalar(0, 0.0);
     x.set_scalar(1, 0.5);
@@ -198,12 +198,10 @@ fn custom_dense_hessian_infers_scalar() {
         costs: AtomicUsize::new(0),
         residuals: AtomicUsize::new(0),
     };
-    let default = FiniteDiff::new_with_scalar(problem()).with_step(0.125);
     let explicit = FiniteDiff::new_with_scalar(problem())
         .with_step(0.125)
         .with_dense_hessian();
     let expected = vec![vec![2.0, 1.0], vec![1.0, 4.0]];
-    assert_eq!(default.hessian(&x).unwrap(), expected);
     assert_eq!(explicit.hessian(&x).unwrap(), expected);
     let mut out = vec![];
     explicit.hessian_into(&x, &mut out).unwrap();
@@ -222,8 +220,7 @@ fn nalgebra_f32() {
         residual: x,
         costs: AtomicUsize::new(0),
         residuals: AtomicUsize::new(0),
-    })
-    .with_square_hessian();
+    });
     let hessian: SMatrix<f32, 2, 2> = fd.hessian(&x).unwrap();
     assert!((hessian[(0, 1)] - 1.0).abs() < 0.002);
 }
@@ -269,7 +266,7 @@ fn f32_precision_sets_probe_steps() {
         }
     }
 
-    let fd = FiniteDiff::<_, false, f32>::new_with_scalar(ProbeLog::default());
+    let fd = FiniteDiff::<_, true, f32>::new_with_scalar(ProbeLog::default());
     let x = vec![0.0];
     let probes = |log: &ProbeLog, expected: &[f32]| {
         let mut actual = std::mem::take(&mut *log.0.lock().unwrap());
@@ -331,9 +328,7 @@ fn f32_nonlinear_constraint_jacobian() {
             },
             ConstraintSet::new().with_nonlinear_inequalities(1),
         );
-        let fd = FiniteDiff::new_with_scalar(problem)
-            .with_square_hessian()
-            .jacobian_method(method);
+        let fd = FiniteDiff::new_with_scalar(problem).jacobian_method(method);
         let jac = fd.constraint_jacobian(&vec![0.0, 0.5]).unwrap();
         assert_eq!((jac.matrix_rows(), jac.matrix_cols()), (1, 2));
         assert!((jac.get(0, 0) - 1.0).abs() < 0.002);
