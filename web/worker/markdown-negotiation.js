@@ -1,3 +1,5 @@
+import { askAi } from "./ask-ai.js";
+
 function acceptsMarkdown(value) {
     return (
         value?.split(",").some((part) => {
@@ -29,6 +31,7 @@ export default {
             url.protocol = "https:";
             return Response.redirect(url, 308);
         }
+        if (url.pathname === "/api/ask") return askAi(request, env);
 
         // Let asset routing canonicalize non-trailing-slash URLs before
         // negotiating, so relative links resolve the same way in both formats.

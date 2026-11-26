@@ -31,6 +31,7 @@
         "@iconify-json/simple-icons": "^1.2.103",
         "@types/node": "^26.6.6",
         "katex": "^0.19.1",
+        "markdown-it": "^15.0.3",
         "node-html-markdown": "^2.0.0",
         "parse5": "^8.1.1",
         "prettier": "^3.10.1",

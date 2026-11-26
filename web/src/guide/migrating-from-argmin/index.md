@@ -10,6 +10,10 @@ The examples below migrate *uses* of Argmin solvers. A custom Argmin `Solver` or
 state machine is a separate port because Basin does not provide a generic
 adapter for those extension points.
 
+For performance comparisons, see the [smooth unconstrained benchmarks](../benchmarks/smooth-unconstrained/)
+and the [Nelder–Mead benchmark](../benchmarks/derivative-free-and-global/#neldermead).
+Both compare Basin and Argmin on specific solver workloads.
+
 ## Agent instructions
 
 Copy this Markdown into your coding agent's prompt or your project's agent

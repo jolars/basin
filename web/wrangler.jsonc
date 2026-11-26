@@ -5,6 +5,20 @@
     "compatibility_date": "2026-10-05",
     "workers_dev": false,
     "preview_urls": false,
+    "ai_search": [
+        {
+            "binding": "BASIN_DOCS",
+            "instance_name": "basin-docs",
+            "remote": true
+        }
+    ],
+    "ratelimits": [
+        {
+            "name": "ASK_RATE_LIMIT",
+            "namespace_id": "363719401",
+            "simple": { "limit": 5, "period": 60 }
+        }
+    ],
     "routes": [
         { "pattern": "basin.rs", "custom_domain": true },
         { "pattern": "www.basin.rs", "custom_domain": true }
