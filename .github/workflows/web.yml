@@ -2,9 +2,9 @@ name: Website
 
 on:
   push:
-    branches: [main, v1]
+    branches: [main, v1, v3]
   pull_request:
-    branches: [main, v1]
+    branches: [main, v1, v3]
   release:
     types: [published]
   schedule:
@@ -121,7 +121,8 @@ jobs:
           RELEASE_PR_SHA: >-
             ${{ github.event_name == 'pull_request' &&
                 github.event.pull_request.head.repo.full_name == github.repository &&
-                (github.head_ref == 'versionary/release' || github.head_ref == 'versionary/release-v1') &&
+                (github.head_ref == 'versionary/release' || github.head_ref == 'versionary/release-v1' ||
+                 github.head_ref == 'versionary/release-v3') &&
                 github.event.pull_request.head.sha || '' }}
         run: |
           # GitHub's commit pages intermittently return 503. Check the hashes
