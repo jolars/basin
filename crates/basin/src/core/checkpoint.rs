@@ -23,7 +23,7 @@ use crate::core::problem::EvalCounts;
 /// [`OptimizationResultWithSolver`](crate::OptimizationResultWithSolver::into_checkpoint)
 /// keeps the solver and state together with the authoritative counts and
 /// requires neither `Clone` nor serialization. A checkpoint does not retain
-/// the problem, execution policy, or termination reason.
+/// the problem, top-level execution controls, or termination reason.
 ///
 /// # Application-managed serialization
 ///
@@ -168,7 +168,7 @@ mod file {
     use super::{Checkpoint, CheckpointSink, EvalCounts};
 
     const MAGIC: &[u8; 8] = b"BASINEX\0";
-    const FORMAT_VERSION: u32 = 5;
+    const FORMAT_VERSION: u32 = 6;
     const PREFIX_LEN: usize = MAGIC.len() + 2 * size_of::<u32>();
     const MAX_HEADER_LEN: usize = 64 * 1024;
 
@@ -362,7 +362,7 @@ mod file {
     /// Read the result with [`read_checkpoint`] and pass it to
     /// [`Executor::resume_from_checkpoint`](crate::Executor::resume_from_checkpoint).
     ///
-    /// Writes format version 5 with postcard-encoded metadata and payload.
+    /// Writes format version 6 with postcard-encoded metadata and payload.
     /// The file records the exact Basin version and the solver and state types.
     #[derive(Clone, Debug)]
     pub struct CheckpointWriter {
@@ -446,7 +446,7 @@ mod file {
     ///
     /// The format, exact Basin version, and concrete solver/state type names
     /// must match before the payload is deserialized.
-    /// Reads only postcard format version 5 without modifying the file.
+    /// Reads only postcard format version 6 without modifying the file.
     /// Unsupported formats, mismatched metadata, malformed data, and trailing
     /// bytes return [`io::ErrorKind::InvalidData`].
     ///

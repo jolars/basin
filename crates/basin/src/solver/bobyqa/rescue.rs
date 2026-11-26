@@ -27,7 +27,7 @@
 //!   incremental `gq += moderr·Ξ_kpt` updates are exactly right for `∇Q(x0)`.
 //! - **No `maxfun` gate.** PRIMA aborts RESCUE when the evaluation budget is
 //!   exhausted; basin enforces budgets framework-side (the `Executor`'s
-//!   `MaxCostEvals`), so RESCUE evaluates the handful of new points it needs and
+//!   `MaxEvaluations`), so RESCUE evaluates the handful of new points it needs and
 //!   lets the executor stop afterward, like [`super::init`] does at start-up.
 
 use crate::core::math::Scalar;

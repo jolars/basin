@@ -48,7 +48,7 @@
 //! the stack and loops `step` to completion; the public
 //! [`Newuoa`](crate::solver::Newuoa) solver parks the same `NewuoaWork` on its
 //! struct and calls `step` once per `next_iter`, so framework termination
-//! (`MaxCostEvals`, `RhoTolerance`, …) composes around it. This mirrors how
+//! (`MaxEvaluations`, `RhoTolerance`, …) composes around it. This mirrors how
 //! Levenberg-Marquardt keeps its μ/ν working state on the solver struct.
 //!
 //! [`adopt_alt_model`]: QuadraticModel::adopt_alt_model
@@ -61,7 +61,7 @@ use crate::solver::powell::{QuadraticModel, TrustRegionSubproblem};
 ///
 /// The public [`Newuoa`](crate::solver::Newuoa) solver does not use this: it
 /// configures `ρ_beg`/`ρ_end`/`npt` on the solver and delegates the budget
-/// to framework termination ([`max_cost_evals`](crate::Executor::max_cost_evals)).
+/// to framework termination ([`max_evaluations`](crate::Executor::max_evaluations)).
 pub(crate) struct NewuoaConfig<F = f64> {
     /// Initial trust-region radius `ρ_beg` (also the initial `Δ`).
     pub(crate) rho_beg: F,

@@ -58,7 +58,7 @@ fn slack_bounds_recover_unconstrained_minimum() {
         PointState::new(vec![0.0, 0.0]),
     )
     .max_iter(50_000)
-    .max_cost_evals(20_000)
+    .max_evaluations(basin::EvaluationKind::Cost, 20_000)
     .run()
     .unwrap();
 
@@ -97,7 +97,7 @@ fn tight_bounds_converge_to_box_corner() {
         PointState::new(vec![0.0, 0.0]),
     )
     .max_iter(50_000)
-    .max_cost_evals(20_000)
+    .max_evaluations(basin::EvaluationKind::Cost, 20_000)
     .run()
     .unwrap();
 

@@ -16,10 +16,9 @@
 //!       configured. Cancellation stops the run with
 //!       [`Termination::Cancelled`]. The borrowed [`run_loop_with_control`] path
 //!       has no attached token and skips this step.
-//!    2. Execution controls check iteration, legacy cost and gradient budgets,
-//!       raw evaluation budgets, elapsed time, target cost, improvement stall,
-//!       and acceptance stall, followed by application hooks in insertion
-//!       order. See [`RunControl`].
+//!    2. Execution controls check iteration, evaluation budgets, elapsed time,
+//!       target cost, improvement stall, and acceptance stall, followed by
+//!       application hooks in insertion order. See [`RunControl`].
 //!    3. [`Solver::check_convergence`] evaluates solver-owned convergence.
 //!       Its default delegates to the legacy [`Solver::terminate`] hook.
 //!       The first stop ends the run.
@@ -54,7 +53,7 @@ use crate::core::observer::{
 use crate::core::problem::{EvalCounts, Problem};
 use crate::core::run_control::RunControl;
 use crate::core::solver::Solver;
-use crate::core::state::{CountsMirror, ExactResumeState, State};
+use crate::core::state::{CountsMirror, State};
 use crate::core::termination::{
     ApplicationStop, Termination, TerminationReport, TerminationStage,
 };
@@ -456,7 +455,7 @@ where
             ))
         } else if let Some(report) = check_boundary(
             &self.problem,
-            &EvalCounts::default(),
+            None,
             self.state.as_ref().unwrap(),
             &mut self.solver,
             &mut self.control,
@@ -632,20 +631,17 @@ where
 
 fn check_boundary<P, S, So>(
     problem: &Problem<P>,
-    baseline: &EvalCounts,
+    baseline: Option<&EvalCounts>,
     state: &S,
     solver: &mut So,
     control: &mut RunControl<S>,
 ) -> Option<TerminationReport<S::Float>>
 where
-    S: State + CountsMirror,
+    S: State,
     So: Solver<P, S>,
 {
     control
-        .check(
-            state,
-            problem.counts().gradient_evals - baseline.gradient_evals,
-        )
+        .check(state, problem.counts(), baseline)
         .or_else(|| solver.check_convergence(problem, state))
         .map(|termination| {
             TerminationReport::new(
@@ -754,7 +750,7 @@ where
     state.publish_selection();
     let reason = loop {
         if let Some(report) =
-            check_boundary(problem, &baseline, &state, solver, control)
+            check_boundary(problem, Some(&baseline), &state, solver, control)
         {
             break report;
         }
@@ -826,7 +822,6 @@ pub struct Executor<P, S: State, So> {
     checkpoints: Vec<(Box<dyn CheckpointSink<So, S>>, ObserverMode)>,
     cancellation_token: Option<CancellationToken>,
     resume_counts: Option<EvalCounts>,
-    skip_init: bool,
 }
 
 impl<P, S, So> Executor<P, S, So>
@@ -847,45 +842,7 @@ where
             checkpoints: Vec::new(),
             cancellation_token: None,
             resume_counts: None,
-            skip_init: false,
         }
-    }
-
-    /// Build an executor that continues an exact state snapshot.
-    ///
-    /// Unlike [`new`](Self::new), this constructor preserves the state's
-    /// best-so-far history and restores the problem wrapper's cumulative
-    /// evaluation counters. The state must implement [`ExactResumeState`],
-    /// which promises that it contains all solver evolution data required for
-    /// an unchanged continuation. The solver's `init` implementation must be
-    /// resume-idempotent.
-    ///
-    /// `max_iter` remains an absolute iteration limit: resuming a state at
-    /// iteration 40 with `.max_iter(100)` performs at most 60 more iterations.
-    /// Exact continuation also requires the same deterministic problem,
-    /// solver configuration, scalar type, and code. Execution controls are
-    /// configured anew; state-derived checks such as
-    /// [`no_acceptance`](Self::no_acceptance) and zero-tolerance
-    /// [`no_objective_improvement`](Self::no_objective_improvement) preserve history stored in the
-    /// state, while controls with private clocks or anchors begin a new run.
-    ///
-    /// To migrate, capture the solver, state, and counters together with
-    /// [`Stepper::into_checkpoint`] or
-    /// [`OptimizationResultWithSolver::into_checkpoint`]. Pass the checkpoint
-    /// and the same problem to [`Self::resume_from_checkpoint`], then reattach
-    /// execution controls and observers. This continuation skips solver
-    /// initialization and preserves solver-owned convergence history.
-    #[deprecated(
-        note = "capture a Checkpoint and use Executor::resume_from_checkpoint"
-    )]
-    pub fn resume(problem: P, solver: So, state: S) -> Self
-    where
-        S: ExactResumeState,
-    {
-        let resume_counts = state.resume_counts();
-        let mut executor = Self::new(problem, solver, state);
-        executor.resume_counts = Some(resume_counts);
-        executor
     }
 
     /// Build an executor that continues an exact solver/state checkpoint.
@@ -898,7 +855,7 @@ where
     /// iteration 40 with `.max_iter(100)` performs at most 60 more iterations.
     /// Exact continuation also requires the same deterministic problem,
     /// scalar type, backend behavior, and code. The checkpoint does not contain
-    /// the problem, execution limits, application hooks, observers,
+    /// the problem, top-level execution limits, application hooks, observers,
     /// cancellation token, or checkpoint sinks; configure that execution
     /// policy anew. State-derived checks such as
     /// [`no_acceptance`](Self::no_acceptance) and zero-tolerance
@@ -914,7 +871,6 @@ where
         let (solver, state, resume_counts) = checkpoint.into_parts();
         let mut executor = Self::new(problem, solver, state);
         executor.resume_counts = Some(resume_counts);
-        executor.skip_init = true;
         executor
     }
 
@@ -1152,22 +1108,15 @@ where
             mut checkpoints,
             cancellation_token,
             resume_counts,
-            skip_init,
         } = self;
         let mut problem = Problem::new(problem);
-        if let Some(counts) = resume_counts {
-            *problem.counts_mut() = counts;
-        } else {
-            // Fresh top-level wrapper: reset best-so-far so it tracks
-            // this run's iterates only, matching the `state.mirror`
-            // per-run snapshot discipline.
-            state.reset_best();
-        }
         let mut selection = None;
-        let state = if skip_init {
+        let state = if let Some(counts) = resume_counts {
+            *problem.counts_mut() = counts;
             control.validate(&state);
             state
         } else {
+            state.reset_best();
             solver.reset_convergence();
             let mut state = solver.init(&mut problem, state)?;
             control.validate(&state);

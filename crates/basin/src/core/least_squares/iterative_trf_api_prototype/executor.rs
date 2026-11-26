@@ -113,7 +113,7 @@ fn residual_reusing<'a, P: Residual>(
     Ok(scratch.as_ref().unwrap())
 }
 
-fn controlled<S: crate::RawEvaluationState>(
+fn controlled<S: crate::State>(
     control: crate::RunControl<S>,
 ) -> crate::RunControl<S> {
     use crate::EvaluationKind::*;

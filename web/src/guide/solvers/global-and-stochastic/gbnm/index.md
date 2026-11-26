@@ -124,7 +124,7 @@ less explored center, but do not guarantee a better objective.
 `with_gaussian_variance_factor` controls how broadly visited regions
 contribute to the density.
 
-Use `max_cost_evals`, `max_iter`, `max_time`, or `target_objective` on the
+Use `max_evaluations`, `max_iter`, `max_time`, or `target_objective` on the
 executor. One local simplex operation or restart completes before the
 next budget check. For `n` free coordinates, a local step can evaluate up
 to `n + 2` points, and a restart evaluates `n + 1`, so the cost budget can

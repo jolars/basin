@@ -1,7 +1,7 @@
 //! Public-API integration tests for the COBYLA solver.
 //!
 //! Exercises [`Cobyla`] through the framework: [`Executor`] over a
-//! [`SelectedState`], with framework termination ([`MaxCostEvals`],
+//! [`SelectedState`], with framework termination (`MaxEvaluations`,
 //! [`RhoTolerance`]) and a problem carrying nonlinear inequality constraints via
 //! [`NonlinearInequalityConstraints`]. These confirm the public wiring:
 //! init/next_iter, the constraint evaluation + folding into the merit, the V↔Vec
@@ -62,7 +62,7 @@ fn converges_to_disk_optimum() {
             .with_final_radius(1e-6),
         SelectedState::new(vec![1.0, 1.0]),
     )
-    .max_cost_evals(2000)
+    .max_evaluations(basin::EvaluationKind::Cost, 2000)
     .run_with_solver()
     .unwrap();
 
@@ -91,11 +91,11 @@ fn respects_cost_eval_budget() {
             .with_final_radius(1e-12),
         SelectedState::new(vec![1.0, 1.0]),
     )
-    .max_cost_evals(15)
+    .max_evaluations(basin::EvaluationKind::Cost, 15)
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.report.code(), TerminationCode::MaxCostEvals);
+    assert_eq!(result.report.code(), TerminationCode::MaxEvaluations);
     assert!(
         result.cost_evals() >= 15,
         "cost_evals = {}",
@@ -267,11 +267,11 @@ fn projected_callbacks_retain_their_hard_budget_and_box_feasibility() {
             vec![1.0],
         )
         .max_iter(1000)
-        .max_cost_evals(budget)
+        .max_evaluations(basin::EvaluationKind::Cost, budget)
         .run_with_solver()
         .unwrap();
         assert_eq!(calls.get(), budget);
-        assert_eq!(result.report.code(), TerminationCode::MaxCostEvals);
+        assert_eq!(result.report.code(), TerminationCode::MaxEvaluations);
         assert!(
             result.selected_record().unwrap().param[0].abs()
                 <= 1.0 + f64::EPSILON.sqrt()
@@ -296,7 +296,7 @@ fn rho_tolerance_stops_early() {
         .with_absolute_radius_tolerance(1e-3),
         SelectedState::new(vec![1.0, 1.0]),
     )
-    .max_cost_evals(5000)
+    .max_evaluations(basin::EvaluationKind::Cost, 5000)
     .run_with_solver()
     .unwrap();
 
@@ -365,7 +365,7 @@ fn backend_generic_nalgebra() {
             .with_final_radius(1e-6),
         SelectedState::new(DVector::from_vec(vec![1.0, 1.0])),
     )
-    .max_cost_evals(2000)
+    .max_evaluations(basin::EvaluationKind::Cost, 2000)
     .run_with_solver()
     .unwrap();
 
@@ -435,7 +435,7 @@ fn backend_generic_ndarray() {
             .with_final_radius(1e-6),
         SelectedState::new(Array1::from_vec(vec![1.0, 1.0])),
     )
-    .max_cost_evals(2000)
+    .max_evaluations(basin::EvaluationKind::Cost, 2000)
     .run_with_solver()
     .unwrap();
 
@@ -505,7 +505,7 @@ fn backend_generic_faer() {
             .with_final_radius(1e-6),
         SelectedState::new(Col::from_fn(2, |_| 1.0)),
     )
-    .max_cost_evals(2000)
+    .max_evaluations(basin::EvaluationKind::Cost, 2000)
     .run_with_solver()
     .unwrap();
 

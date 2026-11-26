@@ -1,5 +1,5 @@
 use super::*;
-use crate::{CountsMirror, FirstOrderState, PointState};
+use crate::{FirstOrderState, PointState};
 
 fn point(cost: f64) -> PointState<f64> {
     let mut state = PointState::new(cost);
@@ -9,9 +9,9 @@ fn point(cost: f64) -> PointState<f64> {
 }
 
 #[test]
-fn raw_categories_read_the_state_without_legacy_folds() {
-    let mut state = point(1.0);
-    state.mirror(&EvalCounts {
+fn raw_categories_read_the_wrapper_counts() {
+    let state = point(1.0);
+    let counts = EvalCounts {
         cost_evals: 2,
         gradient_evals: 3,
         residual_evals: 5,
@@ -20,16 +20,19 @@ fn raw_categories_read_the_state_without_legacy_folds() {
         hessian_product_evals: 13,
         jacobian_product_evals: 17,
         transpose_jacobian_product_evals: 19,
-    });
+    };
     for (kind, count) in EvaluationKind::ALL
         .into_iter()
         .zip([2, 3, 5, 7, 11, 13, 17, 19, 77])
     {
         let mut control = RunControl::new().max_evaluations(kind, count + 1);
-        assert_eq!(control.check(&state, 0), None);
+        assert_eq!(control.check(&state, &counts, None), None);
         control = control.max_evaluations(kind, count);
         assert_eq!(
-            control.check(&state, 0).as_ref().map(|stop| stop.code()),
+            control
+                .check(&state, &counts, None)
+                .as_ref()
+                .map(|stop| stop.code()),
             Some(crate::TerminationCode::MaxEvaluations)
         );
     }
@@ -44,19 +47,18 @@ fn raw_setters_replace_and_preserve_budget_precedence() {
         gradient_evals: 3,
         ..EvalCounts::default()
     };
-    state.mirror(&counts);
     state.update_best();
     let mut control = RunControl::new()
         .max_evaluations(EvaluationKind::Cost, 1)
         .max_evaluations(EvaluationKind::Cost, 3);
-    assert_eq!(control.check(&state, counts.gradient_evals), None);
+    assert_eq!(control.check(&state, &counts, None), None);
     control = control
         .max_evaluations(EvaluationKind::Gradient, 2)
         .max_time(Duration::ZERO)
         .target_objective(1.0);
     assert_eq!(
         control
-            .check(&state, counts.gradient_evals)
+            .check(&state, &counts, None)
             .as_ref()
             .map(|stop| stop.code()),
         Some(crate::TerminationCode::MaxEvaluations)
@@ -64,31 +66,15 @@ fn raw_setters_replace_and_preserve_budget_precedence() {
     control = control.max_evaluations(EvaluationKind::Cost, 2);
     assert_eq!(
         control
-            .check(&state, counts.gradient_evals)
+            .check(&state, &counts, None)
             .as_ref()
             .map(|stop| stop.code()),
         Some(crate::TerminationCode::MaxEvaluations)
     );
-    control = control.max_gradient_evals(1);
-    assert_eq!(
-        control
-            .check(&state, counts.gradient_evals)
-            .as_ref()
-            .map(|stop| stop.code()),
-        Some(crate::TerminationCode::MaxGradientEvals)
-    );
-    control = control.max_cost_evals(1);
-    assert_eq!(
-        control
-            .check(&state, counts.gradient_evals)
-            .as_ref()
-            .map(|stop| stop.code()),
-        Some(crate::TerminationCode::MaxCostEvals)
-    );
     control = control.max_iter(0);
     assert_eq!(
         control
-            .check(&state, counts.gradient_evals)
+            .check(&state, &counts, None)
             .as_ref()
             .map(|stop| stop.code()),
         Some(crate::TerminationCode::MaxIter)
@@ -97,30 +83,34 @@ fn raw_setters_replace_and_preserve_budget_precedence() {
 
 #[test]
 fn repeated_checks_and_mid_step_publications_do_not_invent_stall_age() {
+    let counts = &EvalCounts::default();
     for delta in [0.0, 1.0] {
         let mut state = point(10.0);
         let mut control = RunControl::new().no_objective_improvement(2, delta);
         for _ in 0..4 {
-            assert_eq!(control.check(&state, 0), None);
+            assert_eq!(control.check(&state, counts, None), None);
         }
         state.increment_iter();
         state.replace(8.0, 8.0);
         state.update_best();
-        assert_eq!(control.check(&state, 0), None);
+        assert_eq!(control.check(&state, counts, None), None);
         state.increment_iter();
         for _ in 0..4 {
-            assert_eq!(control.check(&state, 0), None);
+            assert_eq!(control.check(&state, counts, None), None);
         }
         // A clean mid-step improvement retains the iteration number but
         // still resets a positive-delta anchor before further checks.
         state.replace(6.0, 6.0);
         state.update_best();
-        assert_eq!(control.check(&state, 0), None);
+        assert_eq!(control.check(&state, counts, None), None);
         state.increment_iter();
-        assert_eq!(control.check(&state, 0), None);
+        assert_eq!(control.check(&state, counts, None), None);
         state.increment_iter();
         assert_eq!(
-            control.check(&state, 0).as_ref().map(|stop| stop.code()),
+            control
+                .check(&state, counts, None)
+                .as_ref()
+                .map(|stop| stop.code()),
             Some(crate::TerminationCode::NoImprovement)
         );
     }
@@ -128,11 +118,12 @@ fn repeated_checks_and_mid_step_publications_do_not_invent_stall_age() {
 
 #[test]
 fn objective_anchor_handles_large_decreases_and_negative_infinity() {
+    let counts = &EvalCounts::default();
     for initial in [f64::MAX, -f64::MAX] {
         let mut state = point(initial);
         let mut control =
             RunControl::new().no_objective_improvement(2, f64::MAX);
-        assert_eq!(control.check(&state, 0), None);
+        assert_eq!(control.check(&state, counts, None), None);
         state.increment_iter();
         let improved = if initial > 0.0 {
             -f64::MAX
@@ -141,12 +132,15 @@ fn objective_anchor_handles_large_decreases_and_negative_infinity() {
         };
         state.replace(improved, improved);
         state.update_best();
-        assert_eq!(control.check(&state, 0), None);
+        assert_eq!(control.check(&state, counts, None), None);
         state.increment_iter();
-        assert_eq!(control.check(&state, 0), None);
+        assert_eq!(control.check(&state, counts, None), None);
         state.increment_iter();
         assert_eq!(
-            control.check(&state, 0).as_ref().map(|stop| stop.code()),
+            control
+                .check(&state, counts, None)
+                .as_ref()
+                .map(|stop| stop.code()),
             Some(crate::TerminationCode::NoImprovement)
         );
     }
@@ -178,33 +172,41 @@ fn invalid_objective_control_settings_are_rejected() {
 
 #[test]
 fn reused_controls_reset_clocks_and_stall_anchors() {
+    let counts = &EvalCounts::default();
     let mut control = RunControl::new()
         .max_time(Duration::from_secs(60))
         .no_objective_improvement(2, 1.0);
     let mut state = point(1.0);
-    assert_eq!(control.check(&state, 0), None);
+    assert_eq!(control.check(&state, counts, None), None);
     for _ in 0..2 {
         state.increment_iter();
-        control.check(&state, 0);
+        control.check(&state, counts, None);
     }
     assert_eq!(
-        control.check(&state, 0).as_ref().map(|stop| stop.code()),
+        control
+            .check(&state, counts, None)
+            .as_ref()
+            .map(|stop| stop.code()),
         Some(crate::TerminationCode::NoImprovement)
     );
     control.start = Some(Instant::now() - Duration::from_secs(120));
     assert_eq!(
-        control.check(&state, 0).as_ref().map(|stop| stop.code()),
+        control
+            .check(&state, counts, None)
+            .as_ref()
+            .map(|stop| stop.code()),
         Some(crate::TerminationCode::MaxTime)
     );
     control.reset();
     assert_eq!(control.start, None);
     let fresh = point(100.0);
-    assert_eq!(control.check(&fresh, 0), None);
+    assert_eq!(control.check(&fresh, counts, None), None);
 }
 
 #[test]
 fn direct_hooks_keep_captures_while_factories_reset_history() {
     use std::{cell::RefCell, rc::Rc};
+    let counts = &EvalCounts::default();
     let direct = Rc::new(RefCell::new(Vec::new()));
     let factory = Rc::new(RefCell::new(Vec::new()));
     let mut control = RunControl::new()
@@ -231,7 +233,7 @@ fn direct_hooks_keep_captures_while_factories_reset_history() {
         });
     for _ in 0..2 {
         control.reset();
-        assert_eq!(control.check(&point(1.0), 0), None);
+        assert_eq!(control.check(&point(1.0), counts, None), None);
     }
     assert_eq!(*direct.borrow(), [1, 2]);
     assert_eq!(*factory.borrow(), [1, 1]);

@@ -215,7 +215,7 @@ into user-provided `Problem` traits, until solver convergence, an execution limi
     `run()` returns an `OptimizationResult<S>` (final state, authoritative counts, and an owned
     `TerminationReport<S::Float>`); opt-in `run_with_solver()` returns an
     `OptimizationResultWithSolver<S, So>` retaining the final solver as well. Also `run_loop_with_control`/`Stepper`, solver-and-state
-    `Executor::resume`/`Executor::resume_from_checkpoint`, and the cooperative,
+    `Executor::resume_from_checkpoint`, and the cooperative,
     top-level `CancellationToken`.
   - `checkpoint.rs`: solver-aware exact checkpoints. The executor captures the
     solver, state, and authoritative evaluation counts at coherent iteration
@@ -225,10 +225,11 @@ into user-provided `Problem` traits, until solver convergence, an execution limi
   - `convergence.rs`: fixed solver convergence slots and shared calculations.
     Optional checks add only the backend capabilities they need.
   - `run_control.rs`: budgets, targets, stagnation stops, and application hooks.
-    Capability-bound builders provide raw `max_evaluations` budgets,
-    `target_objective`, `no_objective_improvement`, and opt-in
-    `require_evaluated_state` publication validation. Inner-executor
-    serialization rejects capability controls instead of discarding them.
+    `max_evaluations` reads authoritative wrapper counts. Capability-bound
+    builders provide `target_objective`, `no_objective_improvement`, and
+    opt-in `require_evaluated_state` publication validation.
+    Inner-executor serialization retains numeric budgets and rejects hooks,
+    targets, stalls, and publication validation.
   - `termination.rs`: stopping reasons reported by solvers and execution controls.
   - `constraint.rs` (+ `constraint/`), `barrier.rs`, `augmented_lagrangian.rs`:
     canonical typed constraint sets, independent evaluation capabilities,

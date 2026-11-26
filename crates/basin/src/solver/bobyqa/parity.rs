@@ -290,7 +290,7 @@ fn check_parity(text: &str) {
             .with_npt(fx.npt),
         PointState::new(fx.x0.clone()),
     )
-    .max_cost_evals(fx.max_fun as u64)
+    .max_evaluations(crate::EvaluationKind::Cost, fx.max_fun as u64)
     .run()
     .unwrap();
     let trace = trace.borrow();

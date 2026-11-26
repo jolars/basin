@@ -94,7 +94,7 @@ impl<LS, S, F> Default for ChainHistory<LS, S, F> {
 ///    - Otherwise: take the saved pair out of the chain slot and
 ///      [`prepare_resume`](ResumableInner::prepare_resume) it.
 /// 5. **Drive the inner.** Each segment uses a fresh
-///    `max_cost_evals(ls_intensity)` budget and the settings supplied by
+///    cost budget set by `ls_intensity` and settings supplied by
 ///    [`ResumableInner::configure_segment`]. New chains initialize once unless
 ///    their seeder supplied an initialized pair. Stored chains skip
 ///    [`Solver::init`] and retain their evolving model across segments.
@@ -103,7 +103,7 @@ impl<LS, S, F> Default for ChainHistory<LS, S, F> {
 ///    - The shared problem wrapper counts every inner call in its original
 ///      category; progress preserves all six categories.
 ///    - Bubble `SolverFailed` (rule 3: failure routing); other
-///      reasons (`MaxCostEvals`, operator tolerances) are clean stops.
+///      reasons (`MaxEvaluations`, operator tolerances) are clean stops.
 ///    - If the inner incumbent improves `costs[c_LS]`, write the improved
 ///      best evaluated param/cost back. Always update
 ///      `last_ls_cost[c_LS]` and `ls_application_count[c_LS]`. Store
@@ -172,11 +172,11 @@ impl<LS, S, F> Default for ChainHistory<LS, S, F> {
 /// # Termination
 ///
 /// No solver-internal optimality test. Pair with framework criteria,
-/// typically [`max_cost_evals`](crate::Executor::max_cost_evals) for budget control. Chain segments
+/// typically [`max_evaluations`](crate::Executor::max_evaluations) for budget control. Chain segments
 /// overshoot `I_str` slightly when the operator evaluates in batches
 /// (CMA-ES runs whole generations, overshooting by up to `λ_inner − 1`
 /// evaluations; Solis-Wets by at most one reversal evaluation); the
-/// outer `MaxCostEvals` will fire on the next outer iteration boundary,
+/// outer `MaxEvaluations` will fire on the next outer iteration boundary,
 /// not exactly on the budget. Document and accept; matches Bergmeir's
 /// reference behavior.
 ///
@@ -597,15 +597,8 @@ where
         let (mut ls, inner_state, initialized) =
             match history.chains[c_ls].take() {
                 Some((ls, mut s)) => {
-                    // Local budget reset. `run_loop_with_control` already snapshots the
-                    // wrapper at entry so the inner state's `cost_evals`
-                    // measures per-segment work, but the iteration counter
-                    // is the inner's responsibility and the `MaxCostEvals`
-                    // criterion in Phase 4 reads `state.cost_evals()`,
-                    // which is the wrapper-mirrored per-run value.
-                    // `prepare_resume` resets `iter` so the chain restarts
-                    // at iter 0; the `run_loop_with_control` baseline takes care of the
-                    // eval counter.
+                    // The chain resets its iteration count. The segment driver
+                    // measures evaluations relative to wrapper counts at entry.
                     ls.prepare_resume(&mut s);
                     (ls, s, true)
                 }
@@ -630,18 +623,9 @@ where
             };
 
         // -- Phase 4: drive the inner. --
-        // Build per-call criteria so `MaxCostEvals` doesn't leak state
-        // between chain segments (it's stateless, but the
-        // `InnerExecutor` reuse pattern doesn't fit here since we hold
-        // a different operator instance per individual). Allocation
-        // cost is a few boxes per chain segment, negligible against
-        // I_str evals. Budget first, then the operator's per-segment
-        // convergence settings built from the segment's starting state.
-        // The execution budget is observed before convergence.
-        let mut control = crate::RunControl::new()
-            .max_iter(u64::MAX)
-            .max_cost_evals(self.ls_intensity);
+        let mut control = crate::RunControl::new().max_iter(u64::MAX);
         ls.configure_segment(&inner_state, &mut control);
+        control.cap_evaluations(crate::EvaluationKind::Cost, self.ls_intensity);
         let inner_result = crate::core::inner::diagnostics::run(
             &mut self.inner_diagnostics,
             problem,
@@ -665,7 +649,7 @@ where
         // -- Phase 5: route failures, write back. --
         // Same-problem composition: inner evals already flowed through the
         // outer wrapper, so shared progress preserves their raw categories. `SolverFailed` is the only failure
-        // reason; other reasons (`MaxCostEvals` from our budget, the
+        // reason; other reasons (`MaxEvaluations` from our budget, the
         // operator's own tolerances) are clean stops the outer consumes.
         if !inner_result
             .report

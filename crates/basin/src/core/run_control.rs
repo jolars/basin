@@ -10,8 +10,7 @@
 use super::math::Scalar;
 use super::problem::{EvalCounts, EvaluationKind};
 use super::state::{
-    AcceptanceState, EvaluatedState, GradientState, ObjectiveIncumbentState,
-    RawEvaluationState, State,
+    AcceptanceState, EvaluatedState, ObjectiveIncumbentState, State,
 };
 use super::termination::{ApplicationStop, ExecutionLimit, Stall, Termination};
 use web_time::{Duration, Instant};
@@ -20,12 +19,6 @@ use web_time::{Duration, Instant};
 mod tests;
 
 type Stop<S> = Box<dyn FnMut(&S) -> Option<Termination<<S as State>::Float>>>;
-
-struct RawBudgets<S> {
-    limits: [u64; EvaluationKind::ALL.len()],
-    configured: u16,
-    counts: fn(&S) -> &EvalCounts,
-}
 
 struct ObjectiveStall<F: Scalar> {
     patience: u64,
@@ -92,9 +85,9 @@ impl<S: State> Entry<S> {
 
 #[derive(Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub(crate) struct Limits {
-    cost: Option<u64>,
-    gradient: Option<u64>,
+    evaluations: Option<[Option<u64>; EvaluationKind::ALL.len()]>,
     time: Option<Duration>,
 }
 
@@ -102,15 +95,14 @@ pub(crate) struct Limits {
 ///
 /// Used with [`run_loop_with_control`](super::executor::run_loop_with_control).
 /// Builders replace their corresponding setting; custom hooks are appended.
-/// Checks run in this order: iteration, cost evaluations, gradient evaluations,
-/// raw evaluation budgets (in [`EvaluationKind`] order), elapsed time, target
-/// cost, improvement stall, acceptance stall, and hooks.
+/// Checks run in this order: iteration, evaluation budgets (in
+/// [`EvaluationKind`] order), elapsed time, target cost, improvement stall,
+/// acceptance stall, and hooks.
 /// The clock starts at the first check after initialization.
 /// Publication validation, when enabled, precedes observers and all checks.
 pub struct RunControl<S: State> {
     pub(crate) max_iter: u64,
     pub(crate) limits: Limits,
-    raw: Option<RawBudgets<S>>,
     validate: Option<fn(&S)>,
     start: Option<Instant>,
     target: Option<Stop<S>>,
@@ -131,7 +123,6 @@ impl<S: State> RunControl<S> {
         Self {
             max_iter: 1000,
             limits: Limits::default(),
-            raw: None,
             validate: None,
             start: None,
             target: None,
@@ -144,22 +135,6 @@ impl<S: State> RunControl<S> {
     /// Set the absolute iteration limit. Replaces the previous limit.
     pub fn max_iter(mut self, limit: u64) -> Self {
         self.max_iter = limit;
-        self
-    }
-
-    /// Set a boundary-checked cost-evaluation limit, using the state's count.
-    pub fn max_cost_evals(mut self, limit: u64) -> Self {
-        self.limits.cost = Some(limit);
-        self
-    }
-
-    /// Set a boundary-checked gradient-evaluation limit using the problem wrapper
-    /// count (relative to run entry for borrowed runs).
-    pub fn max_gradient_evals(mut self, limit: u64) -> Self
-    where
-        S: GradientState,
-    {
-        self.limits.gradient = Some(limit);
         self
     }
 
@@ -193,7 +168,7 @@ impl<S: State> RunControl<S> {
         self
     }
 
-    /// Set a raw category or total-work budget, requiring [`RawEvaluationState`].
+    /// Set a category or total-work budget using the problem wrapper's counts.
     ///
     /// Checks run after initialization and between iterations, so even a zero
     /// limit permits initialization. Limits are not hard caps inside a step.
@@ -203,30 +178,32 @@ impl<S: State> RunControl<S> {
     /// Counts follow [`EvalCounts`]: internal adapter evaluations, such as
     /// finite-difference probes, are excluded even from `TotalWork`.
     ///
-    /// Replaces the limit for `kind`. Different kinds and legacy budgets are
-    /// independent; legacy budgets are checked first. Exhaustion reports
-    /// [`ExecutionLimit::Evaluations`] for every kind. Compare the
-    /// state's [`raw_counts`](RawEvaluationState::raw_counts) with configured
-    /// limits to identify exhausted budgets. Capability controls on an
-    /// [`InnerExecutor`](crate::InnerExecutor) cannot be serialized.
+    /// Replaces the limit for `kind`. Different kinds are independent.
+    /// [`ExecutionLimit::Evaluations`] identifies each exhausted kind and its
+    /// observed count. With `serde`, these limits are serialized as part of
+    /// an [`InnerExecutor`](crate::InnerExecutor).
     ///
     /// ```
     /// use basin::{PointState, EvaluationKind, RunControl};
     /// let _ = RunControl::<PointState<Vec<f64>>>::new()
     ///     .max_evaluations(EvaluationKind::Cost, 10);
     /// ```
-    pub fn max_evaluations(mut self, kind: EvaluationKind, limit: u64) -> Self
-    where
-        S: RawEvaluationState,
-    {
-        let raw = self.raw.get_or_insert(RawBudgets {
-            limits: [0; EvaluationKind::ALL.len()],
-            configured: 0,
-            counts: S::raw_counts,
-        });
-        raw.limits[kind as usize] = limit;
-        raw.configured |= 1 << kind as usize;
+    pub fn max_evaluations(mut self, kind: EvaluationKind, limit: u64) -> Self {
+        *self.evaluation_budget(kind) = Some(limit);
         self
+    }
+
+    pub(crate) fn cap_evaluations(&mut self, kind: EvaluationKind, limit: u64) {
+        let budget = self.evaluation_budget(kind);
+        *budget = Some(budget.map_or(limit, |existing| existing.min(limit)));
+    }
+
+    fn evaluation_budget(&mut self, kind: EvaluationKind) -> &mut Option<u64> {
+        let budgets = self
+            .limits
+            .evaluations
+            .get_or_insert([None; EvaluationKind::ALL.len()]);
+        &mut budgets[kind as usize]
     }
 
     /// Stop when an eligible objective-ordered incumbent reaches `target`.
@@ -367,7 +344,6 @@ impl<S: State> RunControl<S> {
     #[cfg(feature = "serde")]
     pub(crate) fn has_unserializable_stops(&self) -> bool {
         self.target.is_some()
-            || self.raw.is_some()
             || self.validate.is_some()
             || self.improvement.is_some()
             || self.acceptance.is_some()
@@ -383,11 +359,9 @@ impl<S: State> RunControl<S> {
     pub(crate) fn check(
         &mut self,
         state: &S,
-        gradient_evals: u64,
-    ) -> Option<Termination<<S as State>::Float>>
-    where
-        S: crate::CountsMirror,
-    {
+        counts: &EvalCounts,
+        baseline: Option<&EvalCounts>,
+    ) -> Option<Termination<<S as State>::Float>> {
         let mut limits = Vec::new();
         if state.iter() >= self.max_iter {
             limits.push(ExecutionLimit::Iterations {
@@ -395,34 +369,15 @@ impl<S: State> RunControl<S> {
                 limit: self.max_iter,
             });
         }
-        if let Some(limit) =
-            self.limits.cost.filter(|&n| state.cost_evals() >= n)
-        {
-            limits.push(ExecutionLimit::CostEvaluations {
-                observed: state.cost_evals(),
-                limit,
-            });
-        }
-        if let Some(limit) = self
-            .limits
-            .gradient
-            .filter(|&limit| gradient_evals >= limit)
-        {
-            limits.push(ExecutionLimit::GradientEvaluations {
-                observed: gradient_evals,
-                limit,
-            });
-        }
-        if let Some(raw) = &self.raw {
-            let counts = (raw.counts)(state);
-            // Visit configured budgets in evaluation-kind order.
-            let mut configured = raw.configured;
-            while configured != 0 {
-                let index = configured.trailing_zeros() as usize;
-                configured &= configured - 1;
-                let kind = EvaluationKind::ALL[index];
+        if let Some(budgets) = &self.limits.evaluations {
+            let delta = baseline.map(|base| counts.delta_since(base));
+            let counts = delta.as_ref().unwrap_or(counts);
+            for (kind, &budget) in EvaluationKind::ALL.into_iter().zip(budgets)
+            {
+                let Some(limit) = budget else {
+                    continue;
+                };
                 let observed = kind.count(counts);
-                let limit = raw.limits[index];
                 if observed >= limit {
                     limits.push(ExecutionLimit::Evaluations {
                         kind,
@@ -491,10 +446,7 @@ macro_rules! control_methods {
             mut self,
             kind: crate::EvaluationKind,
             limit: u64,
-        ) -> Self
-        where
-            S: crate::core::state::RawEvaluationState,
-        {
+        ) -> Self {
             self.control =
                 std::mem::take(&mut self.control).max_evaluations(kind, limit);
             self
@@ -531,21 +483,6 @@ macro_rules! control_methods {
         {
             self.control = std::mem::take(&mut self.control)
                 .no_objective_improvement(patience, min_delta);
-            self
-        }
-        /// Set a cost-evaluation budget, checked after initialization and between iterations.
-        pub fn max_cost_evals(mut self, limit: u64) -> Self {
-            self.control =
-                std::mem::take(&mut self.control).max_cost_evals(limit);
-            self
-        }
-        /// Set a gradient-evaluation budget, checked between iterations.
-        pub fn max_gradient_evals(mut self, limit: u64) -> Self
-        where
-            S: crate::core::state::GradientState,
-        {
-            self.control =
-                std::mem::take(&mut self.control).max_gradient_evals(limit);
             self
         }
         /// Set a time budget starting at the first post-initialization check.

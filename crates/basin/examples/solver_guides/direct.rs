@@ -41,7 +41,7 @@ fn main() {
 
     let result = Executor::new(problem, solver, PointState::new(vec![0.0; 2]))
         .target_objective(-78.33)
-        .max_cost_evals(2_000)
+        .max_evaluations(basin::EvaluationKind::Cost, 2_000)
         .run()
         .unwrap();
 

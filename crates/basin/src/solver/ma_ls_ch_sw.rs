@@ -83,7 +83,7 @@ use crate::solver::solis_wets::SolisWets;
 ///     PopulationProgress::empty(),
 /// )
 /// .max_iter(u64::MAX)
-/// .max_cost_evals(10_000)
+/// .max_evaluations(basin::EvaluationKind::Cost, 10_000)
 /// .run()
 /// .unwrap();
 /// assert!(result.current_record().unwrap().cost.unwrap() < 1e-6);

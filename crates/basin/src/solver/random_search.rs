@@ -62,7 +62,7 @@ use crate::solver::cma_es::sort_population_ascending;
 /// No solver-internal optimality test; random search has no canonical
 /// fixed-point criterion. Use the framework's
 /// [`max_iter`](crate::Executor::max_iter),
-/// [`max_cost_evals`](crate::Executor::max_cost_evals),
+/// [`max_evaluations`](crate::Executor::max_evaluations),
 /// [`max_time`](crate::Executor::max_time),
 /// [`with_absolute_cost_change_tolerance`](Self::with_absolute_cost_change_tolerance), or
 /// [`with_absolute_step_tolerance`](Self::with_absolute_step_tolerance). The

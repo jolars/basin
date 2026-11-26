@@ -19,7 +19,7 @@ fn main() {
         .with_minimum_poll_size(1e-8);
 
     let result = Executor::from_start(AbsValley, solver, vec![0.0, 0.0])
-        .max_cost_evals(5_000)
+        .max_evaluations(basin::EvaluationKind::Cost, 5_000)
         .run()
         .unwrap();
 

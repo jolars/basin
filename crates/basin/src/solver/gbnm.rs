@@ -98,7 +98,7 @@ struct BoxGeometry<'a, V> {
 /// # Termination
 ///
 /// GBNM is a budget-driven global algorithm. Use
-/// [`max_cost_evals`](crate::Executor::max_cost_evals), [`max_iter`](crate::Executor::max_iter),
+/// [`max_evaluations`](crate::Executor::max_evaluations), [`max_iter`](crate::Executor::max_iter),
 /// [`max_time`](crate::Executor::max_time), or [`target_objective`](crate::Executor::target_objective). One
 /// simplex operation is atomic. A local step may evaluate up to `n + 2` points
 /// and a restart evaluates `n + 1`, where `n` is the number of free
@@ -162,7 +162,7 @@ struct BoxGeometry<'a, V> {
 /// };
 /// let result =
 ///     Executor::new(problem, Gbnm::new(42), PointState::new(vec![4.0, 4.0]))
-///         .max_cost_evals(2_000)
+///         .max_evaluations(basin::EvaluationKind::Cost, 2_000)
 ///         .run()
 ///         .unwrap();
 /// let incumbent = result.selected_record().expect("expected an incumbent");

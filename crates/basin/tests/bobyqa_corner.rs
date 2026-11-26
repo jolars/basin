@@ -68,7 +68,7 @@ where
             solver,
             PointState::new(from_slice(&start)),
         )
-        .max_cost_evals(300)
+        .max_evaluations(basin::EvaluationKind::Cost, 300)
         .run()
         .unwrap();
 

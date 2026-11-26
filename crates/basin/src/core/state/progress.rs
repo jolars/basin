@@ -35,9 +35,7 @@
 //!
 //! Exact continuation uses a solver-aware [`Checkpoint`](crate::Checkpoint)
 //! and [`Executor::resume_from_checkpoint`](crate::Executor::resume_from_checkpoint),
-//! which skips initialization. Shared progress alone does not contain the
-//! solver's evolution data, so these types do not implement
-//! [`ExactResumeState`](super::ExactResumeState).
+//! which retains the solver’s evolution data and skips initialization.
 //!
 //! # Example
 //!
@@ -276,14 +274,6 @@ impl<V, F: Scalar> PointState<V, F> {
 /// Exact continuation requires a solver-aware checkpoint; this state alone
 /// cannot reconstruct the proposal stream. With `serde`, serialization is
 /// available when `V` and `F` support it.
-///
-/// Progress alone cannot provide exact continuation:
-///
-/// ```compile_fail
-/// use basin::{ExactResumeState, ProposalState};
-/// fn exact<S: ExactResumeState>(_: S) {}
-/// exact(ProposalState::<i32>::new(0));
-/// ```
 ///
 /// # Backends
 ///

@@ -1,6 +1,6 @@
 use basin::{
-    Checkpoint, CheckpointSink, CountsMirror, EvalCounts, ExactResumeState,
-    Executor, ObserverMode, Problem, Solver, State,
+    Checkpoint, CheckpointSink, CountsMirror, EvalCounts, Executor,
+    ObserverMode, Problem, Solver, State,
 };
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
@@ -58,14 +58,6 @@ impl CountsMirror for TestState {
     }
     fn mirror(&mut self, counts: &EvalCounts) {
         self.cost_evals = counts.cost_evals;
-    }
-}
-
-impl ExactResumeState for TestState {
-    fn resume_counts(&self) -> EvalCounts {
-        let mut counts = EvalCounts::default();
-        counts.cost_evals = self.cost_evals;
-        counts
     }
 }
 
@@ -161,27 +153,6 @@ fn resume_skips_init_even_at_iteration_zero() {
 }
 
 #[test]
-#[allow(deprecated)]
-fn legacy_state_resume_still_calls_resume_idempotent_init() {
-    let state = TestState {
-        param: (),
-        iter: 4,
-        cost_evals: 7,
-    };
-    let (writer, snapshots) = memory_sink();
-
-    Executor::resume((), CountingSolver::new(), state)
-        .max_iter(4)
-        .checkpoint_with(writer, ObserverMode::Never)
-        .run()
-        .unwrap();
-
-    let checkpoint = snapshots.lock().unwrap().pop().unwrap();
-    assert_eq!(checkpoint.solver().init_calls, 1);
-    assert_eq!(checkpoint.counts().cost_evals, 7);
-}
-
-#[test]
 fn checkpoint_mode_gates_iterations_but_not_final_save() {
     let (writer, snapshots) = memory_sink();
     Executor::new((), CountingSolver::new(), TestState::new())
@@ -274,7 +245,7 @@ mod file {
             .unwrap();
         let bytes = std::fs::read(&path).unwrap();
         assert_eq!(&bytes[..8], b"BASINEX\0");
-        assert_eq!(&bytes[8..12], &5_u32.to_le_bytes());
+        assert_eq!(&bytes[8..12], &6_u32.to_le_bytes());
         let header_len =
             u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as usize;
         let (header, rest): ((String, String, String), _) =
@@ -300,7 +271,7 @@ mod file {
         let path = checkpoint_path("unsupported-format");
         write_valid_checkpoint(&path);
         let original = std::fs::read(&path).unwrap();
-        for version in [0_u32, 1, 2, 3, 4, u32::MAX] {
+        for version in [0_u32, 1, 2, 3, 4, 5, u32::MAX] {
             let mut bytes = original.clone();
             bytes[8..12].copy_from_slice(&version.to_le_bytes());
             std::fs::write(&path, &bytes).unwrap();

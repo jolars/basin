@@ -422,7 +422,7 @@ fn cobyla_f32_round_trips_full_form_constraints() {
             .with_final_radius(1e-4),
         vec![0.0_f32; 5],
     )
-    .max_cost_evals(3000)
+    .max_evaluations(basin::EvaluationKind::Cost, 3000)
     .run()
     .unwrap();
 

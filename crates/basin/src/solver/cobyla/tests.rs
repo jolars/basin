@@ -59,7 +59,7 @@ fn problem_b_disk_min_product() {
         .with_final_radius(1e-4);
     let state = SelectedState::new(vec![1.0, 1.0]);
     let result = Executor::new(prob, solver, state)
-        .max_cost_evals(2000)
+        .max_evaluations(crate::EvaluationKind::Cost, 2000)
         .run()
         .unwrap();
     assert!(
@@ -86,7 +86,7 @@ fn problem_c_ellipsoid_min_product3() {
         .with_final_radius(1e-5);
     let state = SelectedState::new(vec![1.0, 1.0, 1.0]);
     let result = Executor::new(prob, solver, state)
-        .max_cost_evals(3000)
+        .max_evaluations(crate::EvaluationKind::Cost, 3000)
         .run()
         .unwrap();
     assert!(
@@ -110,7 +110,7 @@ fn problem_f_fletcher() {
         .with_final_radius(1e-5);
     let state = SelectedState::new(vec![1.0, 1.0]);
     let result = Executor::new(prob, solver, state)
-        .max_cost_evals(3000)
+        .max_evaluations(crate::EvaluationKind::Cost, 3000)
         .run()
         .unwrap();
     assert!(
@@ -148,7 +148,7 @@ fn problem_g_fletcher() {
         .with_final_radius(1e-5);
     let state = SelectedState::new(vec![1.0, 1.0, 1.0]);
     let result = Executor::new(prob, solver, state)
-        .max_cost_evals(3000)
+        .max_evaluations(crate::EvaluationKind::Cost, 3000)
         .run()
         .unwrap();
     assert!(
@@ -171,7 +171,7 @@ fn unconstrained_rosenbrock_like() {
         .with_final_radius(1e-6);
     let state = SelectedState::new(vec![-1.0, 1.0]);
     let result = Executor::new(prob, solver, state)
-        .max_cost_evals(5000)
+        .max_evaluations(crate::EvaluationKind::Cost, 5000)
         .run()
         .unwrap();
     assert!(

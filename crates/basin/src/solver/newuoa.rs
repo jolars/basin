@@ -44,7 +44,7 @@
 //! NEWUOA's natural convergence is `ρ` reaching `ρ_end` (configured on the
 //! solver, where it also drives the eq-7.6 schedule); the solver signals it via
 //! [`crate::TerminationCode::SolverConverged`]. Add
-//! [`max_cost_evals`](crate::Executor::max_cost_evals) to cap the evaluation budget, or
+//! [`max_evaluations`](crate::Executor::max_evaluations) to cap the evaluation budget, or
 //! [`with_absolute_radius_tolerance`](crate::Newuoa::with_absolute_radius_tolerance) to stop early at a coarser `ρ`.
 //!
 //! # Backends
@@ -98,7 +98,7 @@ use driver::{NewuoaWork, Transition};
 ///     .with_final_radius(1e-8);
 /// let state = PointState::new(vec![0.0, 0.0]);
 /// let result = Executor::new(Quadratic, solver, state)
-///     .max_cost_evals(500)
+///     .max_evaluations(basin::EvaluationKind::Cost, 500)
 ///     .run()
 ///     .unwrap();
 /// let incumbent = result.selected_record().expect("expected an incumbent");

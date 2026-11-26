@@ -16,8 +16,7 @@
 //! pipeline composes at `F = f32`.
 //!
 //! [`AcceptanceState`] exposes proposal acceptance history to generic stall
-//! criteria. [`ExactResumeState`] is the marker for the deprecated state-only
-//! [`Executor::resume`](crate::Executor::resume) constructor.
+//! criteria.
 //!
 //! External and new solvers can use [`PointState`] or [`FirstOrderState`] for
 //! shared progress storage with public, coherent record updates. See
@@ -183,8 +182,8 @@ pub trait State {
     ///
     /// Called by fresh [`Executor`](crate::Executor) and
     /// [`run_loop_with_control`](crate::core::executor::run_loop_with_control) paths at run entry so a
-    /// reused state tracks per-run best. [`Executor::resume`](crate::Executor::resume)
-    /// deliberately preserves the snapshot's best history instead.
+    /// reused state tracks per-run best. Checkpoint continuation preserves
+    /// the saved selection history.
     fn reset_best(&mut self);
 }
 
@@ -250,8 +249,8 @@ pub trait CountsMirror: State {
     /// Every shipped shared state reports only raw cost-function calls.
     /// Custom states define their mapping through [`CountsMirror`].
     /// Diverges from `iter()` whenever a single iteration evaluates the
-    /// cost more than once (line searches, Nelder-Mead shrinks, etc.);
-    /// this is what users actually budget against.
+    /// cost more than once (line searches, Nelder-Mead shrinks, etc.).
+    /// Execution budgets read the wrapper’s raw counts.
     ///
     /// Populated by the
     /// [`Executor`](crate::core::executor::Executor) from the wrapper's
@@ -269,27 +268,6 @@ pub trait CountsMirror: State {
     /// [`Solver::init`](crate::core::solver::Solver::init) /
     /// [`Solver::next_iter`](crate::core::solver::Solver::next_iter).
     fn mirror(&mut self, delta: &EvalCounts);
-}
-
-/// Capability marker for the deprecated state-only resume constructor.
-///
-/// Implementations must return the complete wrapper-side evaluation counters
-/// represented by the snapshot. [`Executor::resume`](crate::Executor::resume)
-/// restores those counters, preserves best-so-far history and absolute
-/// iteration numbers, and calls the solver's resume-idempotent `init` method.
-/// No shipped shared state implements this marker: built-in solvers require
-/// [`Checkpoint`](crate::Checkpoint) for exact continuation. For a
-/// custom state-only resume contract, solver-specific evolution data—including
-/// RNG and adaptive machinery—must
-/// live in the state itself. Exact continuation additionally assumes the same
-/// deterministic problem, solver configuration, scalar type, and code;
-/// executor-owned termination criteria are not part of the snapshot.
-/// This path resets solver-owned convergence history. To retain that history
-/// too, use [`Checkpoint`](crate::Checkpoint) and
-/// [`Executor::resume_from_checkpoint`](crate::Executor::resume_from_checkpoint).
-pub trait ExactResumeState: State {
-    /// Complete evaluation counts at the point represented by this snapshot.
-    fn resume_counts(&self) -> EvalCounts;
 }
 
 /// Minimum state shape for acceptance-stall termination criteria.

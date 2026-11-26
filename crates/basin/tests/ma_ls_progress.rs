@@ -376,6 +376,98 @@ fn zero_threshold_retains_the_chain_until_its_finite_probe() {
 }
 
 #[test]
+fn segment_honors_the_stricter_cost_budget() {
+    use basin::{
+        EvaluationKind, ExecutionLimit, MaLsCh, PointState, Problem,
+        ResumableInner, RunControl, SamplingDomain, Solver, SolverStep,
+        Termination,
+    };
+
+    struct Operator(u64);
+
+    impl ResumableInner<Vec<f64>> for Operator {
+        type State = PointState<Vec<f64>>;
+
+        fn seed_chain(
+            &self,
+            x: &Vec<f64>,
+            cost: f64,
+            _: f64,
+            _: u64,
+        ) -> (Self, Self::State) {
+            let mut state = PointState::new(x.clone());
+            state.replace(x.clone(), cost);
+            (Self(self.0), state)
+        }
+
+        fn seeded_chain_is_initialized(&self) -> bool {
+            true
+        }
+
+        fn prepare_resume(&self, state: &mut Self::State) {
+            state.reset_progress();
+        }
+
+        fn configure_segment(
+            &mut self,
+            _: &Self::State,
+            control: &mut RunControl<Self::State>,
+        ) {
+            *control = std::mem::take(control)
+                .max_evaluations(EvaluationKind::Cost, self.0);
+        }
+    }
+
+    impl Solver<SamplingDomain<Sphere>, PointState<Vec<f64>>> for Operator {
+        type Error = Infallible;
+
+        fn next_iter(
+            &mut self,
+            problem: &mut Problem<SamplingDomain<Sphere>>,
+            state: &mut PointState<Vec<f64>>,
+        ) -> Result<SolverStep<f64>, Infallible> {
+            let point = state.param().clone();
+            let cost = problem.cost(&point)?;
+            state.replace(point, cost);
+            Ok(SolverStep::completed())
+        }
+    }
+
+    for (intensity, operator_limit) in [(2, 9), (9, 2)] {
+        let result = Executor::new(
+            SamplingDomain::new(Sphere::new(2)),
+            MaLsCh::with_inner(71, Operator(operator_limit))
+                .with_pop_size(4)
+                .with_nfrec(1)
+                .with_ls_intensity(intensity)
+                .with_inner_diagnostics(true),
+            PopulationProgress::empty(),
+        )
+        .max_iter(1)
+        .run_with_solver()
+        .unwrap();
+
+        let diagnostics = result.solver.inner_diagnostics();
+        assert_eq!(diagnostics.len(), 1);
+        let segment = &diagnostics[0];
+        let limit = intensity.min(operator_limit);
+        assert_eq!(
+            segment.counts_after.unwrap().cost_evals
+                - segment.counts_before.cost_evals,
+            limit
+        );
+        assert_eq!(
+            segment.report.as_ref().unwrap().termination,
+            Termination::Limit(vec![ExecutionLimit::Evaluations {
+                kind: EvaluationKind::Cost,
+                observed: limit,
+                limit,
+            }])
+        );
+    }
+}
+
+#[test]
 fn inner_failure_preserves_every_category_and_current_population() {
     struct Failing;
     impl basin::ResumableInner<Vec<f64>> for Failing {

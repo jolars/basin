@@ -1041,7 +1041,7 @@ pub struct EvalCounts {
 ///
 /// Used by [`Executor::max_evaluations`](crate::Executor::max_evaluations).
 /// Fused calls charge each category they produce, and batches charge submitted
-/// work even when evaluation fails. These metrics do not use legacy state folds.
+/// work even when evaluation fails. These metrics use the problem wrapper's counts.
 /// Variants are listed in raw-budget check order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

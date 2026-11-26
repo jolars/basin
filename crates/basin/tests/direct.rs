@@ -528,7 +528,7 @@ fn scipy_solution_quality_and_evaluation_counts() {
             no_geometry(),
             PointState::new(vec![0.0; dimension]),
         )
-        .max_cost_evals(budget)
+        .max_evaluations(basin::EvaluationKind::Cost, budget)
         .max_iter(1000)
         .run()
         .unwrap();
@@ -538,7 +538,7 @@ fn scipy_solution_quality_and_evaluation_counts() {
             result.state.cost_evals(),
             reference - minimum
         );
-        assert_eq!(result.report.code(), TerminationCode::MaxCostEvals);
+        assert_eq!(result.report.code(), TerminationCode::MaxEvaluations);
         assert!(
             gap >= -1e-11 && gap <= tolerance,
             "{name}: gap={gap}, tolerance={tolerance}"

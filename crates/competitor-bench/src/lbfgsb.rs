@@ -164,7 +164,7 @@ fn basin_solve(
         FirstOrderState::new(vec![3.0; problem.lower.len()]),
     )
     .max_iter(limits.0)
-    .max_cost_evals(limits.1)
+    .max_evaluations(basin::EvaluationKind::Cost, limits.1)
     .into_stepper()
     .unwrap();
     record(stepper.state().current_record().unwrap().cost.unwrap());
@@ -181,7 +181,12 @@ fn basin_solve(
                 iterations: stepper.iter(),
                 objective_calls: stepper.state().cost_evals() as usize,
                 gradient_calls: stepper.counts().gradient_evals as usize,
-                status: format!("{:?}", report.code()),
+                status: match report.code() {
+                    basin::TerminationCode::MaxEvaluations => {
+                        "MaxCostEvals".into()
+                    }
+                    code => format!("{code:?}"),
+                },
             };
         }
     }

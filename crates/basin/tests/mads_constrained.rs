@@ -94,7 +94,7 @@ fn converges_to_disk_optimum() {
             .constrained(),
         SelectedState::new(vec![0.0, 0.0]),
     )
-    .max_cost_evals(20_000)
+    .max_evaluations(basin::EvaluationKind::Cost, 20_000)
     .run()
     .unwrap();
 
@@ -128,7 +128,7 @@ fn infeasible_start_reaches_feasible_optimum() {
             .constrained(),
         SelectedState::new(start),
     )
-    .max_cost_evals(20_000)
+    .max_evaluations(basin::EvaluationKind::Cost, 20_000)
     .run()
     .unwrap();
 
@@ -146,7 +146,7 @@ fn infeasible_start_reaches_feasible_optimum() {
 }
 
 /// The evaluation budget is honored: a tiny cap stops the run with
-/// [`TerminationCode::MaxCostEvals`].
+/// [`TerminationCode::MaxEvaluations`].
 #[test]
 fn respects_eval_budget() {
     let result = Executor::new(
@@ -154,11 +154,11 @@ fn respects_eval_budget() {
         Mads::new().constrained(),
         SelectedState::new(vec![0.0, 0.0]),
     )
-    .max_cost_evals(50)
+    .max_evaluations(basin::EvaluationKind::Cost, 50)
     .run()
     .unwrap();
 
-    assert_eq!(result.report.code(), TerminationCode::MaxCostEvals);
+    assert_eq!(result.report.code(), TerminationCode::MaxEvaluations);
 }
 
 /// Backend-generic: drive constrained MADS on nalgebra `DVector`. Guards the
@@ -216,7 +216,7 @@ fn backend_generic_nalgebra() {
         Mads::new().with_minimum_poll_size(1e-7).constrained(),
         SelectedState::new(DVector::from_vec(vec![0.0, 0.0])),
     )
-    .max_cost_evals(20_000)
+    .max_evaluations(basin::EvaluationKind::Cost, 20_000)
     .run()
     .unwrap();
 
@@ -283,7 +283,7 @@ fn backend_generic_ndarray() {
         Mads::new().with_minimum_poll_size(1e-7).constrained(),
         SelectedState::new(Array1::from_vec(vec![0.0, 0.0])),
     )
-    .max_cost_evals(20_000)
+    .max_evaluations(basin::EvaluationKind::Cost, 20_000)
     .run()
     .unwrap();
 
@@ -347,7 +347,7 @@ fn backend_generic_faer() {
         Mads::new().with_minimum_poll_size(1e-7).constrained(),
         SelectedState::new(Col::from_fn(2, |_| 0.0)),
     )
-    .max_cost_evals(20_000)
+    .max_evaluations(basin::EvaluationKind::Cost, 20_000)
     .run()
     .unwrap();
 

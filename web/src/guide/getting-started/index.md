@@ -109,14 +109,14 @@ and time limits on the executor, along with targets, stagnation stops, and
 application conditions:
 
 ```rust
-use basin::{Executor, GradientDescent};
+use basin::{EvaluationKind, Executor, GradientDescent};
 
 let solver = GradientDescent::new(1e-3)
     .with_absolute_gradient_tolerance(1e-6)
     .with_relative_cost_change_tolerance(None);
 let result = Executor::from_start(problem, solver, x0)
     .max_iter(50_000)
-    .max_cost_evals(100_000)
+    .max_evaluations(EvaluationKind::Cost, 100_000)
     .run()
     .unwrap();
 ```

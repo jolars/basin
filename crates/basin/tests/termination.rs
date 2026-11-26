@@ -10,8 +10,6 @@ use std::time::Duration;
 fn termination_reasons_preserve_numeric_casts_and_values() {
     let reasons = [
         TerminationCode::MaxIter,
-        TerminationCode::MaxCostEvals,
-        TerminationCode::MaxGradientEvals,
         TerminationCode::GradientTolerance,
         TerminationCode::RelativeGradientTolerance,
         TerminationCode::ProjectedGradientTolerance,
@@ -32,8 +30,12 @@ fn termination_reasons_preserve_numeric_casts_and_values() {
         TerminationCode::SolverConverged,
         TerminationCode::SolverFailed,
         TerminationCode::NumericalNoProgress,
+        TerminationCode::MaxEvaluations,
     ];
-    for (reason, value) in reasons.into_iter().zip(0u8..) {
+    for (reason, value) in
+        reasons.into_iter().zip([0].into_iter().chain(3..=23))
+    {
+        assert_eq!(reason.as_u8(), value);
         assert_eq!(reason as u8, value);
     }
 }
@@ -615,34 +617,34 @@ fn cost_evals_exceeds_iter_for_nelder_mead_shrinks() {
 }
 
 #[test]
-fn max_gradient_evals_fires_before_max_iter() {
+fn gradient_budget_fires_before_max_iter() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.001),
         FirstOrderState::new(vec![10.0, 10.0]),
     )
     .max_iter(10_000)
-    .max_gradient_evals(5)
+    .max_evaluations(basin::EvaluationKind::Gradient, 5)
     .run()
     .unwrap();
 
-    assert_eq!(result.report.code(), TerminationCode::MaxGradientEvals);
+    assert_eq!(result.report.code(), TerminationCode::MaxEvaluations);
     assert!(result.state.gradient_evals() >= 5);
 }
 
 #[test]
-fn max_cost_evals_fires_before_max_iter() {
+fn cost_budget_fires_before_max_iter() {
     let result = Executor::new(
         Quadratic,
         NelderMead::new(),
         SimplexProgress::new(vec![5.0, -2.0, 4.0]),
     )
     .max_iter(10_000)
-    .max_cost_evals(25)
+    .max_evaluations(basin::EvaluationKind::Cost, 25)
     .run()
     .unwrap();
 
-    assert_eq!(result.report.code(), TerminationCode::MaxCostEvals);
+    assert_eq!(result.report.code(), TerminationCode::MaxEvaluations);
     assert!(
         result.state.cost_evals() >= 25,
         "cost_evals should have reached the budget: {}",

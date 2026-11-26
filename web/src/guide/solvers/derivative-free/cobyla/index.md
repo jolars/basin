@@ -96,8 +96,8 @@ termination report together with the violation report.
 
 ### Budget objective and constraint calls
 
-`max_cost_evals` limits objective calls. Nonlinear inequality and equality
-callbacks count separately as residual evaluations, so use
+`max_evaluations(EvaluationKind::Cost, limit)` limits objective calls.
+Nonlinear inequality and equality callbacks count as residual evaluations. Use
 `max_evaluations(EvaluationKind::Residual, limit)` when those callbacks have
 their own budget. Bound and linear arithmetic require no residual callbacks.
 

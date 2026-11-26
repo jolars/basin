@@ -76,7 +76,7 @@ pub struct Bounded;
 ///     .with_final_radius(1e-8);
 /// let state = PointState::new(vec![0.0, 0.0]);
 /// let result = Executor::new(problem, solver, state)
-///     .max_cost_evals(500)
+///     .max_evaluations(basin::EvaluationKind::Cost, 500)
 ///     .run()
 ///     .unwrap();
 /// let incumbent = result.selected_record().expect("expected an incumbent");
@@ -434,7 +434,7 @@ mod tests {
                 .with_final_radius(1e-8),
             PointState::new(vec![0.0, 0.0]),
         )
-        .max_cost_evals(500)
+        .max_evaluations(crate::EvaluationKind::Cost, 500)
         .run()
         .unwrap();
         let x = result.selected_record().unwrap().param;
@@ -462,7 +462,7 @@ mod tests {
                     .with_final_radius(1e-8),
                 vec![0.0, 0.0],
             )
-            .max_cost_evals(500)
+            .max_evaluations(crate::EvaluationKind::Cost, 500)
             .run()
             .unwrap();
             assert!(
@@ -490,7 +490,7 @@ mod tests {
             Bobyqa::new(),
             PointState::new(vec![1.0, -2.0]),
         )
-        .max_cost_evals(500)
+        .max_evaluations(crate::EvaluationKind::Cost, 500)
         .run()
         .unwrap();
         let x = result.selected_record().unwrap().param;
@@ -512,7 +512,7 @@ mod tests {
                 .with_final_radius(1e-8),
             PointState::new(vec![100.0, -100.0]),
         )
-        .max_cost_evals(500)
+        .max_evaluations(crate::EvaluationKind::Cost, 500)
         .run()
         .unwrap();
         let x = result.selected_record().unwrap().param;
@@ -564,7 +564,7 @@ mod tests {
                 .with_final_radius(1e-8),
             PointState::new(vec![0.0, 0.0]),
         )
-        .max_cost_evals(500)
+        .max_evaluations(crate::EvaluationKind::Cost, 500)
         .run()
         .unwrap();
         let x = result.selected_record().unwrap().param;
@@ -615,7 +615,7 @@ mod tests {
                 .with_final_radius(1e-6),
             PointState::new(vec![-1.2, 1.0]),
         )
-        .max_cost_evals(2000)
+        .max_evaluations(crate::EvaluationKind::Cost, 2000)
         .run()
         .unwrap();
         let x = result.selected_record().unwrap().param;

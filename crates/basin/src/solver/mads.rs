@@ -41,7 +41,7 @@
 //!
 //! MADS's natural convergence is the poll size `Δᵖ` reaching the configured floor
 //! `poll_size_min`; the solver signals it via
-//! [`crate::TerminationCode::SolverConverged`]. Add [`max_cost_evals`](crate::Executor::max_cost_evals)
+//! [`crate::TerminationCode::SolverConverged`]. Add [`max_evaluations`](crate::Executor::max_evaluations)
 //! to cap the evaluation budget, or [`with_absolute_poll_size_tolerance`](crate::Mads::with_absolute_poll_size_tolerance) to
 //! stop early at a coarser poll size.
 //!
@@ -118,7 +118,7 @@ pub struct Constrained;
 ///     .with_minimum_poll_size(1e-9);
 /// let state = PointState::new(vec![0.0, 0.0]);
 /// let result = Executor::new(AbsValley, solver, state)
-///     .max_cost_evals(5_000)
+///     .max_evaluations(basin::EvaluationKind::Cost, 5_000)
 ///     .run()
 ///     .unwrap();
 /// let incumbent = result.selected_record().expect("expected an incumbent");

@@ -357,7 +357,7 @@ where
             let result = if projected {
                 Executor::new(problem, solver.projected(), state)
                     .max_iter(10_000)
-                    .max_cost_evals(20_000)
+                    .max_evaluations(basin::EvaluationKind::Cost, 20_000)
                     .run()
                     .unwrap()
             } else {
@@ -367,7 +367,7 @@ where
                     state,
                 )
                 .max_iter(10_000)
-                .max_cost_evals(20_000)
+                .max_evaluations(basin::EvaluationKind::Cost, 20_000)
                 .run()
                 .unwrap()
             };

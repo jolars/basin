@@ -111,7 +111,7 @@ substantial uncertainty along individual coordinates.
 
 ### Budget for complete sweeps
 
-Use executor limits such as `max_cost_evals`, `max_iter`, or `max_time`.
+Use executor limits such as `max_evaluations`, `max_iter`, or `max_time`.
 The executor checks limits between complete subdivision sweeps. A sweep
 can evaluate many points, particularly when several rectangles tie, so the
 last sweep can exceed an evaluation budget. Storage grows with both the

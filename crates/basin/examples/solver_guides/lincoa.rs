@@ -28,7 +28,7 @@ fn main() {
         .with_final_radius(1e-7);
 
     let result = Executor::from_start(problem, solver, vec![0.0, 0.0])
-        .max_cost_evals(500)
+        .max_evaluations(basin::EvaluationKind::Cost, 500)
         .run()
         .unwrap();
 

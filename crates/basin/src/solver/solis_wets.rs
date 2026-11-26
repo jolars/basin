@@ -85,7 +85,7 @@ use crate::solver::cma_inject::MemeticInner;
 ///   can expand `ρ` all the way to `+∞`, and from there contraction
 ///   cannot recover it (`0.5 · ∞ = ∞`): the run makes no further
 ///   progress and `RhoTolerance` never fires, so budgets (`MaxIter`,
-///   `MaxCostEvals`) remain the caller's job.
+///   `MaxEvaluations`) remain the caller's job.
 ///
 /// # Convergence
 ///

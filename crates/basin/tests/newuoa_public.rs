@@ -1,7 +1,7 @@
 //! Public-API integration tests for the NEWUOA solver.
 //!
 //! Exercises [`Newuoa`] through the framework: [`Executor`] over a
-//! [`PointState`], with framework termination ([`MaxCostEvals`],
+//! [`PointState`], with framework termination (`MaxEvaluations`,
 //! [`RhoTolerance`]). The algorithm itself is validated bit-against-PRIMA by the
 //! in-crate `solver::newuoa::parity` tests; these confirm the public wiring:
 //! init/next_iter, the V↔Vec bridge, count mirroring, and the convergence/
@@ -42,7 +42,7 @@ fn converges_on_rosenbrock_2d() {
             .with_final_radius(1e-8),
         PointState::new(vec![-1.2, 1.0]),
     )
-    .max_cost_evals(500)
+    .max_evaluations(basin::EvaluationKind::Cost, 500)
     .run_with_solver()
     .unwrap();
 
@@ -80,11 +80,11 @@ fn respects_cost_eval_budget() {
             .with_final_radius(1e-12),
         PointState::new(vec![-1.2, 1.0]),
     )
-    .max_cost_evals(20)
+    .max_evaluations(basin::EvaluationKind::Cost, 20)
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.report.code(), TerminationCode::MaxCostEvals);
+    assert_eq!(result.report.code(), TerminationCode::MaxEvaluations);
     assert!(
         result.cost_evals() >= 20,
         "cost_evals = {}",
@@ -106,7 +106,7 @@ fn rho_tolerance_stops_early() {
         .with_absolute_radius_tolerance(1e-3),
         PointState::new(vec![-1.2, 1.0]),
     )
-    .max_cost_evals(5000)
+    .max_evaluations(basin::EvaluationKind::Cost, 5000)
     .run_with_solver()
     .unwrap();
 
@@ -159,7 +159,7 @@ fn backend_generic_nalgebra() {
             .with_final_radius(1e-8),
         PointState::new(DVector::from_vec(vec![-1.2, 1.0])),
     )
-    .max_cost_evals(500)
+    .max_evaluations(basin::EvaluationKind::Cost, 500)
     .run_with_solver()
     .unwrap();
 

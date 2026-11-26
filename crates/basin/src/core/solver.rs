@@ -181,7 +181,7 @@ pub trait Solver<P, S: State> {
 
     /// Reset per-run convergence history without changing algorithm state.
     ///
-    /// Called before initialization for fresh runs and state-only resumes.
+    /// Called for fresh runs and local-search segments.
     /// Exact solver-aware checkpoint resumes retain this history.
     fn reset_convergence(&mut self) {}
 

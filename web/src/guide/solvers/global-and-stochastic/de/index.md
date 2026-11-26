@@ -95,9 +95,9 @@ of the dimension. `Rand2` requires at least six members and `Best2` at least
 five; the remaining rules require at least four. A larger population gives
 more initial coverage but leaves fewer generations within a fixed cost budget.
 
-`max_cost_evals` is checked at iteration boundaries. Initialization evaluates
-the entire population, and a generation completes its full batch, so the
-requested limit need not be an exact cap on objective calls.
+The executor checks evaluation budgets at iteration boundaries. Initialization
+evaluates the entire population, and a generation completes its full batch.
+Either can take the run past the requested limit.
 
 ### Tune mutation and crossover together
 

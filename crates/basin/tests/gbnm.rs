@@ -142,7 +142,7 @@ fn upper_bound_start_explores_the_feasible_inward_direction() {
     let result =
         Executor::new(problem, Gbnm::new(5), PointState::new(vec![1.0, 0.0]))
             .max_iter(2_000)
-            .max_cost_evals(500)
+            .max_evaluations(basin::EvaluationKind::Cost, 500)
             .run_with_solver()
             .unwrap();
 
@@ -269,7 +269,7 @@ fn paper_rosenbrock_start_reaches_the_global_minimum() {
     let result =
         Executor::new(problem, Gbnm::new(7), PointState::new(vec![10.0, 10.0]))
             .max_iter(20_000)
-            .max_cost_evals(5_000)
+            .max_evaluations(basin::EvaluationKind::Cost, 5_000)
             .run_with_solver()
             .unwrap();
 
@@ -467,7 +467,7 @@ fn probabilistic_restarts_escape_the_initial_rastrigin_basin() {
     let result =
         Executor::new(problem, Gbnm::new(7), PointState::new(vec![3.0, 3.0]))
             .max_iter(20_000)
-            .max_cost_evals(5_000)
+            .max_evaluations(basin::EvaluationKind::Cost, 5_000)
             .run_with_solver()
             .unwrap();
 

@@ -101,7 +101,7 @@ fn solve(case: Case, n: usize, library: &str, target: Option<f64>) -> Outcome {
             PointState::new(case.start(n)),
         )
         .max_iter(10_000)
-        .max_cost_evals(10_000);
+        .max_evaluations(basin::EvaluationKind::Cost, 10_000);
         if let Some(target) = target {
             executor = executor.target_objective(target);
         }

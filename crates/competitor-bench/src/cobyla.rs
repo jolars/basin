@@ -166,7 +166,7 @@ impl Case {
             SelectedState::new(start),
         )
         .max_iter(self.budget() as u64)
-        .max_cost_evals(self.budget() as u64)
+        .max_evaluations(basin::EvaluationKind::Cost, self.budget() as u64)
         .run()
         .unwrap();
         Outcome {
@@ -177,7 +177,7 @@ impl Case {
             constraint_calls: problem.constraint_calls.get(),
             iterations: Some(result.iter()),
             stop: match result.report.code() {
-                TerminationCode::MaxCostEvals => Stop::Budget,
+                TerminationCode::MaxEvaluations => Stop::Budget,
                 TerminationCode::SolverConverged => Stop::Radius,
                 other => Stop::Other(format!("{other:?}")),
             },

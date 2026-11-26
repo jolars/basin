@@ -838,8 +838,7 @@ fn reason_str(r: TerminationCode) -> &'static str {
     match r {
         TerminationCode::UserRequested => "user_requested",
         TerminationCode::MaxIter => "max_iter",
-        TerminationCode::MaxCostEvals => "max_cost_evals",
-        TerminationCode::MaxGradientEvals => "max_gradient_evals",
+        TerminationCode::MaxEvaluations => "max_evaluations",
         TerminationCode::GradientTolerance => "gradient_tolerance",
         TerminationCode::RelativeGradientTolerance => {
             "relative_gradient_tolerance"
@@ -865,6 +864,14 @@ fn reason_str(r: TerminationCode) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn evaluation_limits_have_a_reason_tag() {
+        assert_eq!(
+            reason_str(TerminationCode::MaxEvaluations),
+            "max_evaluations"
+        );
+    }
 
     #[test]
     fn numerical_no_progress_has_a_distinct_reason_tag() {

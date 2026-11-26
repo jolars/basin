@@ -29,7 +29,7 @@ fn main() {
         solver,
         PopulationProgress::<Vec<f64>>::empty(),
     )
-    .max_cost_evals(10_000)
+    .max_evaluations(basin::EvaluationKind::Cost, 10_000)
     .run()
     .unwrap();
 

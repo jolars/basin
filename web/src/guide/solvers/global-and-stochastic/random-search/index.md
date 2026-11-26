@@ -103,13 +103,13 @@ evaluations when their batch sizes differ.
 
 Executor budgets are checked between complete iterations. Initialization
 evaluates a full batch, and the next iteration can finish a batch that
-crosses `max_cost_evals`. Choose `lambda` with that granularity in mind
+crosses the budget. Choose `lambda` with that granularity in mind
 when objective calls are expensive.
 
 ### Use patience when checking progress
 
 There is no default solver convergence criterion. Set execution limits
-such as `max_iter`, `max_cost_evals`, or `max_time`, and use a target
+such as `max_iter`, `max_evaluations`, or `max_time`, and use a target
 objective if a useful threshold is known.
 
 Optional step- and cost-change checks compare successive elite points.

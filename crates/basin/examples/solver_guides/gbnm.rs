@@ -38,7 +38,7 @@ fn main() {
     let solver = Gbnm::new(42);
 
     let result = Executor::from_start(problem, solver, vec![4.0, 4.0])
-        .max_cost_evals(2_000)
+        .max_evaluations(basin::EvaluationKind::Cost, 2_000)
         .run()
         .unwrap();
 

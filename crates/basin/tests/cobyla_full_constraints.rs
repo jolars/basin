@@ -123,7 +123,7 @@ where
 {
     let start = (problem.vector)(vec![0.0; 5]);
     let result = Executor::from_start(problem, solver(), start)
-        .max_cost_evals(3000)
+        .max_evaluations(basin::EvaluationKind::Cost, 3000)
         .run()
         .unwrap();
 
@@ -254,12 +254,12 @@ impl basin::NonlinearInequalityValues for Expanded {
 #[test]
 fn agrees_with_hand_expanded_legacy_constraints() {
     let folded = Executor::from_start(mixed_vec(), solver(), vec![0.0; 5])
-        .max_cost_evals(3000)
+        .max_evaluations(basin::EvaluationKind::Cost, 3000)
         .run()
         .unwrap();
     let expanded =
         Executor::from_start(Expanded(mixed_vec()), solver(), vec![0.0; 5])
-            .max_cost_evals(3000)
+            .max_evaluations(basin::EvaluationKind::Cost, 3000)
             .run()
             .unwrap();
 
@@ -391,11 +391,11 @@ fn counts_objective_evaluations_once_and_preserves_callback_order() {
         solver(),
         vec![1.0, 1.0],
     )
-    .max_cost_evals(15)
+    .max_evaluations(basin::EvaluationKind::Cost, 15)
     .run()
     .unwrap();
 
-    assert_eq!(result.report.code(), TerminationCode::MaxCostEvals);
+    assert_eq!(result.report.code(), TerminationCode::MaxEvaluations);
     assert_eq!(result.cost_evals(), costs.get() as u64);
     assert_eq!(costs.get(), constraints.get());
     assert!(costs.get() >= 15);

@@ -38,7 +38,7 @@ fn main() {
         .constrained();
 
     let result = Executor::from_start(problem, solver, vec![2.0, 0.0])
-        .max_cost_evals(5_000)
+        .max_evaluations(basin::EvaluationKind::Cost, 5_000)
         .run()
         .unwrap();
 

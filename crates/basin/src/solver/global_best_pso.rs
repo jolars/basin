@@ -125,7 +125,7 @@ pub enum PsoVelocityLimit<F: Scalar = f64> {
 /// # Termination
 ///
 /// PSO has no single canonical convergence test. Pair it with framework
-/// criteria such as [`max_iter`](crate::Executor::max_iter), [`max_cost_evals`](crate::Executor::max_cost_evals),
+/// criteria such as [`max_iter`](crate::Executor::max_iter), [`max_evaluations`](crate::Executor::max_evaluations),
 /// [`target_objective`](crate::Executor::target_objective), or
 /// [`no_objective_improvement`](crate::Executor::no_objective_improvement).
 /// Optional cost-change and step checks compare the global-best representative,

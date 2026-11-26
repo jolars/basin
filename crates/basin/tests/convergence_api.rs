@@ -287,10 +287,10 @@ fn repeated_setters_replace_and_none_disables() {
 fn direct_budget_observes_initialization() {
     let result =
         Executor::from_start(Sphere, GradientDescent::new(0.1), vec![1.0])
-            .max_cost_evals(0)
+            .max_evaluations(basin::EvaluationKind::Cost, 0)
             .run()
             .unwrap();
-    assert_eq!(result.report.code(), TerminationCode::MaxCostEvals);
+    assert_eq!(result.report.code(), TerminationCode::MaxEvaluations);
     assert_eq!(result.cost_evals(), 1);
     assert_eq!(result.iter(), 0);
 }
@@ -403,7 +403,7 @@ fn repeated_boundary_checks_do_not_create_zero_changes() {
 fn inner_stop_factory_restarts_history_and_counts() {
     use basin::{InnerExecutor, Problem, State};
     let mut inner = InnerExecutor::new(GradientDescent::new(0.1))
-        .max_gradient_evals(100)
+        .max_evaluations(basin::EvaluationKind::Gradient, 100)
         .stop_when_factory(|| {
             let mut calls = 0;
             move |_: &FirstOrderState<Vec<f64>>| {
@@ -429,11 +429,11 @@ fn direct_budgets_take_precedence_over_convergence_and_hooks() {
     let solver =
         GradientDescent::new(0.1).with_absolute_gradient_tolerance(0.0);
     let result = Executor::from_start(Sphere, solver, vec![0.0])
-        .max_gradient_evals(1)
+        .max_evaluations(basin::EvaluationKind::Gradient, 1)
         .stop_when(|_| Some(basin::ApplicationStop::new("user_requested")))
         .run()
         .unwrap();
-    assert_eq!(result.report.code(), TerminationCode::MaxGradientEvals);
+    assert_eq!(result.report.code(), TerminationCode::MaxEvaluations);
     assert_eq!(result.iter(), 0);
 }
 
@@ -596,28 +596,70 @@ fn cost_check_does_not_require_vector_norms() {
 #[cfg(feature = "serde")]
 #[test]
 fn configured_solver_and_inner_budgets_round_trip() {
-    use basin::{InnerExecutor, Problem, SimplexProgress};
-    let mut inner = InnerExecutor::new(
-        NelderMead::new()
-            .with_absolute_simplex_size_tolerance(1e-8)
-            .with_absolute_step_tolerance(1e-12),
-    )
-    .max_cost_evals(50);
+    use basin::{
+        EvaluationKind, ExecutionLimit, InnerExecutor, Problem, Termination,
+    };
+    use std::time::Duration;
+
+    let inner = InnerExecutor::new(GradientDescent::new(0.1))
+        .max_iter(0)
+        .max_evaluations(EvaluationKind::Cost, 50)
+        .max_evaluations(EvaluationKind::Cost, 1)
+        .max_evaluations(EvaluationKind::Gradient, 0)
+        .max_time(Duration::ZERO);
     let encoded = postcard::to_allocvec(&inner).unwrap();
-    let (mut decoded, _): (InnerExecutor<SimplexProgress<Vec<f64>>, _>, _) =
-        postcard::take_from_bytes(&encoded).unwrap();
-    std::mem::swap(&mut inner, &mut decoded);
-    let expected = inner
-        .run(&mut Problem::new(Sphere), SimplexProgress::new(vec![1.0]))
-        .unwrap();
-    let result = decoded
-        .run(&mut Problem::new(Sphere), SimplexProgress::new(vec![1.0]))
-        .unwrap();
-    assert_eq!(result.iter(), expected.iter());
-    assert_eq!(result.report.code(), expected.report.code());
-    assert_eq!(result.param(), expected.param());
-    let with_hook = decoded.stop_when(|_| None);
-    assert!(postcard::to_allocvec(&with_hook).is_err());
+    let (postcard, remaining): (
+        InnerExecutor<FirstOrderState<Vec<f64>>, _>,
+        _,
+    ) = postcard::take_from_bytes(&encoded).unwrap();
+    assert!(remaining.is_empty());
+
+    let mut named = serde_json::to_value(&inner).unwrap();
+    let json = serde_json::from_value(named.clone()).unwrap();
+    let expected = [
+        ExecutionLimit::Iterations {
+            observed: 0,
+            limit: 0,
+        },
+        ExecutionLimit::Evaluations {
+            kind: EvaluationKind::Cost,
+            observed: 1,
+            limit: 1,
+        },
+        ExecutionLimit::Evaluations {
+            kind: EvaluationKind::Gradient,
+            observed: 1,
+            limit: 0,
+        },
+    ];
+    for mut configured in [inner, postcard, json] {
+        let result = configured
+            .run(&mut Problem::new(Sphere), FirstOrderState::new(vec![1.0]))
+            .unwrap();
+        let Termination::Limit(limits) = result.report.termination else {
+            panic!("expected exhausted budgets");
+        };
+        assert_eq!(limits[..3], expected);
+        assert!(matches!(
+            limits[3..],
+            [ExecutionLimit::Time {
+                limit: Duration::ZERO,
+                ..
+            }]
+        ));
+    }
+
+    named["limits"] =
+        serde_json::json!({ "cost": 50, "gradient": null, "time": null });
+    let restored = serde_json::from_value::<
+        InnerExecutor<
+            FirstOrderState<Vec<f64>>,
+            GradientDescent<basin::Constant<f64>, Vec<f64>>,
+        >,
+    >(named);
+    assert!(
+        matches!(restored, Err(error) if error.to_string().contains("unknown field `cost`"))
+    );
 }
 
 #[test]

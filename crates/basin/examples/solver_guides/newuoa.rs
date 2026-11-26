@@ -19,7 +19,7 @@ fn main() {
         .with_final_radius(1e-8);
 
     let result = Executor::from_start(Quadratic, solver, vec![-3.0, 5.0])
-        .max_cost_evals(500)
+        .max_evaluations(basin::EvaluationKind::Cost, 500)
         .run()
         .unwrap();
 

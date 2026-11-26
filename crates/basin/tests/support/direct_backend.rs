@@ -70,7 +70,7 @@ where
         )
         .require_evaluated_state()
         .target_objective(num(1e-6))
-        .max_cost_evals(5000)
+        .max_evaluations(basin::EvaluationKind::Cost, 5000)
         .max_iter(200)
         .run()
         .unwrap();

@@ -115,7 +115,7 @@ use rectangle::{Rectangle, Work};
 ///     BoundedQuartic { lower: vec![-5.0; 2], upper: vec![5.0; 2] },
 ///     Direct::new(),
 ///     PointState::new(vec![0.0; 2]),
-/// ).target_objective(-78.33).max_cost_evals(2000).run().unwrap();
+/// ).target_objective(-78.33).max_evaluations(basin::EvaluationKind::Cost, 2000).run().unwrap();
 /// assert!(result.current_record().unwrap().cost.unwrap() < -78.33);
 /// ```
 ///

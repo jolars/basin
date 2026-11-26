@@ -57,8 +57,7 @@ pub trait EvaluatedGradientState: EvaluatedState {
 /// callback-request semantics of [`EvalCounts`]; internal adapter probes are
 /// excluded.
 ///
-/// No gradient or evaluated-record capability is required: a derivative-free
-/// outer solver can budget derivative work performed by its inner solvers.
+/// Execution budgets use the problem wrapper's counts and work with any state.
 pub trait RawEvaluationState: State {
     /// All six raw categories, without folding or reconstruction.
     fn raw_counts(&self) -> &EvalCounts;

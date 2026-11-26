@@ -159,6 +159,8 @@ where
     /// The default leaves the solver and controls unchanged. Built-in
     /// operators configure their own convergence directly. The outer solver
     /// supplies execution budgets, which are checked before convergence.
+    /// MA-LSCh uses the smaller of its local-search intensity and any cost
+    /// evaluation limit set here.
     fn configure_segment(
         &mut self,
         _state: &Self::State,
@@ -188,8 +190,7 @@ where
 /// # Serialization
 ///
 /// With `serde`, the solver and iteration/evaluation/time budgets serialize.
-/// Application hooks, capability controls (raw budgets
-/// and publication validation), and erased target/stall checks
+/// Application hooks, publication validation, and target and stall checks
 /// cannot be reconstructed and cause a serialization error. They are never
 /// silently dropped from an exact checkpoint.
 ///
@@ -218,7 +219,7 @@ where
 ///      fold the inner wrapper's counts back into the outer's wrapper via
 ///      [`EvalCounts::add`](crate::core::problem::EvalCounts::add) on
 ///      [`Problem::counts_mut`]. Skipping this fold silently corrupts
-///      `MaxCostEvals` budgets and the public `result.cost_evals()`.
+///      evaluation budgets and the public `result.counts`.
 ///
 ///    See the [`Solver::next_iter`]
 ///    contract for the canonical wording.
@@ -263,8 +264,7 @@ where
 
         if self.control.has_unserializable_stops() {
             return Err(Error::custom(
-                "InnerExecutor cannot serialize application hooks, target/stall checks, or capability controls; \
-                 use legacy iteration/evaluation/time budgets or an owned checkpoint",
+                "InnerExecutor cannot serialize application hooks, target or stall checks, or publication validation",
             ));
         }
 

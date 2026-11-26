@@ -105,7 +105,7 @@ objective values round to the same number.
 The current `param()` and `cost()` describe the most recent probe, which can
 be worse than an earlier point. Use `selected_record()` for the
 lowest recorded objective, particularly after an iteration or evaluation
-limit. Set budgets on the executor with `max_iter` or `max_cost_evals`, and
+limit. Set budgets on the executor with `max_iter` or `max_evaluations`, and
 check `result.report` to distinguish native convergence from a budget stop.
 
 Optional cost-change and step-change tolerances can stop the run before the

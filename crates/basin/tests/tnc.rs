@@ -432,7 +432,7 @@ fn cancellation_and_budgets_keep_basins_boundary_semantics() {
         Tnc::new(),
         vec![0.5; 3],
     )
-    .max_cost_evals(1)
+    .max_evaluations(basin::EvaluationKind::Cost, 1)
     .run()
     .unwrap();
     assert!(matches!(

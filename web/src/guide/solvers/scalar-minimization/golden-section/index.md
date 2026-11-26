@@ -91,7 +91,8 @@ Both must be finite and strictly positive; invalid settings panic.
 
 Ignoring rounding, the interval width after `n` iterations is its initial
 width times `r^n`. Budget enough iterations for that reduction with
-`Executor::max_iter`, or limit objective requests with `max_cost_evals`.
+`Executor::max_iter`, or limit objective requests with
+`max_evaluations(EvaluationKind::Cost, limit)`.
 Initialization costs two evaluations, and each completed iteration adds one.
 Check `result.report` to distinguish a budget stop from native convergence.
 

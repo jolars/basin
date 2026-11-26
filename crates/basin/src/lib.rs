@@ -401,7 +401,7 @@ pub use crate::core::run_control::RunControl;
 pub use crate::core::solver::{Solver, SolverStep};
 pub use crate::core::state::{
     AcceptanceState, ConstraintViolationState, CountsMirror, CurrentRef,
-    EvaluatedGradientState, EvaluatedState, ExactResumeState, FirstOrderState,
+    EvaluatedGradientState, EvaluatedState, FirstOrderState,
     GradientDimensionMismatch, GradientState, IntoInitialSimplex, MeshState,
     ObjectiveIncumbentState, PointState, PopulationProgress,
     PopulationShapeError, PopulationState, ProposalState, RawEvaluationState,

@@ -15,6 +15,11 @@ The executor restores cumulative evaluation counts and continues without
 initializing the solver again. Reapply any execution controls you need. Specify
 the solver and state types that wrote the file when you load it.
 
+`Executor::resume` and `ExactResumeState` have been removed. Capture a
+checkpoint with `Stepper::into_checkpoint` or call `run_with_solver` and
+convert the result with `into_checkpoint`. Both capture the initialized
+solver, state, and counts together.
+
 ```rust
 type Solver = GradientDescent<Constant<f64>, Vec<f64>>;
 let checkpoint: Checkpoint<Solver, FirstOrderState<Vec<f64>>> =
@@ -61,7 +66,33 @@ pass it to `Executor::from_start` with a newly configured solver.
 Open older native state snapshots with the version that wrote them. Export
 the saved point and pass it to `Executor::from_start` for a fresh run in
 Basin 4.0. The native state snapshot format is now version 2, and the exact
-checkpoint format is version 5.
+checkpoint format is version 6.
+
+## Evaluation budgets
+
+| Basin 3.x builder | Basin 4.0 replacement |
+| --- | --- |
+| `max_cost_evals(n)` | `max_evaluations(EvaluationKind::Cost, n)` |
+| `max_gradient_evals(n)` | `max_evaluations(EvaluationKind::Gradient, n)` |
+
+Budgets read the problem wrapper's callback counts. Use `EvaluationKind::Residual`
+for residual or nonlinear constraint requests and `EvaluationKind::TotalWork`
+for the sum of all categories. If a custom state's `cost_evals()` reports a
+different aggregate, use `stop_when` to check that value and return an
+`ApplicationStop`.
+
+Match `result.report.termination` on `Termination::Limit` and read each
+`ExecutionLimit::Evaluations { kind, observed, limit }` for the exhausted
+category, observed count, and configured limit. This replaces the
+`CostEvaluations` and `GradientEvaluations` variants. The compact budget code is
+`TerminationCode::MaxEvaluations` (23). Bindings that handled codes 1 and 2
+for cost and gradient limits should handle code 23. The WASM status tag is
+`max_evaluations`.
+
+Each borrowed inner run counts requests from its own entry. An exact
+continuation uses the cumulative counts in the checkpoint. With `serde`,
+numeric `InnerExecutor` budgets travel with the inner solver. Recreate inner
+configurations saved by earlier versions using the builders above.
 
 ## Checked progress records
 

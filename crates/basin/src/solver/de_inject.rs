@@ -106,7 +106,7 @@ use crate::solver::de::De;
 /// No solver-internal optimality test; inherits [`De`]'s "pair with
 /// framework criteria" model
 /// ([`max_iter`](crate::Executor::max_iter),
-/// [`max_cost_evals`](crate::Executor::max_cost_evals),
+/// [`max_evaluations`](crate::Executor::max_evaluations),
 /// [`max_time`](crate::Executor::max_time),
 /// [`with_absolute_cost_change_tolerance`](Self::with_absolute_cost_change_tolerance), or
 /// [`with_absolute_step_tolerance`](Self::with_absolute_step_tolerance)). The
@@ -297,7 +297,7 @@ where
     I::State: CountsMirror,
 {
     /// Cap the inner refinement at `evals` cost-evaluations via
-    /// [`max_cost_evals`](crate::Executor::max_cost_evals), the local-search-intensity idiom
+    /// [`max_evaluations`](crate::Executor::max_evaluations), the local-search-intensity idiom
     /// [`MaLsChCma`](crate::solver::MaLsChCma) uses. Composes with
     /// [`with_inner_max_iter`](Self::with_inner_max_iter): whichever
     /// budget fires first stops the inner.
@@ -305,7 +305,9 @@ where
     /// Stateless across calls; safe to reuse for the lifetime of the
     /// outer solver (composition contract 2).
     pub fn with_ls_intensity(mut self, evals: u64) -> Self {
-        self.inner = self.inner.max_cost_evals(evals);
+        self.inner = self
+            .inner
+            .max_evaluations(crate::EvaluationKind::Cost, evals);
         self
     }
 }

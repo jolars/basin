@@ -23,7 +23,7 @@ fn converges_on_sphere_d10() {
         PopulationProgress::empty(),
     )
     .max_iter(u64::MAX)
-    .max_cost_evals(20_000)
+    .max_evaluations(basin::EvaluationKind::Cost, 20_000)
     .run()
     .unwrap();
 
@@ -45,7 +45,7 @@ fn converges_on_rastrigin_d10() {
         PopulationProgress::empty(),
     )
     .max_iter(u64::MAX)
-    .max_cost_evals(50_000)
+    .max_evaluations(basin::EvaluationKind::Cost, 50_000)
     .run()
     .unwrap();
 

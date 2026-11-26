@@ -89,7 +89,7 @@ use driver::{CobylaWork, Transition};
 ///     .with_final_radius(1e-6);
 /// let state = SelectedState::new(vec![1.0, 1.0]);
 /// let result = Executor::new(Disk, solver, state)
-///     .max_cost_evals(500)
+///     .max_evaluations(basin::EvaluationKind::Cost, 500)
 ///     .run()
 ///     .unwrap();
 /// let incumbent = result.selected_record().expect("expected an incumbent");
@@ -125,7 +125,7 @@ use driver::{CobylaWork, Transition};
 /// Natural convergence is `ρ` reaching `ρ_end`, signalled as
 /// [`crate::TerminationCode::SolverConverged`]; this does not certify feasibility.
 /// Add
-/// [`max_cost_evals`](crate::Executor::max_cost_evals) to cap the budget (each evaluated point
+/// [`max_evaluations`](crate::Executor::max_evaluations) to cap the budget (each evaluated point
 /// counts once) or [`with_absolute_radius_tolerance`](crate::Cobyla::with_absolute_radius_tolerance) to stop at a coarser
 /// `ρ`.
 ///

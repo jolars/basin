@@ -91,11 +91,12 @@ whether to adopt the conditional changes below.
   accepted result must carry, how to enforce feasible trials, and how
   projected gradient descent should select its search. Preserve typed
   callback errors and evaluation counts.
-- [ ] **Use authoritative counts for raw budgets.** Drive raw budgets from the
+- [x] **Use authoritative counts for raw budgets.** Drive raw budgets from the
   problem wrapper's authoritative counts and make numeric inner budgets
   serializable. Document how legacy budget callers migrate. Retire
   state-only `Executor::resume` and `ExactResumeState` in favor of
-  `resume_from_checkpoint`.
+  `resume_from_checkpoint`. See the [Basin 4.0 migration
+  guide](web/src/guide/migrating-to-v4/index.md#evaluation-budgets).
 - [x] **Split Serde support from Postcard checkpoint files.** Make `serde`
   enable serialization traits so callers can choose their codec. Make
   `checkpoint-postcard` enable `serde` and expose both built-in native file

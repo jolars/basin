@@ -19,7 +19,7 @@ fn converges_on_low_dim_rastrigin() {
     let result =
         Executor::new(problem, solver, PopulationProgress::<Vec<f64>>::empty())
             .max_iter(u64::MAX)
-            .max_cost_evals(12_000)
+            .max_evaluations(basin::EvaluationKind::Cost, 12_000)
             .run()
             .unwrap();
 

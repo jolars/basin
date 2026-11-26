@@ -1,7 +1,7 @@
 //! Public-API integration tests for the MADS (OrthoMADS) solver.
 //!
 //! Exercises [`Mads`] through the framework: [`Executor`] over a [`PointState`],
-//! with framework termination ([`MaxCostEvals`], [`MeshTolerance`]). The
+//! with framework termination (`MaxEvaluations`, [`MeshTolerance`]). The
 //! direction machinery is validated against the OrthoMADS paper by the in-crate
 //! `solver::mads` golden tests; these confirm the public wiring (init/next_iter,
 //! the V↔Vec bridge, count mirroring, convergence/budget/early-stop paths)
@@ -62,7 +62,7 @@ fn converges_on_sphere() {
             .with_minimum_poll_size(1e-8),
         PointState::new(vec![2.0, -3.0, 1.5]),
     )
-    .max_cost_evals(10_000)
+    .max_evaluations(basin::EvaluationKind::Cost, 10_000)
     .run_with_solver()
     .unwrap();
 
@@ -91,7 +91,7 @@ fn converges_on_rosenbrock_2d() {
     // MADS is a poll-only direct search, so it needs many iterations on the
     // Rosenbrock valley; let convergence or the eval budget govern, not max_iter.
     .max_iter(100_000)
-    .max_cost_evals(20_000)
+    .max_evaluations(basin::EvaluationKind::Cost, 20_000)
     .run_with_solver()
     .unwrap();
 
@@ -122,7 +122,7 @@ fn mesh_tolerance_stops_early() {
         .with_absolute_poll_size_tolerance(1e-3),
         PointState::new(vec![-1.2, 1.0]),
     )
-    .max_cost_evals(50_000)
+    .max_evaluations(basin::EvaluationKind::Cost, 50_000)
     .run_with_solver()
     .unwrap();
 
@@ -143,11 +143,11 @@ fn respects_cost_eval_budget() {
             .with_minimum_poll_size(1e-12),
         PointState::new(vec![-1.2, 1.0]),
     )
-    .max_cost_evals(50)
+    .max_evaluations(basin::EvaluationKind::Cost, 50)
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.report.code(), TerminationCode::MaxCostEvals);
+    assert_eq!(result.report.code(), TerminationCode::MaxEvaluations);
     assert!(
         result.cost_evals() >= 50,
         "cost_evals = {}",
@@ -178,7 +178,7 @@ fn outperforms_nelder_mead_on_discontinuous_step() {
         PointState::new(start.clone()),
     )
     .max_iter(100_000)
-    .max_cost_evals(budget)
+    .max_evaluations(basin::EvaluationKind::Cost, budget)
     .run_with_solver()
     .unwrap();
 
@@ -190,7 +190,7 @@ fn outperforms_nelder_mead_on_discontinuous_step() {
         SimplexProgress::new(start.clone()),
     )
     .max_iter(100_000)
-    .max_cost_evals(budget)
+    .max_evaluations(basin::EvaluationKind::Cost, budget)
     .run_with_solver()
     .unwrap();
 
@@ -245,7 +245,7 @@ fn backend_generic_nalgebra() {
         Mads::new().with_minimum_poll_size(1e-8),
         PointState::new(DVector::from_vec(vec![2.0, -3.0, 1.5])),
     )
-    .max_cost_evals(10_000)
+    .max_evaluations(basin::EvaluationKind::Cost, 10_000)
     .run_with_solver()
     .unwrap();
 
@@ -290,7 +290,7 @@ fn backend_generic_ndarray() {
         Mads::new().with_minimum_poll_size(1e-8),
         PointState::new(Array1::from_vec(vec![2.0, -3.0, 1.5])),
     )
-    .max_cost_evals(10_000)
+    .max_evaluations(basin::EvaluationKind::Cost, 10_000)
     .run_with_solver()
     .unwrap();
 
@@ -332,7 +332,7 @@ fn backend_generic_faer() {
         Mads::new().with_minimum_poll_size(1e-8),
         PointState::new(Col::<f64>::from_fn(3, |i| [2.0, -3.0, 1.5][i])),
     )
-    .max_cost_evals(10_000)
+    .max_evaluations(basin::EvaluationKind::Cost, 10_000)
     .run_with_solver()
     .unwrap();
 

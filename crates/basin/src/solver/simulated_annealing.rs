@@ -305,8 +305,8 @@ pub(crate) struct ReannealingProgress {
 /// Exact continuation retains the live components and uses a solver-aware
 /// [`Checkpoint`](crate::Checkpoint) with
 /// [`Executor::resume_from_checkpoint`](crate::Executor::resume_from_checkpoint).
-/// State-only snapshots start a fresh chain through `Executor::new`; they no
-/// longer support `Executor::resume`. With `serde`, exact checkpoints include
+/// State-only snapshots start a fresh chain through `Executor::new`.
+/// With `serde`, exact checkpoints include
 /// both configured and live components. Old solver and state payloads must be
 /// reconstructed with the matching Basin version.
 ///

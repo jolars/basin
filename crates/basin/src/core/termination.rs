@@ -446,20 +446,6 @@ pub enum ExecutionLimit {
         /// Configured maximum.
         limit: u64,
     },
-    /// Cost-evaluation budget using the state's category mapping.
-    CostEvaluations {
-        /// Work observed at the stopping boundary.
-        observed: u64,
-        /// Configured maximum.
-        limit: u64,
-    },
-    /// Raw gradient-evaluation budget.
-    GradientEvaluations {
-        /// Work observed at the stopping boundary.
-        observed: u64,
-        /// Configured maximum.
-        limit: u64,
-    },
     /// Raw category or total-work budget.
     Evaluations {
         /// Counted evaluation category or total work.
@@ -745,10 +731,6 @@ impl<F: Scalar> Termination<F> {
             },
             Self::Limit(limits) => match limits.first() {
                 Some(ExecutionLimit::Iterations { .. }) => R::MaxIter,
-                Some(ExecutionLimit::CostEvaluations { .. }) => R::MaxCostEvals,
-                Some(ExecutionLimit::GradientEvaluations { .. }) => {
-                    R::MaxGradientEvals
-                }
                 Some(ExecutionLimit::Time { .. }) => R::MaxTime,
                 _ => R::MaxEvaluations,
             },
@@ -772,13 +754,9 @@ impl<F: Scalar> Termination<F> {
 #[non_exhaustive]
 pub enum TerminationCode {
     /// `state.iter() >= max_iter`.
-    MaxIter,
-    /// Cost-evaluation budget exhausted.
-    MaxCostEvals,
-    /// Gradient-evaluation budget exhausted.
-    MaxGradientEvals,
+    MaxIter = 0,
     /// `‖∇f(x)‖ ≤ tol`.
-    GradientTolerance,
+    GradientTolerance = 3,
     /// `‖∇f(x_k)‖ ≤ tol · ‖∇f(x_0)‖`: gradient norm relative to the
     /// initial gradient (scale-invariant first-order stationarity).
     RelativeGradientTolerance,
@@ -840,10 +818,8 @@ pub enum TerminationCode {
     NumericalNoProgress,
     /// A raw evaluation category or total-work budget was exhausted.
     ///
-    /// Checked at iteration boundaries through the state's raw-count
-    /// capability; distinct from the legacy cost and gradient budget reasons.
-    /// Compare [`RawEvaluationState::raw_counts`](crate::RawEvaluationState::raw_counts)
-    /// with the configured limits to identify exhausted budgets.
+    /// See [`ExecutionLimit::Evaluations`] for each exhausted category and
+    /// the observed count from the problem wrapper.
     MaxEvaluations,
 }
 
@@ -862,8 +838,7 @@ impl TerminationCode {
     /// | Code | Identifier |
     /// | --- | --- |
     /// | 0 | `MaxIter` |
-    /// | 1 | `MaxCostEvals` |
-    /// | 2 | `MaxGradientEvals` |
+    /// | 1–2 | Reserved |
     /// | 3 | `GradientTolerance` |
     /// | 4 | `RelativeGradientTolerance` |
     /// | 5 | `ProjectedGradientTolerance` |
@@ -886,31 +861,6 @@ impl TerminationCode {
     /// | 22 | `NumericalNoProgress` |
     /// | 23 | `MaxEvaluations` |
     pub const fn as_u8(self) -> u8 {
-        match self {
-            Self::MaxIter => 0,
-            Self::MaxCostEvals => 1,
-            Self::MaxGradientEvals => 2,
-            Self::GradientTolerance => 3,
-            Self::RelativeGradientTolerance => 4,
-            Self::ProjectedGradientTolerance => 5,
-            Self::ParamTolerance => 6,
-            Self::RelativeParamTolerance => 7,
-            Self::CostTolerance => 8,
-            Self::RelativeCostTolerance => 9,
-            Self::TargetCost => 10,
-            Self::NoImprovement => 11,
-            Self::NoAcceptedMove => 12,
-            Self::SimplexTolerance => 13,
-            Self::CmaEsTolerance => 14,
-            Self::RhoTolerance => 15,
-            Self::MeshTolerance => 16,
-            Self::MaxTime => 17,
-            Self::Cancelled => 18,
-            Self::UserRequested => 19,
-            Self::SolverConverged => 20,
-            Self::SolverFailed => 21,
-            Self::NumericalNoProgress => 22,
-            Self::MaxEvaluations => 23,
-        }
+        self as u8
     }
 }

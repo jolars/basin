@@ -44,7 +44,7 @@ fn converges_on_ackley_d3_with_nm_inner() {
         PopulationProgress::<DVector<f64>>::empty(),
     )
     .max_iter(u64::MAX)
-    .max_cost_evals(12_000)
+    .max_evaluations(basin::EvaluationKind::Cost, 12_000)
     .run()
     .unwrap();
 

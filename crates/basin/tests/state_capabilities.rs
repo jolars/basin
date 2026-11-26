@@ -2,10 +2,11 @@
 
 use basin::{
     Checkpoint, CostFunction, CountsMirror, EvalCounts, EvaluatedGradientState,
-    EvaluatedState, EvaluationKind, Executor, FirstOrderState, Gradient,
-    Hessian, HessianProduct, InnerExecutor, Jacobian, ObjectiveIncumbentState,
-    Observe, ObserverMode, PointState, Problem, RawEvaluationState, Residual,
-    RunControl, Solver, State, TerminationCode, run_loop_with_control,
+    EvaluatedState, EvaluationKind, ExecutionLimit, Executor, FirstOrderState,
+    Gradient, Hessian, HessianProduct, InnerExecutor, Jacobian,
+    ObjectiveIncumbentState, Observe, ObserverMode, PointState, Problem,
+    RawEvaluationState, Residual, RunControl, Solver, State, Termination,
+    TerminationCode, run_loop_with_control,
 };
 use std::cell::Cell;
 use std::convert::Infallible;
@@ -245,7 +246,14 @@ fn raw_budget_observes_init_and_nested_run_deltas() {
             .run()
             .unwrap();
     assert_eq!(result.iter(), 0);
-    assert_eq!(result.report.code(), TerminationCode::MaxEvaluations);
+    assert_eq!(
+        result.report.termination,
+        Termination::Limit(vec![ExecutionLimit::Evaluations {
+            kind: EvaluationKind::Cost,
+            observed: 1,
+            limit: 0,
+        }])
+    );
     let mut problem = Problem::new(Identity);
     problem.cost(&10.0).unwrap();
     let mut inner = InnerExecutor::new(Trajectory::new(&[]))
@@ -255,6 +263,14 @@ fn raw_budget_observes_init_and_nested_run_deltas() {
         let result = inner.run(&mut problem, PointState::new(1.0)).unwrap();
         assert_eq!(result.iter(), 2);
         assert_eq!(result.state.raw_counts().cost_evals, 3);
+        assert_eq!(
+            result.report.termination,
+            Termination::Limit(vec![ExecutionLimit::Evaluations {
+                kind: EvaluationKind::Cost,
+                observed: 3,
+                limit: 3,
+            }])
+        );
     }
     assert_eq!(problem.counts().cost_evals, 7);
 }
@@ -375,11 +391,11 @@ fn borrowed_runs_reset_positive_delta_history() {
 
 #[cfg(feature = "serde")]
 #[test]
-fn capability_controls_are_never_silently_discarded_by_serialization() {
-    let controls: [InnerExecutor<PointState<f64>, _>; 4] = [
+fn nonnumeric_controls_are_never_silently_discarded_by_serialization() {
+    let controls: [InnerExecutor<PointState<f64>, _>; 5] = [
         InnerExecutor::new(Trajectory::new(&[])).require_evaluated_state(),
-        InnerExecutor::new(Trajectory::new(&[]))
-            .max_evaluations(EvaluationKind::Cost, 3),
+        InnerExecutor::new(Trajectory::new(&[])).stop_when(|_| None),
+        InnerExecutor::new(Trajectory::new(&[])).stop_when_factory(|| |_| None),
         InnerExecutor::new(Trajectory::new(&[])).target_objective(1.0),
         InnerExecutor::new(Trajectory::new(&[]))
             .no_objective_improvement(3, 0.0),
@@ -387,6 +403,11 @@ fn capability_controls_are_never_silently_discarded_by_serialization() {
     for inner in controls {
         assert!(postcard::to_allocvec(&inner).is_err());
     }
+    let acceptance = InnerExecutor::<basin::ProposalState<f64>, _>::new(
+        Trajectory::new(&[]),
+    )
+    .no_acceptance(3);
+    assert!(postcard::to_allocvec(&acceptance).is_err());
 }
 
 struct Quadratic;
@@ -538,7 +559,14 @@ fn every_raw_budget_counts_fused_and_batch_work_without_folding() {
                 .max_evaluations(kind, work + 1)
                 .run_with_solver()
                 .unwrap();
-        assert_eq!(result.report.code(), TerminationCode::MaxEvaluations);
+        assert_eq!(
+            result.report.termination,
+            Termination::Limit(vec![ExecutionLimit::Evaluations {
+                kind,
+                observed: 2 * work,
+                limit: work + 1,
+            }])
+        );
         assert_eq!(result.iter(), 1);
         let mut expected = work_counts();
         expected.add(&work_counts());
@@ -586,6 +614,15 @@ struct Selected {
 }
 
 impl Selected {
+    fn new(param: f64) -> Self {
+        Self {
+            current: PointState::new(param),
+            selection: None,
+            pending: false,
+            best: None,
+        }
+    }
+
     fn select(&mut self, id: u64, point: f64, cost: f64) {
         self.pending |= self.selection != Some(id);
         self.selection = Some(id);
@@ -622,7 +659,7 @@ impl State for Selected {
                 *self.param(),
                 self.current_record().unwrap().cost.unwrap(),
                 self.iter(),
-                *self.raw_counts(),
+                *self.current.counts(),
             ));
         }
     }
@@ -635,16 +672,10 @@ impl State for Selected {
 
 impl CountsMirror for Selected {
     fn cost_evals(&self) -> u64 {
-        self.current.cost_evals()
+        self.current.counts().total_work()
     }
     fn mirror(&mut self, counts: &EvalCounts) {
         self.current.mirror(counts);
-    }
-}
-
-impl RawEvaluationState for Selected {
-    fn raw_counts(&self) -> &EvalCounts {
-        self.current.raw_counts()
     }
 }
 
@@ -655,13 +686,59 @@ impl EvaluatedState for Selected {
 }
 
 #[test]
+fn owned_and_resumed_budgets_ignore_custom_state_mappings() {
+    struct Select;
+    impl Solver<Quadratic, Selected> for Select {
+        type Error = &'static str;
+
+        fn init(
+            &mut self,
+            problem: &mut Problem<Quadratic>,
+            mut state: Selected,
+        ) -> Result<Selected, Self::Error> {
+            let x = *state.param();
+            state.select(0, x, evaluate_all(problem, x)?);
+            Ok(state)
+        }
+
+        fn next_iter(
+            &mut self,
+            problem: &mut Problem<Quadratic>,
+            state: &mut Selected,
+        ) -> Result<basin::SolverStep, Self::Error> {
+            state.select(1, 0.0, evaluate_all(problem, 0.0)?);
+            Ok(basin::SolverStep::completed())
+        }
+    }
+
+    let result = Executor::new(Quadratic, Select, Selected::new(1.0))
+        .max_evaluations(EvaluationKind::Cost, 4)
+        .run_with_solver()
+        .unwrap();
+    assert_eq!(result.iter(), 1);
+    assert_eq!(result.counts.cost_evals, 6);
+    assert_eq!(result.cost_evals(), 46);
+
+    let resumed =
+        Executor::resume_from_checkpoint(Quadratic, result.into_checkpoint())
+            .max_evaluations(EvaluationKind::Gradient, 4)
+            .run()
+            .unwrap();
+    assert_eq!(resumed.iter(), 1);
+    assert_eq!(resumed.counts.total_work(), 46);
+    assert_eq!(
+        resumed.report.termination,
+        Termination::Limit(vec![ExecutionLimit::Evaluations {
+            kind: EvaluationKind::Gradient,
+            observed: 4,
+            limit: 4,
+        }])
+    );
+}
+
+#[test]
 fn external_selection_is_explicit_and_does_not_claim_objective_ordering() {
-    let mut state = Selected {
-        current: PointState::new(-1.0),
-        selection: None,
-        pending: false,
-        best: None,
-    };
+    let mut state = Selected::new(-1.0);
     state.select(1, -1.0, -100.0);
     state.mirror(&work_counts());
     state.update_best();

@@ -1,7 +1,7 @@
 //! Public-API integration tests for the LINCOA solver.
 //!
 //! Exercises [`Lincoa`] through the framework: [`Executor`] over a
-//! [`PointState`], with framework termination ([`MaxCostEvals`],
+//! [`PointState`], with framework termination (`MaxEvaluations`,
 //! [`RhoTolerance`]) and a problem carrying linear constraints. These confirm
 //! the public wiring: init/next_iter, the constraint extraction + folding (all
 //! of inequalities, box bounds, and equalities through the general-form
@@ -62,7 +62,7 @@ fn converges_to_projection() {
             .with_final_radius(1e-7),
         PointState::new(vec![0.0, 0.0]),
     )
-    .max_cost_evals(500)
+    .max_evaluations(basin::EvaluationKind::Cost, 500)
     .run_with_solver()
     .unwrap();
 
@@ -102,7 +102,7 @@ fn converges_with_two_active_constraints() {
             .with_final_radius(1e-7),
         PointState::new(vec![0.0, 0.0]),
     )
-    .max_cost_evals(500)
+    .max_evaluations(basin::EvaluationKind::Cost, 500)
     .run_with_solver()
     .unwrap();
 
@@ -157,7 +157,7 @@ fn box_bounds_fold_and_converge_to_corner() {
             .with_final_radius(1e-7),
         PointState::new(vec![0.0, 0.0]),
     )
-    .max_cost_evals(500)
+    .max_evaluations(basin::EvaluationKind::Cost, 500)
     .run_with_solver()
     .unwrap();
 
@@ -219,7 +219,7 @@ fn equality_folds_and_converges_to_projection() {
             .with_final_radius(1e-8),
         PointState::new(vec![0.0, 2.0]),
     )
-    .max_cost_evals(500)
+    .max_evaluations(basin::EvaluationKind::Cost, 500)
     .run_with_solver()
     .unwrap();
 
@@ -246,11 +246,11 @@ fn respects_cost_eval_budget() {
             .with_final_radius(1e-12),
         PointState::new(vec![0.0, 0.0]),
     )
-    .max_cost_evals(15)
+    .max_evaluations(basin::EvaluationKind::Cost, 15)
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.report.code(), TerminationCode::MaxCostEvals);
+    assert_eq!(result.report.code(), TerminationCode::MaxEvaluations);
     assert!(
         result.cost_evals() >= 15,
         "cost_evals = {}",
@@ -273,7 +273,7 @@ fn rho_tolerance_stops_early() {
         .with_absolute_radius_tolerance(1e-3),
         PointState::new(vec![0.0, 0.0]),
     )
-    .max_cost_evals(5000)
+    .max_evaluations(basin::EvaluationKind::Cost, 5000)
     .run_with_solver()
     .unwrap();
 
@@ -335,7 +335,7 @@ fn backend_generic_nalgebra() {
             .with_final_radius(1e-7),
         PointState::new(DVector::from_vec(vec![0.0, 0.0])),
     )
-    .max_cost_evals(500)
+    .max_evaluations(basin::EvaluationKind::Cost, 500)
     .run_with_solver()
     .unwrap();
 
@@ -399,7 +399,7 @@ fn backend_generic_ndarray() {
             .with_final_radius(1e-7),
         PointState::new(Array1::from_vec(vec![0.0, 0.0])),
     )
-    .max_cost_evals(500)
+    .max_evaluations(basin::EvaluationKind::Cost, 500)
     .run_with_solver()
     .unwrap();
 
@@ -459,7 +459,7 @@ fn backend_generic_faer() {
             .with_final_radius(1e-7),
         PointState::new(Col::from_fn(2, |_| 0.0)),
     )
-    .max_cost_evals(500)
+    .max_evaluations(basin::EvaluationKind::Cost, 500)
     .run_with_solver()
     .unwrap();
 

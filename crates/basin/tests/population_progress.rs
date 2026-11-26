@@ -353,6 +353,7 @@ where
         .unwrap();
     assert_eq!(resumed.state, expected.state);
     assert_eq!(resumed.counts, expected.counts);
+    assert_eq!(resumed.report, expected.report);
     assert_eq!(
         postcard::to_allocvec(&resumed.solver).unwrap(),
         postcard::to_allocvec(&expected.solver).unwrap()
@@ -382,6 +383,8 @@ fn serialized_checkpoints_preserve_rng_and_inner_workspace() {
         .with_refine_every(3)
         .with_k(2)
         .with_inner_max_iter(3)
+        .with_ls_intensity(3)
+        .with_inner_diagnostics(true)
     });
 }
 

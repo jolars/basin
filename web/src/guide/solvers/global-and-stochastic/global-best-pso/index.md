@@ -113,7 +113,7 @@ every new position. `with_swarm_size` overrides the default size. Compare
 settings using objective evaluations, since the same iteration budget
 costs more with a larger swarm.
 
-Use executor controls such as `max_iter`, `max_cost_evals`,
+Use executor controls such as `max_iter`, `max_evaluations`,
 `target_objective`, or `no_objective_improvement`. Evaluation limits are
 checked between generations, so a complete swarm evaluation can cross
 the requested limit. Optional step- and cost-change checks observe the

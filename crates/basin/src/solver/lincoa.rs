@@ -109,7 +109,7 @@ use init::fold_constraints;
 ///     .with_final_radius(1e-7);
 /// let state = PointState::new(vec![0.0, 0.0]);
 /// let result = Executor::new(problem, solver, state)
-///     .max_cost_evals(500)
+///     .max_evaluations(basin::EvaluationKind::Cost, 500)
 ///     .run()
 ///     .unwrap();
 /// let incumbent = result.selected_record().expect("expected an incumbent");
@@ -141,7 +141,7 @@ use init::fold_constraints;
 ///
 /// Natural convergence is `ρ` reaching `ρ_end`, signalled as
 /// [`crate::TerminationCode::SolverConverged`]. Add
-/// [`max_cost_evals`](crate::Executor::max_cost_evals) to cap the budget or
+/// [`max_evaluations`](crate::Executor::max_evaluations) to cap the budget or
 /// [`with_absolute_radius_tolerance`](crate::Lincoa::with_absolute_radius_tolerance) to stop at a coarser `ρ`.
 ///
 /// # Progress and continuation

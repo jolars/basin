@@ -285,8 +285,11 @@ fn executor_limits_precede_default_convergence() {
     };
     let result = make().max_iter(0).run().unwrap();
     assert_eq!(result.report.code(), TerminationCode::MaxIter);
-    let result = make().max_cost_evals(2).run().unwrap();
-    assert_eq!(result.report.code(), TerminationCode::MaxCostEvals);
+    let result = make()
+        .max_evaluations(basin::EvaluationKind::Cost, 2)
+        .run()
+        .unwrap();
+    assert_eq!(result.report.code(), TerminationCode::MaxEvaluations);
     assert_eq!(result.cost_evals(), 2);
 }
 
