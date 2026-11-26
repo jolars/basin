@@ -2353,9 +2353,9 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "rmpfit"
-version = "2.0.0"
+version = "2.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3e8006f8d69fcd1b9cbbf7b74999549dfe44b504b8c4f80727ae40a2b856528"
+checksum = "61612e393bf9916f7cd6c7f91d45986f3613bedb67b2b5064b09d4399e9a9775"
 
 [[package]]
 name = "rustc-hash"
