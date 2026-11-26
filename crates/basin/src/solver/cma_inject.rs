@@ -315,12 +315,12 @@ where
         deserialize = "I: serde::Deserialize<'de>, V: serde::Deserialize<'de>, M: serde::Deserialize<'de>, F: serde::Deserialize<'de>"
     ))
 )]
-pub struct CmaInject<I, V, M, F = f64>
+pub struct CmaInject<I, V, M, F = f64, Evaluation = crate::SerialEvaluation>
 where
     F: Scalar,
     I: MemeticInner<V, F>,
 {
-    cma: CmaEs<V, M, F>,
+    cma: CmaEs<V, M, F, Evaluation>,
     inner: InnerExecutor<I::State, I>,
     #[cfg_attr(feature = "serde", serde(default))]
     inner_diagnostics: Option<Vec<crate::core::inner::diagnostics::Record<F>>>,
@@ -328,7 +328,7 @@ where
     c_y_override: Option<F>,
 }
 
-impl<I, V, M, F> CmaInject<I, V, M, F>
+impl<I, V, M, F, Evaluation> CmaInject<I, V, M, F, Evaluation>
 where
     F: Scalar,
     I: MemeticInner<V, F>,
@@ -337,7 +337,10 @@ where
     /// Wrap a configured [`CmaEs`] with `inner` as the local
     /// refinement step. Defaults: `k = 1` refinement per generation,
     /// inner `max_iter = 50`, `c_y` = Hansen-2011 Table 1 default.
-    pub fn with_inner_solver(cma: CmaEs<V, M, F>, inner: I) -> Self {
+    pub fn with_inner_solver(
+        cma: CmaEs<V, M, F, Evaluation>,
+        inner: I,
+    ) -> Self {
         Self {
             cma,
             inner: InnerExecutor::new(inner).max_iter(50),
@@ -348,7 +351,7 @@ where
     }
 
     /// Inspect the outer distribution model without transferring its ownership.
-    pub fn cma(&self) -> &CmaEs<V, M, F> {
+    pub fn cma(&self) -> &CmaEs<V, M, F, Evaluation> {
         &self.cma
     }
 
@@ -453,8 +456,8 @@ pub(crate) fn default_c_y<F: Scalar>(n: usize) -> F {
     n.sqrt() + two * n / (n + two)
 }
 
-impl<P, I, V, M, F> Solver<P, PopulationProgress<V, F>>
-    for CmaInject<I, V, M, F>
+impl<P, I, V, M, F, Evaluation> Solver<P, PopulationProgress<V, F>>
+    for CmaInject<I, V, M, F, Evaluation>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
@@ -478,7 +481,8 @@ where
         + RankOneUpdate<V, F>
         + SymmetricEigen<V>
         + Clone,
-    CmaEs<V, M, F>: Solver<P, PopulationProgress<V, F>, Error = P::Error>,
+    CmaEs<V, M, F, Evaluation>:
+        Solver<P, PopulationProgress<V, F>, Error = P::Error>,
 {
     type Error = P::Error;
 

@@ -1261,32 +1261,30 @@ impl<P: CostFunction> Problem<P> {
         self.inner.cost(param)
     }
 
-    /// Counted batch cost evaluation: evaluate the inner
-    /// [`CostFunction::cost`] at every `param` and collect the outputs in
-    /// input order.
+    /// Evaluate a cost batch on the calling thread in input order.
     ///
-    /// Bumps [`EvalCounts::cost_evals`] by `params.len()` once, on the
-    /// calling thread, then fans the evaluations across the `rayon` pool
-    /// when the `parallel` feature is on (sequential otherwise). The counter
-    /// touch happens before the fan-out and the parallel closure only borrows
-    /// the inner problem immutably, so there is no shared mutable state across
-    /// threads; the total it adds is identical to one
-    /// [`cost`](Self::cost) per element. Results are collected in slice order,
-    /// so the returned costs are bit-identical to a serial loop whether or not
-    /// `parallel` is enabled.
-    ///
-    /// Population solvers use this for per-generation fitness evaluation:
-    /// the λ candidates of one generation are independent, so they evaluate
-    /// concurrently. Short-circuits on the first `Err` (hard abort).
+    /// Counts the full submitted batch, including when a callback returns an error.
     pub fn cost_batch(
+        &mut self,
+        params: &[P::Param],
+    ) -> Result<Vec<P::Output>, P::Error> {
+        self.counts.cost_evals += params.len() as u64;
+        params.iter().map(|p| self.inner.cost(p)).collect()
+    }
+
+    /// Evaluate a cost batch on the active Rayon pool and return costs in input order.
+    ///
+    /// Counts the full submitted batch, including when a callback returns an error.
+    #[cfg(feature = "parallel")]
+    pub fn cost_batch_parallel(
         &mut self,
         params: &[P::Param],
     ) -> Result<Vec<P::Output>, P::Error>
     where
-        P: crate::core::parallel::MaybeSync,
-        P::Param: crate::core::parallel::MaybeSync,
-        P::Output: crate::core::parallel::MaybeSend,
-        P::Error: crate::core::parallel::MaybeSend,
+        P: Sync,
+        P::Param: Sync,
+        P::Output: Send,
+        P::Error: Send,
     {
         self.counts.cost_evals += params.len() as u64;
         let inner = &self.inner;

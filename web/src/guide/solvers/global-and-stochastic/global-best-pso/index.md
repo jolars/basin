@@ -157,8 +157,8 @@ The `serde` feature supports serializing compatible solver checkpoints.
 Supported parameter types are `Vec<F>`, `nalgebra::DVector<F>`,
 `ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f32` or `f64`. No
 matrix operations or BLAS/LAPACK provider are required. Independent
-objective evaluations can use the `parallel` feature without changing
-the proposal order for a deterministic objective. See the API's [Backends
+objective evaluations can run concurrently with `with_parallel_evaluation()`
+and the `parallel` feature. Proposal order is preserved. See the API's [Backends
 section](https://docs.rs/basin/latest/basin/solver/global_best_pso/struct.GlobalBestPso.html#backends)
 for custom-vector requirements.
 

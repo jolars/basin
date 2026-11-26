@@ -4,12 +4,8 @@
 //!
 //! # Why this exists
 //!
-//! basin's `parallel` feature is a *compile-time* switch with no runtime
-//! threads knob: thread count follows rayon's global pool
-//! (`RAYON_NUM_THREADS`, default = all cores). So you cannot put a "serial"
-//! and a "parallel" contestant side by side in one criterion run. Instead the
-//! comparison is **two runs of this single `parallel`-built binary**, differing
-//! only by the rayon pool size, compared via criterion baselines:
+//! The solvers explicitly opt in to Rayon. Run the same binary with
+//! different pool sizes and compare Criterion baselines.
 //!
 //! ```text
 //! # serial baseline: one rayon worker (≈ the feature-off path, minus the
@@ -123,7 +119,8 @@ fn bench_cma_es(c: &mut Criterion) {
                                 dim,
                             )),
                             CmaEs::<Vec<f64>, DenseMatrix>::new(7, 0.5)
-                                .with_lambda(lambda),
+                                .with_lambda(lambda)
+                                .with_parallel_evaluation(),
                             PopulationProgress::<Vec<f64>>::from_point(vec![
                                 1.0;
                                 dim
@@ -150,7 +147,9 @@ fn bench_de(c: &mut Criterion) {
                     black_box(
                         Executor::new(
                             ExpensiveSphere::new(dim),
-                            De::<f64>::new(99).with_pop_size(np),
+                            De::<f64>::new(99)
+                                .with_pop_size(np)
+                                .with_parallel_evaluation(),
                             PopulationProgress::<Vec<f64>>::empty(),
                         )
                         .max_iter(GENERATIONS)
@@ -174,7 +173,8 @@ fn bench_random_search(c: &mut Criterion) {
                     black_box(
                         Executor::new(
                             ExpensiveSphere::new(dim),
-                            RandomSearch::new(lambda, 2024),
+                            RandomSearch::new(lambda, 2024)
+                                .with_parallel_evaluation(),
                             PopulationProgress::<Vec<f64>>::empty(),
                         )
                         .max_iter(GENERATIONS)

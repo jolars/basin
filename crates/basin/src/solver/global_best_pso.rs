@@ -1,4 +1,5 @@
 //! Synchronous global-best particle swarm optimization.
+use crate::{SerialEvaluation, core::parallel::CostBatch};
 
 use crate::core::constraint::evaluation::BoxProblem;
 use crate::core::math::{SampleUniformBox, Scalar, VectorLen};
@@ -47,8 +48,8 @@ pub enum PsoVelocityLimit<F: Scalar = f64> {
 /// followed by `xᵢ ← xᵢ + vᵢ`. All particles in a generation use the same
 /// frozen personal and global bests, and use independent `r₁, r₂ ~ U(0, 1)`
 /// for each coordinate. Objective evaluations are batched after the complete
-/// generation is built, preserving deterministic order under the `parallel`
-/// feature.
+/// generation is built. With the `parallel` feature,
+/// `with_parallel_evaluation()` runs the batch on the active Rayon pool.
 ///
 /// The name is deliberately topology-specific. Standard PSO 2006 and Standard
 /// PSO 2011 use changing random neighborhoods, and SPSO-2011 also changes the
@@ -198,7 +199,12 @@ pub enum PsoVelocityLimit<F: Scalar = f64> {
 ///   Basin does not reproduce that citation mismatch.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
-pub struct GlobalBestPso<V, F: Scalar = f64, R = ChaCha8Rng> {
+pub struct GlobalBestPso<
+    V,
+    F: Scalar = f64,
+    R = ChaCha8Rng,
+    Evaluation = SerialEvaluation,
+> {
     swarm_size_override: Option<usize>,
     inertia: F,
     cognitive: F,
@@ -215,6 +221,8 @@ pub struct GlobalBestPso<V, F: Scalar = f64, R = ChaCha8Rng> {
     global_best_cost: F,
     cognitive_draws: Vec<F>,
     social_draws: Vec<F>,
+    #[cfg_attr(feature = "serde", serde(skip))]
+    evaluation: std::marker::PhantomData<fn() -> Evaluation>,
 }
 
 impl<V, F: Scalar> GlobalBestPso<V, F, ChaCha8Rng> {
@@ -225,31 +233,7 @@ impl<V, F: Scalar> GlobalBestPso<V, F, ChaCha8Rng> {
     }
 }
 
-impl<V, F: Scalar, R> GlobalBestPso<V, F, R> {
-    /// Construct a global-best PSO with the research-profile defaults and a
-    /// caller-supplied RNG.
-    pub fn new_with_rng(rng: R) -> Self {
-        let two = F::from_f64(2.0).unwrap();
-        Self {
-            swarm_size_override: None,
-            inertia: F::one() / (two * two.ln()),
-            cognitive: F::from_f64(0.5).unwrap() + two.ln(),
-            social: F::from_f64(0.5).unwrap() + two.ln(),
-            boundary_handling: PsoBoundaryHandling::Absorb,
-            velocity_limit: PsoVelocityLimit::Unbounded,
-            rng,
-            initial_velocities: None,
-            live_rng: None,
-            velocities: Vec::new(),
-            personal_best_positions: Vec::new(),
-            personal_best_costs: Vec::new(),
-            global_best_position: None,
-            global_best_cost: F::infinity(),
-            cognitive_draws: Vec::new(),
-            social_draws: Vec::new(),
-        }
-    }
-
+impl<V, F: Scalar, R, Evaluation> GlobalBestPso<V, F, R, Evaluation> {
     /// Configure explicit velocities for fresh initialization, or `None` to
     /// sample the default half-displacement velocities. Entries correspond to
     /// the initial member order, before any sorting. Fresh runs reapply these
@@ -498,7 +482,7 @@ fn repair_position<V, F>(
     }
 }
 
-impl<V, F: Scalar, R> GlobalBestPso<V, F, R> {
+impl<V, F: Scalar, R, Evaluation> GlobalBestPso<V, F, R, Evaluation> {
     fn sort_particles_ascending(
         &mut self,
         state: &mut PopulationProgress<V, F>,
@@ -518,17 +502,15 @@ impl<V, F: Scalar, R> GlobalBestPso<V, F, R> {
     }
 }
 
-impl<P, V, F, R> Solver<P, PopulationProgress<V, F>> for GlobalBestPso<V, F, R>
+impl<P, V, F, R, Evaluation> Solver<P, PopulationProgress<V, F>>
+    for GlobalBestPso<V, F, R, Evaluation>
 where
-    F: Scalar + crate::core::parallel::MaybeSend,
-    P: CostFunction<Param = V, Output = F>
-        + BoxProblem<Param = V>
-        + crate::core::parallel::MaybeSync,
-    P::Error: crate::core::parallel::MaybeSend,
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F> + BoxProblem<Param = V>,
+    Evaluation: CostBatch<P>,
     V: Clone
         + VectorLen
         + SampleUniformBox
-        + crate::core::parallel::MaybeSync
         + std::ops::Index<usize, Output = F>
         + std::ops::IndexMut<usize, Output = F>,
     R: Rng + Clone,
@@ -624,7 +606,7 @@ where
                 self.boundary_handling,
             );
         }
-        state.costs = problem.cost_batch(&state.candidates)?;
+        state.costs = Evaluation::evaluate(problem, &state.candidates)?;
         self.personal_best_positions = state.candidates.clone();
         self.personal_best_costs = state.costs.clone();
         self.sort_particles_ascending(&mut state);
@@ -720,7 +702,7 @@ where
             );
         }
 
-        state.costs = problem.cost_batch(&state.candidates)?;
+        state.costs = Evaluation::evaluate(problem, &state.candidates)?;
         for i in 0..state.candidates.len() {
             if strictly_better(state.costs[i], self.personal_best_costs[i]) {
                 self.personal_best_positions[i] = state.candidates[i].clone();
@@ -765,6 +747,80 @@ where
             ))
         } else {
             None
+        }
+    }
+}
+
+#[cfg(feature = "parallel")]
+impl<V, F: Scalar, R> GlobalBestPso<V, F, R> {
+    /// Evaluate independent candidates on the active Rayon pool.
+    pub fn with_parallel_evaluation(
+        self,
+    ) -> GlobalBestPso<V, F, R, crate::ParallelEvaluation> {
+        let Self {
+            swarm_size_override,
+            inertia,
+            cognitive,
+            social,
+            boundary_handling,
+            velocity_limit,
+            rng,
+            initial_velocities,
+            live_rng,
+            velocities,
+            personal_best_positions,
+            personal_best_costs,
+            global_best_position,
+            global_best_cost,
+            cognitive_draws,
+            social_draws,
+            evaluation: _,
+        } = self;
+        GlobalBestPso {
+            swarm_size_override,
+            inertia,
+            cognitive,
+            social,
+            boundary_handling,
+            velocity_limit,
+            rng,
+            initial_velocities,
+            live_rng,
+            velocities,
+            personal_best_positions,
+            personal_best_costs,
+            global_best_position,
+            global_best_cost,
+            cognitive_draws,
+            social_draws,
+            evaluation: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<V, F: Scalar, R> GlobalBestPso<V, F, R> {
+    /// Construct a global-best PSO with the research-profile defaults and a
+    /// caller-supplied RNG.
+    pub fn new_with_rng(rng: R) -> Self {
+        let two = F::from_f64(2.0).unwrap();
+        Self {
+            evaluation: std::marker::PhantomData,
+            swarm_size_override: None,
+            inertia: F::one() / (two * two.ln()),
+            cognitive: F::from_f64(0.5).unwrap() + two.ln(),
+            social: F::from_f64(0.5).unwrap() + two.ln(),
+            boundary_handling: PsoBoundaryHandling::Absorb,
+            velocity_limit: PsoVelocityLimit::Unbounded,
+            rng,
+            initial_velocities: None,
+            live_rng: None,
+            velocities: Vec::new(),
+            personal_best_positions: Vec::new(),
+            personal_best_costs: Vec::new(),
+            global_best_position: None,
+            global_best_cost: F::infinity(),
+            cognitive_draws: Vec::new(),
+            social_draws: Vec::new(),
         }
     }
 }

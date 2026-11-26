@@ -8,6 +8,7 @@ use crate::core::rng::{ChaCha8Rng, SeedableRng};
 use crate::core::solver::Solver;
 use crate::core::state::PopulationProgress;
 use crate::core::termination::Termination;
+use crate::{SerialEvaluation, core::parallel::CostBatch};
 
 pub mod diagnostics;
 
@@ -162,7 +163,7 @@ use workspace::Distribution;
 /// # Ok::<(), std::convert::Infallible>(())
 /// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct CmaEs<V, M, F: Scalar = f64> {
+pub struct CmaEs<V, M, F: Scalar = f64, Evaluation = SerialEvaluation> {
     distribution_tolerance: Option<F>,
     distribution_tolerance_configured: bool,
     lambda_override: Option<usize>,
@@ -178,6 +179,8 @@ pub struct CmaEs<V, M, F: Scalar = f64> {
         serde(default = "default_eigen_update_period")
     )]
     eigen_update_period: std::num::NonZeroU64,
+    #[cfg_attr(feature = "serde", serde(skip))]
+    evaluation: std::marker::PhantomData<fn() -> Evaluation>,
 }
 
 pub(super) fn default_eigen_update_period() -> std::num::NonZeroU64 {
@@ -213,7 +216,7 @@ pub(crate) struct CmaConstants<F = f64> {
     pub(crate) h_sigma_threshold: F,
 }
 
-impl<V, M, F: Scalar> CmaEs<V, M, F> {
+impl<V, M, F: Scalar, Evaluation> CmaEs<V, M, F, Evaluation> {
     /// Stop when the largest distribution axis standard deviation is < the tolerance.
     ///
     /// Disabled by default. `None` disables the test and zero requests an
@@ -228,32 +231,6 @@ impl<V, M, F: Scalar> CmaEs<V, M, F> {
             crate::core::convergence::optional_tolerance(value);
         self.distribution_tolerance_configured = true;
         self
-    }
-
-    /// Configure a seeded CMA distribution with initial overall step size `sigma`.
-    /// Supply the mean through [`PopulationProgress::from_point`]. Population
-    /// size defaults to `4 + ⌊3 ln n⌋`; distribution-size convergence is disabled.
-    ///
-    /// # Panics
-    ///
-    /// Panics unless `sigma` is finite and strictly positive.
-    pub fn new(seed: u64, sigma: F) -> Self {
-        assert!(
-            sigma.is_finite() && sigma > F::zero(),
-            "initial sigma must be finite and positive"
-        );
-        Self {
-            lambda_override: None,
-            distribution_tolerance: None,
-            distribution_tolerance_configured: false,
-            constants: None,
-            rng: ChaCha8Rng::seed_from_u64(seed),
-            initial_sigma: sigma,
-            initial_stds: None,
-            seed,
-            work: None,
-            eigen_update_period: default_eigen_update_period(),
-        }
     }
 
     /// Refresh the covariance eigendecomposition every `generations` updates.
@@ -571,11 +548,12 @@ pub(crate) fn apply_permutation<T>(slice: &mut [T], idx: &[usize]) {
     }
 }
 
-impl<P, V, M, F> Solver<P, PopulationProgress<V, F>> for CmaEs<V, M, F>
+impl<P, V, M, F, Evaluation> Solver<P, PopulationProgress<V, F>>
+    for CmaEs<V, M, F, Evaluation>
 where
-    F: Scalar + crate::core::parallel::MaybeSend,
-    P: CostFunction<Param = V, Output = F> + crate::core::parallel::MaybeSync,
-    P::Error: crate::core::parallel::MaybeSend,
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F>,
+    Evaluation: CostBatch<P>,
     V: VectorLen
         + Clone
         + ScaledAdd<F>
@@ -583,7 +561,6 @@ where
         + ComponentMulAssign
         + NormSquared<F>
         + SampleStandardNormal
-        + crate::core::parallel::MaybeSync
         + std::ops::Index<usize, Output = F>
         + std::ops::IndexMut<usize, Output = F>,
     M: MatrixIdentity
@@ -616,7 +593,7 @@ where
             work = work.with_stds(stds.clone());
         }
         sample_generation(&mut work, lambda, &mut self.rng);
-        work.costs = problem.cost_batch(&work.candidates)?;
+        work.costs = Evaluation::evaluate(problem, &work.candidates)?;
         sort_population_ascending(&mut work.candidates, &mut work.costs);
         work.m_cost = Some(problem.cost(&work.m)?);
         publish(&mut work, &mut state);
@@ -765,10 +742,10 @@ where
         // Sample new generation: x_k = m + σ B (D ⊙ z_k). Sampling is
         // sequential (the RNG draws define the reproducible trajectory);
         // the λ independent candidates then evaluate in one batch
-        // (parallel under the `parallel` feature).
+        // using the configured evaluation mode.
         let lambda = k.lambda;
         sample_generation(work, lambda, &mut self.rng);
-        work.costs = problem.cost_batch(&work.candidates)?;
+        work.costs = Evaluation::evaluate(problem, &work.candidates)?;
         sort_population_ascending(&mut work.candidates, &mut work.costs);
 
         // Evaluate the mean so param()/cost() report `m` (xfavorite).
@@ -801,7 +778,8 @@ where
     }
 }
 
-impl<V, M, F> crate::core::inner::ResumableInner<V, F> for CmaEs<V, M, F>
+impl<V, M, F, Evaluation> crate::core::inner::ResumableInner<V, F>
+    for CmaEs<V, M, F, Evaluation>
 where
     F: Scalar,
     V: VectorLen
@@ -828,6 +806,7 @@ where
         // empty: `Solver::init` derives it from the chain's own
         // dimension.
         let cma = Self {
+            evaluation: std::marker::PhantomData,
             lambda_override: self.lambda_override,
             distribution_tolerance: self.distribution_tolerance,
             distribution_tolerance_configured: self
@@ -882,12 +861,76 @@ pub(crate) fn publish<V: VectorLen + Clone, M, F: Scalar>(
         .expect("CMA mean matches the population");
 }
 
-impl<V: VectorLen + Clone, M, F: Scalar> crate::core::inner::InitialState<V>
-    for CmaEs<V, M, F>
+impl<V: VectorLen + Clone, M, F: Scalar, Evaluation>
+    crate::core::inner::InitialState<V> for CmaEs<V, M, F, Evaluation>
 {
     type State = PopulationProgress<V, F>;
     fn seed(&self, x: &V) -> Self::State {
         PopulationProgress::from_point(x.clone())
+    }
+}
+
+#[cfg(feature = "parallel")]
+impl<V, M, F: Scalar> CmaEs<V, M, F> {
+    /// Evaluate independent candidates on the active Rayon pool.
+    pub fn with_parallel_evaluation(
+        self,
+    ) -> CmaEs<V, M, F, crate::ParallelEvaluation> {
+        let Self {
+            distribution_tolerance,
+            distribution_tolerance_configured,
+            lambda_override,
+            constants,
+            rng,
+            initial_sigma,
+            initial_stds,
+            seed,
+            eigen_update_period,
+            work,
+            evaluation: _,
+        } = self;
+        CmaEs {
+            distribution_tolerance,
+            distribution_tolerance_configured,
+            lambda_override,
+            constants,
+            rng,
+            initial_sigma,
+            initial_stds,
+            seed,
+            eigen_update_period,
+            work,
+            evaluation: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<V, M, F: Scalar> CmaEs<V, M, F> {
+    /// Configure a seeded CMA distribution with initial overall step size `sigma`.
+    /// Supply the mean through [`PopulationProgress::from_point`]. Population
+    /// size defaults to `4 + ⌊3 ln n⌋`; distribution-size convergence is disabled.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless `sigma` is finite and strictly positive.
+    pub fn new(seed: u64, sigma: F) -> Self {
+        assert!(
+            sigma.is_finite() && sigma > F::zero(),
+            "initial sigma must be finite and positive"
+        );
+        Self {
+            evaluation: std::marker::PhantomData,
+            lambda_override: None,
+            distribution_tolerance: None,
+            distribution_tolerance_configured: false,
+            constants: None,
+            rng: ChaCha8Rng::seed_from_u64(seed),
+            initial_sigma: sigma,
+            initial_stds: None,
+            seed,
+            work: None,
+            eigen_update_period: default_eigen_update_period(),
+        }
     }
 }
 

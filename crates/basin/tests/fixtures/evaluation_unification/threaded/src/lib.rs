@@ -68,3 +68,18 @@ pub fn two_workers() -> Threaded {
             .unwrap(),
     )
 }
+
+/// Run a test on a two-worker pool.
+///
+/// ```compile_fail
+/// use basin::{CmaEs, DenseMatrix, Executor, PopulationProgress};
+/// use basin_evaluation_local::Local;
+/// Executor::new(
+///     Local::default(),
+///     CmaEs::<Vec<f64>, DenseMatrix>::new(7, 0.25).with_parallel_evaluation(),
+///     PopulationProgress::from_point(vec![2.0, 1.0]),
+/// ).run().unwrap();
+/// ```
+pub fn on_two_workers<T: Send>(run: impl FnOnce() -> T + Send) -> T {
+    two_workers().0.install(run)
+}

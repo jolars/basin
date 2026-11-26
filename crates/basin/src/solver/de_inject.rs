@@ -170,12 +170,12 @@ use crate::solver::de::De;
         deserialize = "I: serde::Deserialize<'de>, F: serde::Deserialize<'de>"
     ))
 )]
-pub struct DeInject<I, V, F = f64>
+pub struct DeInject<I, V, F = f64, Evaluation = crate::SerialEvaluation>
 where
     F: Scalar,
     I: MemeticInner<V, F>,
 {
-    de: De<F>,
+    de: De<F, Evaluation>,
     inner: InnerExecutor<I::State, I>,
     #[cfg_attr(feature = "serde", serde(default))]
     inner_diagnostics: Option<Vec<crate::core::inner::diagnostics::Record<F>>>,
@@ -184,7 +184,7 @@ where
     _phantom: PhantomData<V>,
 }
 
-impl<I, V, F> DeInject<I, V, F>
+impl<I, V, F, Evaluation> DeInject<I, V, F, Evaluation>
 where
     F: Scalar,
     I: MemeticInner<V, F>,
@@ -193,7 +193,7 @@ where
     /// Wrap a configured [`De`] with `inner` as the local refinement
     /// step. Defaults: `k = 1` refinement per generation, refine every
     /// outer iteration, inner `max_iter = 50`.
-    pub fn with_inner_solver(de: De<F>, inner: I) -> Self {
+    pub fn with_inner_solver(de: De<F, Evaluation>, inner: I) -> Self {
         Self {
             de,
             inner: InnerExecutor::new(inner).max_iter(50),
@@ -290,7 +290,7 @@ where
     }
 }
 
-impl<I, V, F> DeInject<I, V, F>
+impl<I, V, F, Evaluation> DeInject<I, V, F, Evaluation>
 where
     F: Scalar,
     I: MemeticInner<V, F>,
@@ -310,7 +310,8 @@ where
     }
 }
 
-impl<P, I, V, F> Solver<P, PopulationProgress<V, F>> for DeInject<I, V, F>
+impl<P, I, V, F, Evaluation> Solver<P, PopulationProgress<V, F>>
+    for DeInject<I, V, F, Evaluation>
 where
     F: Scalar + SampleUniform,
     P: CostFunction<Param = V, Output = F> + BoxProblem<Param = V>,
@@ -328,7 +329,7 @@ where
         + ScaleInPlace<F>
         + std::ops::Index<usize, Output = F>
         + std::ops::IndexMut<usize, Output = F>,
-    De<F>: Solver<
+    De<F, Evaluation>: Solver<
             P,
             PopulationProgress<V, F>,
             Error = crate::ConstraintSolveError<P::Error>,
@@ -471,7 +472,7 @@ where
         &self,
         state: &PopulationProgress<V, F>,
     ) -> Option<Termination<F>> {
-        <De<F> as Solver<P, PopulationProgress<V, F>>>::terminate(
+        <De<F, Evaluation> as Solver<P, PopulationProgress<V, F>>>::terminate(
             &self.de, state,
         )
     }

@@ -386,6 +386,9 @@ pub use crate::core::observer::{
 };
 #[cfg(all(feature = "checkpoint-postcard", not(target_arch = "wasm32")))]
 pub use crate::core::observer::{StateSnapshotWriter, read_state_snapshot};
+#[cfg(feature = "parallel")]
+pub use crate::core::parallel::ParallelEvaluation;
+pub use crate::core::parallel::SerialEvaluation;
 pub use crate::core::parameter_transform::{
     ParameterEvaluationError, ParameterScale, ParameterTransform,
     ParameterTransformError,

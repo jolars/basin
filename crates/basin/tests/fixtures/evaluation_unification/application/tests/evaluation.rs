@@ -1,4 +1,3 @@
-use basin::CountsMirror as _;
 use std::{
     cell::Cell,
     rc::Rc,
@@ -16,8 +15,8 @@ use basin::{
     central_difference_hessian_product, forward_difference_hessian_product,
 };
 use basin_evaluation_local::{
-    Difference, Local, Population, STEP, Serial, Stencil, check_local_runs,
-    population_seed, product, quadratic,
+    Difference, Local, STEP, Serial, Stencil, check_local_runs, product,
+    quadratic,
 };
 use basin_evaluation_threaded::two_workers;
 
@@ -25,6 +24,7 @@ use basin_evaluation_threaded::two_workers;
 struct Shared {
     costs: AtomicUsize,
     gradients: AtomicUsize,
+    cost_rendezvous: Option<(Mutex<usize>, Condvar)>,
     rendezvous: Option<(Mutex<usize>, Condvar)>,
     fail: bool,
 }
@@ -36,6 +36,15 @@ impl CostFunction for Shared {
 
     fn cost(&self, point: &Vec<f64>) -> Result<f64, Self::Error> {
         self.costs.fetch_add(1, Relaxed);
+        if let Some((arrived, ready)) = &self.cost_rendezvous {
+            let mut arrived = arrived.lock().unwrap();
+            *arrived += 1;
+            ready.notify_all();
+            let (_guard, status) = ready
+                .wait_timeout_while(arrived, Duration::from_secs(5), |n| *n < 2)
+                .unwrap();
+            assert!(!status.timed_out(), "cost calls did not overlap");
+        }
         if self.fail {
             return Err("cost failed");
         }
@@ -124,37 +133,12 @@ fn explicit_modes_agree_through_executor() {
     assert_eq!(threaded.cost_evals(), 3);
     assert_eq!(threaded.counts.gradient_evals, 3);
 
-    let serial =
-        Executor::new(Shared::default(), Population(Serial), population_seed())
-            .max_iter(2)
-            .run()
-            .unwrap();
-    let threaded = Executor::new(
-        Shared::default(),
-        Population(two_workers()),
-        population_seed(),
-    )
-    .max_iter(2)
-    .run()
-    .unwrap();
-    assert_eq!(
-        serial.state.evaluated_members(),
-        threaded.state.evaluated_members()
-    );
-    assert_eq!(serial.param(), threaded.param());
-    assert_eq!(serial.counts, threaded.counts);
-    assert_eq!(threaded.cost_evals(), 6);
-
     let mut problem = basin::Problem::new(Shared {
         fail: true,
         ..Shared::default()
     });
-    let error = basin::Solver::init(
-        &mut Population(two_workers()),
-        &mut problem,
-        population_seed(),
-    );
-    assert_eq!(error.err(), Some("cost failed"));
+    let error = problem.cost_batch_parallel(&[vec![1.0], vec![2.0]]);
+    assert_eq!(error, Err("cost failed"));
     assert_eq!(problem.counts().cost_evals, 2);
 }
 
@@ -255,4 +239,35 @@ fn hessian_products_match_and_threaded_calls_overlap() {
         );
         assert_eq!(failing.gradients.load(Relaxed), 2);
     }
+}
+
+#[test]
+fn built_in_population_modes_agree() {
+    use basin::{CmaEs, DenseMatrix, PopulationProgress};
+
+    let start = || PopulationProgress::from_point(vec![2.0, 1.0]);
+    let solver = || CmaEs::<Vec<f64>, DenseMatrix>::new(7, 0.25).with_lambda(4);
+    let serial = Executor::new(Shared::default(), solver(), start())
+        .max_iter(2)
+        .run()
+        .unwrap();
+    let threaded = basin_evaluation_threaded::on_two_workers(|| {
+        Executor::new(
+            Shared {
+                cost_rendezvous: Some((Mutex::new(0), Condvar::new())),
+                ..Shared::default()
+            },
+            solver().with_parallel_evaluation(),
+            start(),
+        )
+        .max_iter(2)
+        .run()
+        .unwrap()
+    });
+    assert_eq!(
+        serial.state.evaluated_members(),
+        threaded.state.evaluated_members()
+    );
+    assert_eq!(serial.param(), threaded.param());
+    assert_eq!(serial.counts, threaded.counts);
 }

@@ -42,9 +42,17 @@ fn configured(
     }
 }
 
+#[cfg(feature = "serde")]
 type DeCheckpoint = Checkpoint<De, PopulationProgress<Vec<f64>>>;
 
-fn solve(solver: De, generations: u64) -> DeCheckpoint {
+fn solve<S>(
+    solver: S,
+    generations: u64,
+) -> Checkpoint<S, PopulationProgress<Vec<f64>>>
+where
+    S: basin::Solver<Quadratic, PopulationProgress<Vec<f64>>>,
+    S::Error: std::fmt::Debug,
+{
     Executor::new(Quadratic::new(), solver, PopulationProgress::empty())
         .max_iter(generations)
         .run_with_solver()
@@ -303,7 +311,13 @@ fn thread_count_does_not_change_generations() {
         .unwrap();
     for mutation in MUTATIONS {
         for crossover in CROSSOVERS {
-            let run = || solve(configured(mutation, crossover, true), 20);
+            let run = || {
+                solve(
+                    configured(mutation, crossover, true)
+                        .with_parallel_evaluation(),
+                    20,
+                )
+            };
             let a = one.install(run);
             let b = many.install(run);
             assert_same_population(a.state(), b.state());

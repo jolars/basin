@@ -129,8 +129,8 @@ not enforce additional linear or nonlinear constraints.
 
 `PopulationProgress` stores the member positions, matching objective values,
 and published best representative. DE owns the configured seed and live
-`ChaCha8Rng`. Independent trial evaluations use the `parallel` feature when
-enabled, preserving proposal order for a deterministic objective.
+`ChaCha8Rng`. With the `parallel` feature, call `with_parallel_evaluation()` to evaluate
+independent trials concurrently while preserving proposal order.
 
 Use `PopulationProgress::from_population` to supply exactly the configured
 number of finite vectors with the bounds' dimension. Fresh initialization

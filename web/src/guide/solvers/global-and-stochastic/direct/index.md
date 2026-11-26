@@ -117,8 +117,8 @@ can evaluate many points, particularly when several rectangles tie, so the
 last sweep can exceed an evaluation budget. Storage grows with both the
 number of coordinates and the number of sampled rectangles.
 
-Independent probes use `Problem::cost_batch`. The optional `parallel`
-feature can evaluate them concurrently while preserving the numerical
+With the `parallel` feature, call `with_parallel_evaluation()` to evaluate
+independent probes concurrently while preserving the numerical
 results for a deterministic objective. Callback scheduling can change.
 
 ### Handle rejected evaluations consistently

@@ -1,9 +1,8 @@
-use basin::CountsMirror as _;
 use std::{cell::Cell, rc::Rc};
 
 use basin::{
-    CostFunction, Executor, Gradient, GradientDescent, PopulationProgress,
-    Problem, Solver, SolverStep,
+    CmaEs, CostFunction, DenseMatrix, Executor, Gradient, GradientDescent,
+    PopulationProgress,
 };
 
 pub trait CostBatch<P: CostFunction> {
@@ -98,58 +97,6 @@ where
             .chunks_exact(2)
             .map(|pair| (pair[0] - pair[1]) / (2.0 * STEP))
             .collect())
-    }
-}
-
-pub struct Population<Mode>(pub Mode);
-
-impl<Mode> Population<Mode> {
-    fn evaluate<P>(
-        &self,
-        problem: &mut Problem<P>,
-        mut state: PopulationProgress<Vec<f64>>,
-        members: Vec<Vec<f64>>,
-    ) -> Result<PopulationProgress<Vec<f64>>, P::Error>
-    where
-        P: CostFunction<Param = Vec<f64>, Output = f64>,
-        Mode: CostBatch<P>,
-    {
-        problem.counts_mut().cost_evals += members.len() as u64;
-        let costs = self.0.costs(problem.inner(), &members)?;
-        state
-            .replace(members, costs)
-            .expect("one cost per valid member");
-        Ok(state)
-    }
-}
-
-impl<P, Mode> Solver<P, PopulationProgress<Vec<f64>>> for Population<Mode>
-where
-    P: CostFunction<Param = Vec<f64>, Output = f64>,
-    Mode: CostBatch<P>,
-{
-    type Error = P::Error;
-
-    fn init(
-        &mut self,
-        problem: &mut Problem<P>,
-        mut state: PopulationProgress<Vec<f64>>,
-    ) -> Result<PopulationProgress<Vec<f64>>, Self::Error> {
-        state.reset();
-        let (members, _) = state.take_members();
-        self.evaluate(problem, state, members)
-    }
-
-    fn next_iter(
-        &mut self,
-        problem: &mut Problem<P>,
-        mut state: PopulationProgress<Vec<f64>>,
-    ) -> Result<SolverStep<PopulationProgress<Vec<f64>>>, Self::Error> {
-        let (mut members, _) = state.take_members();
-        for coordinate in members.iter_mut().flatten() {
-            *coordinate *= 0.5;
-        }
-        Ok((self.evaluate(problem, state, members)?, None).into())
     }
 }
 
@@ -249,20 +196,16 @@ pub fn check_local_runs() {
 
     let problem = Local::default();
     let calls = Rc::clone(&problem.calls);
-    let result = Executor::new(problem, Population(Serial), population_seed())
-        .max_iter(2)
-        .run()
-        .unwrap();
-    assert_eq!(
-        result.state.candidates(),
-        &[vec![0.5, 0.25], vec![0.25, 0.0]]
-    );
-    assert_eq!(result.cost_evals(), 6);
-    assert_eq!(calls.get(), 6);
-}
-
-pub fn population_seed() -> PopulationProgress<Vec<f64>> {
-    PopulationProgress::from_population(vec![vec![2.0, 1.0], vec![1.0, 0.0]])
+    let result = Executor::new(
+        problem,
+        CmaEs::<Vec<f64>, DenseMatrix>::new(7, 0.25).with_lambda(4),
+        PopulationProgress::from_point(vec![2.0, 1.0]),
+    )
+    .max_iter(2)
+    .run()
+    .unwrap();
+    assert_eq!(result.cost_evals(), 15);
+    assert_eq!(calls.get(), 15);
 }
 
 #[test]

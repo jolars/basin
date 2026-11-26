@@ -114,20 +114,6 @@ where
     items.par_iter().map_init(init, f).collect()
 }
 
-#[cfg(not(feature = "parallel"))]
-pub(crate) fn try_map_slice_with<I, S, T, E, FInit, F>(
-    items: &[I],
-    init: FInit,
-    f: F,
-) -> Result<Vec<T>, E>
-where
-    FInit: FnOnce() -> S,
-    F: Fn(&mut S, &I) -> Result<T, E>,
-{
-    let mut scratch = init();
-    items.iter().map(|it| f(&mut scratch, it)).collect()
-}
-
 #[cfg(all(test, feature = "parallel"))]
 mod tests {
     use std::{
@@ -213,5 +199,47 @@ mod tests {
                 );
             });
         }
+    }
+}
+
+/// Evaluate callbacks on the calling thread.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SerialEvaluation;
+
+/// Evaluate independent callbacks on the active Rayon pool.
+#[cfg(feature = "parallel")]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ParallelEvaluation;
+
+#[doc(hidden)]
+pub trait CostBatch<P: crate::CostFunction> {
+    fn evaluate(
+        problem: &mut crate::Problem<P>,
+        params: &[P::Param],
+    ) -> Result<Vec<P::Output>, P::Error>;
+}
+
+impl<P: crate::CostFunction> CostBatch<P> for SerialEvaluation {
+    fn evaluate(
+        problem: &mut crate::Problem<P>,
+        params: &[P::Param],
+    ) -> Result<Vec<P::Output>, P::Error> {
+        problem.cost_batch(params)
+    }
+}
+
+#[cfg(feature = "parallel")]
+impl<P> CostBatch<P> for ParallelEvaluation
+where
+    P: crate::CostFunction + Sync,
+    P::Param: Sync,
+    P::Output: Send,
+    P::Error: Send,
+{
+    fn evaluate(
+        problem: &mut crate::Problem<P>,
+        params: &[P::Param],
+    ) -> Result<Vec<P::Output>, P::Error> {
+        problem.cost_batch_parallel(params)
     }
 }

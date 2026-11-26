@@ -4,6 +4,7 @@ use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, SeedableRng};
 use crate::core::solver::Solver;
 use crate::core::state::PopulationProgress;
+use crate::{SerialEvaluation, core::parallel::CostBatch};
 // Joint ascending-by-cost sort shared with the population solvers.
 use crate::solver::cma_es::sort_population_ascending;
 
@@ -116,10 +117,12 @@ use crate::solver::cma_es::sort_population_ascending;
 /// assert!(result.current_record().unwrap().cost.unwrap() < 1.0);
 /// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct RandomSearch {
+pub struct RandomSearch<Evaluation = SerialEvaluation> {
     lambda: usize,
     seed: u64,
     rng: ChaCha8Rng,
+    #[cfg_attr(feature = "serde", serde(skip))]
+    evaluation: std::marker::PhantomData<fn() -> Evaluation>,
 }
 
 impl RandomSearch {
@@ -134,6 +137,7 @@ impl RandomSearch {
     pub fn new(lambda: usize, seed: u64) -> Self {
         assert!(lambda >= 1, "RandomSearch requires lambda >= 1");
         Self {
+            evaluation: std::marker::PhantomData,
             lambda,
             seed,
             rng: ChaCha8Rng::seed_from_u64(seed),
@@ -141,19 +145,17 @@ impl RandomSearch {
     }
 }
 
-impl<P, V, F> Solver<P, PopulationProgress<V, F>> for RandomSearch
+impl<P, V, F, Evaluation> Solver<P, PopulationProgress<V, F>>
+    for RandomSearch<Evaluation>
 where
-    F: Scalar + crate::core::parallel::MaybeSend,
-    P: CostFunction<Param = V, Output = F>
-        + BoxProblem<Param = V>
-        + crate::core::parallel::MaybeSync,
-    P::Error: crate::core::parallel::MaybeSend,
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F> + BoxProblem<Param = V>,
+    Evaluation: CostBatch<P>,
     V: SampleUniformBox
         + Clone
         + VectorLen
         + std::ops::Index<usize, Output = F>
-        + std::ops::IndexMut<usize, Output = F>
-        + crate::core::parallel::MaybeSync,
+        + std::ops::IndexMut<usize, Output = F>,
     V: crate::VectorLen + std::ops::Index<usize, Output = F>,
 {
     type Error = crate::ConstraintSolveError<P::Error>;
@@ -180,7 +182,7 @@ where
             self.lambda,
             &mut self.rng,
         );
-        state.costs = problem.cost_batch(&state.candidates)?;
+        state.costs = Evaluation::evaluate(problem, &state.candidates)?;
         sort_population_ascending(&mut state.candidates, &mut state.costs);
         state.select_best_member();
         Ok(state)
@@ -204,14 +206,14 @@ where
         state.costs.push(elite_c);
         // Sample the λ fresh draws (sequential RNG) into their own buffer so
         // the elite's already-known cost is not re-evaluated, then batch the
-        // independent draws (parallel under the `parallel` feature). Pushing
+        // independent draws. Pushing
         // them in sample order keeps the population bit-identical to a serial
         // loop before the sort.
         let mut fresh: Vec<V> = Vec::with_capacity(self.lambda);
         for _ in 0..self.lambda {
             fresh.push(V::sample_uniform_box(&lo, &hi, &mut self.rng));
         }
-        let fresh_costs = problem.cost_batch(&fresh)?;
+        let fresh_costs = Evaluation::evaluate(problem, &fresh)?;
         state.candidates.extend(fresh);
         state.costs.extend(fresh_costs);
         sort_population_ascending(&mut state.candidates, &mut state.costs);
@@ -221,5 +223,26 @@ where
         state.costs.truncate(self.lambda);
         state.select_best_member();
         Ok(crate::SolverStep::from((state, None)))
+    }
+}
+
+#[cfg(feature = "parallel")]
+impl RandomSearch {
+    /// Evaluate independent candidates on the active Rayon pool.
+    pub fn with_parallel_evaluation(
+        self,
+    ) -> RandomSearch<crate::ParallelEvaluation> {
+        let Self {
+            lambda,
+            seed,
+            rng,
+            evaluation: _,
+        } = self;
+        RandomSearch {
+            lambda,
+            seed,
+            rng,
+            evaluation: std::marker::PhantomData,
+        }
     }
 }

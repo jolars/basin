@@ -1,16 +1,13 @@
-//! Population solvers must be bit-reproducible and count cost evaluations
-//! identically whether or not the `parallel` feature fans candidate
-//! evaluation across the `rayon` pool.
+//! The default serial population solvers must be reproducible and count cost
+//! evaluations identically with and without the `parallel` feature.
 //!
 //! Each generation's candidates are evaluated with
 //! [`Problem::cost_batch`](basin::Problem::cost_batch), which collects results
 //! in input order and bumps `cost_evals` by the batch size on the calling
 //! thread. So:
 //!
-//! - **Same seed → identical trajectory**, regardless of thread scheduling.
-//!   This is the parallel analogue of numdiff's
-//!   `gradient_is_bitwise_reproducible_across_calls`: it catches any
-//!   nondeterminism a reordered parallel reduction could introduce.
+//! - **Same seed → identical trajectory.** The downstream evaluation fixture
+//!   also compares a seeded CMA-ES run with explicit threaded evaluation.
 //! - **`cost_evals` matches a fixed per-solver formula.** DE, global-best PSO,
 //!   and RandomSearch hit `λ · (iters + 1)`; CMA-ES adds one `f(m)` mean evaluation per
 //!   generation, so it hits `(λ + 1) · (iters + 1)`. The constants below are
@@ -18,8 +15,8 @@
 //!   without, and both must hit the same numbers, proving the batched path
 //!   counts exactly as the old per-candidate loop did.
 //!
-//! These run on the default `Vec<f64>` backend so the file needs no LA
-//! feature; the `parallel` matrix entry exercises the rayon path.
+//! These run on the default `Vec<f64>` backend without optional linear
+//! algebra features.
 
 #![cfg(feature = "problems")]
 
@@ -120,6 +117,27 @@ fn global_best_pso_reproducible_and_counts_match() {
         expected_cost_evals(swarm_size as u64, max_iter),
         "global-best PSO cost_evals must equal swarm·(iters+1) regardless of `parallel`"
     );
+}
+
+#[cfg(feature = "parallel")]
+#[test]
+fn de_parallel_opt_in_preserves_cost_tolerance() {
+    let solver = De::new(99)
+        .with_pop_size(16)
+        .with_absolute_cost_change_tolerance(1e6)
+        .with_parallel_evaluation();
+    let result = Executor::new(
+        RastriginBoxed::<Vec<f64>>::with_standard_bounds(4),
+        solver,
+        PopulationProgress::empty(),
+    )
+    .max_iter(8)
+    .run()
+    .unwrap();
+
+    assert_eq!(result.report.code(), basin::TerminationCode::CostTolerance);
+    assert_eq!(result.iter(), 1);
+    assert_eq!(result.counts.cost_evals, 32);
 }
 
 #[test]

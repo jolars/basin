@@ -104,3 +104,50 @@ partial or completed steps. Implement
 `CheckpointSink::save_with_selection` to inspect the reason in a sink.
 Custom states report the reason from `State::publish_selection`.
 Use `EvaluatedState::evaluated_record()` for a complete evaluated iterate.
+
+## Threaded population evaluation
+
+Population batches in `CmaEs`, `De`, `GlobalBestPso`, and `RandomSearch`, and
+independent probes in `Direct`, run serially by default. To retain threaded
+evaluation from Basin 3.x, enable the `parallel` feature and opt in on the
+solver.
+
+```rust
+use basin::{De, ParallelEvaluation};
+
+fn solver() -> De<f64, ParallelEvaluation> {
+    De::new(42).with_parallel_evaluation()
+}
+```
+
+Use the threaded solver type in explicit annotations, including factory
+return types and the solver type of a checkpoint reader for a threaded run.
+Keep the same parameter, matrix, scalar, and RNG types where applicable.
+
+| Solver | Type after `with_parallel_evaluation()` |
+| --- | --- |
+| `CmaEs` | `CmaEs<V, M, F, ParallelEvaluation>` |
+| `De` | `De<F, ParallelEvaluation>` |
+| `Direct` | `Direct<F, ParallelEvaluation>` |
+| `GlobalBestPso` | `GlobalBestPso<V, F, R, ParallelEvaluation>` |
+| `RandomSearch` | `RandomSearch<ParallelEvaluation>` |
+
+`MaLsChCma::new(seed)` also evaluates its CMA-ES chains serially. To run
+those chains with threaded evaluation, pass a threaded CMA-ES prototype to
+`MaLsCh::with_inner`. For example, with the `Vec<f64>` backend:
+
+```rust
+use basin::{CmaEs, DenseMatrix, MaLsCh};
+
+let inner = CmaEs::<Vec<f64>, DenseMatrix>::new(0, 1.0)
+    .with_parallel_evaluation();
+let solver = MaLsCh::with_inner(42, inner);
+```
+
+To migrate `with_inner_lambda(lambda)`, call `with_lambda(lambda)` on the
+CMA-ES prototype.
+
+Custom solvers can call `Problem::cost_batch_parallel` for a threaded batch.
+Threaded batches require a shareable problem and parameters, and sendable
+outputs and errors. A serial batch can use local callbacks and errors even
+when another dependency enables `parallel`.

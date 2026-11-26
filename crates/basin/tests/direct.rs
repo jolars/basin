@@ -566,7 +566,7 @@ fn parallel_pool_sizes_preserve_the_trajectory() {
             .install(|| {
                 Executor::new(
                     quadratic(3),
-                    no_geometry(),
+                    no_geometry().with_parallel_evaluation(),
                     PointState::new(vec![0.0; 3]),
                 )
                 .max_iter(12)

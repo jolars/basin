@@ -1,3 +1,4 @@
+use crate::{SerialEvaluation, core::parallel::CostBatch};
 use rand_distr::uniform::SampleUniform;
 
 use crate::core::constraint::evaluation::BoxProblem;
@@ -173,7 +174,7 @@ pub enum DeCrossover {
 ///   mutation formulas, binomial and exponential crossover, and generation-wise
 ///   dithering. Donors and solution quality are checked against this version.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct De<F: Scalar = f64> {
+pub struct De<F: Scalar = f64, Evaluation = SerialEvaluation> {
     pop_size_override: Option<usize>,
     f: F,
     cr: f64,
@@ -182,6 +183,8 @@ pub struct De<F: Scalar = f64> {
     mutation: DeMutation,
     crossover: DeCrossover,
     dither: Option<(F, F)>,
+    #[cfg_attr(feature = "serde", serde(skip))]
+    evaluation: std::marker::PhantomData<fn() -> Evaluation>,
 }
 
 impl<F: Scalar> De<F> {
@@ -190,6 +193,7 @@ impl<F: Scalar> De<F> {
     /// in [`Solver::init`]) and a PRNG seeded from `seed`.
     pub fn new(seed: u64) -> Self {
         Self {
+            evaluation: std::marker::PhantomData,
             pop_size_override: None,
             f: F::from_f64(0.8).unwrap(),
             cr: 0.9,
@@ -216,7 +220,7 @@ impl<F: Scalar> De<F> {
     }
 }
 
-impl<F: Scalar> De<F> {
+impl<F: Scalar, Evaluation> De<F, Evaluation> {
     /// Select a mutation rule; defaults to [`DeMutation::Rand1`].
     ///
     /// Initialization checks the final population size against this rule,
@@ -500,19 +504,17 @@ where
     trial
 }
 
-impl<P, V, F> Solver<P, PopulationProgress<V, F>> for De<F>
+impl<P, V, F, Evaluation> Solver<P, PopulationProgress<V, F>>
+    for De<F, Evaluation>
 where
-    F: Scalar + SampleUniform + crate::core::parallel::MaybeSend,
-    P: CostFunction<Param = V, Output = F>
-        + BoxProblem<Param = V>
-        + crate::core::parallel::MaybeSync,
-    P::Error: crate::core::parallel::MaybeSend,
+    F: Scalar + SampleUniform,
+    P: CostFunction<Param = V, Output = F> + BoxProblem<Param = V>,
+    Evaluation: CostBatch<P>,
     V: VectorLen
         + Clone
         + SampleUniformBox
         + ScaledAdd<F>
         + ScaleInPlace<F>
-        + crate::core::parallel::MaybeSync
         + std::ops::Index<usize, Output = F>
         + std::ops::IndexMut<usize, Output = F>,
     V: crate::VectorLen + std::ops::Index<usize, Output = F>,
@@ -536,7 +538,7 @@ where
         assert!(n > 0, "De requires non-empty parameter bounds");
         let pop_size = self
             .pop_size_override
-            .unwrap_or_else(|| Self::default_pop_size(n));
+            .unwrap_or_else(|| De::<F>::default_pop_size(n));
         // Check the final configuration so builder order cannot affect validity.
         let minimum = self.mutation.minimum_pop_size();
         assert!(
@@ -553,7 +555,7 @@ where
             pop_size,
             &mut rng,
         );
-        state.costs = problem.cost_batch(&state.candidates)?;
+        state.costs = Evaluation::evaluate(problem, &state.candidates)?;
         sort_population_ascending(&mut state.candidates, &mut state.costs);
         state.select_best_member();
         self.rng = Some(rng);
@@ -605,9 +607,8 @@ where
             trials.push(trial);
         }
         // All trials are built from the frozen current generation, so they
-        // are independent, so evaluate them in one batch (parallel under the
-        // `parallel` feature).
-        let trial_costs = problem.cost_batch(&trials)?;
+        // are independent, so evaluate them in one batch.
+        let trial_costs = Evaluation::evaluate(problem, &trials)?;
 
         // Greedy selection: `<=` (not `<`) lets equal-cost trials take
         // over, which keeps the population moving on plateaus without
@@ -624,6 +625,35 @@ where
         sort_population_ascending(&mut state.candidates, &mut state.costs);
         state.select_best_member();
         Ok(crate::SolverStep::from((state, None)))
+    }
+}
+
+#[cfg(feature = "parallel")]
+impl<F: Scalar> De<F> {
+    /// Evaluate independent candidates on the active Rayon pool.
+    pub fn with_parallel_evaluation(self) -> De<F, crate::ParallelEvaluation> {
+        let Self {
+            pop_size_override,
+            f,
+            cr,
+            seed,
+            rng,
+            mutation,
+            crossover,
+            dither,
+            evaluation: _,
+        } = self;
+        De {
+            pop_size_override,
+            f,
+            cr,
+            seed,
+            rng,
+            mutation,
+            crossover,
+            dither,
+            evaluation: std::marker::PhantomData,
+        }
     }
 }
 

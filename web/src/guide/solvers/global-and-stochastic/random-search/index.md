@@ -98,7 +98,7 @@ constraint blocks; it samples the box rather than a general feasible set.
 
 `RandomSearch::new(lambda, seed)` requires a positive batch size. A larger
 batch uses more cost evaluations per iteration and can expose more
-independent work to the `parallel` feature. Compare runs using cost
+independent work when threaded evaluation is enabled. Compare runs using cost
 evaluations when their batch sizes differ.
 
 Executor budgets are checked between complete iterations. Initialization
@@ -125,8 +125,9 @@ additional evaluations outside the search.
 `PopulationProgress` stores the population and its matching objective
 values, with the best member as its current representative. `RandomSearch`
 owns a `ChaCha8Rng` and the configured seed. It samples proposals in a
-fixed order and batches independent objective evaluations; the `parallel`
-feature preserves that order for a deterministic objective.
+fixed order and batches independent objective evaluations. With the
+`parallel` feature, call `with_parallel_evaluation()` to run batches concurrently
+while preserving proposal order.
 
 `PopulationProgress::from_population` accepts exactly `lambda` finite
 vectors with the bounds' dimension. Fresh initialization resets progress

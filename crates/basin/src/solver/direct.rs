@@ -1,11 +1,11 @@
 use crate::core::constraint::evaluation::BoxProblem;
 use crate::core::convergence::optional_tolerance;
 use crate::core::math::{Scalar, VectorIndex, VectorLen};
-use crate::core::parallel::{MaybeSend, MaybeSync};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{PointState, State};
 use crate::core::termination::Termination;
+use crate::{SerialEvaluation, core::parallel::CostBatch};
 
 mod rectangle;
 use rectangle::{Rectangle, Work};
@@ -63,9 +63,9 @@ use rectangle::{Rectangle, Work};
 /// cancellation, and stagnation. Budgets and cancellation are checked between
 /// complete subdivision sweeps, so the last sweep can exceed an evaluation
 /// budget. Storage grows as `O(n * evaluations)`; cost ties can make sweeps
-/// large. Independent probes use [`Problem::cost_batch`], preserving numerical
-/// results with the optional `parallel` feature. Actual callback scheduling
-/// may differ under parallel execution.
+/// large. Independent probes are evaluated serially by default. Use
+/// `with_parallel_evaluation()` with the `parallel` feature to evaluate
+/// them on the active Rayon pool.
 ///
 /// # Numerical safeguards
 ///
@@ -90,7 +90,7 @@ use rectangle::{Rectangle, Work};
 /// `Vec<F>`, `nalgebra::DVector<F>`, `ndarray::Array1<F>`, and `faer::Col<F>`
 /// support both `F = f64` (default) and `f32`, with their corresponding backend
 /// features. Only [`VectorLen`], [`VectorIndex<F>`], and `Clone` are required.
-/// With `parallel`, the problem and parameter must be `Sync`, and the output
+/// With threaded evaluation, the problem and parameter must be `Sync`, and the output
 /// and problem error must be `Send`.
 ///
 /// # Example
@@ -133,11 +133,13 @@ use rectangle::{Rectangle, Work};
 /// (MIT). Basin implements the published algorithm independently.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
-pub struct Direct<F: Scalar = f64> {
+pub struct Direct<F: Scalar = f64, Evaluation = SerialEvaluation> {
     epsilon: F,
     radius_tolerance: Option<F>,
     volume_tolerance: Option<F>,
     work: Option<Work<F>>,
+    #[cfg_attr(feature = "serde", serde(skip))]
+    evaluation: std::marker::PhantomData<fn() -> Evaluation>,
 }
 
 /// Borrowed geometry of the live incumbent rectangle after a DIRECT sweep.
@@ -167,6 +169,7 @@ pub struct RectangleRef<'a, F: Scalar = f64> {
 impl<F: Scalar> Default for Direct<F> {
     fn default() -> Self {
         Self {
+            evaluation: std::marker::PhantomData,
             epsilon: F::from_f64(1e-4).unwrap(),
             radius_tolerance: Some(F::from_f64(1e-6).unwrap()),
             volume_tolerance: None,
@@ -176,6 +179,14 @@ impl<F: Scalar> Default for Direct<F> {
 }
 
 impl<F: Scalar> Direct<F> {
+    /// Construct original DIRECT with epsilon `1e-4`, normalized radius
+    /// tolerance `1e-6`, and no volume tolerance.
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl<F: Scalar, Evaluation> Direct<F, Evaluation> {
     /// Borrow the current incumbent's normalized rectangle geometry.
     pub fn best_rectangle(&self) -> Option<RectangleRef<'_, F>> {
         let work = self.work.as_ref()?;
@@ -188,11 +199,6 @@ impl<F: Scalar> Direct<F> {
             level: rectangle.level(),
             rectangle_count: work.rectangles.len(),
         })
-    }
-    /// Construct original DIRECT with epsilon `1e-4`, normalized radius
-    /// tolerance `1e-6`, and no volume tolerance.
-    pub fn new() -> Self {
-        Self::default()
     }
 
     /// Set the potential-improvement factor (default `1e-4`).
@@ -240,12 +246,12 @@ impl<F: Scalar> Direct<F> {
     }
 }
 
-impl<P, V, F> Solver<P, PointState<V, F>> for Direct<F>
+impl<P, V, F, Evaluation> Solver<P, PointState<V, F>> for Direct<F, Evaluation>
 where
-    F: Scalar + MaybeSend,
-    P: CostFunction<Param = V, Output = F> + BoxProblem<Param = V> + MaybeSync,
-    P::Error: MaybeSend,
-    V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F> + BoxProblem<Param = V>,
+    Evaluation: CostBatch<P>,
+    V: Clone + VectorLen + VectorIndex<F>,
 {
     type Error = crate::ConstraintSolveError<P::Error>;
 
@@ -324,7 +330,7 @@ where
                     )),
                 )));
             };
-            let costs = problem.cost_batch(&probes.params)?;
+            let costs = Evaluation::evaluate(problem, &probes.params)?;
             work.divide(id, probes.axes, probes.centers, costs);
             if let Some(best) = work.best {
                 let rectangle = &work.rectangles[best];
@@ -415,5 +421,28 @@ where
             .into_iter()
             .chain(volume_report)
             .reduce(Termination::merge)
+    }
+}
+
+#[cfg(feature = "parallel")]
+impl<F: Scalar> Direct<F> {
+    /// Evaluate independent candidates on the active Rayon pool.
+    pub fn with_parallel_evaluation(
+        self,
+    ) -> Direct<F, crate::ParallelEvaluation> {
+        let Self {
+            epsilon,
+            radius_tolerance,
+            volume_tolerance,
+            work,
+            evaluation: _,
+        } = self;
+        Direct {
+            epsilon,
+            radius_tolerance,
+            volume_tolerance,
+            work,
+            evaluation: std::marker::PhantomData,
+        }
     }
 }

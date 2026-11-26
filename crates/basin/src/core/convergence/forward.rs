@@ -14,6 +14,32 @@ macro_rules! forward_setting {
     };
 }
 
+#[cfg(feature = "parallel")]
+macro_rules! forward_parallel_evaluation {
+    ([$($generics:tt)*] $solver:ident $(<$($arg:ident),+>)?) => {
+        impl<CG, CX, CC, CT, $($generics)*>
+            ConfiguredSolver<$solver $(<$($arg),+>)?, CG, CX, CC, CT>
+        {
+            #[doc = concat!("Configure [`with_parallel_evaluation`](", stringify!($solver), "::with_parallel_evaluation) while retaining convergence settings.")]
+            #[allow(clippy::type_complexity)] // Preserve the solver and convergence type parameters.
+            pub fn with_parallel_evaluation(
+                self,
+            ) -> ConfiguredSolver<$solver<$($($arg,)+)? crate::ParallelEvaluation>, CG, CX, CC, CT> {
+                self.map_solver($solver::with_parallel_evaluation)
+            }
+        }
+    };
+}
+
+#[cfg(feature = "parallel")]
+forward_parallel_evaluation!([V, M, F: Scalar] CmaEs<V, M, F>);
+#[cfg(feature = "parallel")]
+forward_parallel_evaluation!([F: Scalar] De<F>);
+#[cfg(feature = "parallel")]
+forward_parallel_evaluation!([V, F: Scalar, R] GlobalBestPso<V, F, R>);
+#[cfg(feature = "parallel")]
+forward_parallel_evaluation!([] RandomSearch);
+
 impl<CG, CX, CC, CT, So, F: Scalar>
     ConfiguredSolver<BarrierMethod<So, F>, CG, CX, CC, CT>
 {
@@ -157,8 +183,8 @@ impl<CG, CX, CC, CT, F: Scalar>
     forward_setting!(Bobyqa, with_npt, npt: usize);
 }
 
-impl<CG, CX, CC, CT, I, V, F>
-    ConfiguredSolver<DeInject<I, V, F>, CG, CX, CC, CT>
+impl<CG, CX, CC, CT, I, V, F, Evaluation>
+    ConfiguredSolver<DeInject<I, V, F, Evaluation>, CG, CX, CC, CT>
 where
     F: Scalar,
     I: MemeticInner<V, F>,
@@ -177,8 +203,8 @@ where
     }
 }
 
-impl<CG, CX, CC, CT, I, V, F>
-    ConfiguredSolver<DeInject<I, V, F>, CG, CX, CC, CT>
+impl<CG, CX, CC, CT, I, V, F, Evaluation>
+    ConfiguredSolver<DeInject<I, V, F, Evaluation>, CG, CX, CC, CT>
 where
     F: Scalar,
     I: MemeticInner<V, F>,
@@ -203,7 +229,9 @@ where
     forward_setting!(MaLsCh, with_initial_scale_fallback, scale: F);
 }
 
-impl<CG, CX, CC, CT, F: Scalar> ConfiguredSolver<De<F>, CG, CX, CC, CT> {
+impl<CG, CX, CC, CT, F: Scalar, Evaluation>
+    ConfiguredSolver<De<F, Evaluation>, CG, CX, CC, CT>
+{
     forward_setting!(De, with_pop_size, pop_size: usize);
     forward_setting!(De, with_f, f: F);
     forward_setting!(De, with_cr, cr: f64);
@@ -322,8 +350,8 @@ impl<CG, CX, CC, CT, F: Scalar>
     forward_setting!(BrentDerivative, with_relative_position_tolerance, value: F);
 }
 
-impl<CG, CX, CC, CT, V, M, F: Scalar>
-    ConfiguredSolver<CmaEs<V, M, F>, CG, CX, CC, CT>
+impl<CG, CX, CC, CT, V, M, F: Scalar, Evaluation>
+    ConfiguredSolver<CmaEs<V, M, F, Evaluation>, CG, CX, CC, CT>
 {
     forward_setting!(CmaEs, with_absolute_distribution_size_tolerance, value: impl Into<Option<F>>);
     forward_setting!(CmaEs, with_lambda, lambda: usize);
@@ -422,8 +450,8 @@ impl<CG, CX, CC, CT, F: Scalar>
     forward_setting!(GoldenSection, with_relative_position_tolerance, value: F);
 }
 
-impl<CG, CX, CC, CT, V, F: Scalar, R>
-    ConfiguredSolver<GlobalBestPso<V, F, R>, CG, CX, CC, CT>
+impl<CG, CX, CC, CT, V, F: Scalar, R, Evaluation>
+    ConfiguredSolver<GlobalBestPso<V, F, R, Evaluation>, CG, CX, CC, CT>
 {
     forward_setting!(GlobalBestPso, with_swarm_size, swarm_size: usize);
     forward_setting!(GlobalBestPso, with_initial_velocities, velocities: Option<Vec<V>>);
@@ -542,8 +570,8 @@ impl<CG, CX, CC, CT, Sub, F: Scalar, Mode, W>
     forward_setting!(TrustRegion, with_max_inner_attempts, n: u32);
 }
 
-impl<CG, CX, CC, CT, I, V, M, F>
-    ConfiguredSolver<CmaInject<I, V, M, F>, CG, CX, CC, CT>
+impl<CG, CX, CC, CT, I, V, M, F, Evaluation>
+    ConfiguredSolver<CmaInject<I, V, M, F, Evaluation>, CG, CX, CC, CT>
 where
     F: Scalar,
     I: MemeticInner<V, F>,
