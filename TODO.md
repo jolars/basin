@@ -71,11 +71,12 @@ whether to adopt the conditional changes below.
   can carry a point and constraint violation before objective evaluation.
   Selection notifications identify how the point was chosen and preserve the
   raw counts at publication. Objective targets and stalls use an eligible
-  objective incumbent. See the [Basin 4.0 migration guide](web/src/guide/migrating-to-v4/index.md#checked-progress-records).
+  objective incumbent. See the [Basin 4.0 migration
+  guide](web/src/guide/migrating-to-v4/index.md#checked-progress-records).
 - [x] **Define which inner results composed solvers can consume.** The
   constrained-DE prototype repairs and reevaluates selected inner points,
   including selections made before the first objective evaluation.
-- [ ] **Make threaded evaluation opt-in at the call site.** Have `parallel`
+- [x] **Make threaded evaluation opt-in at the call site.** Have `parallel`
   enable threaded execution and keep serial APIs usable when a dependency
   enables the feature. Apply thread-safety bounds to the threaded path.
   Validate the migration on Basin's built-in finite-difference adapters and
@@ -116,22 +117,23 @@ whether to adopt the conditional changes below.
   measurement ideas. Keep the prototype in tests and benchmarks. Prototype
   native bincode-next fingerprinting on a live checkpoint and record what
   support it needs beyond the Serde path. Document which compatibility
-  checks callers own when serializing directly. See the
-  [checkpoint codec fixture and results](crates/basin/tests/fixtures/checkpoint_codecs/README.md).
+  checks callers own when serializing directly. See the [checkpoint codec
+  fixture and
+  results](crates/basin/tests/fixtures/checkpoint_codecs/README.md).
 - [x] **Use `Checkpoint` for exact continuation.** Rename `ExactCheckpoint` to
   `Checkpoint`, `ExactCheckpointWriter` to `CheckpointWriter`, and
   `read_exact_checkpoint` to `read_checkpoint`. Keep one generic checkpoint
-  containing the solver, progress state, and authoritative evaluation counts.
-  Keep capture, `CheckpointSink`, and `resume_from_checkpoint` independent of
-  codecs so callers can attach their own writer and choose their format,
-  fingerprint, and compatibility policy. Document the 4.0 name changes
-  together with the state-only API migration.
+  containing the solver, progress state, and authoritative evaluation
+  counts. Keep capture, `CheckpointSink`, and `resume_from_checkpoint`
+  independent of codecs so callers can attach their own writer and choose
+  their format, fingerprint, and compatibility policy. Document the 4.0 name
+  changes together with the state-only API migration.
 - [x] **Give state-only snapshots explicit names.** Rename the existing
   `CheckpointWriter` to `StateSnapshotWriter` and the existing
   `read_checkpoint` to `read_state_snapshot`. Document how to load a
   snapshot and start a fresh run with `Executor::new`.
-- [ ] **Evaluate additional checkpoint codecs in 4.x.** Keep Postcard opt-in
-  and use the existing checkpoint and sink APIs for any additional readers and
+- [ ] **Evaluate additional checkpoint codecs in 4.x.** Keep Postcard opt-in and
+  use the existing checkpoint and sink APIs for any additional readers and
   writers. Start with Serde codecs. If a native codec needs access to a
   built-in solver's saved state, prototype a private BFGS wire record and
   measure the conversion and maintenance costs before expanding coverage.
@@ -841,14 +843,14 @@ The prototype establishes these contracts:
 - Explicit selection events retain independent point, objective, and violation
   snapshots. The executor stamps iteration and all raw counts at publication,
   including clean mid-step stops. Republishing a selection preserves its age.
-  The state exposes checked selections. It has no objective-ordered selection
-  or population capability, so objective targets and stalls cannot attach to it.
+  The state exposes checked selections. It has no objective-ordered selection or
+  population capability, so objective targets and stalls cannot attach to it.
 - An injection inner must accept the original constrained problem. Seeds follow
-  the representative ranking. A consumable run can supply a selected point
-  with or without an objective. The outer solver repairs it to the box,
-  rechecks feasibility, evaluates the objective if feasible, and applies the
-  same trial selection rule. With no selection, the existing member stays in
-  place. The inner must honor the nonlinear blocks.
+  the representative ranking. A consumable run can supply a selected point with
+  or without an objective. The outer solver repairs it to the box, rechecks
+  feasibility, evaluates the objective if feasible, and applies the same trial
+  selection rule. With no selection, the existing member stays in place. The
+  inner must honor the nonlinear blocks.
 - Nonempty nonlinear callback attempts charge `residual_evals`, including
   failures and malformed output. Zero-count blocks skip callbacks. Objective and
   derivative calls preserve their existing categories. Same-problem inner
