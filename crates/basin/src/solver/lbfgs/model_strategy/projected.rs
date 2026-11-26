@@ -156,10 +156,10 @@ where
     fn next_iter(
         &mut self,
         p: &mut Problem<P>,
-        s: FirstOrderState<V, F>,
-    ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
+        s: &mut FirstOrderState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let x = s.param().as_float_slice();
-        let g = crate::GradientState::gradient(&s)
+        let g = crate::GradientState::gradient(s)
             .expect("initialized gradient")
             .as_float_slice();
         let lower = p.inner().lower().as_float_slice();

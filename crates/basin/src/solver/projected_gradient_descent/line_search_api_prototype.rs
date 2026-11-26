@@ -36,8 +36,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: FirstOrderState<V, F>,
-    ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
+        state: &mut FirstOrderState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let (x, cost, gradient) =
             state.current().expect("initialized progress");
         let mut direction = gradient.clone();
@@ -50,7 +50,6 @@ where
         )?
         else {
             return Ok(crate::SolverStep::stopped(
-                state,
                 Termination::numerical_failure(
                     "Projected Armijo search exhausted.",
                 ),
@@ -59,7 +58,7 @@ where
         state
             .replace(accepted.param, accepted.cost, accepted.gradient)
             .expect("matching gradient dimension");
-        Ok(crate::SolverStep::completed(state))
+        Ok(crate::SolverStep::completed())
     }
 }
 

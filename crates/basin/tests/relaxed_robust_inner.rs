@@ -169,13 +169,13 @@ fn relaxed_robust_callback_errors_retain_counts() {
     let mut solver = RelaxedInner::new(LevenbergMarquardt::new());
     problem.counts_mut().cost_evals = 7;
     problem.counts_mut().hessian_evals = 3;
-    let state = solver
+    let mut state = solver
         .init(&mut problem, PointState::new(vec![0.0]))
         .unwrap();
     assert_eq!(problem.counts().residual_evals, 1);
     assert_eq!(problem.counts().jacobian_evals, 1);
     location.fail.store(true, Ordering::Relaxed);
-    let error = solver.next_iter(&mut problem, state).unwrap_err();
+    let error = solver.next_iter(&mut problem, &mut state).unwrap_err();
     assert_eq!(error, ConstraintSolveError::Evaluation("residual failed"));
     assert_eq!(problem.counts().cost_evals, 7);
     assert_eq!(problem.counts().hessian_evals, 3);

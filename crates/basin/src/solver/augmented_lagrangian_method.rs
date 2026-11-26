@@ -463,8 +463,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: SelectedState<V, F>,
-    ) -> Result<crate::SolverStep<SelectedState<V, F>>, Self::Error> {
+        state: &mut SelectedState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         self.stationarity_norm = F::infinity();
         self.stationarity_initial_norm = F::infinity();
         // Minimize the augmented Lagrangian at the current (λ, ρ) on a
@@ -543,12 +543,12 @@ where
             .termination
             .can_continue_as_inner(crate::PartialResultPolicy::Consume)
         {
-            return Ok(crate::SolverStep::from((
-                state,
-                result.report.into_outer_termination(
+            return Ok({
+                let termination = result.report.into_outer_termination(
                     crate::PartialResultPolicy::Consume,
-                ),
-            )));
+                );
+                crate::SolverStep::new(termination.is_none(), termination)
+            });
         }
 
         // Publish a coherent original objective and feasibility pair only after
@@ -562,7 +562,6 @@ where
         let c_norm = c.norm_squared().sqrt();
         if !cost.is_finite() || !c_norm.is_finite() {
             return Ok(crate::SolverStep::stopped(
-                state,
                 Termination::numerical_failure(
                     "The augmented-Lagrangian solve returned a non-finite original objective or equality residual.",
                 ),
@@ -575,7 +574,7 @@ where
             cost,
             ViolationReport::new(self.c_norm, ViolationMeasure::L2),
         );
-        self.select_incumbent(&mut state);
+        self.select_incumbent(state);
 
         // Multiplier update vs. penalty increase. The first solve
         // (c_norm_prev = +∞) always takes the update branch.
@@ -589,7 +588,7 @@ where
             self.rho = self.rho * self.rho_increase;
         }
 
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::completed())
     }
 
     fn should_check_iterate_change(&self) -> bool {

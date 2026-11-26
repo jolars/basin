@@ -514,8 +514,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PopulationProgress<V, F>,
-    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
+        state: &mut PopulationProgress<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let history = &mut self.history;
         let lo = problem.inner().sampling_lower().clone();
         let hi = problem.inner().sampling_upper().clone();
@@ -565,7 +565,7 @@ where
                 history.ls_application_count[replaced_idx] = 0;
             }
         }
-        sort_parallel_arrays(&mut state, history);
+        sort_parallel_arrays(state, history);
 
         // -- Phase 2: pick the LS target c_LS. --
         // S_LS membership (Molina §4.3 step 1): never LS'd, or the last
@@ -646,7 +646,7 @@ where
             &mut self.inner_diagnostics,
             problem,
             crate::core::inner::diagnostics::Context {
-                outer_iteration: crate::State::iter(&state),
+                outer_iteration: crate::State::iter(state),
                 member: Some(c_ls),
                 resumed,
                 initial_scale,
@@ -673,12 +673,12 @@ where
             .can_continue_as_inner(crate::PartialResultPolicy::Consume)
         {
             // Leave the chain dropped so a future pick would restart.
-            return Ok(crate::SolverStep::from((
-                state,
-                inner_result.report.into_outer_termination(
+            return Ok({
+                let termination = inner_result.report.into_outer_termination(
                     crate::PartialResultPolicy::Consume,
-                ),
-            )));
+                );
+                crate::SolverStep::new(termination.is_none(), termination)
+            });
         }
 
         // Adopt the chain's best *evaluated* point (xbest), not
@@ -712,9 +712,9 @@ where
         }
 
         // -- Phase 6: resort all parallel arrays jointly. --
-        sort_parallel_arrays(&mut state, history);
+        sort_parallel_arrays(state, history);
 
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::completed())
     }
 }
 

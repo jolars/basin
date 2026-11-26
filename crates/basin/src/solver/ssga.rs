@@ -500,8 +500,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PopulationProgress<V, F>,
-    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
+        state: &mut PopulationProgress<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
         let rng = self
@@ -538,7 +538,7 @@ where
 
         sort_population_ascending(&mut state.candidates, &mut state.costs);
         state.select_best_member();
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::completed())
     }
 }
 

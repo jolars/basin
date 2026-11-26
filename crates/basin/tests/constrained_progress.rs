@@ -291,11 +291,11 @@ fn failed_adapter_work_is_charged_before_propagating_error() {
     use basin::{Problem, SelectedState, Solver};
     let mut problem = Problem::new(FailingEquality(Equality::new(1)));
     let mut solver = solver();
-    let state = solver
+    let mut state = solver
         .init(&mut problem, SelectedState::new(vec![0.0]))
         .unwrap();
     assert_eq!(problem.counts().total_work(), 1);
-    let err = solver.next_iter(&mut problem, state).unwrap_err();
+    let err = solver.next_iter(&mut problem, &mut state).unwrap_err();
     assert_eq!(
         err,
         basin::ConstraintSolveError::Evaluation("gradient callback aborted")

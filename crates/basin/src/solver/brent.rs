@@ -155,8 +155,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PointState<F, F>,
-    ) -> Result<crate::SolverStep<PointState<F, F>>, Self::Error> {
+        state: &mut PointState<F, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let s = self.inner.as_mut().expect("Brent::init must run first");
         let half = F::from_f64(0.5).unwrap();
         let two = F::from_f64(2.0).unwrap();
@@ -250,7 +250,7 @@ where
         // Brent's bracket-collapse `terminate` only fires once
         // `|u - x| < 2·tol`, so the two coincide at convergence.
         state.replace(u, fu);
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::completed())
     }
 
     fn terminate(&self, _state: &PointState<F, F>) -> Option<Termination<F>> {

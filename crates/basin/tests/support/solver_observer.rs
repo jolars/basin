@@ -63,8 +63,8 @@ impl Solver<Linear, PointState<f64>> for Probe {
     fn next_iter(
         &mut self,
         p: &mut Problem<Linear>,
-        mut s: PointState<f64>,
-    ) -> Result<basin::SolverStep<PointState<f64>>, Self::Error> {
+        s: &mut PointState<f64>,
+    ) -> Result<basin::SolverStep<f64>, Self::Error> {
         let x = *s.param()
             - if self.scenario == Scenario::Flat {
                 0.0
@@ -78,14 +78,15 @@ impl Solver<Linear, PointState<f64>> for Probe {
             return Err("step");
         }
         s.replace(x, cost);
-        Ok(basin::SolverStep::from((
-            s,
-            (self.scenario == Scenario::MidStop).then(|| {
+        if self.scenario == Scenario::MidStop {
+            Ok(basin::SolverStep::stopped(
                 basin::Termination::numerical_failure(
                     "External solver reported a numerical failure.",
-                )
-            }),
-        )))
+                ),
+            ))
+        } else {
+            Ok(basin::SolverStep::completed())
+        }
     }
     fn check_convergence(
         &mut self,

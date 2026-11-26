@@ -164,14 +164,14 @@ impl Solver<Sphere, FirstOrderState<Vec<f64>>> for ExternalDescent {
     fn next_iter(
         &mut self,
         problem: &mut Problem<Sphere>,
-        mut state: FirstOrderState<Vec<f64>>,
-    ) -> Result<basin::SolverStep<FirstOrderState<Vec<f64>>>, Infallible> {
+        state: &mut FirstOrderState<Vec<f64>>,
+    ) -> Result<basin::SolverStep<f64>, Infallible> {
         let (x, _, gradient) = state.take_current().unwrap();
         let mut next = x;
         next.scaled_add(-0.1, &gradient);
         let (cost, gradient) = problem.cost_and_gradient(&next)?;
         state.replace(next, cost, gradient).unwrap();
-        Ok(basin::SolverStep::from((state, None)))
+        Ok(basin::SolverStep::completed())
     }
 }
 
@@ -790,9 +790,8 @@ fn a_first_order_solver_must_initialize_the_gradient() {
         fn next_iter(
             &mut self,
             _: &mut Problem<Sphere>,
-            _: FirstOrderState<Vec<f64>>,
-        ) -> Result<basin::SolverStep<FirstOrderState<Vec<f64>>>, Infallible>
-        {
+            _: &mut FirstOrderState<Vec<f64>>,
+        ) -> Result<basin::SolverStep<f64>, Infallible> {
             unreachable!()
         }
     }
@@ -841,8 +840,8 @@ impl<P, S: Progress, So: Solver<P, S>> Solver<P, S> for HistoryStop<So> {
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: S,
-    ) -> Result<basin::SolverStep<S>, Self::Error> {
+        state: &mut S,
+    ) -> Result<basin::SolverStep<S::Float>, Self::Error> {
         self.solver.next_iter(problem, state)
     }
     fn reset_convergence(&mut self) {
@@ -1006,8 +1005,8 @@ impl Solver<FallibleSphere, PointState<Vec<f64>>> for EvaluationScript {
     fn next_iter(
         &mut self,
         problem: &mut Problem<FallibleSphere>,
-        mut state: PointState<Vec<f64>>,
-    ) -> Result<basin::SolverStep<PointState<Vec<f64>>>, Self::Error> {
+        state: &mut PointState<Vec<f64>>,
+    ) -> Result<basin::SolverStep<f64>, Self::Error> {
         let x = vec![0.5];
         let (cost, _) = problem.cost_and_gradient(&x)?;
         problem.residual_and_jacobian(&x)?;
@@ -1019,13 +1018,10 @@ impl Solver<FallibleSphere, PointState<Vec<f64>>> for EvaluationScript {
             // A consumed candidate must not escape through observation on Err.
             problem.cost_and_gradient(&vec![-1.0])?;
         }
-        Ok(basin::SolverStep::from((
-            state,
-            Some(basin::Termination::custom(
-                "external.SolverConverged",
-                "External solver stopping predicate: SolverConverged.",
-                vec![],
-            )),
+        Ok(basin::SolverStep::stopped(basin::Termination::custom(
+            "external.SolverConverged",
+            "External solver stopping predicate: SolverConverged.",
+            vec![],
         )))
     }
 }

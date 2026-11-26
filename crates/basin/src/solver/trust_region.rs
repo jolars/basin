@@ -787,10 +787,10 @@ fn tr_next_iter<P, V, F, E>(
     max_inner: u32,
     trials: &mut Option<Vec<diagnostics::Trial<F>>>,
     problem: &mut Problem<P>,
-    mut state: FirstOrderState<V, F>,
+    state: &mut FirstOrderState<V, F>,
     evaluator: &mut impl TrialEvaluation<P, V, F, Error = E>,
     mut attempt: impl FnMut(&mut Problem<P>, &V, &V, F) -> Result<Step<V, F>, E>,
-) -> Result<(FirstOrderState<V, F>, Option<Termination<F>>, bool), E>
+) -> Result<(Option<Termination<F>>, bool), E>
 where
     F: Scalar,
     V: Clone + ScaledAdd<F> + NormSquared<F> + VectorLen,
@@ -839,7 +839,6 @@ where
                 .set_evaluation(cost_old, g)
                 .expect("gradient dimension differs from parameter");
             return Ok((
-                state,
                 Some(Termination::numerical_failure(
                     "The trust-region subproblem returned a non-finite predicted reduction.",
                 )),
@@ -866,7 +865,7 @@ where
             state
                 .set_evaluation(cost_old, g)
                 .expect("gradient dimension differs from parameter");
-            return Ok((state, Some(reason), false));
+            return Ok((Some(reason), false));
         }
 
         let mut trial = state.param().clone();
@@ -879,7 +878,6 @@ where
                 .set_evaluation(cost_old, g)
                 .expect("gradient dimension differs from parameter");
             return Ok((
-                state,
                 Some(Termination::numerical_stall(
                     "The trust-region trial leaves every parameter unchanged.",
                 )),
@@ -945,7 +943,6 @@ where
                     .set_evaluation(cost_old, g)
                     .expect("gradient dimension differs from parameter");
                 return Ok((
-                    state,
                     Some(Termination::numerical_failure(
                         "The trust-region trial produced an unusable gradient.",
                     )),
@@ -955,7 +952,7 @@ where
             state
                 .replace(trial, cost_trial, g)
                 .expect("gradient dimension differs from parameter");
-            return Ok((state, None, true));
+            return Ok((None, true));
         }
         // Reject: radius has shrunk; retry at the same iterate.
     }
@@ -967,7 +964,7 @@ where
     state
         .set_evaluation(cost_old, g)
         .expect("gradient dimension differs from parameter");
-    Ok((state, None, false))
+    Ok((None, false))
 }
 
 impl<P, Sub, V, M, F> Solver<P, FirstOrderState<V, F>>
@@ -998,8 +995,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: FirstOrderState<V, F>,
-    ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
+        state: &mut FirstOrderState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         // One Hessian per outer iteration, reused across all inner radius
         // reductions at zero extra derivative evaluations (the gradient is
         // likewise fixed while x is).
@@ -1022,9 +1019,9 @@ where
             |_, _, g, radius| Ok(subproblem.solve(g, &b, radius)),
         );
         self.workspace.matrix = Some(b);
-        let (state, reason, accepted) = result?;
+        let (reason, accepted) = result?;
         self.rejected_step = !accepted;
-        Ok(crate::SolverStep::from((state, reason)))
+        Ok(crate::SolverStep::new(reason.is_none(), reason))
     }
 }
 
@@ -1056,15 +1053,15 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: FirstOrderState<V, F>,
-    ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
+        state: &mut FirstOrderState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         // No Hessian is formed: every product goes through the problem's
         // counted `hessian_product`. Unlike exact mode, an inner radius
         // reduction re-pays its CG products at the same iterate (the
         // shrunken radius truncates CG earlier, so re-attempts get
         // cheaper); `hessian_product_evals` makes that cost visible.
         let subproblem = &self.subproblem;
-        let (state, reason, accepted) = tr_next_iter(
+        let (reason, accepted) = tr_next_iter(
             &mut self.radius,
             self.max_radius,
             self.eta,
@@ -1080,7 +1077,7 @@ where
             },
         )?;
         self.rejected_step = !accepted;
-        Ok(crate::SolverStep::from((state, reason)))
+        Ok(crate::SolverStep::new(reason.is_none(), reason))
     }
 }
 
@@ -1293,18 +1290,18 @@ mod tests {
         ] {
             let mut problem = Problem::new(Quadratic);
             let mut radius = 1.0;
-            let state =
+            let mut state =
                 tr_init(&mut problem, FirstOrderState::new(vec![1.0, 0.0]))
                     .unwrap();
             let counts = *problem.counts();
-            let (state, reason, _) = tr_next_iter(
+            let (reason, _) = tr_next_iter(
                 &mut radius,
                 100.0,
                 0.125,
                 10,
                 &mut None,
                 &mut problem,
-                state,
+                &mut state,
                 &mut ObjectiveTrial,
                 |_, _, _, _| {
                     Ok(Step {
@@ -1573,9 +1570,10 @@ mod tests {
             .init(&mut problem, FirstOrderState::new(vec![-1.2, 1.0]))
             .unwrap();
         for _ in 0..3 {
-            let (next, _, _) =
-                solver.next_iter(&mut problem, state).unwrap().into_parts();
-            state = next;
+            let (_, _) = solver
+                .next_iter(&mut problem, &mut state)
+                .unwrap()
+                .into_parts();
         }
         let counts = problem.counts();
         assert!(counts.hessian_product_evals > 0);

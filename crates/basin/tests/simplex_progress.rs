@@ -311,9 +311,8 @@ impl basin::Solver<Sphere, basin::SimplexProgress<Vec<f64>>>
     fn next_iter(
         &mut self,
         p: &mut basin::Problem<Sphere>,
-        mut state: basin::SimplexProgress<Vec<f64>>,
-    ) -> Result<basin::SolverStep<basin::SimplexProgress<Vec<f64>>>, Infallible>
-    {
+        state: &mut basin::SimplexProgress<Vec<f64>>,
+    ) -> Result<basin::SolverStep<f64>, Infallible> {
         let (mut vertices, mut costs) = state.take_vertices();
         for (v, cost) in vertices.iter_mut().zip(&mut costs) {
             for x in v.iter_mut() {
@@ -325,12 +324,9 @@ impl basin::Solver<Sphere, basin::SimplexProgress<Vec<f64>>>
         p.residual_and_jacobian(&vertices[0])?;
         p.hessian_product(&vertices[0], &vertices[0])?;
         state.replace(vertices, costs).unwrap();
-        Ok(basin::SolverStep::stopped(
-            state,
-            basin::Termination::Application(basin::ApplicationStop::new(
-                "user_requested",
-            )),
-        ))
+        Ok(basin::SolverStep::stopped(basin::Termination::Application(
+            basin::ApplicationStop::new("user_requested"),
+        )))
     }
 }
 

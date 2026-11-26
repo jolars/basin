@@ -263,10 +263,9 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<LogBarrier<'p, P, F>>,
-        state: S,
-    ) -> Result<crate::SolverStep<S>, Self::Error> {
+        state: &mut S,
+    ) -> Result<crate::SolverStep<S::Float>, Self::Error> {
         let crate::SolverStep {
-            state,
             termination: reason,
             completed,
         } = self.inner.next_iter(problem, state)?;
@@ -277,7 +276,6 @@ where
             && problem.inner().strict_feasibility(state.param()) == Some(true)
         {
             Ok(crate::SolverStep {
-                state,
                 completed,
                 termination: Some(Termination::custom(
                     "barrier.strict_feasibility",
@@ -287,7 +285,6 @@ where
             })
         } else {
             Ok(crate::SolverStep {
-                state,
                 termination: reason,
                 completed,
             })
@@ -563,17 +560,16 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PointState<V, F>,
-    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
+        state: &mut PointState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         self.accepted_iterate = false;
         self.stationarity_norm = F::infinity();
         if self.phase == BarrierPhase::Failed {
-            return Ok(crate::SolverStep::from((
-                state,
-                Some(Termination::numerical_failure(
+            return Ok(crate::SolverStep::stopped(
+                Termination::numerical_failure(
                     "The barrier method could not initialize a finite barrier model.",
-                )),
-            )));
+                ),
+            ));
         }
 
         if self.phase == BarrierPhase::PhaseOne {
@@ -623,12 +619,12 @@ where
                 .can_continue_as_inner(crate::PartialResultPolicy::Consume)
             {
                 self.phase = BarrierPhase::Failed;
-                return Ok(crate::SolverStep::from((
-                    state,
-                    result.report.into_outer_termination(
+                return Ok({
+                    let termination = result.report.into_outer_termination(
                         crate::PartialResultPolicy::Consume,
-                    ),
-                )));
+                    );
+                    crate::SolverStep::new(termination.is_none(), termination)
+                });
             }
 
             // Only the inner solver's gradient convergence can certify a
@@ -643,12 +639,11 @@ where
             let feasibility = strict_feasibility(problem.inner(), candidate);
             let Some(is_strictly_feasible) = feasibility else {
                 self.phase = BarrierPhase::Failed;
-                return Ok(crate::SolverStep::from((
-                    state,
-                    Some(Termination::numerical_failure(
+                return Ok(crate::SolverStep::stopped(
+                    Termination::numerical_failure(
                         "Phase I produced non-finite constraint slacks.",
-                    )),
-                )));
+                    ),
+                ));
             };
 
             if is_strictly_feasible {
@@ -656,7 +651,6 @@ where
                 if !cost.is_finite() {
                     self.phase = BarrierPhase::Failed;
                     return Ok(crate::SolverStep::stopped(
-                        state,
                         Termination::numerical_failure(
                             "Phase I returned a strict point with a non-finite original objective.",
                         ),
@@ -669,7 +663,7 @@ where
                 self.mu = self.mu0;
                 self.gap = F::infinity();
                 self.accepted_iterate = true;
-                return Ok(crate::SolverStep::from((state, None)));
+                return Ok(crate::SolverStep::completed());
             }
 
             state.replace(candidate.clone(), F::infinity());
@@ -684,18 +678,17 @@ where
                         * self.mu;
                 if phase_one_gap <= self.phase_one_tol {
                     self.phase = BarrierPhase::Failed;
-                    return Ok(crate::SolverStep::from((
-                        state,
-                        Some(Termination::numerical_failure(
+                    return Ok(crate::SolverStep::stopped(
+                        Termination::numerical_failure(
                             "A centered Phase I subproblem reached its gap threshold without strict feasibility.",
-                        )),
-                    )));
+                        ),
+                    ));
                 }
 
                 self.mu = self.mu / self.reduction;
             }
 
-            return Ok(crate::SolverStep::from((state, None)));
+            return Ok(crate::SolverStep::completed());
         }
 
         // Minimize the barrier objective at the current μ on a *separate*
@@ -788,30 +781,28 @@ where
             .can_continue_as_inner(crate::PartialResultPolicy::Consume)
         {
             self.phase = BarrierPhase::Failed;
-            return Ok(crate::SolverStep::from((
-                state,
-                result.report.into_outer_termination(
+            return Ok({
+                let termination = result.report.into_outer_termination(
                     crate::PartialResultPolicy::Consume,
-                ),
-            )));
+                );
+                crate::SolverStep::new(termination.is_none(), termination)
+            });
         }
 
         // Publish the original objective only after verifying the barrier domain.
         let candidate = result.state.param();
         if strict_feasibility(problem.inner(), candidate) != Some(true) {
             self.phase = BarrierPhase::Failed;
-            return Ok(crate::SolverStep::from((
-                state,
-                Some(Termination::numerical_failure(
+            return Ok(crate::SolverStep::stopped(
+                Termination::numerical_failure(
                     "The inner barrier solve returned a point outside the strict barrier domain.",
-                )),
-            )));
+                ),
+            ));
         }
         let cost = problem.cost(candidate)?;
         if !cost.is_finite() {
             self.phase = BarrierPhase::Failed;
             return Ok(crate::SolverStep::stopped(
-                state,
                 Termination::numerical_failure(
                     "The inner barrier solve returned a non-finite original objective.",
                 ),
@@ -827,7 +818,7 @@ where
         if self.stationarity_satisfied() {
             self.mu = self.mu / self.reduction;
         }
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::completed())
     }
 
     fn should_check_iterate_change(&self) -> bool {

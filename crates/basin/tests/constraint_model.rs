@@ -334,10 +334,10 @@ fn a_changed_declaration_is_a_typed_error() {
         calls: Cell::new(0),
     });
     let mut solver = Cobyla::new();
-    let state = solver.init(&mut p, SelectedState::new(vec![1.0])).unwrap();
+    let mut state = solver.init(&mut p, SelectedState::new(vec![1.0])).unwrap();
     p.inner().count.set(2);
     assert!(matches!(
-        solver.next_iter(&mut p, state),
+        solver.next_iter(&mut p, &mut state),
         Err(ConstraintSolveError::InvalidConstraints(
             ConstraintError::LayoutChanged
         ))

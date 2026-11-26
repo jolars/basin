@@ -310,7 +310,7 @@ where
     }
 }
 
-type CobylaStep<V, F, E> = Result<crate::SolverStep<SelectedState<V, F>>, E>;
+type CobylaStep<F, E> = Result<crate::SolverStep<F>, E>;
 
 impl<V, F: Scalar> Cobyla<V, F> {
     fn init_with<P>(
@@ -366,7 +366,7 @@ impl<V, F: Scalar> Cobyla<V, F> {
     fn next_iter_with<P>(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: SelectedState<V, F>,
+        state: &mut SelectedState<V, F>,
         mut constraints: impl FnMut(
             &mut Problem<P>,
             &V,
@@ -374,7 +374,7 @@ impl<V, F: Scalar> Cobyla<V, F> {
             Vec<F>,
             ConstraintSolveError<P::Error>,
         >,
-    ) -> CobylaStep<V, F, ConstraintSolveError<P::Error>>
+    ) -> CobylaStep<F, ConstraintSolveError<P::Error>>
     where
         P: CostFunction<Param = V, Output = F>,
         V: Clone
@@ -407,7 +407,7 @@ impl<V, F: Scalar> Cobyla<V, F> {
             };
             work.step(&mut eval)?
         };
-        publish(work, param, &mut state);
+        publish(work, param, state);
 
         let reason = match transition {
             Transition::Converged => Some(Termination::custom(
@@ -423,7 +423,7 @@ impl<V, F: Scalar> Cobyla<V, F> {
             )),
             Transition::Continue | Transition::RhoReduced => None,
         };
-        Ok(crate::SolverStep::from((state, reason)))
+        Ok(crate::SolverStep::new(reason.is_none(), reason))
     }
 
     fn radius_termination(&self) -> Option<Termination<F>> {
@@ -471,8 +471,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: SelectedState<V, F>,
-    ) -> Result<crate::SolverStep<SelectedState<V, F>>, Self::Error> {
+        state: &mut SelectedState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let layout = self
             .layout
             .take()

@@ -544,15 +544,12 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: SelectedPopulationProgress<V, F>,
-    ) -> Result<SolverStep<SelectedPopulationProgress<V, F>>, Self::Error> {
+        state: &mut SelectedPopulationProgress<V, F>,
+    ) -> Result<SolverStep<F>, Self::Error> {
         if self.position == self.script.len() {
-            return Ok(SolverStep::stopped(
-                state,
-                basin::Termination::Application(basin::ApplicationStop::new(
-                    "script exhausted",
-                )),
-            ));
+            return Ok(SolverStep::stopped(basin::Termination::Application(
+                basin::ApplicationStop::new("script exhausted"),
+            )));
         }
         let params = self.script[self.position].clone();
         assert_eq!(params.len(), state.members().unwrap().len());
@@ -564,8 +561,8 @@ where
                 *original = trial;
             }
         }
-        publish(problem, &mut state, members, self.evaluate_infeasible)?;
-        Ok(SolverStep::completed(state))
+        publish(problem, state, members, self.evaluate_infeasible)?;
+        Ok(SolverStep::completed())
     }
 }
 impl<V: VectorLen + Clone + IndexMut<usize, Output = F>, F: Scalar>
@@ -678,15 +675,12 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: SelectedPopulationProgress<V, F>,
-    ) -> Result<SolverStep<SelectedPopulationProgress<V, F>>, Self::Error> {
+        state: &mut SelectedPopulationProgress<V, F>,
+    ) -> Result<SolverStep<F>, Self::Error> {
         let step = self.outer.next_iter(problem, state)?;
-        if step.termination.is_some()
-            || step.state.iter() % self.refine_every != 0
-        {
+        if step.termination.is_some() || state.iter() % self.refine_every != 0 {
             return Ok(step);
         }
-        let mut state = step.state;
         let members = state.members().unwrap();
         let mut order: Vec<_> = (0..members.len()).collect();
         order.sort_by(|&a, &b| {
@@ -708,7 +702,7 @@ where
                 .report
                 .into_outer_termination(PartialResultPolicy::Consume)
             {
-                return Ok(SolverStep::stopped(state, stop));
+                return Ok(SolverStep::stopped(stop));
             }
             let Some(selection) = result.state.selected_record() else {
                 continue;
@@ -723,12 +717,12 @@ where
                 members[i] = refined;
                 publish(
                     problem,
-                    &mut state,
+                    state,
                     members,
                     self.outer.evaluate_infeasible,
                 )?;
             }
         }
-        Ok(SolverStep::completed(state))
+        Ok(SolverStep::completed())
     }
 }

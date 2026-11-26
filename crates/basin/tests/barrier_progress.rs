@@ -86,11 +86,11 @@ fn failed_phase_two_work_is_charged_before_propagating_error() {
     let mut problem = Problem::new(Inequality::new(1));
     let mut solver = solver();
     let seed = solver.seed(&vec![0.0]);
-    let state = solver.init(&mut problem, seed).unwrap();
+    let mut state = solver.init(&mut problem, seed).unwrap();
     let before = *problem.counts();
     problem.inner().fail_gradient.set(true);
     assert_eq!(
-        solver.next_iter(&mut problem, state).err().unwrap(),
+        solver.next_iter(&mut problem, &mut state).err().unwrap(),
         basin::ConstraintSolveError::Evaluation("gradient callback aborted")
     );
     assert_eq!(problem.counts().cost_evals, before.cost_evals + 1);
@@ -220,9 +220,8 @@ where
     fn next_iter(
         &mut self,
         _: &mut Problem<P>,
-        _: basin::FirstOrderState<Vec<f64>>,
-    ) -> Result<basin::SolverStep<basin::FirstOrderState<Vec<f64>>>, Self::Error>
-    {
+        _: &mut basin::FirstOrderState<Vec<f64>>,
+    ) -> Result<basin::SolverStep<f64>, Self::Error> {
         unreachable!()
     }
 }
@@ -231,12 +230,12 @@ where
 fn failed_phase_one_adapter_work_is_charged() {
     let mut problem = Problem::new(Inequality::new(1));
     let mut solver = BarrierMethod::with_inner_solver(AbortInner);
-    let state = solver
+    let mut state = solver
         .init(&mut problem, basin::PointState::new(vec![3.0]))
         .unwrap();
     assert_eq!(problem.counts().total_work(), 0);
     assert_eq!(
-        solver.next_iter(&mut problem, state).err().unwrap(),
+        solver.next_iter(&mut problem, &mut state).err().unwrap(),
         basin::ConstraintSolveError::Evaluation("inner init aborted")
     );
     assert_eq!(problem.counts().cost_evals, 1);

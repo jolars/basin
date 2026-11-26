@@ -784,8 +784,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: S,
-    ) -> Result<SolverStep<S>, Self::Error> {
+        state: &mut S,
+    ) -> Result<SolverStep<S::Float>, Self::Error> {
         let step = self.solver.next_iter(problem, state)?;
         // A partial step can publish new state without advancing either cache key.
         self.step.invalidate_cache();
@@ -1083,13 +1083,12 @@ mod tests {
         fn next_iter(
             &mut self,
             _: &mut Problem<()>,
-            mut state: PointState<Vec<f64>>,
-        ) -> Result<SolverStep<PointState<Vec<f64>>>, Self::Error> {
+            state: &mut PointState<Vec<f64>>,
+        ) -> Result<SolverStep<f64>, Self::Error> {
             state.replace(vec![if self.0 { 0.0 } else { 1.0 }], 0.0);
             let completed = self.0;
             self.0 = true;
             Ok(SolverStep {
-                state,
                 completed,
                 termination: None,
             })

@@ -361,7 +361,8 @@ decision about serialized data and checkpoint compatibility.
 
 Stopping decisions carry owned evidence in `Termination<F>`. The executor
 publishes `TerminationReport<F>` with the observation stage and completed
-iteration count. `SolverStep::completed` is independent of its optional
+iteration count. Solvers update progress through a mutable reference.
+`SolverStep::completed` is independent of its optional
 termination, and every successful step publishes counts and coherent progress.
 Ordinary results retain the report and authoritative evaluation counts. Exact
 continuation preserves convergence history and publishes a new event.

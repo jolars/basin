@@ -579,8 +579,10 @@ fn reused_solver_resizes_scratch_and_keeps_best_snapshot_independent() {
         let snapshot_cost = state.selected_record().unwrap().cost.unwrap();
         // Solver callbacks reuse their own parameter buffer. The selected
         // snapshot remains unchanged until the executor publishes the boundary.
-        let (mut state, _, _) =
-            solver.next_iter(&mut problem, state).unwrap().into_parts();
+        let (_, _) = solver
+            .next_iter(&mut problem, &mut state)
+            .unwrap()
+            .into_parts();
         assert_eq!(state.selected_record().unwrap().param, &snapshot);
         assert_eq!(
             state.selected_record().unwrap().cost.unwrap(),

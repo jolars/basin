@@ -49,7 +49,14 @@ def build(scratch, output, variant, archive, env):
     for patch in VARIANTS[variant]:
         run("git", "apply", str(HERE / f"{patch}.patch"), cwd=tree)
 
-    source = (HERE / "step_overhead.rs").read_text()
+    source = run(
+        "git",
+        "show",
+        "7dbb501:crates/basin/benches/step_overhead/step_overhead.rs",
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    ).stdout
     if "borrowed-report" in VARIANTS[variant]:
         owned_call = "stepper.step().unwrap().report().map(read)"
         assert source.count(owned_call) == 1

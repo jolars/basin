@@ -635,8 +635,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PopulationProgress<V, F>,
-    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
+        state: &mut PopulationProgress<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let lower = problem.inner().lower().clone();
         let upper = problem.inner().upper().clone();
         let global_best = self
@@ -717,14 +717,14 @@ where
                 self.global_best_cost = self.personal_best_costs[i];
             }
         }
-        self.sort_particles_ascending(&mut state);
+        self.sort_particles_ascending(state);
         state
             .publish_representative_from(
                 self.global_best_position.as_ref().unwrap(),
                 self.global_best_cost,
             )
             .expect("updated swarm has matching member shapes");
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::completed())
     }
 
     fn terminate(

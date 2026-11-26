@@ -431,8 +431,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PointState<V, F>,
-    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
+        state: &mut PointState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let template = state.param().clone();
         let work = self
             .work
@@ -469,7 +469,7 @@ where
             )),
             Transition::Continue => None,
         };
-        Ok(crate::SolverStep::from((state, reason)))
+        Ok(crate::SolverStep::new(reason.is_none(), reason))
     }
 
     fn terminate(&self, _state: &PointState<V, F>) -> Option<Termination<F>> {
@@ -577,8 +577,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: SelectedState<V, F>,
-    ) -> Result<crate::SolverStep<SelectedState<V, F>>, Self::Error> {
+        state: &mut SelectedState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let m = self
             .constraint_count
             .expect("MADS initialization declares the constraint count");
@@ -629,7 +629,7 @@ where
             )),
             Transition::Continue => None,
         };
-        Ok(crate::SolverStep::from((state, reason)))
+        Ok(crate::SolverStep::new(reason.is_none(), reason))
     }
 
     fn terminate(
@@ -724,8 +724,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PointState<V, F>,
-    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
+        state: &mut PointState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let n = state.param().vec_len();
         let lower = to_vec(problem.inner().lower(), n);
         let upper = to_vec(problem.inner().upper(), n);
@@ -768,7 +768,7 @@ where
             )),
             Transition::Continue => None,
         };
-        Ok(crate::SolverStep::from((state, reason)))
+        Ok(crate::SolverStep::new(reason.is_none(), reason))
     }
 
     fn terminate(&self, _state: &PointState<V, F>) -> Option<Termination<F>> {

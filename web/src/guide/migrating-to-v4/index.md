@@ -105,6 +105,23 @@ partial or completed steps. Implement
 Custom states report the reason from `State::publish_selection`.
 Use `EvaluatedState::evaluated_record()` for a complete evaluated iterate.
 
+## In-place solver steps
+
+Custom solvers implement `next_iter` with `state: &mut S` and return
+`Result<SolverStep<S::Float>, Self::Error>`. Update the borrowed state
+before returning. Use `SolverStep::completed()`, `SolverStep::partial()`,
+`SolverStep::stopped(reason)`, or
+`SolverStep::completed_with_termination(reason)`. The executor publishes
+the state and counts after a successful call. A typed error discards the
+partially updated state and retains the attempted evaluation counts.
+
+Replace `SolverStep::from((state, termination))` with
+`SolverStep::new(termination.is_none(), termination)` to preserve the
+convention that a step with a stopping reason is partial.
+
+For manual solver calls, pass `&mut state` and read it after a successful
+call. Use `into_parts()` to extract the completion flag and termination.
+
 ## Nelder–Mead stopping
 
 Remove calls to `with_absolute_cost_change_tolerance` and

@@ -345,9 +345,7 @@ impl<F: Scalar> StepOutcome<F> {
 /// ```
 pub struct Stepper<P, S: State, So> {
     problem: Problem<P>,
-    // `Option<S>` because `Solver::next_iter` consumes the state by
-    // value. A hard error cannot restore that owned value, so the slot
-    // remains empty after a failed step. Successful steps restore it.
+    // A hard error discards the partially updated state.
     state: Option<S>,
     solver: So,
     control: RunControl<S>,
@@ -367,7 +365,7 @@ where
     /// # Panics
     ///
     /// Panics after [`step`](Self::step) returns `Err`, because the
-    /// failing solver call consumed the state.
+    /// stepper discarded the partially updated state.
     pub fn state(&self) -> &S {
         self.state
             .as_ref()
@@ -428,7 +426,7 @@ where
     ///
     /// Returns `Err` when the underlying problem returns `Err` from any
     /// cost/gradient/residual/Jacobian/Hessian call during the
-    /// step. A hard error consumes the state and may leave solver machinery
+    /// step. A hard error discards the state and may leave solver machinery
     /// partially updated. It does not set [`finished`](Self::finished).
     /// Callers can inspect [`counts`](Self::counts), then drop the stepper or
     /// call [`into_checkpoint`](Self::into_checkpoint), which returns `None`.
@@ -456,15 +454,34 @@ where
                 TerminationStage::Boundary,
                 starting_iter,
             ))
+        } else if let Some(report) = check_boundary(
+            &self.problem,
+            &EvalCounts::default(),
+            self.state.as_ref().unwrap(),
+            &mut self.solver,
+            &mut self.control,
+        ) {
+            StepOutcome::Stopped(report)
         } else {
-            step_once(
+            // Discard unpublished state on a typed error or during unwinding.
+            struct DiscardOnFailure<'a, S>(&'a mut Option<S>);
+            impl<S> Drop for DiscardOnFailure<'_, S> {
+                fn drop(&mut self) {
+                    *self.0 = None;
+                }
+            }
+
+            let guard = DiscardOnFailure(&mut self.state);
+            let outcome = step_once(
                 &mut self.problem,
                 &EvalCounts::default(),
-                &mut self.state,
+                guard.0.as_mut().unwrap(),
                 &mut self.solver,
                 &mut self.control,
                 &mut selection,
-            )?
+            )?;
+            std::mem::forget(guard);
+            outcome
         };
         let stopped = match &outcome {
             StepOutcome::Continue => None,
@@ -557,8 +574,8 @@ where
     ///
     /// Returns `Some` after successful initialization, between completed
     /// steps, or after a clean stop (including cancellation and a mid-step
-    /// stop). Returns `None` after a hard [`step`](Self::step) error consumed
-    /// the state; partial solver machinery cannot form an exact checkpoint.
+    /// stop). A typed error or panic during a solver transition discards
+    /// unpublished state. In that case this method returns `None`.
     ///
     /// Moves the solver and state and copies the authoritative counters
     /// without requiring `Clone` or serialization. Extraction performs no
@@ -607,33 +624,47 @@ where
     /// # Panics
     ///
     /// Panics after [`step`](Self::step) returns `Err`, because the
-    /// failing solver call consumed the state.
+    /// stepper discarded the partially updated state.
     pub fn into_state(self) -> S {
         self.state.expect("state slot is Some at drop")
     }
 }
 
-/// Single-iteration core, shared by [`Stepper::step`] (owned) and
-/// [`run_loop_with_control`] (borrowed). Reads the current state via `state_slot`,
-/// checks termination, and either returns `Stopped` (slot left
-/// untouched) or hands the state to `solver.next_iter`, mirrors the
-/// wrapper's counter delta (relative to `baseline`) onto the state,
-/// increments the iteration counter, and puts the returned state back.
+fn check_boundary<P, S, So>(
+    problem: &Problem<P>,
+    baseline: &EvalCounts,
+    state: &S,
+    solver: &mut So,
+    control: &mut RunControl<S>,
+) -> Option<TerminationReport<S::Float>>
+where
+    S: State + CountsMirror,
+    So: Solver<P, S>,
+{
+    control
+        .check(
+            state,
+            problem.counts().gradient_evals - baseline.gradient_evals,
+        )
+        .or_else(|| solver.check_convergence(problem, state))
+        .map(|termination| {
+            TerminationReport::new(
+                termination,
+                TerminationStage::Boundary,
+                state.iter(),
+            )
+        })
+}
+
+/// Drive one transition for both standalone and composed runs.
 ///
-/// The `baseline` captures the wrapper count at the start of the
-/// containing run so the state mirror always reflects *per-run* work:
-/// for [`Stepper::step`]/[`Executor::run`] it is
-/// [`EvalCounts::default`] (fresh wrapper), for nested
-/// [`run_loop_with_control`] calls it is the wrapper count at run-loop entry.
-///
-/// The state slot must be `Some` on entry and is `Some` after an `Ok`
-/// return. If [`Solver::next_iter`] returns `Err`, it has consumed the
-/// previous state, so the slot remains empty and execution cannot resume
-/// from this pair. The wrapper's charged counts remain available.
+/// On success, a solver step publishes coherent progress and counts relative
+/// to the run's baseline. On error the caller discards the state and the
+/// wrapper retains the charged counts.
 fn step_once<P, S, So>(
     problem: &mut Problem<P>,
     baseline: &EvalCounts,
-    state_slot: &mut Option<S>,
+    state: &mut S,
     solver: &mut So,
     control: &mut RunControl<S>,
     selection: &mut Option<crate::SelectionChange>,
@@ -642,32 +673,18 @@ where
     S: State + CountsMirror,
     So: Solver<P, S>,
 {
-    let state = state_slot.as_ref().expect("cannot step after a hard error");
-    if let Some(termination) = control
-        .check(state, {
-            problem.counts().gradient_evals - baseline.gradient_evals
-        })
-        .or_else(|| solver.check_convergence(problem, state))
-    {
-        return Ok(StepOutcome::Stopped(TerminationReport::new(
-            termination,
-            TerminationStage::Boundary,
-            state.iter(),
-        )));
-    }
     let SolverStep {
-        state: mut next,
         completed,
         termination,
-    } = solver.next_iter(problem, state_slot.take().unwrap())?;
-    control.validate(&next);
-    next.mirror(&problem.counts().delta_since(baseline));
+        ..
+    } = solver.next_iter(problem, state)?;
+    control.validate(state);
+    state.mirror(&problem.counts().delta_since(baseline));
     if completed {
-        next.increment_iter();
+        state.increment_iter();
     }
-    *selection = next.publish_selection();
-    let iteration = next.iter();
-    *state_slot = Some(next);
+    *selection = state.publish_selection();
+    let iteration = state.iter();
     Ok(match termination {
         Some(termination) => StepOutcome::Stopped(TerminationReport::new(
             termination,
@@ -735,17 +752,21 @@ where
     // Mirror init's work onto the state before any termination check.
     state.mirror(&problem.counts().delta_since(&baseline));
     state.publish_selection();
-    let mut slot = Some(state);
     let reason = loop {
+        if let Some(report) =
+            check_boundary(problem, &baseline, &state, solver, control)
+        {
+            break report;
+        }
         match step_once(
-            problem, &baseline, &mut slot, solver, control, &mut None,
+            problem, &baseline, &mut state, solver, control, &mut None,
         )? {
             StepOutcome::Continue => continue,
             StepOutcome::Stopped(reason) => break reason,
         }
     };
     Ok(OptimizationResult::new(
-        slot.take().expect("state slot is Some on stop"),
+        state,
         problem.counts().delta_since(&baseline),
         reason,
     ))

@@ -582,8 +582,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: FirstOrderState<V, F>,
-    ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
+        state: &mut FirstOrderState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         self.next_iter_bounded_search(problem, state, None, None)
     }
 }
@@ -592,13 +592,10 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
     fn next_iter_bounded_search<P>(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: FirstOrderState<V, F>,
+        state: &mut FirstOrderState<V, F>,
         mut model: Option<&mut model_strategy::RunWorkspace<F>>,
         mut projected: Option<&mut model_strategy::ProjectedSettings<F>>,
-    ) -> Result<
-        crate::SolverStep<FirstOrderState<V, F>>,
-        crate::ConstraintSolveError<P::Error>,
-    >
+    ) -> Result<crate::SolverStep<F>, crate::ConstraintSolveError<P::Error>>
     where
         P: CostFunction<Param = V, Output = F>
             + Gradient<Gradient = V>
@@ -618,7 +615,6 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
                 .set_evaluation(f_old, g_v)
                 .expect("gradient dimension differs from parameter");
             return Ok(crate::SolverStep::stopped(
-                state,
                 Termination::numerical_failure(
                     "L-BFGS-B requires a finite point, cost, and gradient.",
                 ),
@@ -670,7 +666,7 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
                     tolerance,
                     None,
                 );
-                return Ok(crate::SolverStep::from((state, Some(stop))));
+                return Ok(crate::SolverStep::stopped(stop));
             }
 
             let col = history.ws.len();
@@ -705,7 +701,6 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
                             "gradient dimension differs from parameter",
                         );
                         return Ok(crate::SolverStep::stopped(
-                            state,
                             Termination::numerical_failure(
                                 "Alternative L-BFGS model failed after exhausting restarts.",
                             ),
@@ -765,12 +760,11 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
                             state.set_evaluation(f_old, g_v).expect(
                                 "gradient dimension differs from parameter",
                             );
-                            return Ok(crate::SolverStep::from((
-                                state,
-                                Some(Termination::numerical_failure(
+                            return Ok(crate::SolverStep::stopped(
+                                Termination::numerical_failure(
                                     "L-BFGS-B Cauchy-point construction failed after exhausting restarts.",
-                                )),
-                            )));
+                                ),
+                            ));
                         }
                     }
                 }
@@ -843,12 +837,11 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
                             state.set_evaluation(f_old, g_v).expect(
                                 "gradient dimension differs from parameter",
                             );
-                            return Ok(crate::SolverStep::from((
-                                state,
-                                Some(Termination::numerical_failure(
+                            return Ok(crate::SolverStep::stopped(
+                                Termination::numerical_failure(
                                     "L-BFGS-B compact subspace factorization failed after exhausting restarts.",
-                                )),
-                            )));
+                                ),
+                            ));
                         }
                     }
 
@@ -897,12 +890,11 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
                             state.set_evaluation(f_old, g_v).expect(
                                 "gradient dimension differs from parameter",
                             );
-                            return Ok(crate::SolverStep::from((
-                                state,
-                                Some(Termination::numerical_failure(
+                            return Ok(crate::SolverStep::stopped(
+                                Termination::numerical_failure(
                                     "L-BFGS-B reduced-gradient construction failed after exhausting restarts.",
-                                )),
-                            )));
+                                ),
+                            ));
                         }
                     }
 
@@ -951,12 +943,11 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
                             state.set_evaluation(f_old, g_v).expect(
                                 "gradient dimension differs from parameter",
                             );
-                            return Ok(crate::SolverStep::from((
-                                state,
-                                Some(Termination::numerical_failure(
+                            return Ok(crate::SolverStep::stopped(
+                                Termination::numerical_failure(
                                     "L-BFGS-B subspace minimization failed after exhausting restarts.",
-                                )),
-                            )));
+                                ),
+                            ));
                         }
                     }
                     // `subsm` writes the projected step to `z`; its status carries
@@ -1145,12 +1136,11 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
                     state
                         .set_evaluation(f_old, g_v)
                         .expect("gradient dimension differs from parameter");
-                    return Ok(crate::SolverStep::from((
-                        state,
-                        Some(Termination::numerical_failure(
+                    return Ok(crate::SolverStep::stopped(
+                        Termination::numerical_failure(
                             "L-BFGS-B line search failed with empty curvature history.",
-                        )),
-                    )));
+                        ),
+                    ));
                 }
                 if try_restart(history, &mut restart_budget) {
                     continue;
@@ -1158,12 +1148,11 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
                     state
                         .set_evaluation(f_old, g_v)
                         .expect("gradient dimension differs from parameter");
-                    return Ok(crate::SolverStep::from((
-                        state,
-                        Some(Termination::numerical_failure(
+                    return Ok(crate::SolverStep::stopped(
+                        Termination::numerical_failure(
                             "L-BFGS-B line search failed after exhausting restarts.",
-                        )),
-                    )));
+                        ),
+                    ));
                 }
             };
 
@@ -1308,7 +1297,7 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
                 .replace(param_new, f_new, g_new)
                 .expect("gradient dimension differs from parameter");
             self.previous_cost = Some(f_old);
-            return Ok(crate::SolverStep::from((state, None)));
+            return Ok(crate::SolverStep::completed());
         }
     }
 }
@@ -1362,8 +1351,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: FirstOrderState<V, F>,
-    ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
+        state: &mut FirstOrderState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let (f_old, g_v) = state
             .take_evaluation()
             .expect("L-BFGS requires initialized progress");
@@ -1372,7 +1361,6 @@ where
                 .set_evaluation(f_old, g_v)
                 .expect("gradient dimension differs from parameter");
             return Ok(crate::SolverStep::stopped(
-                state,
                 Termination::numerical_failure(
                     "L-BFGS requires a finite point, cost, and gradient.",
                 ),
@@ -1481,12 +1469,11 @@ where
             state
                 .set_evaluation(f_old, g_v)
                 .expect("gradient dimension differs from parameter");
-            return Ok(crate::SolverStep::from((
-                state,
-                Some(Termination::numerical_failure(
+            return Ok(crate::SolverStep::stopped(
+                Termination::numerical_failure(
                     "L-BFGS line search returned no finite positive step.",
-                )),
-            )));
+                ),
+            ));
         }
 
         let (param_new, f_new, g_new) =
@@ -1506,7 +1493,6 @@ where
                 .set_evaluation(f_old, g_v)
                 .expect("gradient dimension differs from parameter");
             return Ok(crate::SolverStep::stopped(
-                state,
                 Termination::numerical_failure(
                     "L-BFGS line search returned a nonfinite evaluation.",
                 ),
@@ -1552,7 +1538,7 @@ where
         state
             .replace(param_new, f_new, g_new)
             .expect("gradient dimension differs from parameter");
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::completed())
     }
 }
 

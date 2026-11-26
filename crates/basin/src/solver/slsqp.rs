@@ -925,39 +925,34 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: SelectedFirstOrderState<V, F>,
-    ) -> Result<
-        crate::SolverStep<SelectedFirstOrderState<V, F>>,
-        ConstraintSolveError<P::Error>,
-    > {
+        state: &mut SelectedFirstOrderState<V, F>,
+    ) -> Result<crate::SolverStep<F>, ConstraintSolveError<P::Error>> {
         let work = self.work.as_mut().expect("SLSQP must be initialized");
         if work.failure.is_some() {
             work.diagnostics(state.param());
-            return Ok(crate::SolverStep::from((
-                state,
-                Some(Termination::numerical_failure(format!(
+            return Ok(crate::SolverStep::stopped(
+                Termination::numerical_failure(format!(
                     "SLSQP numerical failure: {:?}.",
                     work.failure
-                ))),
-            )));
+                )),
+            ));
         }
         if work.free.is_empty() {
             // No step is possible, so disabled convergence leaves termination
             // to executor controls without attempting empty BFGS updates.
-            return Ok(crate::SolverStep::from((state, None)));
+            return Ok(crate::SolverStep::completed());
         }
         let old_cost = state.current_record().unwrap().cost.unwrap();
         let merit = old_cost + work.weighted_violation();
         if !merit.is_finite() {
             work.failure = Some(SlsqpFailure::NonFiniteEvaluation);
             work.diagnostics(state.param());
-            return Ok(crate::SolverStep::from((
-                state,
-                Some(Termination::numerical_failure(format!(
+            return Ok(crate::SolverStep::stopped(
+                Termination::numerical_failure(format!(
                     "SLSQP numerical failure: {:?}.",
                     work.failure
-                ))),
-            )));
+                )),
+            ));
         }
         let mut alpha = F::one();
         let mut accepted = None;
@@ -1009,13 +1004,12 @@ where
         let Some((param, cost, c)) = accepted else {
             work.failure = Some(SlsqpFailure::LineSearchFailed);
             work.diagnostics(state.param());
-            return Ok(crate::SolverStep::from((
-                state,
-                Some(Termination::numerical_failure(format!(
+            return Ok(crate::SolverStep::stopped(
+                Termination::numerical_failure(format!(
                     "SLSQP numerical failure: {:?}.",
                     work.failure
-                ))),
-            )));
+                )),
+            ));
         };
         let mut gradient =
             self.gradient_buffer.take().unwrap_or_else(|| param.clone());
@@ -1033,13 +1027,12 @@ where
         {
             work.failure = Some(SlsqpFailure::NonFiniteEvaluation);
             work.diagnostics(state.param());
-            return Ok(crate::SolverStep::from((
-                state,
-                Some(Termination::numerical_failure(format!(
+            return Ok(crate::SolverStep::stopped(
+                Termination::numerical_failure(format!(
                     "SLSQP numerical failure: {:?}.",
                     work.failure
-                ))),
-            )));
+                )),
+            ));
         }
         work.scratch.y.resize(work.free.len(), F::zero());
         for (j, &i) in work.free.iter().enumerate() {
@@ -1084,7 +1077,7 @@ where
             .expect("SLSQP gradient dimensions were checked");
         self.gradient_buffer = previous;
         state.select_current();
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::completed())
     }
     fn terminate(
         &self,

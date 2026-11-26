@@ -175,8 +175,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: FirstOrderState<F, F>,
-    ) -> Result<crate::SolverStep<FirstOrderState<F, F>>, Self::Error> {
+        state: &mut FirstOrderState<F, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let s = self
             .inner
             .as_mut()
@@ -280,7 +280,6 @@ where
         }
         if u == s.x || !(s.a < u && u < s.b) {
             return Ok(crate::SolverStep::stopped(
-                state,
                 Termination::numerical_stall(
                     "BrentDerivative cannot move inside the remaining bracket.",
                 ),
@@ -334,7 +333,7 @@ where
         // bracket-collapse `terminate` only fires once the bracket has shrunk
         // below tolerance, so the two coincide at convergence.
         state.replace(u, fu, du).expect("scalar dimensions agree");
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::completed())
     }
 
     fn terminate(

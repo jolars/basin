@@ -288,8 +288,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: FirstOrderState<V, F>,
-    ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
+        state: &mut FirstOrderState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let (param, cost_old, g) =
             state.current().expect("BFGS requires initialized progress");
         let h = self
@@ -308,30 +308,24 @@ where
         let alpha = match search_result.outcome {
             LineSearchOutcome::Step(alpha) => alpha,
             LineSearchOutcome::Failed => {
-                return Ok(crate::SolverStep::from((
-                    state,
-                    Some(Termination::numerical_failure(
-                        "BFGS line search failed.",
-                    )),
-                )));
+                return Ok(crate::SolverStep::stopped(
+                    Termination::numerical_failure("BFGS line search failed."),
+                ));
             }
         };
 
         // A nonpositive step may indicate stagnation even away from a
         // stationary point, so it cannot establish convergence on its own.
         if !(alpha.is_finite() && alpha > F::zero()) {
-            return Ok(crate::SolverStep::from((
-                state,
-                Some(if alpha.is_finite() {
-                    Termination::numerical_stall(
-                        "The line search returned a nonpositive step without establishing stationarity.",
-                    )
-                } else {
-                    Termination::numerical_failure(
-                        "The line search returned a non-finite step.",
-                    )
-                }),
-            )));
+            return Ok(crate::SolverStep::stopped(if alpha.is_finite() {
+                Termination::numerical_stall(
+                    "The line search returned a nonpositive step without establishing stationarity.",
+                )
+            } else {
+                Termination::numerical_failure(
+                    "The line search returned a non-finite step.",
+                )
+            }));
         }
 
         // s = α d.
@@ -394,7 +388,7 @@ where
         state
             .replace(param, cost_new, g_new)
             .expect("gradient dimension differs from parameter");
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::completed())
     }
 }
 

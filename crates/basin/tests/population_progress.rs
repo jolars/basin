@@ -444,9 +444,8 @@ impl Solver<Sphere, PopulationProgress<Vec<f64>>> for ExternalPopulation {
     fn next_iter(
         &mut self,
         p: &mut basin::Problem<Sphere>,
-        mut state: PopulationProgress<Vec<f64>>,
-    ) -> Result<basin::SolverStep<PopulationProgress<Vec<f64>>>, Infallible>
-    {
+        state: &mut PopulationProgress<Vec<f64>>,
+    ) -> Result<basin::SolverStep<f64>, Infallible> {
         let (mut members, mut costs) = state.take_members();
         for (member, cost) in members.iter_mut().zip(&mut costs) {
             member[0] *= 0.5;
@@ -456,12 +455,9 @@ impl Solver<Sphere, PopulationProgress<Vec<f64>>> for ExternalPopulation {
         p.residual_and_jacobian(&members[0])?;
         p.hessian_product(&members[0], &members[0])?;
         state.replace(members, costs).unwrap();
-        Ok(basin::SolverStep::stopped(
-            state,
-            basin::Termination::Application(basin::ApplicationStop::new(
-                "user_requested",
-            )),
-        ))
+        Ok(basin::SolverStep::stopped(basin::Termination::Application(
+            basin::ApplicationStop::new("user_requested"),
+        )))
     }
 }
 
@@ -531,9 +527,8 @@ impl Solver<Sphere, basin::PointState<Vec<f64>>> for PartialRefinement {
     fn next_iter(
         &mut self,
         _: &mut basin::Problem<Sphere>,
-        _: basin::PointState<Vec<f64>>,
-    ) -> Result<basin::SolverStep<basin::PointState<Vec<f64>>>, Self::Error>
-    {
+        _: &mut basin::PointState<Vec<f64>>,
+    ) -> Result<basin::SolverStep<f64>, Self::Error> {
         unreachable!("the test inner terminates at initialization")
     }
     fn terminate(

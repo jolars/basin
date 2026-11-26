@@ -154,8 +154,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: MultiStartState,
-    ) -> Result<basin::SolverStep<MultiStartState>, Self::Error> {
+        state: &mut MultiStartState,
+    ) -> Result<basin::SolverStep<f64>, Self::Error> {
         let mut new_iterates: Vec<Vec<f64>> =
             Vec::with_capacity(state.iterates.len());
         let mut new_costs: Vec<f64> = Vec::with_capacity(state.iterates.len());
@@ -177,12 +177,12 @@ where
                     state.iterates.push(vec![0.0; 2]);
                     state.costs.push(f64::INFINITY);
                 }
-                return Ok(basin::SolverStep::from((
-                    state,
-                    result.report.into_outer_termination(
+                return Ok({
+                    let termination = result.report.into_outer_termination(
                         basin::PartialResultPolicy::Consume,
-                    ),
-                )));
+                    );
+                    basin::SolverStep::new(termination.is_none(), termination)
+                });
             }
 
             new_costs.push(result.current_record().unwrap().cost.unwrap());
@@ -192,7 +192,7 @@ where
         state.iterates = new_iterates;
         state.costs = new_costs;
         sort_by_cost(&mut state.iterates, &mut state.costs);
-        Ok(basin::SolverStep::from((state, None)))
+        Ok(basin::SolverStep::completed())
     }
 }
 
@@ -207,14 +207,13 @@ impl<P, S: State> Solver<P, S> for AlwaysFails {
     fn next_iter(
         &mut self,
         _problem: &mut Problem<P>,
-        state: S,
-    ) -> Result<basin::SolverStep<S>, Self::Error> {
-        Ok(basin::SolverStep::from((
-            state,
-            Some(basin::Termination::numerical_failure(
+        _state: &mut S,
+    ) -> Result<basin::SolverStep<S::Float>, Self::Error> {
+        Ok(basin::SolverStep::stopped(
+            basin::Termination::numerical_failure(
                 "External solver reported a numerical failure.",
-            )),
-        )))
+            ),
+        ))
     }
 }
 

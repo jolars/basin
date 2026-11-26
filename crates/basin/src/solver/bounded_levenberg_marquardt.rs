@@ -396,8 +396,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: PointState<V, F>,
-    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
+        state: &mut PointState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         self.next_evaluated(problem, state)
             .map_err(crate::ConstraintSolveError::Evaluation)
     }
@@ -448,8 +448,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<RobustLeastSquares<P, L, F, RW, I>>,
-        state: PointState<V, F>,
-    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
+        state: &mut PointState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         self.next_evaluated(problem, state)
             .map_err(crate::ConstraintSolveError::Evaluation)
     }
@@ -538,8 +538,8 @@ where
     fn next_evaluated<E: BoundedEvaluation<V, M, F, R>>(
         &mut self,
         problem: &mut E,
-        mut state: PointState<V, F>,
-    ) -> NllsStep<V, F, E::Error> {
+        state: &mut PointState<V, F>,
+    ) -> NllsStep<F, E::Error> {
         if let Some(trace) = &mut self.trace {
             trace.clear();
         }
@@ -554,12 +554,11 @@ where
                     "invalid_initial_model",
                 );
             }
-            return Ok(crate::SolverStep::from((
-                state,
-                Some(Termination::numerical_failure(
+            return Ok(crate::SolverStep::stopped(
+                Termination::numerical_failure(
                     "Bounded LM could not initialize a finite residual model.",
-                )),
-            )));
+                ),
+            ));
         }
         let r = match self.r_cache.take() {
             Some(r) => r,
@@ -581,12 +580,11 @@ where
                             "invalid_residual_model",
                         );
                     }
-                    return Ok(crate::SolverStep::from((
-                        state,
-                        Some(Termination::numerical_failure(
+                    return Ok(crate::SolverStep::stopped(
+                        Termination::numerical_failure(
                             "Bounded LM could not construct the residual model at the current point.",
-                        )),
-                    )));
+                        ),
+                    ));
                 };
                 model
             }
@@ -604,12 +602,11 @@ where
                 trace.observations[index].gradient =
                     self.trace_vector.unwrap()(&g);
             }
-            return Ok(crate::SolverStep::from((
-                state,
-                Some(Termination::numerical_failure(
+            return Ok(crate::SolverStep::stopped(
+                Termination::numerical_failure(
                     "The bounded LM model gradient is invalid.",
-                )),
-            )));
+                ),
+            ));
         }
 
         // Compute the Coleman-Li affine scaling diagonals at the
@@ -663,22 +660,19 @@ where
             self.r_cache = Some(r);
             self.j_cache = Some(j);
             self.model_r_cache = model_r;
-            return Ok(crate::SolverStep::from((
-                state,
-                Some(Termination::custom(
-                    "bounded_lm.scaled_gradient",
-                    "The bounded LM Coleman-Li KKT gradient metric is at most the absolute tolerance.",
-                    vec![
-                        crate::Measurement {
-                            name: "scaled_gradient".into(),
-                            value: g.cl_kkt_inf_norm(&d_sq),
-                        },
-                        crate::Measurement {
-                            name: "tolerance".into(),
-                            value: self.tol_grad.unwrap(),
-                        },
-                    ],
-                )),
+            return Ok(crate::SolverStep::stopped(Termination::custom(
+                "bounded_lm.scaled_gradient",
+                "The bounded LM Coleman-Li KKT gradient metric is at most the absolute tolerance.",
+                vec![
+                    crate::Measurement {
+                        name: "scaled_gradient".into(),
+                        value: g.cl_kkt_inf_norm(&d_sq),
+                    },
+                    crate::Measurement {
+                        name: "tolerance".into(),
+                        value: self.tol_grad.unwrap(),
+                    },
+                ],
             )));
         }
 
@@ -714,7 +708,6 @@ where
                 self.j_cache = Some(j);
                 self.model_r_cache = model_r;
                 return Ok(crate::SolverStep::stopped(
-                    state,
                     Termination::numerical_failure($message),
                 ));
             }};
@@ -784,12 +777,11 @@ where
                         self.r_cache = Some(r);
                         self.j_cache = Some(j);
                         self.model_r_cache = model_r;
-                        return Ok(crate::SolverStep::from((
-                            state,
-                            Some(Termination::numerical_failure(
+                        return Ok(crate::SolverStep::stopped(
+                            Termination::numerical_failure(
                                 "Bounded LM exhausted damped linear-solve attempts or produced non-finite damping.",
-                            )),
-                        )));
+                            ),
+                        ));
                     }
                     mu = mu * nu;
                     nu = nu * two;
@@ -941,6 +933,6 @@ where
         }
         self.mu = Some(mu);
         self.nu = nu;
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::completed())
     }
 }

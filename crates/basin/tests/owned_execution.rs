@@ -174,21 +174,22 @@ impl Solver<Quadratic, OwnedState> for OwnedSolver {
     fn next_iter(
         &mut self,
         problem: &mut Problem<Quadratic>,
-        mut state: OwnedState,
-    ) -> Result<basin::SolverStep<OwnedState>, Self::Error> {
+        state: &mut OwnedState,
+    ) -> Result<basin::SolverStep<f64>, Self::Error> {
         self.steps += 1;
         self.workspace[0] += 1;
         *state.point *= 0.5;
         state.cost = problem.cost_and_gradient_and_hessian(state.param())?.0;
         problem.residual_and_jacobian(state.param())?;
         problem.hessian_product(state.param(), &1.0)?;
-        Ok(basin::SolverStep::from((
-            state,
-            self.stop_mid_step
-                .then_some(basin::Termination::Application(
-                    basin::ApplicationStop::new("user_requested"),
-                )),
-        )))
+        Ok({
+            let termination =
+                self.stop_mid_step
+                    .then_some(basin::Termination::Application(
+                        basin::ApplicationStop::new("user_requested"),
+                    ));
+            basin::SolverStep::new(termination.is_none(), termination)
+        })
     }
 }
 

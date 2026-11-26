@@ -470,12 +470,12 @@ where
     fn install_restart<P>(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PointState<V, F>,
+        state: &mut PointState<V, F>,
         restart: GbnmRestart,
         center: V,
         edge_fraction: F,
         geometry: BoxGeometry<'_, V>,
-    ) -> Result<PointState<V, F>, crate::ConstraintSolveError<P::Error>>
+    ) -> Result<(), crate::ConstraintSolveError<P::Error>>
     where
         P: CostFunction<Param = V, Output = F> + BoxProblem<Param = V>,
         V: Clone
@@ -507,7 +507,7 @@ where
         self.restart_center = Some(center);
         state.replace_from(&simplex.vertices[0], simplex.costs[0]);
         self.simplex = Some(simplex);
-        Ok(state)
+        Ok(())
     }
 
     fn is_known_optimum(
@@ -597,7 +597,7 @@ where
         }
         self.install_restart(
             problem,
-            state,
+            &mut state,
             GbnmRestart::Probabilistic,
             center,
             self.initial_simplex_fraction,
@@ -606,24 +606,25 @@ where
                 upper: &upper,
                 free: &free,
             },
-        )
+        )?;
+        Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PointState<V, F>,
-    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
+        state: &mut PointState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         if self.fixed_box {
             let termination =
-                <Self as Solver<P, PointState<V, F>>>::terminate(self, &state)
+                <Self as Solver<P, PointState<V, F>>>::terminate(self, state)
                     .expect("an initialized fixed box has a terminal outcome");
-            return Ok(crate::SolverStep::stopped(state, termination));
+            return Ok(crate::SolverStep::stopped(termination));
         }
         let lower = problem.inner().lower().clone();
         let upper = problem.inner().upper().clone();
         let free = free_coordinates(&lower, &upper);
-        let simplex = self
+        let mut simplex = self
             .simplex
             .take()
             .expect("Gbnm::init must run before next_iter");
@@ -649,17 +650,17 @@ where
 
         if !(small || flat || degenerate) {
             let crate::SolverStep {
-                state: simplex,
                 termination: reason,
                 completed,
             } = <NelderMead<V, F, Projected> as Solver<
                 P,
                 SimplexProgress<V, F>,
-            >>::next_iter(&mut self.local, problem, simplex)?;
+            >>::next_iter(
+                &mut self.local, problem, &mut simplex
+            )?;
             state.replace_from(&simplex.vertices[0], simplex.costs[0]);
             self.simplex = Some(simplex);
             return Ok(crate::SolverStep {
-                state,
                 completed,
                 termination: reason,
             });
@@ -702,7 +703,7 @@ where
             GbnmRestart::LargeTest => (point, self.large_test_fraction),
         };
         self.restart_count += 1;
-        let state = self.install_restart(
+        self.install_restart(
             problem,
             state,
             next_restart,
@@ -714,7 +715,7 @@ where
                 free: &free,
             },
         )?;
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::completed())
     }
 
     fn terminate(&self, state: &PointState<V, F>) -> Option<Termination<F>> {

@@ -96,9 +96,10 @@ where
             self.stopped = Some(reason);
             return Ok(Some(reason));
         }
-        let (mut state, completed, reason) = self
+        let mut state = self.state.take().unwrap();
+        let (completed, reason) = self
             .solver
-            .next_iter(&mut self.problem, self.state.take().unwrap())?
+            .next_iter(&mut self.problem, &mut state)?
             .into_parts();
         let reason = reason.map(|termination| termination.code());
         assert!(state.is_ready(), "solver published incomplete state");

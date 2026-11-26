@@ -246,12 +246,12 @@ impl Solver<basin::SamplingDomain<FlatBox>, PointState<Vec<f64>>> for Chain {
     fn next_iter(
         &mut self,
         problem: &mut Problem<basin::SamplingDomain<FlatBox>>,
-        state: PointState<Vec<f64>>,
-    ) -> Result<basin::SolverStep<PointState<Vec<f64>>>, Infallible> {
+        state: &mut PointState<Vec<f64>>,
+    ) -> Result<basin::SolverStep<f64>, Infallible> {
         self.model_steps += 1;
         self.seen.borrow_mut().push(self.model_steps);
         problem.cost(state.param())?;
-        Ok(basin::SolverStep::from((state, None)))
+        Ok(basin::SolverStep::completed())
     }
 }
 

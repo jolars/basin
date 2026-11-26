@@ -132,8 +132,9 @@ fn main() {
                 .unwrap();
             (solver, problem, state)
         },
-        |(mut solver, mut problem, state)| {
-            solver.next_iter(&mut problem, state).unwrap()
+        |(mut solver, mut problem, mut state)| {
+            let decision = solver.next_iter(&mut problem, &mut state).unwrap();
+            (state, decision)
         },
     );
 

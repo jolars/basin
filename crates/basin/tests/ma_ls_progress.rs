@@ -347,12 +347,12 @@ fn zero_threshold_retains_the_chain_until_its_finite_probe() {
         fn next_iter(
             &mut self,
             problem: &mut Problem<SamplingDomain<Fixture>>,
-            mut state: PointState<Vec<f64>>,
-        ) -> Result<SolverStep<PointState<Vec<f64>>>, Infallible> {
+            state: &mut PointState<Vec<f64>>,
+        ) -> Result<SolverStep<f64>, Infallible> {
             let probe = vec![0.0];
             let cost = problem.cost(&probe)?;
             state.replace(probe, cost);
-            Ok(SolverStep::completed(state))
+            Ok(SolverStep::completed())
         }
     }
 
@@ -410,9 +410,8 @@ fn inner_failure_preserves_every_category_and_current_population() {
         fn next_iter(
             &mut self,
             problem: &mut basin::Problem<basin::SamplingDomain<Sphere>>,
-            state: basin::PointState<Vec<f64>>,
-        ) -> Result<basin::SolverStep<basin::PointState<Vec<f64>>>, Infallible>
-        {
+            _state: &mut basin::PointState<Vec<f64>>,
+        ) -> Result<basin::SolverStep<f64>, Infallible> {
             // A custom adapter can report work performed by an external evaluator.
             let counts = problem.counts_mut();
             counts.gradient_evals += 2;
@@ -421,7 +420,6 @@ fn inner_failure_preserves_every_category_and_current_population() {
             counts.hessian_evals += 5;
             counts.hessian_product_evals += 6;
             Ok(basin::SolverStep::stopped(
-                state,
                 basin::Termination::numerical_failure("scripted inner failure"),
             ))
         }

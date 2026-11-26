@@ -211,8 +211,8 @@ where
     fn next_iter(
         &mut self,
         p: &mut Problem<P>,
-        state: S,
-    ) -> Result<SolverStep<S>, Self::Error> {
+        state: &mut S,
+    ) -> Result<SolverStep<S::Float>, Self::Error> {
         let mut view = Problem::new(RelaxedProblem { problem: p.inner() });
         *view.counts_mut() = *p.counts();
         let result = self.inner.next_iter(&mut view, state);

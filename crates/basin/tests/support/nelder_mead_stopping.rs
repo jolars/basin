@@ -90,7 +90,7 @@ where
         bounds: (make(&[F::neg_infinity(); 2]), make(&[F::infinity(); 2])),
     });
     let mut solver = NelderMead::new().with_trial_diagnostics(true);
-    let state = solver
+    let mut state = solver
         .init(
             &mut problem,
             SimplexProgress::from_simplex(vec![
@@ -99,14 +99,14 @@ where
             ]),
         )
         .unwrap();
-    let state = solver.next_iter(&mut problem, state).unwrap().state;
+    solver.next_iter(&mut problem, &mut state).unwrap();
     assert!(
         solver.trial_observations()[0]
             .point
             .get_scalar(0)
             .is_infinite()
     );
-    let _ = solver.next_iter(&mut problem, state).unwrap();
+    let _ = solver.next_iter(&mut problem, &mut state).unwrap();
     assert!(
         solver.trial_observations()[0]
             .point
@@ -126,7 +126,7 @@ where
             ),
         });
         let mut solver = NelderMead::new().with_trial_diagnostics(true);
-        let state = solver
+        let mut state = solver
             .init(
                 &mut problem,
                 SimplexProgress::from_simplex(
@@ -138,7 +138,7 @@ where
                 ),
             )
             .unwrap();
-        let _ = solver.next_iter(&mut problem, state).unwrap();
+        let _ = solver.next_iter(&mut problem, &mut state).unwrap();
         // The mean is representable even though the unscaled sum overflows.
         // Exercise complete coordinate blocks and their remainders.
         let reflection = &solver.trial_observations()[0].point;

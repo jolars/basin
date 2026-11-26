@@ -391,9 +391,8 @@ impl<P: CostFunction<Param = Vec<f64>, Output = f64>>
     fn next_iter(
         &mut self,
         _: &mut basin::Problem<P>,
-        _: basin::PointState<Vec<f64>>,
-    ) -> Result<basin::SolverStep<basin::PointState<Vec<f64>>>, Self::Error>
-    {
+        _: &mut basin::PointState<Vec<f64>>,
+    ) -> Result<basin::SolverStep<f64>, Self::Error> {
         unreachable!()
     }
     fn terminate(
@@ -423,17 +422,19 @@ fn stationarity_callback_errors_are_charged_and_propagated() {
         let (error, counts) = if barrier_mode {
             let mut problem = Problem::new(probe_ineq(problem));
             let mut solver = BarrierMethod::with_inner_solver(ClaimedConverged);
-            let state =
+            let mut state =
                 solver.init(&mut problem, solver.seed(&vec![0.0])).unwrap();
-            let error = solver.next_iter(&mut problem, state).err().unwrap();
+            let error =
+                solver.next_iter(&mut problem, &mut state).err().unwrap();
             (error, *problem.counts())
         } else {
             let mut problem = Problem::new(probe_eq(problem));
             let mut solver =
                 AugmentedLagrangianMethod::with_inner_solver(ClaimedConverged);
-            let state =
+            let mut state =
                 solver.init(&mut problem, solver.seed(&vec![0.0])).unwrap();
-            let error = solver.next_iter(&mut problem, state).err().unwrap();
+            let error =
+                solver.next_iter(&mut problem, &mut state).err().unwrap();
             (error, *problem.counts())
         };
         assert_eq!(

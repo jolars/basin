@@ -203,15 +203,14 @@ where
     fn next_iter(
         &mut self,
         p: &mut Problem<Fit>,
-        s: PointState<Vec<f64>>,
-    ) -> Result<SolverStep<PointState<Vec<f64>>>, Self::Error> {
+        s: &mut PointState<Vec<f64>>,
+    ) -> Result<SolverStep<f64>, Self::Error> {
         let SolverStep {
-            state,
             completed,
             termination,
             ..
         } = self.0.next_iter(p, s)?;
-        Ok(SolverStep::new(state, completed, termination))
+        Ok(SolverStep::new(completed, termination))
     }
 }
 
@@ -232,8 +231,8 @@ impl Solver<Fit, PointState<Vec<f64>>> for LastStep {
     fn next_iter(
         &mut self,
         p: &mut Problem<Fit>,
-        mut s: PointState<Vec<f64>>,
-    ) -> Result<SolverStep<PointState<Vec<f64>>>, Self::Error> {
+        s: &mut PointState<Vec<f64>>,
+    ) -> Result<SolverStep<f64>, Self::Error> {
         let x = vec![1.];
         let cost = p.cost(&x).unwrap();
         if self.abort {
@@ -246,9 +245,9 @@ impl Solver<Fit, PointState<Vec<f64>>> for LastStep {
             vec![],
         );
         Ok(if self.completed {
-            SolverStep::completed_with_termination(s, termination)
+            SolverStep::completed_with_termination(termination)
         } else {
-            SolverStep::stopped(s, termination)
+            SolverStep::stopped(termination)
         })
     }
 }
@@ -449,16 +448,16 @@ impl Solver<Fit, PointState<Vec<f64>>> for PartialThenComplete {
     fn next_iter(
         &mut self,
         p: &mut Problem<Fit>,
-        mut s: PointState<Vec<f64>>,
-    ) -> Result<SolverStep<PointState<Vec<f64>>>, Self::Error> {
+        s: &mut PointState<Vec<f64>>,
+    ) -> Result<SolverStep<f64>, Self::Error> {
         let x = vec![if self.0 { 1. } else { 2. }];
         s.replace(x.clone(), p.cost(&x)?);
         let completed = self.0;
         self.0 = true;
         Ok(if completed {
-            SolverStep::completed(s)
+            SolverStep::completed()
         } else {
-            SolverStep::partial(s)
+            SolverStep::partial()
         })
     }
 }
@@ -521,6 +520,21 @@ fn continuing_partial_steps_publish_work_without_iteration_observation() {
     assert!(iterations.borrow().is_empty());
     let improved = Some(basin::SelectionChange::ObjectiveImproved);
     assert_eq!(*sink.0.borrow(), [(improved, 0, 1), (improved, 0, 2)]);
+    let saved = stepper.into_checkpoint().unwrap();
+    let output = iterations.clone();
+    let mut stepper = Executor::resume_from_checkpoint(Fit, saved)
+        .observe_solver(
+            move |s, _, event| {
+                if matches!(event, ObservationEvent::Iter) {
+                    output.borrow_mut().push(s.iter());
+                }
+            },
+            ObserverMode::Always,
+        )
+        .checkpoint_with(sink.clone(), ObserverMode::SelectionChanged)
+        .max_iter(1)
+        .into_stepper()
+        .unwrap();
     assert_eq!(stepper.step().unwrap(), StepOutcome::Continue);
     assert_eq!(stepper.state().selected_record().unwrap().param, &vec![1.]);
     assert_eq!(stepper.state().iter(), 1);

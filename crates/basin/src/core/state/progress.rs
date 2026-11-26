@@ -82,13 +82,13 @@
 //!     fn next_iter(
 //!         &mut self,
 //!         problem: &mut Problem<Quadratic>,
-//!         mut state: FirstOrderState<Vec<f64>>,
-//!     ) -> Result<SolverStep<FirstOrderState<Vec<f64>>>, Infallible> {
+//!         state: &mut FirstOrderState<Vec<f64>>,
+//!     ) -> Result<SolverStep<f64>, Infallible> {
 //!         let (x, _, gradient) = state.current().unwrap();
 //!         let next = x.iter().zip(gradient).map(|(x, g)| x - 0.25 * g).collect();
 //!         let (cost, gradient) = problem.cost_and_gradient(&next)?;
 //!         state.replace(next, cost, gradient).unwrap();
-//!         Ok(SolverStep::completed(state))
+//!         Ok(SolverStep::completed())
 //!     }
 //! }
 //! let result = Executor::new(

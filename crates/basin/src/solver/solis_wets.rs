@@ -387,8 +387,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PointState<V, F>,
-    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
+        state: &mut PointState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let f_x = state.current_record().unwrap().cost.unwrap();
         self.accepted_iterate = false;
         let bias = self.bias.as_mut().expect("SolisWets must be initialized");
@@ -449,7 +449,7 @@ where
             self.rho = self.rho * self.contract_factor;
         }
 
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::completed())
     }
 
     fn should_check_iterate_change(&self) -> bool {
@@ -642,12 +642,14 @@ mod tests {
             SolisWets::<_, f64>::new(1).with_initial_step_size(0.5);
         let mut problem = Problem::new(AlwaysImproving::new());
         let state = PointState::new(vec![0.0, 0.0, 0.0]);
-        let state = solver.init(&mut problem, state).unwrap();
+        let mut state = solver.init(&mut problem, state).unwrap();
 
         let x_old = state.param().clone();
         let bias_old = solver.bias().unwrap().clone();
-        let (state, _, reason) =
-            solver.next_iter(&mut problem, state).unwrap().into_parts();
+        let (_, reason) = solver
+            .next_iter(&mut problem, &mut state)
+            .unwrap()
+            .into_parts();
         assert!(reason.is_none());
 
         // Forward success moved to x + step with step = x_new − x_old,
@@ -673,13 +675,15 @@ mod tests {
                 SolisWets::<_, f64>::new(seed).with_initial_step_size(0.4);
             let mut problem = Problem::new(Sphere);
             let state = PointState::new(vec![0.3, -0.2]);
-            let state = solver.init(&mut problem, state).unwrap();
+            let mut state = solver.init(&mut problem, state).unwrap();
             let x_old = state.param().clone();
             let bias_old = solver.bias().unwrap().clone();
             let f_old = state.current_record().unwrap().cost.unwrap();
 
-            let (state, _, _) =
-                solver.next_iter(&mut problem, state).unwrap().into_parts();
+            let (_, _) = solver
+                .next_iter(&mut problem, &mut state)
+                .unwrap()
+                .into_parts();
             let moved = state.param() != &x_old;
             let improved =
                 state.current_record().unwrap().cost.unwrap() < f_old;
@@ -712,12 +716,14 @@ mod tests {
             SolisWets::<_, f64>::new(3).with_initial_step_size(0.5);
         let mut problem = Problem::new(Constant);
         let state = PointState::new(vec![1.0, 2.0]);
-        let state = solver.init(&mut problem, state).unwrap();
+        let mut state = solver.init(&mut problem, state).unwrap();
         // Seed a nonzero bias after initialization so the decay is observable.
         solver.bias = Some(vec![0.8, -0.4]);
 
-        let (state, _, reason) =
-            solver.next_iter(&mut problem, state).unwrap().into_parts();
+        let (_, reason) = solver
+            .next_iter(&mut problem, &mut state)
+            .unwrap()
+            .into_parts();
         assert!(reason.is_none());
         approx_eq(solver.bias().unwrap(), &[0.4, -0.2], 1e-12);
         assert_eq!(solver.failure_count(), 1);
@@ -735,9 +741,11 @@ mod tests {
         let mut state = solver.init(&mut problem, state).unwrap();
 
         for i in 1..=5 {
-            let (s, _, _) =
-                solver.next_iter(&mut problem, state).unwrap().into_parts();
-            state = s;
+            let (_, _) = solver
+                .next_iter(&mut problem, &mut state)
+                .unwrap()
+                .into_parts();
+
             if i < 5 {
                 assert_eq!(solver.success_count(), i);
                 assert!(
@@ -759,9 +767,11 @@ mod tests {
         let mut state = solver.init(&mut problem, state).unwrap();
 
         for i in 1..=3 {
-            let (s, _, _) =
-                solver.next_iter(&mut problem, state).unwrap().into_parts();
-            state = s;
+            let (_, _) = solver
+                .next_iter(&mut problem, &mut state)
+                .unwrap()
+                .into_parts();
+
             if i < 3 {
                 assert_eq!(solver.failure_count(), i);
                 assert!(
@@ -782,7 +792,7 @@ mod tests {
         let state = PointState::new(vec![1.5, -0.5]);
         let mut state = solver.init(&mut problem, state).unwrap();
         for _ in 0..10 {
-            state = solver.next_iter(&mut problem, state).unwrap().state;
+            solver.next_iter(&mut problem, &mut state).unwrap();
         }
         state.replace(state.param().clone(), -1000.0);
         let state = solver.init(&mut problem, state).unwrap();

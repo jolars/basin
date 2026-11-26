@@ -91,7 +91,7 @@ fn projected_iterations_do_not_clone_bounds() {
     let mut state = solver.init(&mut problem, state).unwrap();
     clones.set(0);
     for _ in 0..20 {
-        state = solver.next_iter(&mut problem, state).unwrap().state;
+        solver.next_iter(&mut problem, &mut state).unwrap();
         let counts = *problem.counts();
         let _ = solver.check_convergence(&problem, &state);
         assert_eq!(problem.counts(), &counts);

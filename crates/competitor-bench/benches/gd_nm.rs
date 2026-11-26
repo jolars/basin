@@ -214,8 +214,10 @@ fn bench_nm_step(c: &mut Criterion) {
                         .unwrap();
                     (problem, solver, state)
                 },
-                |(mut problem, mut solver, state)| {
-                    black_box(solver.next_iter(&mut problem, state).unwrap())
+                |(mut problem, mut solver, mut state)| {
+                    let decision =
+                        solver.next_iter(&mut problem, &mut state).unwrap();
+                    black_box((state, decision))
                 },
                 BatchSize::SmallInput,
             )

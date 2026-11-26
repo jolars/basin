@@ -169,8 +169,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: FirstOrderState<V, F>,
-    ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
+        state: &mut FirstOrderState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let (prev_cost, mut grad) = state
             .take_evaluation()
             .expect("solver requires initialized progress");
@@ -189,12 +189,11 @@ where
                 state
                     .set_evaluation(prev_cost, grad)
                     .expect("gradient dimension differs from parameter");
-                return Ok(crate::SolverStep::from((
-                    state,
-                    Some(Termination::numerical_failure(
+                return Ok(crate::SolverStep::stopped(
+                    Termination::numerical_failure(
                         "Gradient-descent line search failed.",
-                    )),
-                )));
+                    ),
+                ));
             }
         };
 
@@ -209,7 +208,7 @@ where
                         evaluation.gradient,
                     )
                     .expect("gradient dimension differs from parameter");
-                return Ok(crate::SolverStep::from((state, None)));
+                return Ok(crate::SolverStep::completed());
             }
             state.seed_param_mut().scaled_add(alpha, &direction);
         } else {
@@ -235,7 +234,7 @@ where
         state
             .set_evaluation(cost, grad)
             .expect("gradient dimension differs from parameter");
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::completed())
     }
 }
 
@@ -334,11 +333,11 @@ mod tests {
         // momentum branch. f = Σx², ∇f = 2x, so x₁ = 1 − 0.1·2 = 0.8.
         let mut solver = GradientDescent::new(0.1).with_momentum(0.0);
         let mut p = Problem::new(Quadratic);
-        let state = solver
+        let mut state = solver
             .init(&mut p, FirstOrderState::new(vec![1.0]))
             .unwrap();
-        let (state, _, reason) =
-            solver.next_iter(&mut p, state).unwrap().into_parts();
+        let (_, reason) =
+            solver.next_iter(&mut p, &mut state).unwrap().into_parts();
         assert!(reason.is_none());
         assert!((state.param()[0] - 0.8).abs() < 1e-12);
     }
@@ -392,9 +391,8 @@ mod tests {
                 .init(&mut p, FirstOrderState::new(start.clone()))
                 .unwrap();
             for _ in 0..10 {
-                let (next, _, _) =
-                    solver.next_iter(&mut p, state).unwrap().into_parts();
-                state = next;
+                let (_, _) =
+                    solver.next_iter(&mut p, &mut state).unwrap().into_parts();
             }
             state.param().clone()
         };

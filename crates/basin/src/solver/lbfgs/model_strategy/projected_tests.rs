@@ -43,10 +43,11 @@ fn ray_preserves_component_ratios_and_projected_pairs_use_actual_displacement()
             .with_projected_search(search);
         let mut p = Problem::new(problem());
         let initial = vec![0.5, 0.5];
-        let state = solver
+        let mut state = solver
             .init(&mut p, FirstOrderState::new(initial.clone()))
             .unwrap();
-        let next = solver.next_iter(&mut p, state).unwrap().state;
+        solver.next_iter(&mut p, &mut state).unwrap();
+        let next = state;
         let expected = if ray { vec![1.0, 0.55] } else { vec![1.0, 0.7] };
         for (a, b) in next.param().iter().zip(&expected) {
             assert!((a - b).abs() < 1e-14);

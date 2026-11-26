@@ -549,8 +549,10 @@ fn reused_solver_handles_changing_dimensions_and_empty_constraint_blocks() {
         state.update_best();
         let snapshot = state.selected_record().unwrap().param.clone();
         let snapshot_cost = state.selected_record().unwrap().cost.unwrap();
-        let (mut state, _, _) =
-            solver.next_iter(&mut problem, state).unwrap().into_parts();
+        let (_, _) = solver
+            .next_iter(&mut problem, &mut state)
+            .unwrap()
+            .into_parts();
 
         assert_eq!(state.param().len(), n);
         assert_eq!(state.selected_record().unwrap().param, &snapshot);

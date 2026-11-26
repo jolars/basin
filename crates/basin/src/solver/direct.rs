@@ -309,26 +309,22 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PointState<V, F>,
-    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
+        state: &mut PointState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let work = self.work.as_mut().expect("DIRECT must be initialized");
         let selected = work.select(self.epsilon);
         if selected.is_empty() {
-            return Ok(crate::SolverStep::from((
-                state,
-                Some(Termination::numerical_stall(
-                    "direct: no numerical progress",
-                )),
-            )));
+            return Ok(crate::SolverStep::stopped(
+                Termination::numerical_stall("direct: no numerical progress"),
+            ));
         }
         for id in selected {
             let Some(probes) = work.probes(state.param(), id) else {
-                return Ok(crate::SolverStep::from((
-                    state,
-                    Some(Termination::numerical_stall(
+                return Ok(crate::SolverStep::stopped(
+                    Termination::numerical_stall(
                         "direct: no numerical progress",
-                    )),
-                )));
+                    ),
+                ));
             };
             let costs = Evaluation::evaluate(problem, &probes.params)?;
             work.divide(id, probes.axes, probes.centers, costs);
@@ -339,21 +335,20 @@ where
                     rectangle.cost,
                 );
                 if rectangle.cost == F::neg_infinity() {
-                    return Ok(crate::SolverStep::from((
-                        state,
-                        Some(Termination::custom(
+                    return Ok(crate::SolverStep::stopped(
+                        Termination::custom(
                             "direct.negative_infinity",
                             "The selected rectangle has objective negative infinity.",
                             vec![crate::Measurement {
                                 name: "cost".into(),
                                 value: rectangle.cost,
                             }],
-                        )),
-                    )));
+                        ),
+                    ));
                 }
             }
         }
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::completed())
     }
 
     fn terminate(&self, _state: &PointState<V, F>) -> Option<Termination<F>> {

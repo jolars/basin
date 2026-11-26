@@ -648,8 +648,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PointState<V, F>,
-    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
+        state: &mut PointState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let f_old = state.current_record().unwrap().cost.unwrap();
 
         // 1. Perturb the current iterate.
@@ -676,10 +676,7 @@ where
             result.report.termination,
             Termination::Cancelled | Termination::Application(_)
         ) {
-            return Ok(crate::SolverStep::stopped(
-                state,
-                result.report.termination,
-            ));
+            return Ok(crate::SolverStep::stopped(result.report.termination));
         }
         let new_success = !result.report.termination.is_failure();
 
@@ -718,7 +715,7 @@ where
             self.step.adjust_scale(factor);
         }
 
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::completed())
     }
 
     fn terminate(&self, _: &PointState<V, F>) -> Option<Termination<F>> {

@@ -303,8 +303,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: FirstOrderState<V, F>,
-    ) -> Result<SolverStep<FirstOrderState<V, F>>, E> {
+        state: &mut FirstOrderState<V, F>,
+    ) -> Result<SolverStep<F>, E> {
         let workspace = self
             .workspace
             .as_mut()
@@ -318,7 +318,7 @@ where
                     "The trust region requires a finite Gram matrix to take another step.",
                 )
             };
-            return Ok(SolverStep::stopped(state, reason));
+            return Ok(SolverStep::stopped(reason));
         };
         let subproblem = &self.subproblem;
         let mut trial = LeastSquaresTrial {
@@ -326,7 +326,7 @@ where
             residual: None,
             matrix: GaussNewtonMatrix::Unavailable,
         };
-        let (state, reason, accepted) = tr_next_iter(
+        let (reason, accepted) = tr_next_iter(
             &mut self.radius,
             self.max_radius,
             self.eta,
@@ -347,6 +347,6 @@ where
             *workspace = GaussNewtonWorkspace { residual, matrix };
         }
         self.rejected_step = !accepted;
-        Ok(SolverStep::from((state, reason)))
+        Ok(SolverStep::new(reason.is_none(), reason))
     }
 }

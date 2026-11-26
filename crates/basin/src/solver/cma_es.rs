@@ -604,8 +604,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PopulationProgress<V, F>,
-    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
+        state: &mut PopulationProgress<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let work = self.work.as_mut().expect("CMA init must precede iteration");
         let k = self
             .constants
@@ -717,12 +717,11 @@ where
                 Err(_) => {
                     state.candidates = std::mem::take(&mut work.candidates);
                     state.costs = std::mem::take(&mut work.costs);
-                    return Ok(crate::SolverStep::from((
-                        state,
-                        Some(Termination::numerical_failure(
+                    return Ok(crate::SolverStep::stopped(
+                        Termination::numerical_failure(
                             "CMA-ES covariance eigendecomposition failed.",
-                        )),
-                    )));
+                        ),
+                    ));
                 }
             };
             work.b = b_new;
@@ -752,8 +751,8 @@ where
         let m_cost = problem.cost(&work.m)?;
         work.m_cost = Some(m_cost);
 
-        publish(work, &mut state);
-        Ok(crate::SolverStep::from((state, None)))
+        publish(work, state);
+        Ok(crate::SolverStep::completed())
     }
 
     fn terminate(
@@ -1038,19 +1037,19 @@ mod zero_tolerance_tests {
             .init(&mut problem, PopulationProgress::from_point(vec![0.0; 3]))
             .unwrap();
         for _ in 0..2 {
-            state = solver.next_iter(&mut problem, state).unwrap().state;
+            solver.next_iter(&mut problem, &mut state).unwrap();
         }
         let prior = state.clone();
         let invalid = DenseMatrix::from_row_slice(3, 3, &[f64::NAN; 9]);
         assert!(invalid.try_eigh().is_err());
         solver.work.as_mut().unwrap().c = invalid;
-        let step = solver.next_iter(&mut problem, state).unwrap();
+        let step = solver.next_iter(&mut problem, &mut state).unwrap();
         assert!(!step.completed);
         assert_eq!(
             step.termination.unwrap().code(),
             crate::TerminationCode::SolverFailed
         );
-        assert_eq!(step.state, prior);
+        assert_eq!(state, prior);
     }
 
     #[test]
@@ -1062,19 +1061,19 @@ mod zero_tolerance_tests {
             .init(&mut problem, PopulationProgress::from_point(vec![0.0; 3]))
             .unwrap();
         for _ in 0..2 {
-            state = solver.next_iter(&mut problem, state).unwrap().state;
+            solver.next_iter(&mut problem, &mut state).unwrap();
         }
         let before = *problem.counts();
         let prior = state.clone();
         solver.work.as_mut().unwrap().c =
             DenseMatrix::from_row_slice(3, 3, &[f64::NAN; 9]);
-        let step = solver.next_iter(&mut problem, state).unwrap();
+        let step = solver.next_iter(&mut problem, &mut state).unwrap();
         assert!(!step.completed);
         assert_eq!(
             step.termination.unwrap().code(),
             crate::TerminationCode::SolverFailed
         );
-        assert_eq!(step.state, prior);
+        assert_eq!(state, prior);
         assert_eq!(*problem.counts(), before);
     }
 }

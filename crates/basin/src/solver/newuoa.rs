@@ -307,8 +307,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PointState<V, F>,
-    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
+        state: &mut PointState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let template = state.param().clone();
         let work = self
             .work
@@ -346,7 +346,7 @@ where
             )),
             Transition::Continue | Transition::RhoReduced => None,
         };
-        Ok(crate::SolverStep::from((state, reason)))
+        Ok(crate::SolverStep::new(reason.is_none(), reason))
     }
 
     fn terminate(&self, _state: &PointState<V, F>) -> Option<Termination<F>> {

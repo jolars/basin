@@ -595,8 +595,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: ProposalState<V, F>,
-    ) -> Result<crate::SolverStep<ProposalState<V, F>>, Self::Error> {
+        state: &mut ProposalState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let incumbent_cost = state.current_record().unwrap().cost.unwrap();
         let temperature = self.temperature();
         let rng = self
@@ -649,7 +649,7 @@ where
                 self.reannealings = self.reannealings.saturating_add(1);
             }
         }
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::completed())
     }
 
     fn should_check_iterate_change(&self) -> bool {

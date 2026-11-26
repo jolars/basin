@@ -521,17 +521,14 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: FirstOrderState<V, F>,
-    ) -> Result<SolverStep<FirstOrderState<V, F>>, Self::Error> {
+        state: &mut FirstOrderState<V, F>,
+    ) -> Result<SolverStep<F>, Self::Error> {
         let (x, cost, g) =
             state.current().expect("TNC requires initialization");
         if !cost.is_finite() || !finite(x) || !finite(g) {
-            return Ok(SolverStep::stopped(
-                state,
-                Termination::numerical_failure(
-                    "TNC requires finite iterate data.",
-                ),
-            ));
+            return Ok(SolverStep::stopped(Termination::numerical_failure(
+                "TNC requires finite iterate data.",
+            )));
         }
         let n = x.vec_len();
         if let Some(termination) = projected_gradient_termination(
@@ -541,7 +538,7 @@ where
             &self.upper,
             self.tolerance,
         ) {
-            return Ok(SolverStep::stopped(state, termination));
+            return Ok(SolverStep::stopped(termination));
         }
         let Workspace {
             free,
@@ -605,7 +602,6 @@ where
             }
             if product.vec_len() != n {
                 return Ok(SolverStep::stopped(
-                    state,
                     Termination::numerical_failure(
                         "TNC product shape changed.",
                     ),
@@ -671,12 +667,9 @@ where
             || mathematical_maximum <= F::zero()
             || g.dot(direction) >= F::zero()
         {
-            return Ok(SolverStep::stopped(
-                state,
-                Termination::numerical_failure(
-                    "TNC has no feasible descent ray.",
-                ),
-            ));
+            return Ok(SolverStep::stopped(Termination::numerical_failure(
+                "TNC has no feasible descent ray.",
+            )));
         }
         // An exact feasible quotient can round to an infeasible reconstructed
         // point. Check the backend's actual arithmetic before any callback.
@@ -687,12 +680,9 @@ where
             &self.upper,
             mathematical_maximum,
         ) else {
-            return Ok(SolverStep::stopped(
-                state,
-                Termination::numerical_failure(
-                    "TNC has no representable feasible line-search interval.",
-                ),
-            ));
+            return Ok(SolverStep::stopped(Termination::numerical_failure(
+                "TNC has no representable feasible line-search interval.",
+            )));
         };
         let result = self.line_search.next_with_bounds(
             problem,
@@ -703,18 +693,14 @@ where
             LineSearchBounds::new(F::one().min(maximum), maximum),
         )?;
         let LineSearchOutcome::Step(alpha) = result.outcome else {
-            return Ok(SolverStep::stopped(
-                state,
-                Termination::numerical_failure("TNC line search failed."),
-            ));
+            return Ok(SolverStep::stopped(Termination::numerical_failure(
+                "TNC line search failed.",
+            )));
         };
         if !alpha.is_finite() || alpha <= F::zero() || alpha > maximum {
-            return Ok(SolverStep::stopped(
-                state,
-                Termination::numerical_failure(
-                    "TNC line search returned an invalid step.",
-                ),
-            ));
+            return Ok(SolverStep::stopped(Termination::numerical_failure(
+                "TNC line search returned an invalid step.",
+            )));
         }
         let mut next = x.clone();
         next.scaled_add(alpha, direction);
@@ -752,12 +738,9 @@ where
             || (0..n).all(|i| next.get_scalar(i) == x.get_scalar(i))
             || next_cost > cost
         {
-            return Ok(SolverStep::stopped(
-                state,
-                Termination::numerical_failure(
-                    "TNC received an unusable accepted evaluation.",
-                ),
-            ));
+            return Ok(SolverStep::stopped(Termination::numerical_failure(
+                "TNC received an unusable accepted evaluation.",
+            )));
         }
         let changed = (0..n).any(|i| {
             free[i]
@@ -776,7 +759,7 @@ where
         state
             .replace(next, next_cost, next_g)
             .expect("shape checked");
-        Ok(SolverStep::completed(state))
+        Ok(SolverStep::completed())
     }
 
     fn terminate(

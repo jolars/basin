@@ -7,10 +7,8 @@ use crate::core::math::{
     MatTransposeVec, Scalar, ScaleRowsInPlace, VectorIndex, VectorLen,
 };
 use crate::core::problem::{Jacobian, Problem, Residual};
-use crate::core::state::PointState;
 
-pub(crate) type NllsStep<V, F, E> =
-    Result<crate::SolverStep<PointState<V, F>>, E>;
+pub(crate) type NllsStep<F, E> = Result<crate::SolverStep<F>, E>;
 
 // Separate implementations keep additional robust math capabilities off the
 // existing solver bounds, including downstream minimal Jacobian types.

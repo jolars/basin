@@ -314,8 +314,8 @@ where
     fn next_iter(
         &mut self,
         p: &mut Problem<P>,
-        s: FirstOrderState<V, F>,
-    ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
+        s: &mut FirstOrderState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         self.work.policy = self.direction;
         self.solver
             .next_iter_bounded_search(p, s, Some(&mut self.work), None)
@@ -418,12 +418,12 @@ mod tests {
             lower: vec![-1.0],
             upper: vec![1.0],
         });
-        let state = solver
+        let mut state = solver
             .init(&mut problem, FirstOrderState::new(vec![0.4]))
             .unwrap();
-        let state = solver.next_iter(&mut problem, state).unwrap().state;
+        solver.next_iter(&mut problem, &mut state).unwrap();
         assert_eq!(solver.solver.history.as_ref().unwrap().ws.len(), 1);
-        let _ = solver.next_iter(&mut problem, state).unwrap();
+        let _ = solver.next_iter(&mut problem, &mut state).unwrap();
         assert_eq!(solver.solver.line_search.0, 3);
         assert_eq!(solver.solver.history.as_ref().unwrap().ws.len(), 2);
         assert_eq!(problem.counts().cost_evals, 4);

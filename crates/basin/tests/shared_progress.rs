@@ -80,15 +80,15 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: FirstOrderState<V, F>,
-    ) -> Result<basin::SolverStep<FirstOrderState<V, F>>, Self::Error> {
+        state: &mut FirstOrderState<V, F>,
+    ) -> Result<basin::SolverStep<F>, Self::Error> {
         let (x, _, gradient) = state.current().unwrap();
         let mut next = x.clone();
         next.scaled_add(-F::from_f64(0.25).unwrap(), gradient);
         let (cost, gradient) = problem.cost_and_gradient(&next)?;
         state.replace(next, cost, gradient).unwrap();
         self.steps += 1;
-        Ok(basin::SolverStep::from((state, None)))
+        Ok(basin::SolverStep::completed())
     }
 }
 
@@ -193,13 +193,13 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PointState<V, F>,
-    ) -> Result<basin::SolverStep<PointState<V, F>>, Self::Error> {
+        state: &mut PointState<V, F>,
+    ) -> Result<basin::SolverStep<F>, Self::Error> {
         let mut x = state.param().clone();
         x.scale_in_place(F::from_f64(0.5).unwrap());
         let cost = problem.cost(&x)?;
         state.replace(x, cost);
-        Ok(basin::SolverStep::from((state, None)))
+        Ok(basin::SolverStep::completed())
     }
 }
 
@@ -427,6 +427,9 @@ impl CostFunction for FallibleIdentity {
     type Error = &'static str;
 
     fn cost(&self, x: &f64) -> Result<f64, Self::Error> {
+        if *x == 100.0 {
+            panic!("panicking probe");
+        }
         if *x == 99.0 {
             Err("failed probe")
         } else {
@@ -436,6 +439,7 @@ impl CostFunction for FallibleIdentity {
 }
 
 struct Probe {
+    panic_in_callback: bool,
     hard_error: bool,
 }
 
@@ -456,21 +460,23 @@ impl Solver<FallibleIdentity, PointState<f64>> for Probe {
     fn next_iter(
         &mut self,
         problem: &mut Problem<FallibleIdentity>,
-        mut state: PointState<f64>,
-    ) -> Result<basin::SolverStep<PointState<f64>>, Self::Error> {
+        state: &mut PointState<f64>,
+    ) -> Result<basin::SolverStep<f64>, Self::Error> {
         state.replace(-2.0, problem.cost(&-2.0)?);
         // Unpublished probes still count, including the failing one.
         problem.cost(&-10.0)?;
+        if self.panic_in_callback {
+            problem.cost(&100.0)?;
+        }
         let error = problem.cost(&99.0).unwrap_err();
         if self.hard_error {
             return Err(error);
         }
-        Ok(basin::SolverStep::from((
-            state,
-            Some(basin::Termination::numerical_failure(
+        Ok(basin::SolverStep::stopped(
+            basin::Termination::numerical_failure(
                 "External solver reported a numerical failure.",
-            )),
-        )))
+            ),
+        ))
     }
 }
 
@@ -478,7 +484,10 @@ impl Solver<FallibleIdentity, PointState<f64>> for Probe {
 fn mid_step_stop_stamps_final_counts_without_completing_an_iteration() {
     let result = Executor::new(
         FallibleIdentity,
-        Probe { hard_error: false },
+        Probe {
+            panic_in_callback: false,
+            hard_error: false,
+        },
         PointState::new(2.0),
     )
     .run_with_solver()
@@ -496,7 +505,10 @@ fn mid_step_stop_stamps_final_counts_without_completing_an_iteration() {
 fn hard_error_cannot_yield_a_checkpoint_of_partial_progress() {
     let mut stepper = Executor::new(
         FallibleIdentity,
-        Probe { hard_error: true },
+        Probe {
+            panic_in_callback: false,
+            hard_error: true,
+        },
         PointState::new(2.0),
     )
     .into_stepper()
@@ -507,11 +519,82 @@ fn hard_error_cannot_yield_a_checkpoint_of_partial_progress() {
 }
 
 #[test]
+fn boundary_hook_panic_preserves_the_last_checkpoint() {
+    let mut stepper = Executor::new(
+        Sphere::<Vec<f64>, f64>(PhantomData),
+        Halve,
+        PointState::new(vec![4.0]),
+    )
+    .stop_when(|state| {
+        assert_eq!(state.iter(), 0, "panicking boundary hook");
+        None
+    })
+    .into_stepper()
+    .unwrap();
+
+    assert_eq!(stepper.step().unwrap(), basin::StepOutcome::Continue);
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        stepper.step()
+    }));
+    assert!(result.is_err());
+    let checkpoint = stepper.into_checkpoint().unwrap();
+    assert_eq!(checkpoint.state().iter(), 1);
+    assert_eq!(checkpoint.counts().cost_evals, 2);
+    let resumed = Executor::resume_from_checkpoint(
+        Sphere::<Vec<f64>, f64>(PhantomData),
+        checkpoint,
+    )
+    .max_iter(2)
+    .run()
+    .unwrap();
+    assert_eq!(resumed.state.param(), &vec![1.0]);
+    assert_eq!(resumed.counts.cost_evals, 3);
+}
+
+#[test]
+fn callback_panic_discards_unpublished_progress() {
+    let mut stepper = Executor::new(
+        FallibleIdentity,
+        Probe {
+            panic_in_callback: true,
+            hard_error: false,
+        },
+        PointState::new(2.0),
+    )
+    .into_stepper()
+    .unwrap();
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        stepper.step()
+    }));
+    assert!(result.is_err());
+    assert_eq!(stepper.counts().cost_evals, 4);
+    assert!(stepper.into_checkpoint().is_none());
+}
+
+#[test]
+fn failed_inner_step_keeps_attempts_on_the_shared_problem() {
+    let mut problem = Problem::new(FallibleIdentity);
+    problem.cost(&3.0).unwrap();
+    let mut inner = basin::InnerExecutor::new(Probe {
+        panic_in_callback: false,
+        hard_error: true,
+    });
+    assert!(matches!(
+        inner.run(&mut problem, PointState::new(2.0)),
+        Err("failed probe")
+    ));
+    assert_eq!(problem.counts().cost_evals, 5);
+}
+
+#[test]
 fn nonfinite_cost_does_not_choose_a_termination_reason() {
     for seed in [f64::INFINITY, f64::NEG_INFINITY, f64::NAN] {
         let result = Executor::new(
             FallibleIdentity,
-            Probe { hard_error: false },
+            Probe {
+                panic_in_callback: false,
+                hard_error: false,
+            },
             PointState::new(seed),
         )
         .max_iter(0)

@@ -87,12 +87,12 @@ impl Solver<Square, Progress> for Halving {
     fn next_iter(
         &mut self,
         problem: &mut Problem<Square>,
-        mut state: Progress,
-    ) -> Result<SolverStep<Progress>, Infallible> {
+        state: &mut Progress,
+    ) -> Result<SolverStep<f64>, Infallible> {
         state.point *= self.scale;
         self.scale *= 0.75;
         state.cost = problem.cost(&state.point)?;
-        Ok(SolverStep::completed(state))
+        Ok(SolverStep::completed())
     }
 }
 

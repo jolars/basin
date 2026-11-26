@@ -507,12 +507,12 @@ where
 #[allow(clippy::type_complexity)]
 fn next_iter_inner<P, V, F, Proj>(
     problem: &mut Problem<P>,
-    mut state: SimplexProgress<V, F>,
+    state: &mut SimplexProgress<V, F>,
     p: Params<F>,
     scratch: &mut [V],
     trace: &mut Trace<V, F>,
     project: &Proj,
-) -> Result<crate::SolverStep<SimplexProgress<V, F>>, P::Error>
+) -> Result<crate::SolverStep<F>, P::Error>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
@@ -577,7 +577,7 @@ where
             std::mem::swap(&mut state.vertices[worst], x_alt);
             state.costs[worst] = foc;
         } else {
-            shrink_inner(problem, &mut state, p.delta, project, trace)?;
+            shrink_inner(problem, state, p.delta, project, trace)?;
         }
     } else {
         // fr ≥ f_{n+1}: inside contraction.
@@ -592,12 +592,12 @@ where
             std::mem::swap(&mut state.vertices[worst], x_alt);
             state.costs[worst] = fic;
         } else {
-            shrink_inner(problem, &mut state, p.delta, project, trace)?;
+            shrink_inner(problem, state, p.delta, project, trace)?;
         }
     }
 
     state.sort_last();
-    Ok(crate::SolverStep::from((state, None)))
+    Ok(crate::SolverStep::completed())
 }
 
 fn shrink_inner<P, V, F, Proj>(
@@ -675,8 +675,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: SimplexProgress<V, F>,
-    ) -> Result<crate::SolverStep<SimplexProgress<V, F>>, Self::Error> {
+        state: &mut SimplexProgress<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let p = self
             .params
             .expect("NelderMead::init must run before next_iter");
@@ -749,8 +749,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: SimplexProgress<V, F>,
-    ) -> Result<crate::SolverStep<SimplexProgress<V, F>>, Self::Error> {
+        state: &mut SimplexProgress<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let p = self
             .params
             .expect("NelderMead::init must run before next_iter");

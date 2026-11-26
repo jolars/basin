@@ -133,11 +133,13 @@ fn rejections_and_damping_retries_reuse_factorization() {
             .with_damping(damping)
             .with_pivoted_qr()
             .with_absolute_gradient_tolerance(0.);
-        let state = solver
+        let mut state = solver
             .init(&mut problem, PointState::new(vec![0.1]))
             .unwrap();
-        let (mut state, _, reason) =
-            solver.next_iter(&mut problem, state).unwrap().into_parts();
+        let (_, reason) = solver
+            .next_iter(&mut problem, &mut state)
+            .unwrap()
+            .into_parts();
         assert!(reason.is_none());
         assert_eq!(state.param(), &vec![0.1]);
         assert_eq!(counts.factors.get(), 1);
@@ -148,12 +150,12 @@ fn rejections_and_damping_retries_reuse_factorization() {
         }
         assert_eq!(counts.residuals.get(), 2);
         while state.param()[0] == 0.1 {
-            state = solver.next_iter(&mut problem, state).unwrap().state;
+            solver.next_iter(&mut problem, &mut state).unwrap();
             assert_eq!(counts.factors.get(), 1);
             assert!(counts.residuals.get() < 20);
         }
         let before = counts.residuals.get();
-        let _ = solver.next_iter(&mut problem, state).unwrap();
+        let _ = solver.next_iter(&mut problem, &mut state).unwrap();
         assert_eq!(counts.factors.get(), 2);
         assert_eq!(counts.jacobians.get(), 2);
         assert_eq!(counts.residuals.get(), before + 1);

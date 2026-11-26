@@ -706,8 +706,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: PointState<V, F>,
-    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
+        state: &mut PointState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let mut buffer = self.jacobian_buffer.take();
         let result = self.next_iter_model::<_, M, NormalEquations<G>>(
             problem,
@@ -816,10 +816,10 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
     fn next_iter_model<E, M, Model>(
         &mut self,
         problem: &mut E,
-        mut state: PointState<V, F>,
+        state: &mut PointState<V, F>,
         rank_tolerance: Option<F>,
         jacobian_buffer: &mut Option<M>,
-    ) -> LmStep<V, F, E::Error>
+    ) -> LmStep<F, E::Error>
     where
         E: Evaluation<V, M, F, R>,
         R: NormSquared<F>
@@ -854,12 +854,11 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
                     "invalid_initial_model",
                 );
             }
-            return Ok(crate::SolverStep::from((
-                state,
-                Some(Termination::numerical_failure(
+            return Ok(crate::SolverStep::stopped(
+                Termination::numerical_failure(
                     "LM initialization produced an invalid residual model.",
-                )),
-            )));
+                ),
+            ));
         }
         let r = match self.r_cache.take() {
             Some(r) => r,
@@ -880,12 +879,11 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
                             "invalid_residual_model",
                         );
                     }
-                    return Ok(crate::SolverStep::from((
-                        state,
-                        Some(Termination::numerical_failure(
+                    return Ok(crate::SolverStep::stopped(
+                        Termination::numerical_failure(
                             "The least-squares objective cannot produce a valid local model.",
-                        )),
-                    )));
+                        ),
+                    ));
                 };
                 let model = (
                     Model::prepare(&j, model_r.as_ref().unwrap_or(&r)),
@@ -909,12 +907,11 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
                 self.model_cache = Some(Err(error));
                 self.r_cache = Some(r);
                 self.jtr_cache = Some(g);
-                return Ok(crate::SolverStep::from((
-                    state,
-                    Some(Termination::numerical_failure(
+                return Ok(crate::SolverStep::stopped(
+                    Termination::numerical_failure(
                         "LM model factorization failed.",
-                    )),
-                )));
+                    ),
+                ));
             }
         };
         // Squaring a finite gradient can overflow even when the QR step is valid.
@@ -941,12 +938,11 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
             self.model_cache = Some(Ok(a));
             self.r_cache = Some(r);
             self.jtr_cache = Some(g);
-            return Ok(crate::SolverStep::from((
-                state,
-                Some(Termination::numerical_failure(
+            return Ok(crate::SolverStep::stopped(
+                Termination::numerical_failure(
                     "The residual, objective, or gradient is non-finite.",
-                )),
-            )));
+                ),
+            ));
         }
         let diag_cur = Model::diagonal(&a);
 
@@ -1052,7 +1048,7 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
             self.r_cache = Some(r);
             self.model_cache = Some(Ok(a));
             self.jtr_cache = Some(g);
-            return Ok(crate::SolverStep::from((state, Some(termination))));
+            return Ok(crate::SolverStep::stopped(termination));
         }
 
         // Moré's monotone scaling keeps the damped Gram positive definite.
@@ -1200,12 +1196,11 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
                 self.r_cache = Some(r);
                 self.model_cache = Some(Ok(a));
                 self.jtr_cache = Some(g);
-                return Ok(crate::SolverStep::from((
-                    state,
-                    Some(Termination::numerical_failure(
+                return Ok(crate::SolverStep::stopped(
+                    Termination::numerical_failure(
                         "LM could not solve the damped model within its retry limit.",
-                    )),
-                )));
+                    ),
+                ));
             }
         };
 
@@ -1421,7 +1416,6 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
                         }
                         return Ok(
                             crate::SolverStep::completed_with_termination(
-                                state,
                                 Termination::numerical_failure(
                                     "The retained least-squares point has an invalid local model.",
                                 ),
@@ -1457,7 +1451,6 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
                         );
                     }
                     return Ok(crate::SolverStep::completed_with_termination(
-                        state,
                         Termination::numerical_failure(
                             "The retained least-squares point has an invalid gradient or model.",
                         ),
@@ -1548,25 +1541,23 @@ impl<V, J, F: Scalar, R, C> LevenbergMarquardt<V, J, F, R, C> {
                     .push(NativeConvergenceTest::RelativeTrustRadius);
             }
             return Ok(crate::SolverStep::completed_with_termination(
-                state,
                 termination,
             ));
         }
 
         if numerical_no_progress {
-            return Ok(crate::SolverStep::from((
-                state,
-                Some(Termination::numerical_stall(
+            return Ok(crate::SolverStep::stopped(
+                Termination::numerical_stall(
                     "A finite rejected LM trial changes no parameter in floating-point arithmetic.",
-                )),
-            )));
+                ),
+            ));
         }
 
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::completed())
     }
 }
 
-type LmStep<V, F, E> = Result<crate::SolverStep<PointState<V, F>>, E>;
+type LmStep<F, E> = Result<crate::SolverStep<F>, E>;
 
 #[derive(PartialEq)]
 enum ModelSolveError {
@@ -1972,8 +1963,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: PointState<V, F>,
-    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
+        state: &mut PointState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         self.inner.next_iter_model::<_, M, PivotedQr>(
             problem,
             state,

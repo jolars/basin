@@ -280,14 +280,13 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: PopulationProgress<V, F>,
-    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
+        state: &mut PopulationProgress<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         // 1. Standard BoundedCmaEs iteration first.
         let step = self.cma.next_iter(problem, state)?;
         if step.termination.is_some() {
             return Ok(step);
         }
-        let mut state = step.state;
 
         let work = self.cma.work.as_mut().expect("CMA init precedes injection");
         let n = work.m.vec_len();
@@ -328,16 +327,17 @@ where
                 sort_bounded_population(work);
                 publish(
                     work,
-                    &mut state,
+                    state,
                     problem.inner().lower(),
                     problem.inner().upper(),
                 );
-                return Ok(crate::SolverStep::from((
-                    state,
-                    inner_result.report.into_outer_termination(
-                        crate::PartialResultPolicy::Consume,
-                    ),
-                )));
+                return Ok({
+                    let termination =
+                        inner_result.report.into_outer_termination(
+                            crate::PartialResultPolicy::Consume,
+                        );
+                    crate::SolverStep::new(termination.is_none(), termination)
+                });
             }
 
             // 5. Extract refined point.
@@ -402,11 +402,11 @@ where
 
         publish(
             work,
-            &mut state,
+            state,
             problem.inner().lower(),
             problem.inner().upper(),
         );
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::completed())
     }
     fn terminate(
         &self,

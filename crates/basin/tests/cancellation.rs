@@ -200,8 +200,8 @@ impl Solver<Quadratic, ScriptedState> for ScriptedSolver {
     fn next_iter(
         &mut self,
         problem: &mut Problem<Quadratic>,
-        mut state: ScriptedState,
-    ) -> Result<basin::SolverStep<ScriptedState>, Infallible> {
+        state: &mut ScriptedState,
+    ) -> Result<basin::SolverStep<f64>, Infallible> {
         let param = if state.iter() == 0 {
             vec![0.0]
         } else {
@@ -210,7 +210,7 @@ impl Solver<Quadratic, ScriptedState> for ScriptedSolver {
         let cost = problem.cost(&param)?;
         state.param = param;
         state.cost = cost;
-        Ok(basin::SolverStep::from((state, None)))
+        Ok(basin::SolverStep::completed())
     }
 }
 

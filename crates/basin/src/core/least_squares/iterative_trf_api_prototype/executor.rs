@@ -56,9 +56,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<RawCallbacks<P, f64>>,
-        state: crate::PointState<Vec<f64>>,
-    ) -> Result<crate::SolverStep<crate::PointState<Vec<f64>>>, Self::Error>
-    {
+        state: &mut crate::PointState<Vec<f64>>,
+    ) -> Result<crate::SolverStep<f64>, Self::Error> {
         let x = state.param();
         let mut trial = x.clone();
         trial[0] = 5.0;
@@ -97,7 +96,7 @@ where
                 .iter()
                 .all(|value| value.is_finite())
         );
-        Ok(crate::SolverStep::completed(state))
+        Ok(crate::SolverStep::completed())
     }
 }
 

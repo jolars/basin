@@ -174,8 +174,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PointState<F, F>,
-    ) -> Result<crate::SolverStep<PointState<F, F>>, Self::Error> {
+        state: &mut PointState<F, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let s = self
             .inner
             .as_mut()
@@ -215,7 +215,7 @@ where
         // the bracket has shrunk below tolerance, so the two coincide at
         // convergence.
         state.replace(u, fu);
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::completed())
     }
 
     fn terminate(&self, _state: &PointState<F, F>) -> Option<Termination<F>> {

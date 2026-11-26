@@ -117,3 +117,67 @@ removed a report clone. Its manual L-BFGS latency changed by −0.6% and +2.8%
 across the two sessions. The original full-run path serves as a control for the
 change to manual stop reports. Differences on that path and at cap zero show
 that the optimized builds vary even when the altered operation is absent.
+
+## Basin 4.0 adoption check
+
+The in-place candidate used one mutable-state step path for standalone and
+composed runs and kept owned step outcomes. The baseline was
+`a026ab3`. Both builds used the same workloads, Rust 1.89.0,
+`ndarray_v0_17` with ndarray 0.17.2, and isolated release builds with
+fat LTO and one codegen unit. Both sessions ran on the Ryzen 9 7900, pinned
+to logical CPU 8, with 16 rounds, alternating baseline and candidate order,
+and 20,000 solves per batch.
+
+The verification traces matched byte for byte. The harness also checked
+equivalent results across manual stepping, full runs, and shared-problem
+inner runs, and matched resumed trajectories after initialization and
+after two steps.
+
+| Converged workload | Session 1 median | Session 1 upper quartile | Session 2 median | Session 2 upper quartile |
+| --- | ---: | ---: | ---: | ---: |
+| LM, 1 parameter and 9 residuals | −5.63% | −4.98% | −5.09% | −2.93% |
+| LM, 1 parameter and 9 residuals, far start | −5.15% | −4.34% | −4.68% | −1.49% |
+| LM, 5 parameters and 21 residuals | −3.12% | +0.71% | −1.80% | −0.05% |
+| L-BFGS, full run | −11.70% | −10.49% | −12.40% | −2.71% |
+| L-BFGS, manual steps | −11.91% | −10.19% | −10.72% | +16.29% |
+
+The gate required a median speedup of at least 5% on each L-BFGS path and
+2% on each one-parameter LM case, with a speedup at the upper quartile in
+both sessions. Five-parameter LM met its separate limit of a 4% median
+slowdown. Manual L-BFGS missed the upper-quartile gate in session 2,
+which prompted the follow-up below.
+
+| Cap-zero control | Session 1 median | Session 2 median |
+| --- | ---: | ---: |
+| LM, 1 parameter and 9 residuals | +0.52% | +0.14% |
+| LM, 1 parameter and 9 residuals, far start | −0.57% | −0.07% |
+| LM, 5 parameters and 21 residuals | −3.50% | −2.48% |
+| L-BFGS, full run | +1.65% | +1.16% |
+| L-BFGS, manual steps | +0.79% | +1.37% |
+
+### Follow-up on two physical cores
+
+Two additional sessions reused the same binaries, with one session pinned
+to logical CPU 8 and the other to CPU 9. Each used the same 16 rounds and
+20,000 solves per batch. Verification traces matched again.
+
+| Converged workload | CPU 8 median | CPU 8 upper quartile | CPU 9 median | CPU 9 upper quartile |
+| --- | ---: | ---: | ---: | ---: |
+| LM, 1 parameter and 9 residuals | −6.66% | −4.52% | −4.94% | −3.80% |
+| LM, 1 parameter and 9 residuals, far start | −6.18% | −3.88% | −4.78% | −4.19% |
+| LM, 5 parameters and 21 residuals | −1.21% | +2.45% | −2.45% | −1.87% |
+| L-BFGS, full run | −12.27% | −8.53% | −12.36% | −12.06% |
+| L-BFGS, manual steps | −11.51% | −9.68% | −11.96% | −11.43% |
+
+Both reruns met the timing thresholds. Across the nonzero fixed caps
+of 1, 2, 4, and 8, manual L-BFGS median gains ranged from 6.04% to
+13.53%. At cap zero, its medians changed by +0.94% and −0.49%, while
+its upper quartiles changed by +10.72% and +3.13%. The earlier
+upper-quartile slowdown for a converged manual run did not recur.
+
+Basin 4.0 adopts in-place stepping with owned stop reports. The final port
+passed backend tests and checkpoint coverage, workspace Clippy, formatting,
+the Rust 1.87 compatibility check, rustdoc, both WASM builds, and the web
+checks. Its release verification trace matched the baseline after the
+remaining caller fixes. The timing sessions used the earlier candidate
+binary.

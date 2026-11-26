@@ -56,8 +56,7 @@ fn brent_domain<F: Scalar + VectorLen>() {
         .unwrap();
     // A composed policy can suppress the native width stop and request more steps.
     for _ in 0..5 {
-        let step = solver.next_iter(&mut problem, state).unwrap();
-        state = step.state;
+        let step = solver.next_iter(&mut problem, &mut state).unwrap();
         assert!(*state.param() >= F::zero() && *state.param() <= F::one());
         if step.termination.is_some() {
             break;

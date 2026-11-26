@@ -211,10 +211,10 @@ mod tests {
             upper: vec![f(8.); 2],
         });
         let mut solver = Lbfgs::new().with_trial_diagnostics(true);
-        let s = solver
+        let mut s = solver
             .init(&mut p, FirstOrderState::new(vec![f(4.), f(3.)]))
             .unwrap();
-        let s = solver.next_iter(&mut p, s).unwrap().state;
+        solver.next_iter(&mut p, &mut s).unwrap();
         assert!(
             solver
                 .model_observations()
@@ -229,7 +229,7 @@ mod tests {
         work.updatd = false;
         work.wn.fill(F::zero());
         let counts = *p.counts();
-        let result = solver.next_iter(&mut p, s).unwrap();
+        let result = solver.next_iter(&mut p, &mut s).unwrap();
         let failed = solver
             .model_observations()
             .iter()

@@ -100,10 +100,10 @@ impl Solver<(), TestState> for CountingSolver {
     fn next_iter(
         &mut self,
         _problem: &mut Problem<()>,
-        state: TestState,
-    ) -> Result<basin::SolverStep<TestState>, Self::Error> {
+        _state: &mut TestState,
+    ) -> Result<basin::SolverStep<f64>, Self::Error> {
         self.steps += 1;
-        Ok(basin::SolverStep::completed(state))
+        Ok(basin::SolverStep::completed())
     }
 }
 

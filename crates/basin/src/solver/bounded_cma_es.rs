@@ -649,8 +649,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PopulationProgress<V, F>,
-    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
+        state: &mut PopulationProgress<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let work = self.work.as_mut().expect("CMA init must precede iteration");
         let k = self
             .constants
@@ -751,12 +751,11 @@ where
             let (b_new, eigs) = match work.c.try_eigh() {
                 Ok(pair) => pair,
                 Err(_) => {
-                    return Ok(crate::SolverStep::from((
-                        state,
-                        Some(Termination::numerical_failure(
+                    return Ok(crate::SolverStep::stopped(
+                        Termination::numerical_failure(
                             "Bounded CMA-ES covariance eigendecomposition failed.",
-                        )),
-                    )));
+                        ),
+                    ));
                 }
             };
             work.b = b_new;
@@ -789,8 +788,8 @@ where
             evaluate_with_penalty(problem, &work.m, &lo, &hi, gamma, n)?;
         work.m_cost = Some(raw);
 
-        publish(work, &mut state, &lo, &hi);
-        Ok(crate::SolverStep::from((state, None)))
+        publish(work, state, &lo, &hi);
+        Ok(crate::SolverStep::completed())
     }
 
     fn terminate(

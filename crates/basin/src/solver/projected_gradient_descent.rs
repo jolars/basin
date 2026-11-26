@@ -209,8 +209,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: FirstOrderState<V, F>,
-    ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
+        state: &mut FirstOrderState<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         let (prev_cost, mut grad) = state
             .take_evaluation()
             .expect("solver requires initialized progress");
@@ -228,12 +228,11 @@ where
                 state
                     .set_evaluation(prev_cost, grad)
                     .expect("gradient dimension differs from parameter");
-                return Ok(crate::SolverStep::from((
-                    state,
-                    Some(Termination::numerical_failure(
+                return Ok(crate::SolverStep::stopped(
+                    Termination::numerical_failure(
                         "Projected gradient-descent line search failed.",
-                    )),
-                )));
+                    ),
+                ));
             }
         };
         state.seed_param_mut().scaled_add(alpha, &direction);
@@ -244,7 +243,7 @@ where
         state
             .set_evaluation(cost, grad)
             .expect("gradient dimension differs from parameter");
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::completed())
     }
 }
 

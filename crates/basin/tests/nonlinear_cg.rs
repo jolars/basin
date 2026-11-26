@@ -317,15 +317,19 @@ fn changing_updates_between_iterations_restarts_from_the_current_gradient() {
         })
         .with_update(original);
         let mut problem = Problem::new(quadratic());
-        let state = solver
+        let mut state = solver
             .init(&mut problem, FirstOrderState::new(vec![2.0, -1.0]))
             .unwrap();
-        let (state, _, reason) =
-            solver.next_iter(&mut problem, state).unwrap().into_parts();
+        let (_, reason) = solver
+            .next_iter(&mut problem, &mut state)
+            .unwrap()
+            .into_parts();
         assert_eq!(reason, None);
         let mut solver = solver.with_update(update);
-        let (_, _, reason) =
-            solver.next_iter(&mut problem, state).unwrap().into_parts();
+        let (_, reason) = solver
+            .next_iter(&mut problem, &mut state)
+            .unwrap()
+            .into_parts();
         assert_eq!(reason, None);
         assert_eq!(trace.borrow().len(), 2);
         assert!(is_steepest(&trace.borrow()[1]));

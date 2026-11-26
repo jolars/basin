@@ -105,8 +105,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: S,
-    ) -> Result<crate::SolverStep<S>, Self::Error> {
+        state: &mut S,
+    ) -> Result<crate::SolverStep<S::Float>, Self::Error> {
         self.inner.next_iter(problem, state)
     }
     fn terminate(&self, state: &S) -> Option<Termination<S::Float>> {
@@ -502,8 +502,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: PopulationProgress<V, F>,
-    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
+        state: &mut PopulationProgress<V, F>,
+    ) -> Result<crate::SolverStep<F>, Self::Error> {
         // 1. Vanilla CMA-ES iteration: update m, σ, C from the
         //    previous generation, sample λ fresh candidates sorted by
         //    cost ascending.
@@ -511,7 +511,6 @@ where
         if step.termination.is_some() {
             return Ok(step);
         }
-        let mut state = step.state;
 
         let work = self.cma.work.as_mut().expect("CMA init precedes injection");
         let n = work.m.vec_len();
@@ -557,12 +556,13 @@ where
                     &mut state.candidates,
                     &mut state.costs,
                 );
-                return Ok(crate::SolverStep::from((
-                    state,
-                    inner_result.report.into_outer_termination(
-                        crate::PartialResultPolicy::Consume,
-                    ),
-                )));
+                return Ok({
+                    let termination =
+                        inner_result.report.into_outer_termination(
+                            crate::PartialResultPolicy::Consume,
+                        );
+                    crate::SolverStep::new(termination.is_none(), termination)
+                });
             }
 
             // 5. Extract refined point.
@@ -605,7 +605,7 @@ where
             sort_population_ascending(&mut state.candidates, &mut state.costs);
         }
 
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::completed())
     }
     fn terminate(
         &self,

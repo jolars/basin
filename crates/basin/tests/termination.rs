@@ -477,9 +477,9 @@ impl Solver<Quadratic, PointState<Vec<f64>>> for AlwaysConverged {
     fn next_iter(
         &mut self,
         _problem: &mut Problem<Quadratic>,
-        state: PointState<Vec<f64>>,
-    ) -> Result<basin::SolverStep<PointState<Vec<f64>>>, Self::Error> {
-        Ok(basin::SolverStep::from((state, None)))
+        _state: &mut PointState<Vec<f64>>,
+    ) -> Result<basin::SolverStep<f64>, Self::Error> {
+        Ok(basin::SolverStep::completed())
     }
 
     fn terminate(
@@ -522,19 +522,18 @@ impl Solver<Quadratic, PointState<Vec<f64>>> for FailsOnSecondCall {
     fn next_iter(
         &mut self,
         _problem: &mut Problem<Quadratic>,
-        state: PointState<Vec<f64>>,
-    ) -> Result<basin::SolverStep<PointState<Vec<f64>>>, Self::Error> {
+        _state: &mut PointState<Vec<f64>>,
+    ) -> Result<basin::SolverStep<f64>, Self::Error> {
         Ok({
             self.calls += 1;
             if self.calls >= 2 {
                 basin::SolverStep::stopped(
-                    state,
                     basin::Termination::numerical_failure(
                         "External solver reported a numerical failure.",
                     ),
                 )
             } else {
-                basin::SolverStep::completed(state)
+                basin::SolverStep::completed()
             }
         })
     }

@@ -48,10 +48,6 @@ impl RngCore for SequenceRng {
 struct Sphere;
 
 
-impl basin::Constraints for Sphere  {
-    type Set = basin::NoConstraints;
-    fn constraints(&self) -> <Self::Set as basin::ConstraintDescription>::Borrowed<'_> { basin::ConstraintSet::new() }
-}
 impl CostFunction for Sphere {
     type Param = Vec<f64>;
     type Output = f64;
@@ -74,7 +70,7 @@ fn main() -> Result<(), argmin::core::Error> {
         .with_social_factor(1.4)?;
     let mut problem = Problem::new(Sphere);
     let (state, _) = solver.init(&mut problem, state)?;
-    let (state, _, _) = solver.next_iter(&mut problem, state)?.into_parts();
+    let (state, _) = solver.next_iter(&mut problem, state)?;
 
     let mut rows: Vec<_> = state
         .get_population()

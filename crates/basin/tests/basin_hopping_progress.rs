@@ -266,9 +266,9 @@ impl basin::Solver<Sphere, PointState<Vec<f64>>> for EveryCategory {
     fn next_iter(
         &mut self,
         _: &mut basin::Problem<Sphere>,
-        s: PointState<Vec<f64>>,
-    ) -> Result<basin::SolverStep<PointState<Vec<f64>>>, Infallible> {
-        Ok(basin::SolverStep::completed(s))
+        _s: &mut PointState<Vec<f64>>,
+    ) -> Result<basin::SolverStep<f64>, Infallible> {
+        Ok(basin::SolverStep::completed())
     }
 }
 

@@ -64,8 +64,8 @@ impl Solver<Identity, PointState<f64>> for Trajectory {
     fn next_iter(
         &mut self,
         problem: &mut Problem<Identity>,
-        mut state: PointState<f64>,
-    ) -> Result<basin::SolverStep<PointState<f64>>, Infallible> {
+        state: &mut PointState<f64>,
+    ) -> Result<basin::SolverStep<f64>, Infallible> {
         let x = self
             .points
             .get(self.next)
@@ -73,7 +73,7 @@ impl Solver<Identity, PointState<f64>> for Trajectory {
             .unwrap_or(*state.param());
         self.next += 1;
         state.replace(x, problem.cost(&x)?);
-        Ok(basin::SolverStep::from((state, None)))
+        Ok(basin::SolverStep::completed())
     }
 }
 
@@ -160,16 +160,17 @@ impl Solver<(), FirstOrderState<Vec<f64>>> for Incomplete {
     fn next_iter(
         &mut self,
         _: &mut Problem<()>,
-        mut state: FirstOrderState<Vec<f64>>,
-    ) -> Result<basin::SolverStep<FirstOrderState<Vec<f64>>>, Infallible> {
+        state: &mut FirstOrderState<Vec<f64>>,
+    ) -> Result<basin::SolverStep<f64>, Infallible> {
         state.reset();
-        Ok(basin::SolverStep::from((
-            state,
-            self.mid_step
-                .then_some(basin::Termination::numerical_failure(
-                    "External solver reported a numerical failure.",
-                )),
-        )))
+        Ok({
+            let termination =
+                self.mid_step
+                    .then_some(basin::Termination::numerical_failure(
+                        "External solver reported a numerical failure.",
+                    ));
+            basin::SolverStep::new(termination.is_none(), termination)
+        })
     }
 }
 
@@ -504,20 +505,20 @@ impl Solver<Quadratic, PointState<f64>> for WorkStep {
     fn next_iter(
         &mut self,
         problem: &mut Problem<Quadratic>,
-        mut state: PointState<f64>,
-    ) -> Result<basin::SolverStep<PointState<f64>>, Self::Error> {
+        state: &mut PointState<f64>,
+    ) -> Result<basin::SolverStep<f64>, Self::Error> {
         state.replace(0.0, evaluate_all(problem, 0.0)?);
         if matches!(self, Self::Fail) {
             problem.cost_batch(&[0.0, 999.0, 2.0])?;
         }
-        Ok(basin::SolverStep::from((
-            state,
-            matches!(self, Self::Stop).then_some(
+        Ok({
+            let termination = matches!(self, Self::Stop).then_some(
                 basin::Termination::Application(basin::ApplicationStop::new(
                     "user_requested",
                 )),
-            ),
-        )))
+            );
+            basin::SolverStep::new(termination.is_none(), termination)
+        })
     }
 }
 

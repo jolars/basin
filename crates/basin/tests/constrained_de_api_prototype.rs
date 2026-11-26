@@ -190,8 +190,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: SelectedPopulationProgress<V, F>,
-    ) -> Result<SolverStep<SelectedPopulationProgress<V, F>>, Self::Error> {
+        state: &mut SelectedPopulationProgress<V, F>,
+    ) -> Result<SolverStep<F>, Self::Error> {
         let stop = self.stop_on_seed.is_none_or(|v| state.param()[0] == v);
         let m = problem
             .inner()
@@ -218,10 +218,10 @@ where
         }
         if stop {
             if let Some(reason) = &self.stop {
-                return Ok(SolverStep::stopped(state, reason.clone()));
+                return Ok(SolverStep::stopped(reason.clone()));
             }
         }
-        Ok(SolverStep::completed(state))
+        Ok(SolverStep::completed())
     }
 }
 
@@ -758,11 +758,10 @@ impl Solver<Fixture<Vec<f64>>, SelectedPopulationProgress<Vec<f64>>>
     fn next_iter(
         &mut self,
         p: &mut Problem<Fixture<Vec<f64>>>,
-        s: SelectedPopulationProgress<Vec<f64>>,
-    ) -> Result<SolverStep<SelectedPopulationProgress<Vec<f64>>>, Self::Error>
-    {
+        s: &mut SelectedPopulationProgress<Vec<f64>>,
+    ) -> Result<SolverStep<f64>, Self::Error> {
         let step = self.0.next_iter(p, s)?;
-        let x = step.state.param();
+        let x = s.param();
         p.cost_and_gradient_and_hessian(x)?;
         p.residual_and_jacobian(x)?;
         p.hessian_product(x, x)?;

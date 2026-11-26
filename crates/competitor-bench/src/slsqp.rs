@@ -252,8 +252,11 @@ fn manual(
         if let Some(reason) = solver.check_convergence(&problem, &state) {
             return (state, reason.code());
         }
-        let (mut next, completed, reason) =
-            solver.next_iter(&mut problem, state).unwrap().into_parts();
+        let (completed, reason) = solver
+            .next_iter(&mut problem, &mut state)
+            .unwrap()
+            .into_parts();
+        let mut next = state;
         next.mirror(problem.counts());
         if completed {
             next.increment_iter();

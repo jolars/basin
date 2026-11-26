@@ -162,11 +162,11 @@ whether to adopt the conditional changes below.
   continuation of the refresh schedule. Document changed seeded trajectories
   and how the lag between covariance updates and sampling axes affects TolX
   and diagnostics.
-- [ ] **Adopt in-place stepping if the benchmark supports it.** Change the
-  `Solver` signature only if it measurably reduces small-solve overhead,
-  simplifies the driver, and passes the lifecycle checks. Adopt borrowed
-  stop reports if the separate measurement supports them, with the final
-  result taking ownership of the report.
+- [x] **Adopt in-place solver steps.** The follow-up benchmarks met the
+  timing thresholds and the port passed the lifecycle checks. Manual steps
+  return owned stop reports. See the [Basin 4.0 adoption
+  check](crates/basin/benches/step_overhead/README.md#basin-40-adoption-check)
+  and the [migration guide](web/src/guide/migrating-to-v4/index.md#in-place-solver-steps).
 
 ## Solvers and integrations
 
