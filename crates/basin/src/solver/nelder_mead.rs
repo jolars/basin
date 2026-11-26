@@ -56,13 +56,17 @@ use crate::core::state::SimplexProgress;
 /// requires identical finite costs. Like cost spread alone, a small standard
 /// deviation does not establish parameter accuracy or stationarity.
 ///
-/// An unchanged best vertex alone does not establish collapse. Flat objectives
-/// and simplexes collapsed by clipping can pass these tests without establishing
-/// stationarity or parameter accuracy. Fixed absolute floors limit accuracy for
-/// small quantities, and one vector norm cannot account for different units
-/// across coordinates. Scale parameters and tune the floors for the problem;
-/// disable relative settings when configuring absolute-only tests. Keep an
-/// iteration or evaluation budget on the executor as well.
+/// The simplex can improve while its best vertex stays fixed. Use
+/// [`Executor::no_objective_improvement`](crate::Executor::no_objective_improvement)
+/// to stop after a chosen number of iterations without sufficient improvement
+/// in the best cost.
+///
+/// Flat objectives and simplexes collapsed by clipping can pass the simplex
+/// tests without establishing stationarity or parameter accuracy. Fixed absolute
+/// floors limit accuracy for small quantities, and one vector norm cannot account
+/// for different units across coordinates. Scale parameters and tune the floors
+/// for the problem. Disable relative settings when configuring absolute-only
+/// tests. Keep an iteration or evaluation budget on the executor as well.
 ///
 /// # Bounds
 ///

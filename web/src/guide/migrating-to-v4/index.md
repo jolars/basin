@@ -105,6 +105,19 @@ partial or completed steps. Implement
 Custom states report the reason from `State::publish_selection`.
 Use `EvaluatedState::evaluated_record()` for a complete evaluated iterate.
 
+## Nelder–Mead stopping
+
+Remove calls to `with_absolute_cost_change_tolerance` and
+`with_relative_cost_change_tolerance` from both unbounded and projected
+`NelderMead`. The best vertex can stay fixed while the simplex improves.
+The default checks use the size and cost spread of the whole simplex.
+
+To adjust the allowed cost spread, use `with_absolute_simplex_cost_tolerance`
+or `with_relative_simplex_cost_tolerance`. To stop after a chosen number of
+iterations without sufficient improvement in the best cost, use
+`Executor::no_objective_improvement(patience, min_delta)`. See the
+[Nelder–Mead guide](../solvers/derivative-free/nelder-mead/#interpret-the-simplex-tests).
+
 ## Threaded population evaluation
 
 Population batches in `CmaEs`, `De`, `GlobalBestPso`, and `RandomSearch`, and

@@ -169,7 +169,6 @@ cost_setters!([L,F:Scalar] ProjectedGradientDescent<L,F>, []);
 step_setters!([L,F:Scalar] ProjectedGradientDescent<L,F>, []);
 cost_setters!([Sub,F:Scalar,Mode,W] TrustRegion<Sub,F,Mode,W>, []);
 step_setters!([Sub,F:Scalar,Mode,W] TrustRegion<Sub,F,Mode,W>, []);
-cost_setters!([V,Mode,F:Scalar] NelderMead<V,F,Mode>, []);
 step_setters!([V,Mode,F:Scalar] NelderMead<V,F,Mode>, []);
 cost_setters!([V,M,F:Scalar] GaussNewton<V,M,F>, []);
 step_setters!([V,M,F:Scalar] GaussNewton<V,M,F>, []);

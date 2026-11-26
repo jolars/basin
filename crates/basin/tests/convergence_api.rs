@@ -185,33 +185,21 @@ fn simplex_cost_check_does_not_require_vector_norms() {
         (Some(0.0), TerminationCode::SimplexTolerance),
         (None, TerminationCode::MaxIter),
     ] {
-        let direct = NelderMead::new()
+        let solver = NelderMead::new()
             .with_absolute_simplex_size_tolerance(None)
             .with_relative_simplex_size_tolerance(None)
             .with_relative_simplex_cost_tolerance(None)
             .with_absolute_simplex_cost_tolerance(1.0)
-            .with_absolute_simplex_cost_tolerance(tolerance)
-            .with_absolute_cost_change_tolerance(None);
-        let configured = NelderMead::new()
-            .with_absolute_cost_change_tolerance(None)
-            .with_absolute_simplex_size_tolerance(None)
-            .with_relative_simplex_size_tolerance(None)
-            .with_relative_simplex_cost_tolerance(None)
             .with_absolute_simplex_cost_tolerance(tolerance);
-        for solver in [direct, configured] {
-            let result = Executor::new(
-                MinimalSphere,
-                solver,
-                SimplexProgress::from_simplex(vec![
-                    Minimal(-1.0),
-                    Minimal(1.0),
-                ]),
-            )
-            .max_iter(1)
-            .run()
-            .unwrap();
-            assert_eq!(result.report.code(), expected);
-        }
+        let result = Executor::new(
+            MinimalSphere,
+            solver,
+            SimplexProgress::from_simplex(vec![Minimal(-1.0), Minimal(1.0)]),
+        )
+        .max_iter(1)
+        .run()
+        .unwrap();
+        assert_eq!(result.report.code(), expected);
     }
 }
 
@@ -612,7 +600,7 @@ fn configured_solver_and_inner_budgets_round_trip() {
     let mut inner = InnerExecutor::new(
         NelderMead::new()
             .with_absolute_simplex_size_tolerance(1e-8)
-            .with_absolute_cost_change_tolerance(1e-12),
+            .with_absolute_step_tolerance(1e-12),
     )
     .max_cost_evals(50);
     let encoded = postcard::to_allocvec(&inner).unwrap();
@@ -693,22 +681,21 @@ fn projected_check_uses_each_inner_problems_bounds() {
 #[cfg(feature = "serde")]
 #[test]
 fn serialized_checkpoint_preserves_observed_convergence_history() {
-    use basin::{
-        Checkpoint, Problem, RunControl, SimplexProgress, run_loop_with_control,
-    };
+    use basin::{Checkpoint, Problem, RunControl, run_loop_with_control};
     fn round_trip<T: serde::Serialize + serde::de::DeserializeOwned>(
         value: &T,
     ) -> T {
         let bytes = postcard::to_allocvec(value).unwrap();
         postcard::take_from_bytes(&bytes).unwrap().0
     }
-    let mut solver = NelderMead::new()
-        .with_absolute_step_tolerance(1e-10)
-        .with_absolute_cost_change_tolerance(1e-14);
+    let mut solver = GradientDescent::new(0.1)
+        .with_absolute_step_tolerance(0.25)
+        .with_absolute_cost_change_tolerance(0.5);
     let mut problem = Problem::new(Sphere);
+    // The budget stops at the first boundary that meets both tolerances.
     let first = run_loop_with_control(
         &mut problem,
-        SimplexProgress::new(vec![1.0, 2.0]),
+        FirstOrderState::new(vec![1.0, 2.0]),
         &mut solver,
         &mut RunControl::new().max_iter(4),
     )
@@ -723,8 +710,8 @@ fn serialized_checkpoint_preserves_observed_convergence_history() {
     let decoded = Executor::resume_from_checkpoint(Sphere, restored)
         .run()
         .unwrap();
-    assert_eq!(direct.report.code(), decoded.report.code());
-    assert_eq!(direct.iter(), decoded.iter());
+    assert_eq!(direct.iter(), 4);
+    assert_eq!(direct.report, decoded.report);
     assert_eq!(direct.param(), decoded.param());
     assert_eq!(direct.cost_evals(), decoded.cost_evals());
 }

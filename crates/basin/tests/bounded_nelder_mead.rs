@@ -10,8 +10,36 @@
 
 #![cfg(feature = "problems")]
 
-use basin::problems::{BoothBoxed, RastriginBoxed};
+use basin::problems::{BoothBoxed, RastriginBoxed, SphereBoxed};
 use basin::{Executor, NelderMead, SimplexProgress, TerminationCode};
+
+#[test]
+fn default_checks_continue_when_the_best_cost_stays_fixed() {
+    let mut stepper = Executor::from_start(
+        SphereBoxed::new(vec![-5.0; 2], vec![5.0; 2]),
+        NelderMead::new().projected(),
+        vec![2.5, -3.0],
+    )
+    .max_iter(400)
+    .into_stepper()
+    .unwrap();
+
+    let mut previous_cost = stepper.state().current().unwrap().1;
+    let mut saw_plateau = false;
+    while stepper.finished().is_none() {
+        stepper.step().unwrap();
+        let cost = stepper.state().current().unwrap().1;
+        saw_plateau |= cost > 1.0 && cost == previous_cost;
+        previous_cost = cost;
+    }
+
+    assert!(saw_plateau);
+    assert_eq!(
+        stepper.finished().unwrap().code(),
+        TerminationCode::SimplexTolerance
+    );
+    assert!(previous_cost < 1e-12);
+}
 
 /// Slack bounds: the unconstrained Booth minimum `(1, 3)` lies inside
 /// `[-5, 5]²`, so the projection step should be a no-op for any vertex

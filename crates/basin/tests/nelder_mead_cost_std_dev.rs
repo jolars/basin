@@ -349,9 +349,9 @@ fn wrappers_forward_replacements_and_preserve_other_tests() {
     let mut state = evaluated(|x| x.to_vec(), &[1.0, 2.0, 3.0]);
     let direct = std_dev_only()
         .with_absolute_simplex_cost_std_dev_tolerance(1.0)
-        .with_absolute_cost_change_tolerance(0.0);
+        .with_absolute_step_tolerance(0.0);
     let wrapped = std_dev_only()
-        .with_absolute_cost_change_tolerance(0.0)
+        .with_absolute_step_tolerance(0.0)
         .with_absolute_simplex_cost_std_dev_tolerance(100.0)
         .with_absolute_simplex_cost_std_dev_tolerance(1.0);
     for mut solver in [direct, wrapped] {
@@ -365,22 +365,22 @@ fn wrappers_forward_replacements_and_preserve_other_tests() {
         assert_eq!(
             tests(&termination),
             [
-                ConvergenceTest::AbsoluteCostChange,
+                ConvergenceTest::AbsoluteStep,
                 ConvergenceTest::AbsoluteSimplexCostStdDev
             ]
         );
         solver = solver.with_absolute_simplex_cost_std_dev_tolerance(None);
         state.increment_iter();
         let termination = solver.check_convergence(&problem, &state).unwrap();
-        assert_eq!(tests(&termination), [ConvergenceTest::AbsoluteCostChange]);
+        assert_eq!(tests(&termination), [ConvergenceTest::AbsoluteStep]);
     }
 
     let direct = std_dev_only()
         .with_absolute_simplex_cost_std_dev_tolerance(1.0)
         .projected()
-        .with_absolute_cost_change_tolerance(None);
+        .with_absolute_step_tolerance(None);
     let wrapped = std_dev_only()
-        .with_absolute_cost_change_tolerance(None)
+        .with_absolute_step_tolerance(None)
         .with_absolute_simplex_cost_std_dev_tolerance(0.5)
         .projected()
         .with_absolute_simplex_cost_std_dev_tolerance(1.0);
@@ -404,7 +404,7 @@ fn setter_rejects_invalid_tolerances() {
         assert!(
             std::panic::catch_unwind(|| {
                 NelderMead::<Vec<f64>>::new()
-                    .with_absolute_cost_change_tolerance::<f64>(None)
+                    .with_absolute_step_tolerance::<Vec<f64>, f64>(None)
                     .with_absolute_simplex_cost_std_dev_tolerance(tolerance)
             })
             .is_err()

@@ -41,6 +41,20 @@ use crate::SolverStep;
 /// let solver = NelderMead::new().with_absolute_gradient_tolerance(1e-8);
 /// ```
 ///
+/// ```compile_fail
+/// use basin::NelderMead;
+/// let solver = NelderMead::<Vec<f64>>::new()
+///     .with_absolute_cost_change_tolerance(1e-8);
+/// ```
+///
+/// ```compile_fail
+/// use basin::NelderMead;
+/// let solver = NelderMead::<Vec<f64>>::new()
+///     .projected()
+///     .with_absolute_step_tolerance::<Vec<f64>, f64>(None)
+///     .with_relative_cost_change_tolerance(1e-8);
+/// ```
+///
 /// # Backends
 ///
 /// Supports the underlying solver's backends when they implement the selected

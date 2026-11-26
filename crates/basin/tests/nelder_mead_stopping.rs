@@ -126,9 +126,9 @@ fn wrappers_and_projection_preserve_one_owner_in_both_builder_orders() {
         .with_relative_simplex_size_tolerance(0.2)
         .with_relative_simplex_cost_tolerance(0.5)
         .projected()
-        .with_absolute_cost_change_tolerance(None);
+        .with_absolute_step_tolerance(None);
     let wrapped = NelderMead::new()
-        .with_absolute_cost_change_tolerance(None)
+        .with_absolute_step_tolerance(None)
         .with_relative_simplex_cost_tolerance(100.0)
         .with_absolute_simplex_cost_tolerance(None)
         .projected()
