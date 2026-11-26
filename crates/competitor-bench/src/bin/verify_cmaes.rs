@@ -12,13 +12,18 @@ fn main() {
     assert!(!cfg!(feature = "parallel") && !cfg!(feature = "basin-latest"));
     if std::env::args().nth(1).as_deref() == Some("--refresh-sweep") {
         let mut args = std::env::args().skip(2);
-        let repetitions = match args.next().as_deref() {
-            None => 3,
-            Some("--repetitions") => args.next().unwrap().parse().unwrap(),
-            Some(arg) => panic!("unknown sweep argument: {arg}"),
-        };
-        assert!(args.next().is_none(), "unexpected sweep arguments");
-        cmaes::refresh::sweep(repetitions);
+        let mut repetitions = 3;
+        let mut regression_only = false;
+        while let Some(arg) = args.next() {
+            match arg.as_str() {
+                "--repetitions" => {
+                    repetitions = args.next().unwrap().parse().unwrap()
+                }
+                "--regression-only" => regression_only = true,
+                _ => panic!("unknown sweep argument: {arg}"),
+            }
+        }
+        cmaes::refresh::sweep(repetitions, regression_only);
         return;
     }
     let mut tracing = true;

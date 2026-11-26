@@ -14,7 +14,7 @@ use basin::{
 
 use super::{BasinMatrix, BasinVector, Case, Workload};
 
-const MAX_DIMENSION: usize = 48;
+const MAX_DIMENSION: usize = 96;
 
 struct Objective<'a, V, F> {
     workload: &'a Workload,
@@ -324,20 +324,34 @@ const VARIANTS: [Variant; 4] = [
 ];
 
 /// Compare policies on identical Basin workloads and write one CSV row per policy.
-pub fn sweep(repetitions: usize) {
+pub fn sweep(repetitions: usize, regression_only: bool) {
     faer::set_global_parallelism(faer::Par::Seq);
     assert!(repetitions > 0 && repetitions % 2 == 1);
     println!(
         "problem,dimension,population,condition,seed,solver,backend,precision,policy,period,reached,median_ns,min_ns,max_ns,objective_calls,generations,cost,box_violation,status"
     );
+    let ill_conditioned = (Case::RotatedEllipsoid, 48, 8, 1e6);
     let scenarios = [
         (Case::RotatedEllipsoid, 8, 8, 1e2),
         (Case::RotatedEllipsoid, 8, 8, 1e6),
         (Case::RotatedEllipsoid, 48, 8, 1e2),
         (Case::RotatedEllipsoid, 48, 16, 1e2),
         (Case::Ackley, 8, 8, 1.0),
+        ill_conditioned,
+        (Case::Ackley, 48, 8, 1.0),
+        (
+            Case::RotatedEllipsoid,
+            96,
+            CmaEs::<Vec<f64>, DenseMatrix>::default_lambda(96),
+            1e2,
+        ),
     ];
-    for (case, n, lambda, condition) in scenarios {
+    let scenarios = if regression_only {
+        std::slice::from_ref(&ill_conditioned)
+    } else {
+        &scenarios[..]
+    };
+    for &(case, n, lambda, condition) in scenarios {
         let scenario = Scenario {
             case,
             n,
@@ -352,6 +366,14 @@ pub fn sweep(repetitions: usize) {
         for seed in [0, 1, 42] {
             for variant in VARIANTS {
                 for (backend, precision, run) in BACKENDS {
+                    if regression_only
+                        && (seed != 0
+                            || !matches!(variant, Variant::Bounded)
+                            || backend != "faer"
+                            || precision != "f32")
+                    {
+                        continue;
+                    }
                     let mut runs = Vec::new();
                     for (_, period) in policies {
                         if !runs.iter().any(|(seen, _, _)| *seen == period) {

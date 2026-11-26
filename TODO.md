@@ -154,14 +154,10 @@ whether to adopt the conditional changes below.
   problems and release their scratch lock before calling the problem. See the
   [Basin 4.0 migration guide](web/src/guide/migrating-to-v4/index.md#evaluation-buffer-reuse)
   for the constructor, type, and checkpoint changes.
-- [ ] **Make CMA-ES eigen refresh automatic if the comparisons support it.**
-  Derive a deterministic period from dimension, population size, and
-  covariance learning rates. Apply the policy to bounded and unbounded
-  CMA-ES and their wrappers, with `.with_eigen_update_period(1)` as an
-  explicit override. Preserve accounting, initialization, and exact
-  continuation of the refresh schedule. Document changed seeded trajectories
-  and how the lag between covariance updates and sampling axes affects TolX
-  and diagnostics.
+- [x] **Keep CMA-ES eigen refresh at period 1 for Basin 4.0.** The automatic
+  candidate missed the objective target on a bounded ill-conditioned ellipsoid
+  that period 1 solved. See the
+  [refresh comparison](crates/basin/benches/benchmarking.md#cma-es-refresh-adoption).
 - [x] **Adopt in-place solver steps.** The follow-up benchmarks met the
   timing thresholds and the port passed the lifecycle checks. Manual steps
   return owned stop reports. See the [Basin 4.0 adoption
@@ -506,6 +502,14 @@ adaptive DE, PANOC, least-squares-specific dogleg, and OWL-QN. Promote these
 only when workloads show useful coverage beyond existing methods. These are
 investigation leads, not measured performance findings or commitments to new
 production solvers.
+
+- [ ] **Revisit automatic CMA-ES eigen refresh.** Compare a deterministic
+  cadence against period 1 using the known failure case and fresh workloads
+  across seeds, conditioning, dimensions, populations, backends, precisions,
+  and solver variants. Set target attainment, evaluation limits, and timing
+  criteria before the comparison. If adopted, retain the explicit period
+  override and exact continuation, and document how lagged sampling axes
+  affect seeded trajectories, TolX, and diagnostics.
 
 ## General design
 

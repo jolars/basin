@@ -76,6 +76,31 @@ in `competitor-bench` or an isolated investigation workspace. Profile the actual
 production implementation; avoid a copied kernel that can drift from it, and do
 not expose private internals as new public API solely for a probe.
 
+## CMA-ES refresh adoption
+
+The Basin 4.0 default remains one generation. In the initial sweep, the
+candidate period was two generations on the 48-dimensional rotated ellipsoid
+with population 8 and condition number `1e2`. Both schedules reached the
+target in all 96 matched runs. The median paired solve time fell by 43%, and
+the largest increase in objective calls was 10.7%.
+
+With condition number `1e6`, the same candidate missed a target that period 1
+reached. On bounded CMA-ES with faer `f32` and seed 0, period 1 reached the
+objective target of `1e-8` in 88,155 calls. The candidate stopped at the
+10,000-generation limit after 90,000 calls with an objective of
+`3.31e-8`. Both returned feasible points. The adoption gate required
+preserving every target reached with period 1, so this case ruled out the
+change. The expanded sweep also includes 48-dimensional Ackley and a
+96-dimensional rotated ellipsoid with the default population size.
+
+Reproduce the regression by running the same case with fixed periods 1
+and 3 and the candidate's resolved period:
+
+```sh
+cargo run --locked --release -p competitor-bench --bin verify_cmaes -- \
+  --refresh-sweep --regression-only
+```
+
 ## Constrained and least-squares diagnostics
 
 Run the diagnostics comparison and its focused checks from the workspace root:
