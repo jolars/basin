@@ -149,13 +149,11 @@ whether to adopt the conditional changes below.
   residual or constraint count. See the [Basin 4.0 migration
   guide](web/src/guide/migrating-to-v4/index.md#finite-difference-hessian-matrices)
   for dynamic-row Hessians and custom matrix builders.
-- [ ] **Make evaluation buffer reuse automatic.** Use typed storage by default
-  once the 3.x probes confirm that it preserves callback dispatch,
-  evaluation counts, fresh initialization, and exact continuation. Preserve
-  residual-only and matrix-free robust composition, and avoid holding a
-  shared scratch lock across independent callbacks. Document migration from
-  the opt-in builders and any changes to public type parameters or `Send`,
-  `Sync`, `Clone`, and `Copy` implementations.
+- [x] **Make evaluation buffer reuse automatic.** Retain typed evaluation
+  buffers by default. Robust adapters support residual-only and matrix-free
+  problems and release their scratch lock before calling the problem. See the
+  [Basin 4.0 migration guide](web/src/guide/migrating-to-v4/index.md#evaluation-buffer-reuse)
+  for the constructor, type, and checkpoint changes.
 - [ ] **Make CMA-ES eigen refresh automatic if the comparisons support it.**
   Derive a deterministic period from dimension, population size, and
   covariance learning rates. Apply the policy to bounded and unbounded

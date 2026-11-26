@@ -132,7 +132,7 @@ pub fn check<V, M, F, S, P, E>(
     prepare: impl FnOnce(Location<V, M, F>) -> P,
 ) where
     F: Scalar,
-    P: Residual<Param = V, Output = V, Error = Infallible>,
+    P: Residual<Param = V, Output = V, Error = Infallible> + Jacobian,
     E: std::fmt::Debug,
     V: Clone + VectorIndex<F> + VectorLen,
     M: Clone,

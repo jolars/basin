@@ -403,8 +403,8 @@ where
     }
 }
 
-impl<P, L, V, M, F, RW, R, G>
-    Solver<RobustLeastSquares<P, L, F, RW>, PointState<V, F>>
+impl<P, L, V, M, F, RW, R, G, const I: bool>
+    Solver<RobustLeastSquares<P, L, F, RW, I>, PointState<V, F>>
     for BoundedLevenbergMarquardt<V, M, F, R, G>
 where
     F: Scalar,
@@ -433,7 +433,7 @@ where
     }
     fn init(
         &mut self,
-        problem: &mut Problem<RobustLeastSquares<P, L, F, RW>>,
+        problem: &mut Problem<RobustLeastSquares<P, L, F, RW, I>>,
         state: PointState<V, F>,
     ) -> Result<PointState<V, F>, Self::Error> {
         crate::core::constraint::evaluation::validate_box_problem(
@@ -447,7 +447,7 @@ where
     }
     fn next_iter(
         &mut self,
-        problem: &mut Problem<RobustLeastSquares<P, L, F, RW>>,
+        problem: &mut Problem<RobustLeastSquares<P, L, F, RW, I>>,
         state: PointState<V, F>,
     ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.next_evaluated(problem, state)

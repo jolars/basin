@@ -1,4 +1,3 @@
-use crate::EvaluationBuffers;
 use crate::core::convergence::{
     NativeConvergenceDiagnostics, NativeConvergenceTest,
 };
@@ -11,7 +10,6 @@ use crate::core::math::{
     RegularizedQrSolve, Scalar, ScaleInPlace, ScaledAdd,
 };
 use crate::core::problem::Problem;
-use crate::core::problem::buffers::BufferStorage;
 #[cfg(test)]
 use crate::core::problem::{Jacobian, Residual};
 use crate::core::solver::Solver;
@@ -1723,25 +1721,25 @@ where
 ///         .with_absolute_gradient_tolerance(1e-10)
 ///         .with_pivoted_qr();
 /// ```
-pub struct LevenbergMarquardtQr<V, M, F: Scalar = f64, W = (), R = V>
+pub struct LevenbergMarquardtQr<V, M, F: Scalar = f64, R = V>
 where
     M: FactorizePivotedQr<V, F, R>,
 {
     inner: LevenbergMarquardt<V, M::Factorization, F, R>,
-    workspace: W,
+    jacobian_buffer: Option<M>,
     rank_tolerance: Option<F>,
 }
 
-impl<V, M: FactorizePivotedQr<V, F, R>, F: Scalar, W, R>
-    NativeConvergenceDiagnostics for LevenbergMarquardtQr<V, M, F, W, R>
+impl<V, M: FactorizePivotedQr<V, F, R>, F: Scalar, R>
+    NativeConvergenceDiagnostics for LevenbergMarquardtQr<V, M, F, R>
 {
     fn native_convergence_tests(&self) -> &[NativeConvergenceTest] {
         self.inner.native_convergence_tests()
     }
 }
 
-impl<V, M: FactorizePivotedQr<V, F, R>, F: Scalar, W, R>
-    LeastSquaresDiagnostics<F> for LevenbergMarquardtQr<V, M, F, W, R>
+impl<V, M: FactorizePivotedQr<V, F, R>, F: Scalar, R> LeastSquaresDiagnostics<F>
+    for LevenbergMarquardtQr<V, M, F, R>
 {
     fn least_squares_observations(&self) -> &[LeastSquaresObservation<F>] {
         self.inner.least_squares_observations()
@@ -1754,7 +1752,7 @@ impl<V, M, F: Scalar, R, G> LevenbergMarquardt<V, M, F, R, G> {
     /// This additive route requires [`FactorizePivotedQr`] only on the
     /// returned solver. Existing Cholesky-only matrix implementations retain
     /// their original solver bounds. Configure this before starting a solve.
-    pub fn with_pivoted_qr(self) -> LevenbergMarquardtQr<V, M, F, (), R>
+    pub fn with_pivoted_qr(self) -> LevenbergMarquardtQr<V, M, F, R>
     where
         M: FactorizePivotedQr<V, F, R>,
     {
@@ -1775,12 +1773,12 @@ impl<V, M, F: Scalar, R, G> LevenbergMarquardt<V, M, F, R, G> {
                 ..LevenbergMarquardt::new_with_gram()
             },
             rank_tolerance: None,
-            workspace: (),
+            jacobian_buffer: None,
         }
     }
 }
 
-impl<V, M, F: Scalar, R> Default for LevenbergMarquardtQr<V, M, F, (), R>
+impl<V, M, F: Scalar, R> Default for LevenbergMarquardtQr<V, M, F, R>
 where
     M: FactorizePivotedQr<V, F, R>,
 {
@@ -1788,7 +1786,7 @@ where
         Self::new()
     }
 }
-impl<V, M, F: Scalar, R> LevenbergMarquardtQr<V, M, F, (), R>
+impl<V, M, F: Scalar, R> LevenbergMarquardtQr<V, M, F, R>
 where
     M: FactorizePivotedQr<V, F, R>,
 {
@@ -1797,28 +1795,12 @@ where
         Self {
             inner: LevenbergMarquardt::new_with_gram(),
             rank_tolerance: None,
-            workspace: (),
-        }
-    }
-
-    /// Retain the raw Jacobian between model evaluations.
-    ///
-    /// The first fused evaluation seeds its storage through the owned callback;
-    /// subsequent refreshes use the in-place callbacks. Fresh initialization
-    /// reevaluates the seed and permits resizing. Exact continuation retains
-    /// the buffer along with the factorization.
-    pub fn with_evaluation_buffers(
-        self,
-    ) -> LevenbergMarquardtQr<V, M, F, EvaluationBuffers<(), M>, R> {
-        LevenbergMarquardtQr {
-            inner: self.inner,
-            rank_tolerance: self.rank_tolerance,
-            workspace: EvaluationBuffers::default(),
+            jacobian_buffer: None,
         }
     }
 }
 
-impl<V, M, F: Scalar, W, R> LevenbergMarquardtQr<V, M, F, W, R>
+impl<V, M, F: Scalar, R> LevenbergMarquardtQr<V, M, F, R>
 where
     M: FactorizePivotedQr<V, F, R>,
 {
@@ -1941,11 +1923,10 @@ where
         self
     }
 }
-impl<P, V, M, F, E, W, R> Solver<P, PointState<V, F>>
-    for LevenbergMarquardtQr<V, M, F, W, R>
+impl<P, V, M, F, E, R> Solver<P, PointState<V, F>>
+    for LevenbergMarquardtQr<V, M, F, R>
 where
     F: Scalar,
-    W: BufferStorage<(), M>,
     Problem<P>: Evaluation<V, M, F, R, Error = E>,
     V: ScaledAdd<F>
         + NormSquared<F>
@@ -1982,29 +1963,28 @@ where
         problem: &mut Problem<P>,
         state: PointState<V, F>,
     ) -> Result<PointState<V, F>, Self::Error> {
-        self.workspace.with_buffers(|_, buffer| {
-            self.inner
-                .init_model::<_, M, PivotedQr>(problem, state, buffer)
-        })
+        self.inner.init_model::<_, M, PivotedQr>(
+            problem,
+            state,
+            &mut self.jacobian_buffer,
+        )
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
         state: PointState<V, F>,
     ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
-        self.workspace.with_buffers(|_, buffer| {
-            self.inner.next_iter_model::<_, M, PivotedQr>(
-                problem,
-                state,
-                self.rank_tolerance,
-                buffer,
-            )
-        })
+        self.inner.next_iter_model::<_, M, PivotedQr>(
+            problem,
+            state,
+            self.rank_tolerance,
+            &mut self.jacobian_buffer,
+        )
     }
 }
 
-impl<V: Clone, M, F: Scalar, W, R> crate::core::inner::InitialState<V>
-    for LevenbergMarquardtQr<V, M, F, W, R>
+impl<V: Clone, M, F: Scalar, R> crate::core::inner::InitialState<V>
+    for LevenbergMarquardtQr<V, M, F, R>
 where
     M: FactorizePivotedQr<V, F, R>,
 {
@@ -2013,14 +1993,14 @@ where
         PointState::new(x.clone())
     }
 }
-impl<V: Clone, M, F: Scalar, W, R> crate::core::inner::WarmStart<V>
-    for LevenbergMarquardtQr<V, M, F, W, R>
+impl<V: Clone, M, F: Scalar, R> crate::core::inner::WarmStart<V>
+    for LevenbergMarquardtQr<V, M, F, R>
 where
     M: FactorizePivotedQr<V, F, R>,
 {
 }
-impl<V: Clone, M, F: Scalar, W, R> super::cma_inject::MemeticInner<V, F>
-    for LevenbergMarquardtQr<V, M, F, W, R>
+impl<V: Clone, M, F: Scalar, R> super::cma_inject::MemeticInner<V, F>
+    for LevenbergMarquardtQr<V, M, F, R>
 where
     M: FactorizePivotedQr<V, F, R>,
 {

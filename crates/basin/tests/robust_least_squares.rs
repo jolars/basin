@@ -236,7 +236,7 @@ fn checkpoint_and_fresh_reuse_preserve_the_objective_and_counts() {
                 Param = Vec<f64>,
                 Output = Vec<f64>,
                 Error = std::convert::Infallible,
-            >,
+            > + Jacobian,
         E: std::fmt::Debug,
         S: basin::Solver<
                 RobustLeastSquares<P, HuberLoss>,

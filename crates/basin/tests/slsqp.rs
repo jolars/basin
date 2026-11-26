@@ -1031,12 +1031,12 @@ fn folded_constraints_include_both_signs_of_nonlinear_equalities() {
 #[test]
 #[should_panic(expected = "positive")]
 fn zero_subproblem_limit_is_invalid() {
-    let _ = Slsqp::<f64>::new().with_max_subproblem_iterations(0);
+    let _ = Slsqp::<f64>::new::<Vec<f64>>().with_max_subproblem_iterations(0);
 }
 #[test]
 #[should_panic]
 fn nonfinite_accuracy_is_invalid() {
-    let _ = Slsqp::new().with_absolute_accuracy_tolerance(f64::NAN);
+    let _: Slsqp = Slsqp::new().with_absolute_accuracy_tolerance(f64::NAN);
 }
 
 #[test]

@@ -45,7 +45,7 @@
 //! so the happy path stays zero-cost.
 
 pub mod buffers;
-pub use buffers::{EvaluationBuffers, SharedEvaluationBuffers};
+pub use buffers::EvaluationBuffers;
 
 /// Scalar-valued objective `f(x): Param → Output`. The smallest
 /// problem trait: every solver binds at least on this.

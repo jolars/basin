@@ -227,3 +227,48 @@ For a custom parameter type, implement `DenseBackend<F>` on the vector and
 Implement `square_from_fn_into` if you want to reuse existing output storage.
 You can keep an existing `DenseMatrixFromFn<F>` builder and select it with
 `.with_dense_hessian()`.
+
+## Evaluation buffer reuse
+
+Remove `.with_evaluation_buffers()` from exact-Hessian trust region, dense
+trust-region reflective, pivoted-QR Levenberg–Marquardt, SLSQP, and robust
+least-squares calls. Each now reuses evaluation storage automatically. Keep
+implementing the owned callbacks to supply initial storage and override the
+matching `*_into` callbacks to write into that storage on later requests.
+
+| Type | Explicit Basin 4.0 annotation |
+| --- | --- |
+| Exact-Hessian trust region | `TrustRegion<Sub, F, ExactHessian, EvaluationBuffers<(), M>>` |
+| Matrix-free trust region | `TrustRegion<Sub, F, MatrixFree, ()>` |
+| Trust-region reflective | `TrustRegionReflective<F, R, M>` |
+| Pivoted-QR Levenberg–Marquardt | `LevenbergMarquardtQr<V, M, F, R>` |
+| SLSQP | `Slsqp<F, V>` |
+
+Here `V` is the parameter vector, `R` is the residual vector, and `M` is the
+Hessian or Jacobian. The executor helps infer these types from the problem.
+When configuring a solver by itself, specify the output types on the constructor
+or give the solver an explicit type.
+
+`RobustLeastSquares::new` infers the fourth type parameter from the problem's
+`Jacobian` implementation. Use `RobustLeastSquares::from_residuals` and the
+type `RobustLeastSquares<P, L, F, ()>` for residual-only or matrix-free
+problems. Custom matrices that already implement `MatTransposeVec` still
+provide scalar gradients. Override `mat_transpose_vec_to` to reuse the
+gradient output as well.
+
+If your old buffered robust adapter used `MatTransposeVecInto`, construct it
+with `RobustLeastSquares::new_with_in_place_transpose(problem, loss)`. This
+works with custom Jacobians and with built-in matrices that implement
+`MatTransposeVecInto` for your parameter type. Use
+`RobustLeastSquares<P, L, F, M, true>` in explicit type annotations.
+
+`Send` and `Sync` now also depend on the solver's stored backend outputs.
+The robust adapter requires its scratch outputs to be `Send` for either
+trait. It implements `Clone` when the problem and loss do, with empty
+scratch in the clone, and drops its `Copy` implementation. Cloning TRF or
+SLSQP also clones its retained backend outputs.
+
+In-memory checkpoints retain solver buffers. Serialized checkpoints rebuild
+buffers as callbacks run. Resuming an exact-Hessian trust-region solve from
+a serialized checkpoint uses the owned Hessian callback on the next request,
+then resumes in-place evaluation.

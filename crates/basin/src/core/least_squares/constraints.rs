@@ -1,14 +1,14 @@
 use super::RobustLeastSquares;
 
-impl<P, L, F, W> crate::NonlinearEqualityValues
-    for RobustLeastSquares<P, L, F, W>
+impl<P, L, F, W, const I: bool> crate::NonlinearEqualityValues
+    for RobustLeastSquares<P, L, F, W, I>
 where
-    P: crate::NonlinearEqualityValues,
+    P: crate::Residual + crate::NonlinearEqualityValues,
     F: crate::Scalar,
 {
-    type Param = P::Param;
+    type Param = <P as crate::NonlinearEqualityValues>::Param;
     type Values = P::Values;
-    type Error = P::Error;
+    type Error = <P as crate::NonlinearEqualityValues>::Error;
     fn nonlinear_equalities(
         &self,
         x: &Self::Param,
@@ -17,15 +17,15 @@ where
     }
 }
 
-impl<P, L, F, W> crate::NonlinearInequalityValues
-    for RobustLeastSquares<P, L, F, W>
+impl<P, L, F, W, const I: bool> crate::NonlinearInequalityValues
+    for RobustLeastSquares<P, L, F, W, I>
 where
-    P: crate::NonlinearInequalityValues,
+    P: crate::Residual + crate::NonlinearInequalityValues,
     F: crate::Scalar,
 {
-    type Param = P::Param;
+    type Param = <P as crate::NonlinearInequalityValues>::Param;
     type Values = P::Values;
-    type Error = P::Error;
+    type Error = <P as crate::NonlinearInequalityValues>::Error;
     fn nonlinear_inequalities(
         &self,
         x: &Self::Param,
@@ -34,14 +34,15 @@ where
     }
 }
 
-impl<P, L, F, W> crate::ConstraintJacobian for RobustLeastSquares<P, L, F, W>
+impl<P, L, F, W, const I: bool> crate::ConstraintJacobian
+    for RobustLeastSquares<P, L, F, W, I>
 where
-    P: crate::ConstraintJacobian,
+    P: crate::Residual + crate::ConstraintJacobian,
     F: crate::Scalar,
 {
-    type Param = P::Param;
+    type Param = <P as crate::ConstraintJacobian>::Param;
     type Jacobian = P::Jacobian;
-    type Error = P::Error;
+    type Error = <P as crate::ConstraintJacobian>::Error;
     fn constraint_jacobian(
         &self,
         x: &Self::Param,

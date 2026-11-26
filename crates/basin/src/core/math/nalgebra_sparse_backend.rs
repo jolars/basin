@@ -67,27 +67,20 @@ where
     F: Scalar + ClosedAddAssign + ClosedMulAssign,
 {
     fn mat_transpose_vec(&self, x: &DVector<F>) -> DVector<F> {
-        assert_eq!(
-            self.nrows(),
-            x.len(),
-            "mat_transpose_vec: A.nrows ({}) != x.len ({})",
-            self.nrows(),
-            x.len()
+        let mut out = DVector::zeros(self.ncols());
+        self.mat_transpose_vec_to(x, &mut out);
+        out
+    }
+
+    fn mat_transpose_vec_to(&self, x: &DVector<F>, out: &mut DVector<F>) {
+        if out.len() != self.ncols() {
+            *out = DVector::zeros(self.ncols());
+        }
+        super::MatTransposeVecInto::mat_transpose_vec_into(
+            self,
+            x.as_slice(),
+            out,
         );
-        // spmm_csc_dense with Op::Transpose lets us avoid materializing
-        // Aᵀ. Output dimension is `ncols(self) × 1`; the helper takes
-        // dense RHS as a `DMatrixView`, so we wrap `x` as a 1-column
-        // DMatrix.
-        let mut y = DMatrix::<F>::zeros(self.ncols(), 1);
-        let x_mat = DMatrix::from_column_slice(x.len(), 1, x.as_slice());
-        spmm_csc_dense(
-            F::zero(),
-            &mut y,
-            F::one(),
-            Op::Transpose(self),
-            Op::NoOp(&x_mat),
-        );
-        DVector::from_column_slice(y.column(0).as_slice())
     }
 }
 
@@ -270,7 +263,8 @@ where
         let rows = self.row_indices();
         let values = self.values();
         for j in 0..self.ncols() {
-            out[j] = (ptr[j]..ptr[j + 1]).map(|k| values[k] * x[rows[k]]).sum();
+            out[j] = (ptr[j]..ptr[j + 1])
+                .fold(F::zero(), |sum, k| sum + values[k] * x[rows[k]]);
         }
     }
 }

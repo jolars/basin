@@ -530,10 +530,10 @@ impl<CG, CX, CC, CT, V, M, F: Scalar>
     }
 }
 
-impl<CG, CX, CC, CT, V, M, F: Scalar>
-    ConfiguredSolver<LevenbergMarquardtQr<V, M, F>, CG, CX, CC, CT>
+impl<CG, CX, CC, CT, V, M, F: Scalar, R>
+    ConfiguredSolver<LevenbergMarquardtQr<V, M, F, R>, CG, CX, CC, CT>
 where
-    M: FactorizePivotedQr<V, F>,
+    M: FactorizePivotedQr<V, F, R>,
 {
     forward_setting!(LevenbergMarquardtQr, with_relative_rank_tolerance, tol: F);
     forward_setting!(LevenbergMarquardtQr, with_absolute_gradient_tolerance, value: impl Into<Option<F>>);
@@ -596,8 +596,8 @@ impl<CG, CX, CC, CT, V, F: Scalar> ConfiguredSolver<Sgd<V, F>, CG, CX, CC, CT> {
     forward_setting!(Sgd, with_cost_eval_every, period: usize);
 }
 
-impl<CG, CX, CC, CT, F: Scalar>
-    ConfiguredSolver<TrustRegionReflective<F>, CG, CX, CC, CT>
+impl<CG, CX, CC, CT, F: Scalar, R, M>
+    ConfiguredSolver<TrustRegionReflective<F, R, M>, CG, CX, CC, CT>
 {
     forward_setting!(TrustRegionReflective, with_absolute_scaled_gradient_tolerance, value: impl Into<Option<F>>);
     forward_setting!(TrustRegionReflective, with_initial_radius, value: impl Into<Option<F>>);

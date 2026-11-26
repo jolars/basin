@@ -76,7 +76,8 @@ where
         finite(r).then(|| (r.clone(), vec![F::one(); r.vec_len()]))
     }
 }
-impl<P, L, F> OperatorObjective<F> for RobustLeastSquares<P, L, F>
+impl<P, L, F, M, const I: bool> OperatorObjective<F>
+    for RobustLeastSquares<P, L, F, M, I>
 where
     P: JacobianProduct + TransposeJacobianProduct,
     P::Output: Clone + VectorLen + VectorIndex<F>,
@@ -528,7 +529,8 @@ fn robust_case<V, R, F, L>(
 {
     let fixture = Fixture::new(make_param, make_residual);
     let trace = fixture.trace.clone();
-    let objective = RobustLeastSquares::new(fixture, loss).with_scale(num(0.7));
+    let objective =
+        RobustLeastSquares::from_residuals(fixture, loss).with_scale(num(0.7));
     let mut problem = counted(objective);
     let x = make_param(&[F::one(), num(-0.5)]);
     let mut model =
@@ -689,7 +691,10 @@ fn failed_requests_stay_counted_and_invalid_models_fail() {
                 assert_eq!(counts.total_work(), if kind == 0 { 1 } else { 2 });
             }
             if robust {
-                check(RobustLeastSquares::new(fixture, SoftL1Loss), kind);
+                check(
+                    RobustLeastSquares::from_residuals(fixture, SoftL1Loss),
+                    kind,
+                );
             } else {
                 check(fixture, kind);
             }
@@ -704,7 +709,10 @@ fn failed_requests_stay_counted_and_invalid_models_fail() {
             .unwrap()
             .is_none()
     );
-    let mut p = counted(RobustLeastSquares::new(p.into_inner().0, CauchyLoss));
+    let mut p = counted(RobustLeastSquares::from_residuals(
+        p.into_inner().0,
+        CauchyLoss,
+    ));
     assert!(
         linearize::<_, f64>(&mut p, vec![1.0, -0.5])
             .unwrap()
@@ -856,7 +864,7 @@ impl TransposeJacobianProduct for ProbingProducts {
 fn internal_probes_do_not_charge_boundary_residual_counts() {
     let fixture = Fixture::new(|x: &[f64]| x.to_vec(), |x: &[f64]| x.to_vec());
     let trace = fixture.trace.clone();
-    let mut problem = counted(RobustLeastSquares::new(
+    let mut problem = counted(RobustLeastSquares::from_residuals(
         ProbingProducts(fixture),
         SoftL1Loss,
     ));
@@ -944,7 +952,12 @@ fn capabilities_do_not_imply_matrix_or_residual_adapter_traits() {
     assert_not!(DenseOnly, JacobianProduct);
     assert_not!(DenseOnly, TransposeJacobianProduct);
     assert_not!(
-        RobustLeastSquares<Fixture<Vec<f64>, Vec<f64>, f64>, SoftL1Loss>,
+        RobustLeastSquares<
+            Fixture<Vec<f64>, Vec<f64>, f64>,
+            SoftL1Loss,
+            f64,
+            (),
+        >,
         Residual
     );
 }

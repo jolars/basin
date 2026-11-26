@@ -380,6 +380,26 @@ where
         );
         y
     }
+
+    fn mat_transpose_vec_to(&self, x: &Col<F>, out: &mut Col<F>) {
+        assert_eq!(
+            x.nrows(),
+            self.nrows(),
+            "transpose matvec input length mismatch"
+        );
+        if out.nrows() != self.ncols() {
+            *out = self.mat_transpose_vec(x);
+            return;
+        }
+        matmul(
+            out.as_mut(),
+            Accum::Replace,
+            self.transpose(),
+            x.as_ref(),
+            F::one(),
+            Par::Seq,
+        );
+    }
 }
 
 impl<F> GramMatrix for Mat<F>

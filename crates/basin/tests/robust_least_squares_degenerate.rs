@@ -82,7 +82,7 @@ where
             Param = Vec<f64>,
             Output = Vec<f64>,
             Error = std::convert::Infallible,
-        >,
+        > + Jacobian,
     E: std::fmt::Debug,
     S: Solver<
             RobustLeastSquares<P, HuberLoss>,
@@ -133,7 +133,7 @@ where
             Param = Vec<f64>,
             Output = Vec<f64>,
             Error = std::convert::Infallible,
-        >,
+        > + Jacobian,
     E: std::fmt::Debug,
     S: Solver<
             RobustLeastSquares<P, HuberLoss>,

@@ -51,7 +51,6 @@ use crate::core::math::{
     Dot, MatVec, NegInPlace, NormSquared, Scalar, ScaleInPlace, ScaledAdd,
     VectorLen,
 };
-use crate::core::problem::buffers::BufferStorage;
 use crate::core::problem::{
     CostFunction, Gradient, Hessian, HessianProduct, Problem,
 };
@@ -505,7 +504,7 @@ pub struct TrustRegion<
     Sub = Steihaug,
     F: Scalar = f64,
     Mode = ExactHessian,
-    W = (),
+    W = EvaluationBuffers<(), crate::DenseMatrix<F>>,
 > {
     subproblem: Sub,
     /// Current trust radius `Δ`, mutated across iterations. Reset to
@@ -546,9 +545,11 @@ pub struct MatrixFree;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GaussNewtonModel;
 
-impl Default for TrustRegion<Steihaug> {
+impl<M> Default
+    for TrustRegion<Steihaug, f64, ExactHessian, EvaluationBuffers<(), M>>
+{
     fn default() -> Self {
-        Self::new()
+        TrustRegion::new()
     }
 }
 
@@ -557,12 +558,13 @@ impl TrustRegion<Steihaug> {
     /// subproblem: initial radius `1.0`, maximum radius `100.0`, acceptance
     /// threshold `η = 0.125`, and up to `10` radius reductions per outer
     /// iteration.
-    pub fn new() -> Self {
+    pub fn new<M>()
+    -> TrustRegion<Steihaug, f64, ExactHessian, EvaluationBuffers<(), M>> {
         Self::with_subproblem(Steihaug::new())
     }
 }
 
-impl TrustRegion<Steihaug, f64, MatrixFree> {
+impl TrustRegion<Steihaug, f64, MatrixFree, ()> {
     /// Matrix-free trust-region solver with the default [`Steihaug`]
     /// subproblem and the same defaults as [`new`](TrustRegion::new). The
     /// problem must implement
@@ -574,7 +576,7 @@ impl TrustRegion<Steihaug, f64, MatrixFree> {
     }
 }
 
-impl<Sub, F: Scalar> TrustRegion<Sub, F, MatrixFree> {
+impl<Sub, F: Scalar> TrustRegion<Sub, F, MatrixFree, ()> {
     /// Matrix-free trust-region solver with an explicit subproblem strategy
     /// ([`Steihaug`] or [`CauchyPoint`]; [`Dogleg`] and [`MoreSorensen`] need
     /// the actual matrix and are compile errors here).
@@ -584,34 +586,12 @@ impl<Sub, F: Scalar> TrustRegion<Sub, F, MatrixFree> {
 }
 
 impl<Sub, F: Scalar> TrustRegion<Sub, F> {
-    /// Retain a typed Hessian buffer between outer iterations.
-    ///
-    /// The matrix type is inferred from the problem. The first Hessian request
-    /// seeds the buffer through the owned callback; later requests call
-    /// [`Hessian::hessian_into`]. Fresh runs reevaluate the Hessian and permit
-    /// the callback to resize retained storage. Exact checkpoints retain it.
-    /// The original constructor and its backend bounds remain available.
-    pub fn with_evaluation_buffers<M>(
-        self,
-    ) -> TrustRegion<Sub, F, ExactHessian, EvaluationBuffers<(), M>> {
-        TrustRegion {
-            subproblem: self.subproblem,
-            radius: self.radius,
-            initial_radius: self.initial_radius,
-            max_radius: self.max_radius,
-            eta: self.eta,
-            max_inner: self.max_inner,
-            rejected_step: self.rejected_step,
-            trials: self.trials,
-            mode: PhantomData,
-            workspace: EvaluationBuffers::default(),
-        }
-    }
-
     /// Trust-region solver with an explicit subproblem strategy
     /// ([`Steihaug`], [`Dogleg`], [`MoreSorensen`], or [`CauchyPoint`]).
-    pub fn with_subproblem(subproblem: Sub) -> Self {
-        Self::with_workspace(subproblem, ())
+    pub fn with_subproblem<M>(
+        subproblem: Sub,
+    ) -> TrustRegion<Sub, F, ExactHessian, EvaluationBuffers<(), M>> {
+        TrustRegion::with_workspace(subproblem, EvaluationBuffers::default())
     }
 }
 
@@ -990,8 +970,8 @@ where
     Ok((state, None, false))
 }
 
-impl<P, Sub, V, M, F, W> Solver<P, FirstOrderState<V, F>>
-    for TrustRegion<Sub, F, ExactHessian, W>
+impl<P, Sub, V, M, F> Solver<P, FirstOrderState<V, F>>
+    for TrustRegion<Sub, F, ExactHessian, EvaluationBuffers<(), M>>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>
@@ -999,7 +979,6 @@ where
         + Hessian<Hessian = M>,
     V: Clone + ScaledAdd<F> + NormSquared<F> + VectorLen,
     Sub: Subproblem<V, M, F>,
-    W: BufferStorage<(), M>,
 {
     type Error = P::Error;
 
@@ -1024,35 +1003,33 @@ where
         // One Hessian per outer iteration, reused across all inner radius
         // reductions at zero extra derivative evaluations (the gradient is
         // likewise fixed while x is).
-        self.workspace.with_buffers(|_, buffer| {
-            let b = if let Some(mut b) = buffer.take() {
-                problem.hessian_into(state.param(), &mut b)?;
-                b
-            } else {
-                problem.hessian(state.param())?
-            };
-            let subproblem = &self.subproblem;
-            let result = tr_next_iter(
-                &mut self.radius,
-                self.max_radius,
-                self.eta,
-                self.max_inner,
-                &mut self.trials,
-                problem,
-                state,
-                &mut ObjectiveTrial,
-                |_, _, g, radius| Ok(subproblem.solve(g, &b, radius)),
-            );
-            *buffer = Some(b);
-            let (state, reason, accepted) = result?;
-            self.rejected_step = !accepted;
-            Ok(crate::SolverStep::from((state, reason)))
-        })
+        let b = if let Some(mut b) = self.workspace.matrix.take() {
+            problem.hessian_into(state.param(), &mut b)?;
+            b
+        } else {
+            problem.hessian(state.param())?
+        };
+        let subproblem = &self.subproblem;
+        let result = tr_next_iter(
+            &mut self.radius,
+            self.max_radius,
+            self.eta,
+            self.max_inner,
+            &mut self.trials,
+            problem,
+            state,
+            &mut ObjectiveTrial,
+            |_, _, g, radius| Ok(subproblem.solve(g, &b, radius)),
+        );
+        self.workspace.matrix = Some(b);
+        let (state, reason, accepted) = result?;
+        self.rejected_step = !accepted;
+        Ok(crate::SolverStep::from((state, reason)))
     }
 }
 
 impl<P, Sub, V, F> Solver<P, FirstOrderState<V, F>>
-    for TrustRegion<Sub, F, MatrixFree>
+    for TrustRegion<Sub, F, MatrixFree, ()>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>

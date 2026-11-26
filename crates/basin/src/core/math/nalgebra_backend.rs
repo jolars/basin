@@ -837,6 +837,14 @@ where
         );
         self.tr_mul(x)
     }
+
+    fn mat_transpose_vec_to(&self, x: &DVector<F>, out: &mut DVector<F>) {
+        if out.len() == self.ncols() {
+            self.tr_mul_to(x, out);
+        } else {
+            *out = self.mat_transpose_vec(x);
+        }
+    }
 }
 
 impl<F> GramMatrix for DMatrix<F>

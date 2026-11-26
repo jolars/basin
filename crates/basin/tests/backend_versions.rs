@@ -1080,7 +1080,6 @@ macro_rules! fixed_rectangular_fits {
                 solve!(
                     $problem,
                     LevenbergMarquardtQr::new()
-                        .with_evaluation_buffers()
                 );
                 solve!($problem, TrustRegion::least_squares_with_gram(Dogleg));
                 solve!(
@@ -1098,7 +1097,7 @@ macro_rules! fixed_rectangular_fits {
                 );
                 solve!(
                     $problem,
-                    TrustRegionReflective::new().with_evaluation_buffers()
+                    TrustRegionReflective::new()
                 );
             }};
         }
@@ -1328,7 +1327,7 @@ macro_rules! nalgebra_checks {
                     ($strategy:expr) => {
                         let result = Executor::from_start(
                             FiniteDiff::new(problem()),
-                            TrustRegion::with_subproblem($strategy).with_evaluation_buffers(),
+                            TrustRegion::with_subproblem($strategy),
                             x,
                         ).max_iter(30).run().unwrap();
                         assert!(result.current_record().unwrap().cost.unwrap() < 1e-12);

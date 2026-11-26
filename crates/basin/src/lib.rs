@@ -396,7 +396,6 @@ pub use crate::core::parameter_transform::{
 pub use crate::core::problem::{
     CostFunction, EvalCounts, EvaluationBuffers, EvaluationKind, Gradient,
     Hessian, HessianProduct, Jacobian, MiniBatchGradient, Problem, Residual,
-    SharedEvaluationBuffers,
 };
 pub use crate::core::run_control::RunControl;
 pub use crate::core::solver::{Solver, SolverStep};

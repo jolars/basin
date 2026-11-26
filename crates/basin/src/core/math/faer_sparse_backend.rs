@@ -73,6 +73,23 @@ where
             self.col_range(j).map(|k| vals[k] * x[row_idx[k]]).sum()
         })
     }
+
+    fn mat_transpose_vec_to(&self, x: &Col<F>, out: &mut Col<F>) {
+        assert_eq!(
+            x.nrows(),
+            self.nrows(),
+            "transpose matvec input length mismatch"
+        );
+        if out.nrows() != self.ncols() {
+            *out = self.mat_transpose_vec(x);
+            return;
+        }
+        let rows = self.row_idx();
+        let values = self.val();
+        for j in 0..self.ncols() {
+            out[j] = self.col_range(j).map(|k| values[k] * x[rows[k]]).sum();
+        }
+    }
 }
 
 impl<F> GramMatrix for SparseColMat<usize, F>

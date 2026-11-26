@@ -173,11 +173,11 @@ step_setters!([V,Mode,F:Scalar] NelderMead<V,F,Mode>, []);
 cost_setters!([V,M,F:Scalar] GaussNewton<V,M,F>, []);
 step_setters!([V,M,F:Scalar] GaussNewton<V,M,F>, []);
 cost_setters!([V,M,F:Scalar] LevenbergMarquardt<V,M,F>, []);
-cost_setters!([V,M,F:Scalar] LevenbergMarquardtQr<V,M,F>, [M: crate::FactorizePivotedQr<V,F>]);
+cost_setters!([V,M,F:Scalar,R] LevenbergMarquardtQr<V,M,F,R>, [M: crate::FactorizePivotedQr<V,F,R>]);
 cost_setters!([V,M,F:Scalar] BoundedLevenbergMarquardt<V,M,F>, []);
 step_setters!([V,M,F:Scalar] BoundedLevenbergMarquardt<V,M,F>, []);
-cost_setters!([F:Scalar] TrustRegionReflective<F>, []);
-step_setters!([F:Scalar] TrustRegionReflective<F>, []);
+cost_setters!([F:Scalar,R,M] TrustRegionReflective<F,R,M>, []);
+step_setters!([F:Scalar,R,M] TrustRegionReflective<F,R,M>, []);
 cost_setters!([F:Scalar] Brent<F>, []);
 step_setters!([F:Scalar] Brent<F>, []);
 cost_setters!([F:Scalar] BrentDerivative<F>, []);
@@ -261,4 +261,4 @@ macro_rules! absolute_step_setters {
 }
 
 absolute_step_setters!([V,M,F:Scalar] LevenbergMarquardt<V,M,F>, []);
-absolute_step_setters!([V,M,F:Scalar] LevenbergMarquardtQr<V,M,F>, [M: crate::FactorizePivotedQr<V,F>]);
+absolute_step_setters!([V,M,F:Scalar,R] LevenbergMarquardtQr<V,M,F,R>, [M: crate::FactorizePivotedQr<V,F,R>]);

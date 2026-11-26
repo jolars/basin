@@ -582,7 +582,7 @@ fn matrix_free_trust_region_f32_round_trips_state_solver_termination() {
         c: vec![1.0_f32, 2.0, 3.0],
     };
     let state = FirstOrderState::<Vec<f32>, f32>::new(vec![0.0_f32; 3]);
-    let solver: TrustRegion<Steihaug, f32, MatrixFree> =
+    let solver: TrustRegion<Steihaug, f32, MatrixFree, ()> =
         TrustRegion::matrix_free_with(Steihaug::new());
 
     let result = Executor::new(

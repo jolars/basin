@@ -701,6 +701,7 @@ macro_rules! backend_test {
                     _,
                     $scalar,
                     basin::solver::trust_region::MatrixFree,
+                    (),
                 >::matrix_free_with(basin::Steihaug::new()),
                 start.clone(),
             )
@@ -834,8 +835,7 @@ macro_rules! backend_test {
             Executor::from_start(
                 make(),
                 basin::LevenbergMarquardt::<_, _, $scalar>::default()
-                    .with_pivoted_qr()
-                    .with_evaluation_buffers(),
+                    .with_pivoted_qr(),
                 start.clone(),
             )
             .max_iter(3)
@@ -864,8 +864,7 @@ macro_rules! backend_test {
                 basin::TrustRegion::<_, $scalar>::with_subproblem(
                     basin::Steihaug::new(),
                 )
-                .with_radius(0.1)
-                .with_evaluation_buffers(),
+                .with_radius(0.1),
                 start.clone(),
             )
             .max_iter(3)
@@ -910,8 +909,7 @@ macro_rules! backend_test {
             calls.lock().unwrap().clear();
             let trf = Executor::from_start(
                 Constrained::new(make(), bounds()),
-                basin::TrustRegionReflective::<$scalar>::new()
-                    .with_evaluation_buffers(),
+                basin::TrustRegionReflective::<$scalar>::new(),
                 start.clone(),
             )
             .max_iter(3)
@@ -954,7 +952,7 @@ macro_rules! backend_test {
 
             Executor::from_start(
                 Constrained::new(make(), bounds()),
-                basin::Slsqp::<$scalar>::new().with_evaluation_buffers(),
+                basin::Slsqp::<$scalar>::new(),
                 start.clone(),
             )
             .max_iter(4)
@@ -965,8 +963,7 @@ macro_rules! backend_test {
             let objective = basin::RobustLeastSquares::<_, _, $scalar>::new(
                 make(),
                 basin::SquaredLoss,
-            )
-            .with_evaluation_buffers();
+            );
             let mut objective = Problem::new(objective);
             let mut gradient = vector(&[<$scalar>::NAN]);
             objective
@@ -1117,17 +1114,14 @@ fn check_buffer_checkpoint<P, So, S>(
 }
 
 #[test]
-fn opt_in_storage_preserves_exact_continuation() {
+fn automatic_storage_preserves_exact_continuation() {
     check_buffer_checkpoint(vec_probe, || {
-        basin::TrustRegion::new()
-            .with_radius(0.1)
-            .with_evaluation_buffers()
+        basin::TrustRegion::new().with_radius(0.1)
     });
     check_buffer_checkpoint(vec_probe, || {
         basin::LevenbergMarquardt::new()
             .with_initial_step_bound(0.01)
             .with_pivoted_qr()
-            .with_evaluation_buffers()
     });
     let bounded = || {
         Constrained::new(
@@ -1139,35 +1133,21 @@ fn opt_in_storage_preserves_exact_continuation() {
         )
     };
     check_buffer_checkpoint(bounded, || {
-        basin::TrustRegionReflective::new()
-            .with_initial_radius(0.01)
-            .with_evaluation_buffers()
+        basin::TrustRegionReflective::new().with_initial_radius(0.01)
     });
-    check_buffer_checkpoint(bounded, || {
-        basin::Slsqp::new().with_evaluation_buffers()
-    });
+    check_buffer_checkpoint(bounded, basin::Slsqp::new);
     check_buffer_checkpoint(
-        || {
-            basin::RobustLeastSquares::new(vec_probe(), basin::SoftL1Loss)
-                .with_evaluation_buffers()
-        },
+        || basin::RobustLeastSquares::new(vec_probe(), basin::SoftL1Loss),
         || basin::GradientDescent::new(0.1),
     );
     check_buffer_checkpoint(
-        || {
-            basin::RobustLeastSquares::new(bounded(), basin::SoftL1Loss)
-                .with_evaluation_buffers()
-        },
-        || {
-            basin::TrustRegionReflective::new()
-                .with_initial_radius(0.01)
-                .with_evaluation_buffers()
-        },
+        || basin::RobustLeastSquares::new(bounded(), basin::SoftL1Loss),
+        || basin::TrustRegionReflective::new().with_initial_radius(0.01),
     );
 }
 
 #[test]
-fn default_types_keep_original_auto_traits() {
+fn buffered_types_support_expected_auto_traits() {
     struct NonSendMatrix(std::marker::PhantomData<std::rc::Rc<()>>);
     impl basin::FactorizePivotedQr<Vec<f64>> for NonSendMatrix {
         type Factorization = basin::QrFactorization;
@@ -1179,22 +1159,39 @@ fn default_types_keep_original_auto_traits() {
         }
     }
     fn send_sync<T: Send + Sync>() {}
-    fn copy<T: Copy>() {}
-    send_sync::<basin::LevenbergMarquardtQr<Vec<f64>, NonSendMatrix>>();
+    send_sync::<basin::LevenbergMarquardtQr<Vec<f64>, basin::DenseMatrix>>();
     send_sync::<basin::TrustRegion>();
     send_sync::<basin::TrustRegionReflective>();
     send_sync::<basin::Slsqp>();
-    copy::<basin::RobustLeastSquares<(), basin::SquaredLoss>>();
-    send_sync::<basin::RobustLeastSquares<(), basin::SquaredLoss>>();
-    send_sync::<basin::SharedEvaluationBuffers<Vec<f64>, basin::DenseMatrix>>();
+    send_sync::<
+        basin::RobustLeastSquares<Probe<Vec<f64>, f64>, basin::SquaredLoss>,
+    >();
+    trait AmbiguousIfSend<Marker> {
+        fn check() {}
+    }
+    impl<T> AmbiguousIfSend<()> for T {}
+    impl<T: Send> AmbiguousIfSend<u8> for T {}
+    let _ = <basin::LevenbergMarquardtQr<Vec<f64>, NonSendMatrix> as AmbiguousIfSend<_>>::check;
+
+    #[cfg(feature = "serde")]
+    {
+        fn serializable<T: serde::Serialize + serde::de::DeserializeOwned>() {}
+        serializable::<
+            basin::TrustRegion<
+                basin::Steihaug,
+                f64,
+                basin::solver::trust_region::ExactHessian,
+                basin::EvaluationBuffers<(), NonSendMatrix>,
+            >,
+        >();
+    }
 }
 
 #[test]
 fn buffered_robust_preserves_errors_and_nonfinite_gradients() {
     let mut probe = vec_probe();
     probe.fail = true;
-    let objective = basin::RobustLeastSquares::new(probe, basin::SquaredLoss)
-        .with_evaluation_buffers();
+    let objective = basin::RobustLeastSquares::new(probe, basin::SquaredLoss);
     let mut problem = Problem::new(objective);
     let mut out = vec![0.0; 2];
     assert_eq!(
@@ -1206,8 +1203,7 @@ fn buffered_robust_preserves_errors_and_nonfinite_gradients() {
 
     let mut probe = vec_probe();
     probe.nonfinite = true;
-    let objective = basin::RobustLeastSquares::new(probe, basin::SquaredLoss)
-        .with_evaluation_buffers();
+    let objective = basin::RobustLeastSquares::new(probe, basin::SquaredLoss);
     let value = objective
         .cost_and_gradient_into(&vec![2.0, -1.0], &mut out)
         .unwrap();
@@ -1222,7 +1218,7 @@ fn buffered_robust_preserves_errors_and_nonfinite_gradients() {
 
 #[cfg(feature = "serde")]
 #[test]
-fn typed_hessian_buffer_survives_serialized_checkpoint() {
+fn typed_hessian_buffer_reseeds_after_serialized_checkpoint() {
     type Solver = basin::TrustRegion<
         basin::Steihaug,
         f64,
@@ -1230,25 +1226,191 @@ fn typed_hessian_buffer_survives_serialized_checkpoint() {
         basin::EvaluationBuffers<(), basin::DenseMatrix>,
     >;
     type Checkpoint = basin::Checkpoint<Solver, FirstOrderState<Vec<f64>>>;
-    let solver = || {
-        basin::TrustRegion::new()
-            .with_radius(0.1)
-            .with_evaluation_buffers()
+    let solver = || basin::TrustRegion::new().with_radius(0.1);
+    let partial_checkpoint = || {
+        Executor::from_start(vec_probe(), solver(), vec![2.0, -1.0])
+            .max_iter(2)
+            .run_with_solver()
+            .unwrap()
+            .into_checkpoint()
     };
-    let part = Executor::from_start(vec_probe(), solver(), vec![2.0, -1.0])
-        .max_iter(2)
-        .run_with_solver()
-        .unwrap();
-    let bytes = postcard::to_allocvec(&part.into_checkpoint()).unwrap();
+    let problem = vec_probe();
+    let calls = problem.calls.clone();
+    let in_memory =
+        Executor::resume_from_checkpoint(problem, partial_checkpoint())
+            .max_iter(5)
+            .run_with_solver()
+            .unwrap();
+    let calls = calls.lock().unwrap();
+    assert!(calls.iter().any(|(name, _)| *name == "hessian"));
+    assert!(!calls.iter().any(|(name, _)| *name == "owned_hessian_seed"));
+
+    let bytes = postcard::to_allocvec(&partial_checkpoint()).unwrap();
     let checkpoint: Checkpoint = postcard::from_bytes(&bytes).unwrap();
-    let resumed = Executor::resume_from_checkpoint(vec_probe(), checkpoint)
+    let problem = vec_probe();
+    let calls = problem.calls.clone();
+    let resumed = Executor::resume_from_checkpoint(problem, checkpoint)
         .max_iter(5)
         .run_with_solver()
         .unwrap();
+    let calls = calls.lock().unwrap();
+    let dispatch: Vec<_> = calls
+        .iter()
+        .map(|(callback, _)| *callback)
+        .filter(|name| matches!(*name, "owned_hessian_seed" | "hessian"))
+        .collect();
+    assert!(dispatch.len() >= 2);
+    assert_eq!(dispatch[0], "owned_hessian_seed");
+    assert!(dispatch[1..].iter().all(|name| *name == "hessian"));
     let full = Executor::from_start(vec_probe(), solver(), vec![2.0, -1.0])
         .max_iter(5)
         .run_with_solver()
         .unwrap();
+    assert_eq!(in_memory.state.param(), full.state.param());
+    assert_eq!(in_memory.counts, full.counts);
+    assert_eq!(resumed.report.code(), full.report.code());
     assert_eq!(resumed.state.param(), full.state.param());
     assert_eq!(resumed.counts, full.counts);
+}
+
+#[test]
+fn robust_gradient_accepts_slice_transpose_with_distinct_vector_types() {
+    use basin::{MatTransposeVecInto, RobustLeastSquares, SquaredLoss};
+    use std::cell::Cell;
+    use std::convert::Infallible;
+
+    struct Fit<M> {
+        matrix: fn() -> M,
+        in_place_calls: Cell<usize>,
+    }
+    impl<M> Residual for Fit<M> {
+        type Param = [f64; 1];
+        type Output = Vec<f64>;
+        type Error = Infallible;
+
+        fn residual(&self, x: &[f64; 1]) -> Result<Vec<f64>, Infallible> {
+            Ok(vec![x[0], 2.0 * x[0]])
+        }
+    }
+    impl<M> Jacobian for Fit<M> {
+        type Jacobian = M;
+
+        fn jacobian(&self, _: &[f64; 1]) -> Result<M, Infallible> {
+            Ok((self.matrix)())
+        }
+
+        fn residual_and_jacobian_into(
+            &self,
+            x: &[f64; 1],
+            r: &mut Vec<f64>,
+            _: &mut M,
+        ) -> Result<(), Infallible> {
+            self.in_place_calls.set(self.in_place_calls.get() + 1);
+            r.copy_from_slice(&[x[0], 2.0 * x[0]]);
+            Ok(())
+        }
+    }
+
+    struct SliceTranspose;
+    impl MatrixShape for SliceTranspose {
+        fn matrix_rows(&self) -> usize {
+            2
+        }
+        fn matrix_cols(&self) -> usize {
+            1
+        }
+    }
+    impl MatTransposeVecInto<[f64; 1]> for SliceTranspose {
+        fn mat_transpose_vec_into(&self, input: &[f64], out: &mut [f64; 1]) {
+            out[0] = input[0] + 2.0 * input[1];
+        }
+    }
+
+    fn check<M: MatTransposeVecInto<[f64; 1]>>(matrix: fn() -> M) {
+        let objective = RobustLeastSquares::new_with_in_place_transpose(
+            Fit {
+                matrix,
+                in_place_calls: Cell::new(0),
+            },
+            SquaredLoss,
+        );
+        let mut problem = Problem::new(objective);
+        assert_eq!(problem.cost_and_gradient(&[2.0]).unwrap(), (10.0, [10.0]));
+        let mut out = [f64::NAN];
+        assert_eq!(
+            problem.cost_and_gradient_into(&[3.0], &mut out).unwrap(),
+            22.5
+        );
+        assert_eq!(out, [15.0]);
+        assert_eq!(problem.inner().inner().in_place_calls.get(), 1);
+        assert_eq!(problem.counts().cost_evals, 2);
+        assert_eq!(problem.counts().gradient_evals, 2);
+    }
+
+    check(|| SliceTranspose);
+    check(|| basin::DenseMatrix::from_row_slice(2, 1, &[1.0, 2.0]));
+}
+
+#[cfg(all(feature = "serde", feature = "nalgebra_all"))]
+#[test]
+fn sparse_robust_gradient_bits_survive_serialized_checkpoint() {
+    use backend_aliases::nalgebra::{DMatrix, DVector};
+    use backend_aliases::nalgebra_sparse::{CooMatrix, CscMatrix};
+    use basin::line_search::Constant;
+    use std::convert::Infallible;
+
+    struct Fit;
+    impl Residual for Fit {
+        type Param = DVector<f64>;
+        type Output = DVector<f64>;
+        type Error = Infallible;
+
+        fn residual(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<DVector<f64>, Infallible> {
+            Ok(DVector::from_element(1, x[0] - 1.0))
+        }
+    }
+    impl Jacobian for Fit {
+        type Jacobian = CscMatrix<f64>;
+
+        fn jacobian(
+            &self,
+            _: &DVector<f64>,
+        ) -> Result<Self::Jacobian, Infallible> {
+            let mut coo = CooMatrix::new(1, 2);
+            coo.push(0, 0, 1.0);
+            Ok(CscMatrix::from(&coo))
+        }
+    }
+
+    type Solver = Bfgs<DVector<f64>, f64, DMatrix<f64>, Constant<f64>>;
+    type Checkpoint = basin::Checkpoint<Solver, FirstOrderState<DVector<f64>>>;
+    let objective = || basin::RobustLeastSquares::new(Fit, basin::SquaredLoss);
+    let run = |max_iter| {
+        Executor::from_start(
+            objective(),
+            Bfgs::with_line_search(Constant(0.1)),
+            DVector::from_vec(vec![3.0, 0.0]),
+        )
+        .max_iter(max_iter)
+        .run_with_solver()
+        .unwrap()
+    };
+    let bytes = postcard::to_allocvec(&run(1).into_checkpoint()).unwrap();
+    let checkpoint: Checkpoint = postcard::from_bytes(&bytes).unwrap();
+    let resumed = Executor::resume_from_checkpoint(objective(), checkpoint)
+        .max_iter(2)
+        .run()
+        .unwrap();
+    let full = run(2);
+    let (_, _, resumed_gradient) = resumed.state.current().unwrap();
+    let (_, _, full_gradient) = full.state.current().unwrap();
+
+    assert_eq!(full.iter(), 2);
+    assert_eq!(resumed.param(), full.param());
+    assert_eq!(resumed.counts, full.counts);
+    assert_eq!(resumed_gradient[1].to_bits(), full_gradient[1].to_bits());
+    assert_eq!(resumed_gradient[1].to_bits(), 0.0_f64.to_bits());
 }

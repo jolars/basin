@@ -331,7 +331,7 @@ fn settings_compose_in_both_orders() {
             .run()
             .unwrap();
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
-    let _ = TrustRegionReflective::<f64>::new()
+    let _ = TrustRegionReflective::<f64>::new::<Vec<f64>, DenseMatrix>()
         .with_initial_radius(None)
         .with_absolute_scaled_gradient_tolerance(None)
         .with_relative_step_tolerance::<Vec<f64>, f64>(1e-12);
@@ -784,32 +784,44 @@ fn disabled_and_exact_gradient_tolerances() {
 fn invalid_configuration_panics() {
     for value in [f64::NAN, f64::INFINITY, -1.0] {
         assert!(
-            std::panic::catch_unwind(|| TrustRegionReflective::new()
-                .with_absolute_scaled_gradient_tolerance(value))
+            std::panic::catch_unwind(|| TrustRegionReflective::new::<
+                Vec<f64>,
+                DenseMatrix,
+            >()
+            .with_absolute_scaled_gradient_tolerance(value))
             .is_err()
         );
         assert!(
-            std::panic::catch_unwind(
-                || TrustRegionReflective::new().with_initial_radius(value)
-            )
+            std::panic::catch_unwind(|| TrustRegionReflective::new::<
+                Vec<f64>,
+                DenseMatrix,
+            >()
+            .with_initial_radius(value))
             .is_err()
         );
         assert!(
-            std::panic::catch_unwind(
-                || TrustRegionReflective::new().with_rank_tolerance(value)
-            )
+            std::panic::catch_unwind(|| TrustRegionReflective::new::<
+                Vec<f64>,
+                DenseMatrix,
+            >()
+            .with_rank_tolerance(value))
             .is_err()
         );
     }
     assert!(
-        std::panic::catch_unwind(
-            || TrustRegionReflective::<f64>::new().with_max_inner_attempts(0)
-        )
+        std::panic::catch_unwind(|| TrustRegionReflective::<f64>::new::<
+            Vec<f64>,
+            DenseMatrix,
+        >()
+        .with_max_inner_attempts(0))
         .is_err()
     );
     assert!(
-        std::panic::catch_unwind(|| TrustRegionReflective::<f64>::new()
-            .with_max_subproblem_iterations(0))
+        std::panic::catch_unwind(|| TrustRegionReflective::<f64>::new::<
+            Vec<f64>,
+            DenseMatrix,
+        >()
+        .with_max_subproblem_iterations(0))
         .is_err()
     );
 }

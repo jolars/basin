@@ -2,14 +2,14 @@ use super::*;
 use crate::State;
 
 type Fit = Fixture<Vec<f64>, Vec<f64>, f64>;
-type Objective = RobustLeastSquares<Fit, SoftL1Loss>;
+type Objective = RobustLeastSquares<Fit, SoftL1Loss, f64, ()>;
 type CountedObjective = RawCallbacks<Objective, f64>;
 
 fn objective(fail: Option<u8>) -> CountedObjective {
     let mut fit = Fixture::new(<[f64]>::to_vec, <[f64]>::to_vec);
     fit.fail = fail;
     RawCallbacks(
-        RobustLeastSquares::new(fit, SoftL1Loss),
+        RobustLeastSquares::from_residuals(fit, SoftL1Loss),
         std::marker::PhantomData,
     )
 }
@@ -275,7 +275,7 @@ fn internal_probes_stay_out_of_executor_budgets() {
     let fit = Fixture::new(<[f64]>::to_vec, <[f64]>::to_vec);
     let trace = fit.trace.clone();
     let problem = RawCallbacks(
-        RobustLeastSquares::new(ProbingProducts(fit), SoftL1Loss),
+        RobustLeastSquares::from_residuals(ProbingProducts(fit), SoftL1Loss),
         std::marker::PhantomData,
     );
     let run = crate::Executor::new(
@@ -389,7 +389,8 @@ impl Residual for ResidualOnly {
 #[test]
 fn residual_only_robust_scratch_is_seeded_and_overwritten() {
     let raw = ResidualOnly(Fixture::new(<[f64]>::to_vec, <[f64]>::to_vec));
-    let loss = RobustLeastSquares::<_, _, f64>::new(raw, SoftL1Loss);
+    let loss =
+        RobustLeastSquares::<_, _, f64, ()>::from_residuals(raw, SoftL1Loss);
     let mut problem = Problem::new(BorrowedResidual(loss.inner()));
     let mut scratch = None;
     let first =
@@ -413,6 +414,11 @@ fn dense_robust_scratch_preserves_fused_dispatch_with_custom_matrix() {
             for (row, factor) in self.0.iter_mut().zip(factors) {
                 *row *= factor;
             }
+        }
+    }
+    impl crate::MatTransposeVec<Vec<f64>> for Matrix {
+        fn mat_transpose_vec(&self, x: &Vec<f64>) -> Vec<f64> {
+            vec![self.0.iter().zip(x).map(|(a, b)| a * b).sum()]
         }
     }
     struct Dense {
@@ -473,6 +479,21 @@ fn dense_robust_scratch_preserves_fused_dispatch_with_custom_matrix() {
     assert_eq!(problem.inner().inner().fused_into.get(), 1);
     assert_eq!(problem.counts().residual_evals, 2);
     assert_eq!(problem.counts().jacobian_evals, 2);
+
+    let mut out = Vec::new();
+    for x in [1.0, 2.0] {
+        let cost = problem.cost_and_gradient_into(&vec![x], &mut out).unwrap();
+        let first = SoftL1Loss.evaluate_scaled(x, 1.0);
+        let second = SoftL1Loss.evaluate_scaled(x * x, 1.0);
+        assert_eq!(cost, first.value + second.value);
+        assert_eq!(
+            out,
+            vec![first.first_derivative + 2.0 * x * second.first_derivative]
+        );
+    }
+    assert_eq!(problem.inner().inner().fused_into.get(), 2);
+    assert_eq!(problem.counts().cost_evals, 2);
+    assert_eq!(problem.counts().gradient_evals, 2);
 }
 
 #[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
@@ -491,6 +512,9 @@ fn independent_scratch_allows_shared_robust_callbacks_to_overlap() {
         type Output = Vec<f64>;
         type Error = std::convert::Infallible;
         fn residual(&self, x: &f64) -> Result<Vec<f64>, Self::Error> {
+            if *x != 0.0 {
+                self.rendezvous();
+            }
             Ok(vec![*x])
         }
         fn residual_into(
@@ -498,6 +522,13 @@ fn independent_scratch_allows_shared_robust_callbacks_to_overlap() {
             x: &f64,
             out: &mut Vec<f64>,
         ) -> Result<(), Self::Error> {
+            self.rendezvous();
+            out[0] = *x;
+            Ok(())
+        }
+    }
+    impl SharedResidual {
+        fn rendezvous(&self) {
             let mut arrivals = self.arrivals.lock().unwrap();
             *arrivals += 1;
             self.ready.notify_all();
@@ -510,28 +541,23 @@ fn independent_scratch_allows_shared_robust_callbacks_to_overlap() {
                 )
                 .unwrap();
             assert_eq!(*arrivals, 2);
-            out[0] = *x;
-            Ok(())
         }
     }
 
-    let objective = RobustLeastSquares::<_, _, f64>::new(
+    let objective = RobustLeastSquares::<_, _, f64, ()>::from_residuals(
         SharedResidual::default(),
         SoftL1Loss,
     );
+    assert_eq!(crate::CostFunction::cost(&objective, &0.0).unwrap(), 0.0);
     std::thread::scope(|scope| {
         for x in [1.0, 2.0] {
             let objective = &objective;
             scope.spawn(move || {
-                let mut problem =
-                    Problem::new(BorrowedResidual(objective.inner()));
-                let mut scratch = None;
-                residual_reusing(&mut problem, &0.0, &mut scratch).unwrap();
-                let residual =
-                    residual_reusing(&mut problem, &x, &mut scratch).unwrap();
-                assert_eq!(residual, &[x]);
-                assert!(objective.residual_cost(residual) > 0.0);
-                assert_eq!(problem.counts().residual_evals, 2);
+                let expected = SoftL1Loss.evaluate_scaled(x, 1.0).value;
+                assert_eq!(
+                    crate::CostFunction::cost(objective, &x).unwrap(),
+                    expected
+                );
             });
         }
     });

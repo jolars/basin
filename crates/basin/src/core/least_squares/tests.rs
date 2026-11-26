@@ -1,8 +1,19 @@
 use super::*;
 
+struct NoCallbacks;
+impl Residual for NoCallbacks {
+    type Param = ();
+    type Output = ();
+    type Error = std::convert::Infallible;
+
+    fn residual(&self, _: &()) -> Result<(), Self::Error> {
+        unreachable!("loss tests supply their own residuals")
+    }
+}
+
 #[test]
 fn model_preserves_the_gradient_and_clips_negative_curvature() {
-    let problem = RobustLeastSquares::new((), CauchyLoss);
+    let problem = RobustLeastSquares::from_residuals(NoCallbacks, CauchyLoss);
     let raw: Vec<f64> = vec![0.0, 0.5, 2.0];
     let (model, scale) = problem.model_residual(&raw).unwrap();
     for (i, &r) in raw.iter().enumerate() {
@@ -20,7 +31,8 @@ fn model_preserves_the_gradient_and_clips_negative_curvature() {
 
 #[test]
 fn positive_model_curvature_matches_an_affine_objective_hessian() {
-    let objective = RobustLeastSquares::new((), SoftL1Loss).with_scale(0.7);
+    let objective = RobustLeastSquares::from_residuals(NoCallbacks, SoftL1Loss)
+        .with_scale(0.7);
     let residuals = |x: f64| vec![2.0 * x + 0.1, -x + 0.2];
     let r = residuals(0.3);
     let (_, scale) = objective.model_residual(&r).unwrap();
@@ -57,7 +69,7 @@ fn scalar_limits<F: Scalar>() {
             );
             assert!(result.second_derivative.is_finite());
         }
-        let adapter = RobustLeastSquares::new((), loss);
+        let adapter = RobustLeastSquares::from_residuals(NoCallbacks, loss);
         for r in [F::nan(), F::infinity(), F::neg_infinity()] {
             assert!(adapter.model_residual(&vec![r]).is_none());
             assert_eq!(adapter.residual_cost(&vec![r]), F::infinity());
@@ -132,7 +144,8 @@ fn extreme_scales<F: Scalar>(large: F, small: F) {
         &ArctanLoss,
     ] {
         for scale in [large, F::max_value()] {
-            let adapter = RobustLeastSquares::new((), loss).with_scale(scale);
+            let adapter = RobustLeastSquares::from_residuals(NoCallbacks, loss)
+                .with_scale(scale);
             for r in [-one, zero, one] {
                 let term = adapter.term(r).expect("representable scaled loss");
                 assert!((term.cost - half * r * r).abs() <= tolerance);
@@ -147,7 +160,8 @@ fn extreme_scales<F: Scalar>(large: F, small: F) {
         F::min_positive_value() * F::epsilon(),
     ] {
         let adapter =
-            RobustLeastSquares::new((), &SquaredLoss).with_scale(scale);
+            RobustLeastSquares::from_residuals(NoCallbacks, &SquaredLoss)
+                .with_scale(scale);
         for r in [-one, zero, one] {
             let term =
                 adapter.term(r).expect("scale cancels out of squared loss");
@@ -156,7 +170,8 @@ fn extreme_scales<F: Scalar>(large: F, small: F) {
             assert_eq!(term.curvature, one);
         }
         for loss in [&HuberLoss as &dyn LossFunction<F>, &SoftL1Loss] {
-            let adapter = RobustLeastSquares::new((), loss).with_scale(scale);
+            let adapter = RobustLeastSquares::from_residuals(NoCallbacks, loss)
+                .with_scale(scale);
             for r in [-one, one] {
                 let term = adapter.term(r).expect("representable linear tail");
                 assert!((term.cost / scale - one).abs() <= tolerance);
@@ -177,15 +192,19 @@ fn large_residuals<F: Scalar>() {
     let one = F::one();
     let tolerance = F::from_f64(8.0).unwrap() * F::epsilon();
     for loss in [&HuberLoss as &dyn LossFunction<F>, &SoftL1Loss] {
-        let adapter = RobustLeastSquares::new((), loss);
+        let adapter = RobustLeastSquares::from_residuals(NoCallbacks, loss);
         let term = adapter.term(r).expect("representable linear tail");
         assert!((term.cost / r - one).abs() <= tolerance);
         assert!((term.derivative - one).abs() <= tolerance);
     }
-    let cauchy = RobustLeastSquares::new((), CauchyLoss).term(r).unwrap();
+    let cauchy = RobustLeastSquares::from_residuals(NoCallbacks, CauchyLoss)
+        .term(r)
+        .unwrap();
     assert!((cauchy.cost / r.ln() - one).abs() <= tolerance);
     assert!((cauchy.derivative * r - one).abs() <= tolerance);
-    let arctan = RobustLeastSquares::new((), ArctanLoss).term(r).unwrap();
+    let arctan = RobustLeastSquares::from_residuals(NoCallbacks, ArctanLoss)
+        .term(r)
+        .unwrap();
     let expected = F::from_f64(std::f64::consts::FRAC_PI_4).unwrap();
     assert!((arctan.cost - expected).abs() <= tolerance);
 }
@@ -209,7 +228,7 @@ impl LossFunction for Invalid {
 
 #[test]
 fn invalid_curvature_is_not_masked_by_the_floor() {
-    let adapter = RobustLeastSquares::new((), Invalid);
+    let adapter = RobustLeastSquares::from_residuals(NoCallbacks, Invalid);
     assert!(adapter.model_residual(&vec![0.5]).is_none());
     assert_eq!(adapter.residual_cost(&vec![0.5]), f64::INFINITY);
 }
@@ -218,9 +237,11 @@ fn invalid_curvature_is_not_masked_by_the_floor() {
 fn scale_must_be_finite_and_positive() {
     for scale in [0.0, -1.0, f64::NAN, f64::INFINITY] {
         assert!(
-            std::panic::catch_unwind(
-                || RobustLeastSquares::new((), HuberLoss).with_scale(scale)
+            std::panic::catch_unwind(|| RobustLeastSquares::from_residuals(
+                NoCallbacks,
+                HuberLoss
             )
+            .with_scale(scale))
             .is_err()
         );
     }

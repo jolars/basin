@@ -253,6 +253,22 @@ impl<F: Scalar> MatTransposeVec<Vec<F>> for DenseMatrix<F> {
         }
         y
     }
+
+    fn mat_transpose_vec_to(&self, x: &Vec<F>, out: &mut Vec<F>) {
+        assert_eq!(
+            x.len(),
+            self.rows,
+            "transpose matvec input length mismatch"
+        );
+        out.resize(self.cols, F::zero());
+        out.fill(F::zero());
+        for (i, &xi) in x.iter().enumerate() {
+            let row = &self.data[i * self.cols..(i + 1) * self.cols];
+            for (yj, a) in out.iter_mut().zip(row) {
+                *yj = *yj + *a * xi;
+            }
+        }
+    }
 }
 
 impl<F: Scalar> MatrixIdentity for DenseMatrix<F> {

@@ -100,7 +100,8 @@ fn check<'a, S, P, E>(
             Param = Vec<f64>,
             Output = Vec<f64>,
             Error = std::convert::Infallible,
-        > + Clone,
+        > + Jacobian
+        + Clone,
     E: std::fmt::Debug,
     S: Solver<
             RobustLeastSquares<P, &'a dyn LossFunction>,

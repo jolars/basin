@@ -282,6 +282,16 @@ where
     }
 }
 
+impl crate::Residual for Fixture<Vec<f64>, f64> {
+    type Param = Vec<f64>;
+    type Output = Vec<f64>;
+    type Error = &'static str;
+
+    fn residual(&self, point: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
+        Ok(point.iter().map(|x| x - 0.25).collect())
+    }
+}
+
 fn num<F: Scalar>(value: f64) -> F {
     F::from_f64(value).unwrap()
 }

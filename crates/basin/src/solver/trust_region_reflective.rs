@@ -3,7 +3,6 @@ use super::least_squares_diagnostics::{
     LeastSquaresCheck, LeastSquaresDiagnostics, LeastSquaresObservation, Trace,
 };
 use crate::EvaluationBuffers;
-use crate::core::problem::buffers::BufferStorage;
 
 #[cfg(test)]
 mod accounting;
@@ -191,7 +190,11 @@ use step::{Model, interior, number, update_radius};
 /// assert!((result.param()[0] - 1.0).abs() < 1e-7);
 /// ```
 #[derive(Clone, Debug)]
-pub struct TrustRegionReflective<F: Scalar = f64, W = ()> {
+pub struct TrustRegionReflective<
+    F: Scalar = f64,
+    R = Vec<F>,
+    M = crate::DenseMatrix<F>,
+> {
     gradient_tolerance: Option<F>,
     initial_radius: Option<F>,
     rank_tolerance: Option<F>,
@@ -200,34 +203,36 @@ pub struct TrustRegionReflective<F: Scalar = f64, W = ()> {
     work: Option<Work<F>>,
     native_convergence: Vec<NativeConvergenceTest>,
     trace: Option<Trace<F>>,
-    workspace: W,
+    workspace: EvaluationBuffers<R, M>,
 }
 
-impl<F: Scalar, W> NativeConvergenceDiagnostics
-    for TrustRegionReflective<F, W>
+impl<F: Scalar, R, M> NativeConvergenceDiagnostics
+    for TrustRegionReflective<F, R, M>
 {
     fn native_convergence_tests(&self) -> &[NativeConvergenceTest] {
         &self.native_convergence
     }
 }
 
-impl<F: Scalar, W> LeastSquaresDiagnostics<F> for TrustRegionReflective<F, W> {
+impl<F: Scalar, R, M> LeastSquaresDiagnostics<F>
+    for TrustRegionReflective<F, R, M>
+{
     fn least_squares_observations(&self) -> &[LeastSquaresObservation<F>] {
         self.trace.as_ref().map_or(&[], |trace| &trace.observations)
     }
 }
 
-impl<F: Scalar> Default for TrustRegionReflective<F> {
+impl<F: Scalar, R, M> Default for TrustRegionReflective<F, R, M> {
     fn default() -> Self {
-        Self::new()
+        TrustRegionReflective::new()
     }
 }
 
 impl<F: Scalar> TrustRegionReflective<F> {
     /// Construct the dense reflective solver with automatic initial radius,
     /// automatic rank cutoff, gradient tolerance `1e-8`, and both limits 50.
-    pub fn new() -> Self {
-        Self {
+    pub fn new<R, M>() -> TrustRegionReflective<F, R, M> {
+        TrustRegionReflective {
             gradient_tolerance: Some(number(1e-8)),
             initial_radius: None,
             rank_tolerance: None,
@@ -236,33 +241,12 @@ impl<F: Scalar> TrustRegionReflective<F> {
             work: None,
             native_convergence: Vec::new(),
             trace: None,
-            workspace: (),
-        }
-    }
-
-    /// Retain native residual and Jacobian storage between evaluations.
-    ///
-    /// Backend types are inferred from the problem. The first fused callback
-    /// seeds storage; later callbacks overwrite it. Fresh solves reevaluate
-    /// their seed and permit resizing, while exact continuation retains storage.
-    pub fn with_evaluation_buffers<V, M>(
-        self,
-    ) -> TrustRegionReflective<F, EvaluationBuffers<V, M>> {
-        TrustRegionReflective {
-            gradient_tolerance: self.gradient_tolerance,
-            initial_radius: self.initial_radius,
-            rank_tolerance: self.rank_tolerance,
-            max_inner_attempts: self.max_inner_attempts,
-            max_subproblem_iterations: self.max_subproblem_iterations,
-            work: self.work,
-            native_convergence: self.native_convergence,
-            trace: self.trace,
             workspace: EvaluationBuffers::default(),
         }
     }
 }
 
-impl<F: Scalar, W> TrustRegionReflective<F, W> {
+impl<F: Scalar, R, M> TrustRegionReflective<F, R, M> {
     /// Enable native model and trial observations (disabled by default).
     ///
     /// Recording adds allocations but no problem evaluations. Fresh runs reset
@@ -329,7 +313,9 @@ impl<F: Scalar, W> TrustRegionReflective<F, W> {
     }
 }
 
-impl<V: Clone, F: Scalar, W> InitialState<V> for TrustRegionReflective<F, W> {
+impl<V: Clone, F: Scalar, R, M> InitialState<V>
+    for TrustRegionReflective<F, R, M>
+{
     type State = PointState<V, F>;
     fn seed(&self, x: &V) -> Self::State {
         PointState::new(x.clone())
@@ -446,11 +432,13 @@ impl<F: Scalar> Work<F> {
     }
 }
 
-impl<P, V, F, W, R> Solver<P, PointState<V, F>> for TrustRegionReflective<F, W>
+impl<P, V, F, M, R> Solver<P, PointState<V, F>>
+    for TrustRegionReflective<F, R, M>
 where
     F: Scalar,
-    W: BufferStorage<R, P::Jacobian>,
-    P: Residual<Param = V, Output = R> + Jacobian + BoxProblem<Param = V>,
+    P: Residual<Param = V, Output = R>
+        + Jacobian<Jacobian = M>
+        + BoxProblem<Param = V>,
     P::Jacobian: MatrixIndex<F>,
     V: Clone + VectorLen + VectorIndex<F>,
     R: Clone + VectorLen + VectorIndex<F>,
@@ -498,14 +486,15 @@ where
     }
 }
 
-impl<P, L, V, F, W, RW, R>
-    Solver<RobustLeastSquares<P, L, F, RW>, PointState<V, F>>
-    for TrustRegionReflective<F, W>
+impl<P, L, V, F, M, RW, R, const I: bool>
+    Solver<RobustLeastSquares<P, L, F, RW, I>, PointState<V, F>>
+    for TrustRegionReflective<F, R, M>
 where
     F: Scalar,
-    W: BufferStorage<R, P::Jacobian>,
     P: crate::Constraints<Set = crate::ConstraintSet<crate::BoxBounds<V>>>,
-    P: Residual<Param = V, Output = R> + Jacobian + BoxProblem<Param = V>,
+    P: Residual<Param = V, Output = R>
+        + Jacobian<Jacobian = M>
+        + BoxProblem<Param = V>,
     P::Jacobian: MatrixIndex<F>,
     V: Clone + VectorLen + VectorIndex<F>,
     R: Clone + VectorLen + VectorIndex<F>,
@@ -521,7 +510,7 @@ where
     }
     fn check_convergence(
         &mut self,
-        _problem: &Problem<RobustLeastSquares<P, L, F, RW>>,
+        _problem: &Problem<RobustLeastSquares<P, L, F, RW, I>>,
         state: &PointState<V, F>,
     ) -> Option<Termination<F>> {
         self.check_native_convergence(
@@ -530,7 +519,7 @@ where
     }
     fn init(
         &mut self,
-        problem: &mut Problem<RobustLeastSquares<P, L, F, RW>>,
+        problem: &mut Problem<RobustLeastSquares<P, L, F, RW, I>>,
         state: PointState<V, F>,
     ) -> Result<PointState<V, F>, Self::Error> {
         crate::core::constraint::evaluation::validate_coordinate_box_problem(
@@ -544,7 +533,7 @@ where
     }
     fn next_iter(
         &mut self,
-        problem: &mut Problem<RobustLeastSquares<P, L, F, RW>>,
+        problem: &mut Problem<RobustLeastSquares<P, L, F, RW, I>>,
         state: PointState<V, F>,
     ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.next_evaluated(problem, state)
@@ -555,8 +544,8 @@ where
     }
 }
 
-impl<F: Scalar, W> TrustRegionReflective<F, W> {
-    fn init_evaluated<V, M, E, R>(
+impl<F: Scalar, R, M> TrustRegionReflective<F, R, M> {
+    fn init_evaluated<V, E>(
         &mut self,
         problem: &mut E,
         state: PointState<V, F>,
@@ -566,18 +555,20 @@ impl<F: Scalar, W> TrustRegionReflective<F, W> {
         R: Clone + VectorLen + VectorIndex<F>,
         M: MatrixIndex<F>,
         E: BoundedEvaluation<V, M, F, R>,
-        W: BufferStorage<R, M>,
     {
         let mut workspace = std::mem::take(&mut self.workspace);
-        let result = workspace.with_buffers(|r, j| {
-            *r = r.take().or_else(R::residual_buffer);
-            self.init_model(problem, state, r, j)
-        });
+        workspace.vector = workspace.vector.take().or_else(R::residual_buffer);
+        let result = self.init_model(
+            problem,
+            state,
+            &mut workspace.vector,
+            &mut workspace.matrix,
+        );
         self.workspace = workspace;
         result
     }
 
-    fn next_evaluated<V, M, E, R>(
+    fn next_evaluated<V, E>(
         &mut self,
         problem: &mut E,
         state: PointState<V, F>,
@@ -587,18 +578,20 @@ impl<F: Scalar, W> TrustRegionReflective<F, W> {
         R: Clone + VectorLen + VectorIndex<F>,
         M: MatrixIndex<F>,
         E: BoundedEvaluation<V, M, F, R>,
-        W: BufferStorage<R, M>,
     {
         let mut workspace = std::mem::take(&mut self.workspace);
-        let result = workspace.with_buffers(|r, j| {
-            *r = r.take().or_else(R::residual_buffer);
-            self.next_model(problem, state, r, j)
-        });
+        workspace.vector = workspace.vector.take().or_else(R::residual_buffer);
+        let result = self.next_model(
+            problem,
+            state,
+            &mut workspace.vector,
+            &mut workspace.matrix,
+        );
         self.workspace = workspace;
         result
     }
 
-    fn init_model<V, M, E, R>(
+    fn init_model<V, E>(
         &mut self,
         problem: &mut E,
         state: PointState<V, F>,
@@ -730,7 +723,7 @@ impl<F: Scalar, W> TrustRegionReflective<F, W> {
         Ok(state)
     }
 
-    fn next_model<V, M, E, R>(
+    fn next_model<V, E>(
         &mut self,
         problem: &mut E,
         mut state: PointState<V, F>,

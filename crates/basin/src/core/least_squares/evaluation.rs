@@ -133,7 +133,7 @@ where
 // Relaxing a box must retain the loss, scale, and raw callback accounting.
 macro_rules! robust_evaluation {
     ($problem:ty, $($field:ident).*) => {
-        impl<P, L, V, M, F, W, R> Evaluation<V, M, F, R> for Problem<$problem>
+        impl<P, L, V, M, F, W, R, const I: bool> Evaluation<V, M, F, R> for Problem<$problem>
         where
             F: Scalar,
             P: Residual<Param = V, Output = R> + Jacobian<Jacobian = M>,
@@ -212,8 +212,11 @@ macro_rules! robust_evaluation {
         }
     };
 }
-robust_evaluation!(RobustLeastSquares<P, L, F, W>,);
-robust_evaluation!(RelaxedProblem<'_, RobustLeastSquares<P, L, F, W>>, problem);
+robust_evaluation!(RobustLeastSquares<P, L, F, W, I>,);
+robust_evaluation!(
+    RelaxedProblem<'_, RobustLeastSquares<P, L, F, W, I>>,
+    problem
+);
 
 impl<P, V, M, F: Scalar, R> BoundedEvaluation<V, M, F, R> for Problem<P>
 where
@@ -229,8 +232,8 @@ where
     }
 }
 
-impl<P, L, V, M, F, W, R> BoundedEvaluation<V, M, F, R>
-    for Problem<RobustLeastSquares<P, L, F, W>>
+impl<P, L, V, M, F, W, R, const I: bool> BoundedEvaluation<V, M, F, R>
+    for Problem<RobustLeastSquares<P, L, F, W, I>>
 where
     F: Scalar,
     P: Residual<Param = V, Output = R>

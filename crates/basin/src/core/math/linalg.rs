@@ -68,6 +68,14 @@ pub trait MatVec<V, Y = V> {
 pub trait MatTransposeVec<V, R = V> {
     /// Compute `Aᵀ x`, allocating a fresh `V` of length `self.ncols()`.
     fn mat_transpose_vec(&self, x: &R) -> V;
+
+    /// Overwrite `out` with `Aᵀ x`, resizing or replacing it if needed.
+    ///
+    /// The default replaces `out` with the owned result. Backends can
+    /// override this method to reuse the caller's storage.
+    fn mat_transpose_vec_to(&self, x: &R, out: &mut V) {
+        *out = self.mat_transpose_vec(x);
+    }
 }
 
 /// Gram matrix `G = Aᵀ A`. The SPD matrix at the heart of the

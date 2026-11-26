@@ -180,6 +180,21 @@ impl<F: Scalar> MatTransposeVec<Array1<F>> for Array2<F> {
                 .sum()
         })
     }
+
+    fn mat_transpose_vec_to(&self, x: &Array1<F>, out: &mut Array1<F>) {
+        assert_eq!(
+            x.len(),
+            self.nrows(),
+            "transpose matvec input length mismatch"
+        );
+        if out.len() != self.ncols() {
+            *out = self.mat_transpose_vec(x);
+            return;
+        }
+        for (value, column) in out.iter_mut().zip(self.columns()) {
+            *value = column.iter().zip(x.iter()).map(|(a, xi)| *a * *xi).sum();
+        }
+    }
 }
 
 impl<F: Scalar> MatrixIdentity for Array2<F> {
