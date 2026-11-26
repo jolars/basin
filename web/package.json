@@ -27,8 +27,8 @@
         "collect:competitors": "tsx scripts/collect-competitors.ts"
     },
     "devDependencies": {
-        "@iconify-json/lucide": "^1.2.155",
-        "@iconify-json/simple-icons": "^1.2.102",
+        "@iconify-json/lucide": "^1.2.158",
+        "@iconify-json/simple-icons": "^1.2.103",
         "@types/node": "^26.6.6",
         "katex": "^0.19.1",
         "node-html-markdown": "^2.0.0",
@@ -40,11 +40,11 @@
         "tsx": "^4.23.15",
         "typescript": "npm:@typescript/typescript6@^6.0.2",
         "unplugin-icons": "^24.0.0",
-        "wrangler": "^4.162.0",
+        "wrangler": "^4.166.0",
         "vitepress": "1.6.4",
         "vue": "^3.5.0",
         "vue-tsc": "^3.2.0",
-        "@mdit/plugin-katex": "1.2.0",
+        "@mdit/plugin-katex": "1.2.1",
         "@tailwindcss/postcss": "^4.3.5",
         "postcss": "^8.5.0"
     }
