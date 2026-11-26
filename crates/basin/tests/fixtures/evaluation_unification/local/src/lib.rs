@@ -1,8 +1,11 @@
 use std::{cell::Cell, rc::Rc};
 
 use basin::{
-    CmaEs, CostFunction, DenseMatrix, Executor, Gradient, GradientDescent,
-    PopulationProgress,
+    BoundedFiniteDiff, CmaEs, CostFunction, DenseMatrix, DerivativeCheckError,
+    DerivativeChecker, Executor, FiniteDiff, Gradient, GradientDescent,
+    Hessian, Jacobian, PopulationProgress, Residual,
+    central_difference_gradient, forward_difference_hessian,
+    forward_difference_jacobian,
 };
 
 pub trait CostBatch<P: CostFunction> {
@@ -168,16 +171,95 @@ impl CostFunction for Local {
     }
 }
 
+impl Gradient for Local {
+    type Gradient = Vec<f64>;
+
+    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
+        Ok(x.iter()
+            .enumerate()
+            .map(|(j, x)| (j + 1) as f64 * x)
+            .collect())
+    }
+}
+
+impl Residual for Local {
+    type Param = Vec<f64>;
+    type Output = Vec<f64>;
+    type Error = Rc<str>;
+
+    fn residual(&self, x: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
+        self.cost(x).map(|value| vec![value])
+    }
+}
+
+impl Jacobian for Local {
+    type Jacobian = DenseMatrix;
+
+    fn jacobian(&self, x: &Vec<f64>) -> Result<DenseMatrix, Self::Error> {
+        let gradient = self.gradient(x)?;
+        Ok(DenseMatrix::from_row_slice(1, gradient.len(), &gradient))
+    }
+}
+
+pub fn check_local_derivatives() {
+    let x = vec![2.0, 1.0];
+    let fd = FiniteDiff::new(Local::default()).with_step(STEP);
+    assert_eq!(fd.gradient(&x).unwrap(), [2.0, 2.0]);
+    assert_eq!(
+        fd.hessian(&x).unwrap(),
+        DenseMatrix::from_row_slice(2, 2, &[1.0, 0.0, 0.0, 2.0])
+    );
+    let bounded = fd.with_bounds(vec![0.0; 2], vec![3.0; 2]);
+    assert_eq!(bounded.gradient(&x).unwrap(), [2.0, 2.0]);
+    assert!(bounded.jacobian(&x).is_ok());
+
+    let checker = DerivativeChecker::new().with_step(STEP);
+    assert!(
+        checker
+            .check_gradient(bounded.get_ref(), &x)
+            .unwrap()
+            .passed()
+    );
+    assert!(
+        checker
+            .check_jacobian(bounded.get_ref(), &x)
+            .unwrap()
+            .passed()
+    );
+
+    let error: Rc<str> = "local failure".into();
+    let problem = Local {
+        error: Some(Rc::clone(&error)),
+        ..Local::default()
+    };
+    let actual = central_difference_gradient(&problem, &x, f64::EPSILON, None)
+        .unwrap_err();
+    assert!(Rc::ptr_eq(&error, &actual));
+    let actual = forward_difference_jacobian(&problem, &x, f64::EPSILON, None)
+        .unwrap_err();
+    assert!(Rc::ptr_eq(&error, &actual));
+    let actual = forward_difference_hessian(&problem, &x, f64::EPSILON, None)
+        .unwrap_err();
+    assert!(Rc::ptr_eq(&error, &actual));
+    match checker.check_gradient(&problem, &x).unwrap_err() {
+        DerivativeCheckError::Evaluation(actual) => {
+            assert!(Rc::ptr_eq(&error, &actual))
+        }
+        other => panic!("expected the callback error, got {other:?}"),
+    }
+    let actual = BoundedFiniteDiff::new(problem, vec![0.0; 2], vec![3.0; 2])
+        .gradient(&x)
+        .unwrap_err();
+    assert!(Rc::ptr_eq(&error, &actual));
+}
+
 pub fn check_local_runs() {
     let problem = Local::default();
     let calls = Rc::clone(&problem.calls);
     let hook_calls = Rc::new(Cell::new(0));
     let observed = Rc::clone(&hook_calls);
     let result = Executor::from_start(
-        Difference {
-            problem,
-            mode: Serial,
-        },
+        FiniteDiff::new(problem).with_step(STEP),
         GradientDescent::new(0.25),
         vec![2.0, 1.0],
     )
@@ -211,4 +293,5 @@ pub fn check_local_runs() {
 #[test]
 fn local_runs() {
     check_local_runs();
+    check_local_derivatives();
 }

@@ -10,20 +10,21 @@ use std::{
 };
 
 use basin::{
-    ApplicationStop, CostFunction, Executor, Gradient, GradientDescent,
-    ObservationEvent, ObserverMode, State, Termination,
+    ApplicationStop, CostFunction, Executor, FiniteDiff, Gradient,
+    GradientDescent, ObservationEvent, ObserverMode, State, Termination,
     central_difference_hessian_product, forward_difference_hessian_product,
 };
 use basin_evaluation_local::{
-    Difference, Local, STEP, Serial, Stencil, check_local_runs, product,
-    quadratic,
+    Difference, Local, STEP, Serial, Stencil, check_local_derivatives,
+    check_local_runs, product, quadratic,
 };
-use basin_evaluation_threaded::two_workers;
+use basin_evaluation_threaded::{on_two_workers, two_workers};
 
 #[derive(Default)]
 struct Shared {
     costs: AtomicUsize,
     gradients: AtomicUsize,
+    caller: Option<thread::ThreadId>,
     cost_rendezvous: Option<(Mutex<usize>, Condvar)>,
     rendezvous: Option<(Mutex<usize>, Condvar)>,
     fail: bool,
@@ -35,6 +36,9 @@ impl CostFunction for Shared {
     type Error = &'static str;
 
     fn cost(&self, point: &Vec<f64>) -> Result<f64, Self::Error> {
+        if let Some(caller) = self.caller {
+            assert_eq!(thread::current().id(), caller);
+        }
         self.costs.fetch_add(1, Relaxed);
         if let Some((arrived, ready)) = &self.cost_rendezvous {
             let mut arrived = arrived.lock().unwrap();
@@ -89,14 +93,12 @@ impl Gradient for Shared {
 #[test]
 fn local_dependency_runs_with_unified_features() {
     check_local_runs();
+    check_local_derivatives();
     let error: Rc<str> = "local failure".into();
-    let problem = Difference {
-        problem: Local {
-            error: Some(Rc::clone(&error)),
-            ..Local::default()
-        },
-        mode: Serial,
-    };
+    let problem = FiniteDiff::new(Local {
+        error: Some(Rc::clone(&error)),
+        ..Local::default()
+    });
     let actual = problem.gradient(&vec![1.0]).unwrap_err();
     assert!(Rc::ptr_eq(&error, &actual));
 }
@@ -104,26 +106,33 @@ fn local_dependency_runs_with_unified_features() {
 #[test]
 fn explicit_modes_agree_through_executor() {
     let x = vec![2.0, 1.0];
-    let serial = Difference {
-        problem: Shared::default(),
-        mode: Serial,
-    };
-    let threaded = Difference {
-        problem: Shared::default(),
-        mode: two_workers(),
-    };
-    assert_eq!(serial.gradient(&x), threaded.gradient(&x));
-
-    let serial =
-        Executor::from_start(serial, GradientDescent::new(0.25), x.clone())
-            .max_iter(2)
-            .run()
-            .unwrap();
-    let threaded =
-        Executor::from_start(threaded, GradientDescent::new(0.25), x)
-            .max_iter(2)
-            .run()
-            .unwrap();
+    let (serial, threaded) = on_two_workers(|| {
+        let serial = FiniteDiff::new(Shared {
+            caller: Some(thread::current().id()),
+            ..Shared::default()
+        })
+        .with_step(STEP);
+        let threaded = FiniteDiff::new(Shared {
+            cost_rendezvous: Some((Mutex::new(0), Condvar::new())),
+            ..Shared::default()
+        })
+        .with_step(STEP)
+        .with_parallel_evaluation();
+        // This initial gradient has no base cost, so both worker threads
+        // must reach the rendezvous before either probe can finish.
+        assert_eq!(serial.gradient(&x), threaded.gradient(&x));
+        let serial =
+            Executor::from_start(serial, GradientDescent::new(0.25), x.clone())
+                .max_iter(2)
+                .run()
+                .unwrap();
+        let threaded =
+            Executor::from_start(threaded, GradientDescent::new(0.25), x)
+                .max_iter(2)
+                .run()
+                .unwrap();
+        (serial, threaded)
+    });
     assert_eq!(serial.param(), threaded.param());
     assert_eq!(
         serial.current_record().unwrap().cost.unwrap().to_bits(),

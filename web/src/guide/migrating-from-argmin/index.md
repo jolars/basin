@@ -424,8 +424,9 @@ fn main() {
 ```
 
 `FiniteDiff` preserves the canonical constraint set, so adding numerical
-derivatives does not erase bounds. Under the optional `parallel` feature, its
-coordinate-wise evaluations can run in parallel.
+derivatives does not erase bounds. Enable `parallel` and call
+`.with_parallel_evaluation()` to evaluate independent probes on the active
+Rayon pool.
 
 ## Bounds and constraints
 

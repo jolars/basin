@@ -13,11 +13,13 @@
 //! errors measure disagreement, not an estimate of finite-difference accuracy.
 //! See also SciPy's [`check_grad`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.check_grad.html).
 
-use super::{Method, bounded};
-use crate::core::math::MatrixShape;
-use crate::core::math::{MatrixIndex, Scalar, VectorIndex, VectorLen};
-use crate::core::parallel::{MaybeSend, MaybeSync};
+use super::{Method, ProbeEvaluation, bounded};
+use crate::SerialEvaluation;
+use crate::core::math::{
+    MatrixIndex, MatrixShape, Scalar, VectorIndex, VectorLen,
+};
 use crate::core::problem::{Gradient, Jacobian};
+use std::marker::PhantomData;
 
 /// The derivative calculation that produced a non-finite value.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -185,9 +187,10 @@ impl<F: Scalar> DerivativeCheckReport<F> {
 /// one-sided central stencils at boundaries and first-order fallback when only
 /// one distinct probe fits. Fixed coordinates are skipped. Problem-side bounds
 /// are not discovered automatically. No solver or evaluation counters are used.
-/// With `parallel`, coordinate probes can run concurrently and the problem,
-/// parameters, scalar, and callback errors need the corresponding thread-safety
-/// bounds. All callbacks should return deterministic values at a given point.
+/// Probes run on the calling thread by default. With the `parallel` feature,
+/// call `with_parallel_evaluation()` to evaluate independent coordinate probes
+/// on the active Rayon pool. All callbacks should return deterministic values
+/// at a given point.
 ///
 /// # Backends
 ///
@@ -222,7 +225,8 @@ impl<F: Scalar> DerivativeCheckReport<F> {
 /// # Ok::<(), basin::DerivativeCheckError<std::convert::Infallible>>(())
 /// ```
 #[derive(Clone, Debug)]
-pub struct DerivativeChecker<F: Scalar = f64> {
+pub struct DerivativeChecker<F: Scalar = f64, Evaluation = SerialEvaluation> {
+    evaluation: PhantomData<fn() -> Evaluation>,
     method: Method,
     precision: F,
     step: Option<F>,
@@ -239,6 +243,7 @@ impl<F: Scalar> DerivativeChecker<F> {
     /// Central differences with adaptive steps and scalar-appropriate tolerances.
     pub fn new() -> Self {
         Self {
+            evaluation: PhantomData,
             method: Method::Central,
             precision: F::epsilon(),
             step: None,
@@ -247,6 +252,27 @@ impl<F: Scalar> DerivativeChecker<F> {
             bounds: None,
         }
     }
+    #[cfg(feature = "parallel")]
+    /// Evaluate independent coordinate probes on the active Rayon pool.
+    ///
+    /// Coordinate-wise checks require shareable probe inputs and sendable
+    /// values and errors. Probe settings, bounds, and tolerances carry over.
+    pub fn with_parallel_evaluation(
+        self,
+    ) -> DerivativeChecker<F, crate::ParallelEvaluation> {
+        DerivativeChecker {
+            evaluation: PhantomData,
+            method: self.method,
+            precision: self.precision,
+            step: self.step,
+            absolute_tolerance: self.absolute_tolerance,
+            relative_tolerance: self.relative_tolerance,
+            bounds: self.bounds,
+        }
+    }
+}
+
+impl<F: Scalar, Evaluation> DerivativeChecker<F, Evaluation> {
     /// Select the stencil for all checks. Forward differences generally need
     /// looser tolerances because their truncation error is first order.
     pub fn method(mut self, method: Method) -> Self {
@@ -372,7 +398,7 @@ impl<F: Scalar> DerivativeChecker<F> {
     }
 }
 
-impl<F: Scalar + MaybeSend + MaybeSync> DerivativeChecker<F> {
+impl<F: Scalar> DerivativeChecker<F> {
     /// Compare every non-fixed component of an analytic gradient.
     pub fn check_gradient<P>(
         &self,
@@ -380,14 +406,72 @@ impl<F: Scalar + MaybeSend + MaybeSync> DerivativeChecker<F> {
         x: &P::Param,
     ) -> Result<DerivativeCheckReport<F>, DerivativeCheckError<P::Error, F>>
     where
-        P: Gradient<Output = F> + MaybeSync,
-        P::Param: Clone + VectorLen + VectorIndex<F> + MaybeSync,
+        P: Gradient<Output = F>,
+        P::Param: Clone + VectorLen + VectorIndex<F>,
         P::Gradient: VectorLen + VectorIndex<F>,
-        P::Error: MaybeSend,
     {
-        self.gradient(problem, x, None)
+        self.gradient::<SerialEvaluation, _>(problem, x, None)
     }
 
+    /// Compare every non-fixed column of an analytic residual Jacobian.
+    pub fn check_jacobian<P>(
+        &self,
+        problem: &P,
+        x: &P::Param,
+    ) -> Result<DerivativeCheckReport<F>, DerivativeCheckError<P::Error, F>>
+    where
+        P: Jacobian,
+        P::Param: Clone + VectorLen + VectorIndex<F>,
+        P::Output: VectorLen + VectorIndex<F>,
+        P::Jacobian: MatrixIndex<F>,
+    {
+        self.jacobian::<SerialEvaluation, _>(problem, x, None)
+    }
+}
+
+#[cfg(feature = "parallel")]
+impl<F: Scalar + Send + Sync> DerivativeChecker<F, crate::ParallelEvaluation> {
+    /// Compare every non-fixed component of an analytic gradient.
+    pub fn check_gradient<P>(
+        &self,
+        problem: &P,
+        x: &P::Param,
+    ) -> Result<DerivativeCheckReport<F>, DerivativeCheckError<P::Error, F>>
+    where
+        P: Gradient<Output = F> + Sync,
+        P::Param: Clone + VectorLen + VectorIndex<F> + Sync,
+        P::Error: Send,
+        P::Gradient: VectorLen + VectorIndex<F>,
+    {
+        self.gradient::<crate::ParallelEvaluation, _>(problem, x, None)
+    }
+
+    /// Compare every non-fixed column of an analytic residual Jacobian.
+    pub fn check_jacobian<P>(
+        &self,
+        problem: &P,
+        x: &P::Param,
+    ) -> Result<DerivativeCheckReport<F>, DerivativeCheckError<P::Error, F>>
+    where
+        P: Jacobian + Sync,
+        P::Param: Clone + VectorLen + VectorIndex<F> + Sync,
+        P::Error: Send,
+        P::Output: VectorLen + VectorIndex<F>,
+        P::Jacobian: MatrixIndex<F>,
+    {
+        self.jacobian::<crate::ParallelEvaluation, _>(problem, x, None)
+    }
+}
+
+type CheckProbes<'a, 'b, P, V, F, Evaluation> = bounded::ColumnProbes<
+    'a,
+    (&'b P, &'b DerivativeChecker<F, Evaluation>, usize),
+    V,
+    Vec<F>,
+    F,
+>;
+
+impl<F: Scalar, Evaluation> DerivativeChecker<F, Evaluation> {
     /// Compare `gᵀd` with a finite difference along `d / max(|d|)`.
     /// The direction must be finite, nonzero, and have the point's length.
     /// Bounds may reverse or shorten probes but never project the direction.
@@ -405,25 +489,28 @@ impl<F: Scalar + MaybeSend + MaybeSync> DerivativeChecker<F> {
         direction: &P::Param,
     ) -> Result<DerivativeCheckReport<F>, DerivativeCheckError<P::Error, F>>
     where
-        P: Gradient<Output = F> + MaybeSync,
-        P::Param: Clone + VectorLen + VectorIndex<F> + MaybeSync,
+        P: Gradient<Output = F>,
+        P::Param: Clone + VectorLen + VectorIndex<F>,
         P::Gradient: VectorLen + VectorIndex<F>,
-        P::Error: MaybeSend,
     {
-        self.gradient(problem, x, Some(direction))
+        self.gradient::<SerialEvaluation, _>(problem, x, Some(direction))
     }
 
-    fn gradient<P>(
+    fn gradient<Mode, P>(
         &self,
         problem: &P,
         x: &P::Param,
         direction: Option<&P::Param>,
     ) -> Result<DerivativeCheckReport<F>, DerivativeCheckError<P::Error, F>>
     where
-        P: Gradient<Output = F> + MaybeSync,
-        P::Param: Clone + VectorLen + VectorIndex<F> + MaybeSync,
+        P: Gradient<Output = F>,
+        P::Param: Clone + VectorLen + VectorIndex<F>,
         P::Gradient: VectorLen + VectorIndex<F>,
-        P::Error: MaybeSend,
+        for<'a, 'b> Mode: ProbeEvaluation<
+                CheckProbes<'a, 'b, P, P::Param, F, Evaluation>,
+                Vec<F>,
+                DerivativeCheckError<P::Error, F>,
+            >,
     {
         self.validate_point(x)?;
         let g = problem
@@ -436,25 +523,14 @@ impl<F: Scalar + MaybeSend + MaybeSync> DerivativeChecker<F> {
         }
         let analytic =
             (0..g.vec_len()).map(|j| vec![g.get_scalar(j)]).collect();
-        self.run(x, 1, analytic, direction, |x| {
-            problem.cost(x).map(|f| vec![f])
-        })
-    }
-
-    /// Compare every non-fixed column of an analytic residual Jacobian.
-    pub fn check_jacobian<P>(
-        &self,
-        problem: &P,
-        x: &P::Param,
-    ) -> Result<DerivativeCheckReport<F>, DerivativeCheckError<P::Error, F>>
-    where
-        P: Jacobian + MaybeSync,
-        P::Param: Clone + VectorLen + VectorIndex<F> + MaybeSync,
-        P::Output: VectorLen + VectorIndex<F>,
-        P::Jacobian: MatrixIndex<F>,
-        P::Error: MaybeSend,
-    {
-        self.jacobian(problem, x, None)
+        self.run::<Mode, _, _, _>(
+            x,
+            1,
+            analytic,
+            direction,
+            problem,
+            |problem, x| problem.cost(x).map(|f| vec![f]),
+        )
     }
 
     /// Compare `Jd` with differences of residual values along the normalized
@@ -467,27 +543,30 @@ impl<F: Scalar + MaybeSend + MaybeSync> DerivativeChecker<F> {
         direction: &P::Param,
     ) -> Result<DerivativeCheckReport<F>, DerivativeCheckError<P::Error, F>>
     where
-        P: Jacobian + MaybeSync,
-        P::Param: Clone + VectorLen + VectorIndex<F> + MaybeSync,
+        P: Jacobian,
+        P::Param: Clone + VectorLen + VectorIndex<F>,
         P::Output: VectorLen + VectorIndex<F>,
         P::Jacobian: MatrixIndex<F>,
-        P::Error: MaybeSend,
     {
-        self.jacobian(problem, x, Some(direction))
+        self.jacobian::<SerialEvaluation, _>(problem, x, Some(direction))
     }
 
-    fn jacobian<P>(
+    fn jacobian<Mode, P>(
         &self,
         problem: &P,
         x: &P::Param,
         direction: Option<&P::Param>,
     ) -> Result<DerivativeCheckReport<F>, DerivativeCheckError<P::Error, F>>
     where
-        P: Jacobian + MaybeSync,
-        P::Param: Clone + VectorLen + VectorIndex<F> + MaybeSync,
+        P: Jacobian,
+        P::Param: Clone + VectorLen + VectorIndex<F>,
         P::Output: VectorLen + VectorIndex<F>,
         P::Jacobian: MatrixIndex<F>,
-        P::Error: MaybeSend,
+        for<'a, 'b> Mode: ProbeEvaluation<
+                CheckProbes<'a, 'b, P, P::Param, F, Evaluation>,
+                Vec<F>,
+                DerivativeCheckError<P::Error, F>,
+            >,
     {
         self.validate_point(x)?;
         let a = problem
@@ -503,31 +582,43 @@ impl<F: Scalar + MaybeSend + MaybeSync> DerivativeChecker<F> {
                 (0..a.matrix_rows()).map(|i| a.matrix_entry(i, j)).collect()
             })
             .collect();
-        self.run(x, a.matrix_rows(), analytic, direction, |x| {
-            problem
-                .residual(x)
-                .map(|r| (0..r.vec_len()).map(|i| r.get_scalar(i)).collect())
-        })
+        self.run::<Mode, _, _, _>(
+            x,
+            a.matrix_rows(),
+            analytic,
+            direction,
+            problem,
+            |problem, x| {
+                problem.residual(x).map(|r| {
+                    (0..r.vec_len()).map(|i| r.get_scalar(i)).collect()
+                })
+            },
+        )
     }
 
-    fn run<V, E, C>(
+    fn run<Mode, P, V, E>(
         &self,
         x: &V,
         rows: usize,
         analytic: Vec<Vec<F>>,
         direction: Option<&V>,
-        evaluate: C,
+        problem: &P,
+        evaluate: impl Fn(&P, &V) -> Result<Vec<F>, E> + Sync,
     ) -> Result<DerivativeCheckReport<F>, DerivativeCheckError<E, F>>
     where
-        V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
-        E: MaybeSend,
-        C: Fn(&V) -> Result<Vec<F>, E> + MaybeSync,
+        V: Clone + VectorLen + VectorIndex<F>,
+        for<'a, 'b> Mode: ProbeEvaluation<
+                CheckProbes<'a, 'b, P, V, F, Evaluation>,
+                Vec<F>,
+                DerivativeCheckError<E, F>,
+            >,
     {
-        let evaluate = |probe: &V| {
+        let evaluate = |&(problem, checker, rows): &(&P, &Self, usize),
+                        probe: &V| {
             // Reject arithmetic overflow before passing a probe to user code.
-            self.validate_point(probe)?;
-            let values =
-                evaluate(probe).map_err(DerivativeCheckError::Evaluation)?;
+            checker.validate_point(probe)?;
+            let values = evaluate(problem, probe)
+                .map_err(DerivativeCheckError::Evaluation)?;
             if values.len() != rows {
                 return Err(DerivativeCheckError::OutputSize {
                     expected: rows,
@@ -547,16 +638,24 @@ impl<F: Scalar + MaybeSend + MaybeSync> DerivativeChecker<F> {
             }
             Ok(values)
         };
+        let inputs = (problem, self, rows);
         if let Some(d) = direction {
-            return self.directional(x, rows, analytic, d, evaluate);
+            return self.directional(x, rows, analytic, d, |point| {
+                evaluate(&inputs, point)
+            });
         }
         let mut report = DerivativeCheckReport {
             comparisons: Vec::new(),
             skipped_coordinates: Vec::new(),
             direction: None,
         };
-        let (_, numeric) =
-            bounded::columns(x, self.options(), self.bounds(), evaluate)?;
+        let (_, numeric) = bounded::columns::<Mode, _, _, _, _>(
+            x,
+            self.options(),
+            self.bounds(),
+            &inputs,
+            evaluate,
+        )?;
         for (j, (a, n)) in analytic.iter().zip(&numeric).enumerate() {
             if self.fixed(j) {
                 report.skipped_coordinates.push(j);
@@ -583,9 +682,8 @@ impl<F: Scalar + MaybeSend + MaybeSync> DerivativeChecker<F> {
         evaluate: C,
     ) -> Result<DerivativeCheckReport<F>, DerivativeCheckError<E, F>>
     where
-        V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
-        E: MaybeSend,
-        C: Fn(&V) -> Result<Vec<F>, DerivativeCheckError<E, F>> + MaybeSync,
+        V: Clone + VectorLen + VectorIndex<F>,
+        C: Fn(&V) -> Result<Vec<F>, DerivativeCheckError<E, F>>,
     {
         if direction.vec_len() != x.vec_len() {
             return Err(DerivativeCheckError::InvalidInput(
@@ -650,34 +748,34 @@ impl<F: Scalar + MaybeSend + MaybeSync> DerivativeChecker<F> {
         options.step = Some(self.step.unwrap_or(step));
         // Anchoring at a parameter coordinate makes the common probe machinery
         // account for representability at x, including adjacent-float boxes.
-        let (_, numeric) = bounded::columns(
+        let evaluate = |s: &Vec<F>| {
+            let t = (s[0] - anchor) / sign;
+            let mut probe = x.clone();
+            for (j, &v) in d.iter().enumerate() {
+                let value = if j == pivot {
+                    s[0]
+                } else if v == F::zero() {
+                    x.get_scalar(j)
+                } else {
+                    t.mul_add(v, x.get_scalar(j))
+                };
+                if let Some((lo, hi)) = &self.bounds {
+                    // The scalar interval can round outward at the anchor's
+                    // precision. Clamping would change the checked direction.
+                    if value < lo[j] || value > hi[j] {
+                        return Err(DerivativeCheckError::NoFeasibleDirection);
+                    }
+                }
+                probe.set_scalar(j, value);
+            }
+            evaluate(&probe)
+        };
+        let (_, numeric) = bounded::columns::<SerialEvaluation, _, _, _, _>(
             &vec![anchor],
             options,
             Some((&[lower], &[upper])),
-            |s| {
-                let t = (s[0] - anchor) / sign;
-                let mut probe = x.clone();
-                for (j, &v) in d.iter().enumerate() {
-                    let value = if j == pivot {
-                        s[0]
-                    } else if v == F::zero() {
-                        x.get_scalar(j)
-                    } else {
-                        t.mul_add(v, x.get_scalar(j))
-                    };
-                    if let Some((lo, hi)) = &self.bounds {
-                        // The scalar interval can round outward at the anchor's
-                        // precision. Clamping would change the checked direction.
-                        if value < lo[j] || value > hi[j] {
-                            return Err(
-                                DerivativeCheckError::NoFeasibleDirection,
-                            );
-                        }
-                    }
-                    probe.set_scalar(j, value);
-                }
-                evaluate(&probe)
-            },
+            &evaluate,
+            |evaluate, point| evaluate(point),
         )?;
         let mut report = DerivativeCheckReport {
             comparisons: Vec::new(),

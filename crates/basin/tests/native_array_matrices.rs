@@ -106,6 +106,25 @@ fn least_squares<F: Scalar + Send + Sync>() {
             check_point(actual, expected, tolerance);
         }
         assert_eq!(finite.jacobian(&start).unwrap(), jac);
+        #[cfg(feature = "parallel")]
+        {
+            let threaded: FiniteDiff<
+                _,
+                false,
+                F,
+                [[F; 2]; 3],
+                basin::ParallelEvaluation,
+            > = FiniteDiff::new_with_scalar(Fit(target[0]))
+                .with_parallel_evaluation()
+                .with_dense_hessian()
+                .with_array_jacobian::<3>()
+                .jacobian_method(method);
+            assert_eq!(threaded.jacobian(&start).unwrap(), jac);
+            assert_eq!(
+                threaded.with_square_hessian().hessian(&target).unwrap(),
+                hessian
+            );
+        }
         let (residual, fused) = finite.residual_and_jacobian(&start).unwrap();
         assert_eq!(residual, Fit(target[0]).residual(&start).unwrap());
         assert_eq!(fused, jac);

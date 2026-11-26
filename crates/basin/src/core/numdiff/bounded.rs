@@ -1,9 +1,13 @@
 //! Shared first-derivative probes with explicit domain bounds.
 
-use super::{FiniteDiff, Method, gradient_from_probes_into, minpack_step};
+use super::{
+    FiniteDiff, Method, ProbeEvaluation, gradient_from_probes_into,
+    minpack_step,
+};
+use crate::SerialEvaluation;
 use crate::core::math::{DenseMatrixFromFn, Scalar, VectorIndex, VectorLen};
-use crate::core::parallel::{MaybeSend, MaybeSync, try_map_range_with};
 use crate::core::problem::{CostFunction, Gradient, Jacobian, Residual};
+use std::marker::PhantomData;
 
 /// Finite-difference first derivatives whose probes stay inside supplied bounds.
 ///
@@ -29,8 +33,9 @@ use crate::core::problem::{CostFunction, Gradient, Jacobian, Residual};
 /// exclude internal probes. Probe counts depend on the chosen stencils and
 /// fixed coordinates. Fused cost/gradient calls reuse the returned cost as
 /// the base value for either stencil, in both owned and `*_into` methods.
-/// The optional `parallel` feature evaluates independent
-/// columns concurrently without changing their arithmetic or result ordering.
+/// Probes run on the calling thread by default. With the `parallel` feature,
+/// call `with_parallel_evaluation()` to evaluate independent probes on the
+/// active Rayon pool.
 ///
 /// # Backends
 ///
@@ -67,7 +72,9 @@ use crate::core::problem::{CostFunction, Gradient, Jacobian, Residual};
 /// assert!((p.gradient(&vec![1.0]).unwrap()[0] - 2.0).abs() < 1e-8);
 /// ```
 #[derive(Clone, Debug)]
-pub struct BoundedFiniteDiff<P, F: Scalar = f64> {
+pub struct BoundedFiniteDiff<P, F: Scalar = f64, Evaluation = SerialEvaluation>
+{
+    evaluation: PhantomData<fn() -> Evaluation>,
     pub(super) problem: P,
     lower: Vec<F>,
     upper: Vec<F>,
@@ -121,6 +128,7 @@ impl<P, F: Scalar> BoundedFiniteDiff<P, F> {
             }
         }
         Ok(Self {
+            evaluation: PhantomData,
             problem,
             lower,
             upper,
@@ -130,6 +138,34 @@ impl<P, F: Scalar> BoundedFiniteDiff<P, F> {
             step: None,
         })
     }
+    #[cfg(feature = "parallel")]
+    /// Evaluate independent finite-difference probes on the active Rayon pool.
+    ///
+    /// The derivative traits require shareable probe inputs and sendable
+    /// probe results and errors. Bounds and stencil settings carry over.
+    pub fn with_parallel_evaluation(
+        self,
+    ) -> BoundedFiniteDiff<P, F, crate::ParallelEvaluation> {
+        self.with_evaluation()
+    }
+}
+
+impl<P, F: Scalar, Evaluation> BoundedFiniteDiff<P, F, Evaluation> {
+    fn with_evaluation<NewEvaluation>(
+        self,
+    ) -> BoundedFiniteDiff<P, F, NewEvaluation> {
+        BoundedFiniteDiff {
+            evaluation: PhantomData,
+            problem: self.problem,
+            lower: self.lower,
+            upper: self.upper,
+            gradient_method: self.gradient_method,
+            jacobian_method: self.jacobian_method,
+            precision: self.precision,
+            step: self.step,
+        }
+    }
+
     /// Choose the objective-gradient stencil (default: central).
     pub fn gradient_method(mut self, method: Method) -> Self {
         self.gradient_method = method;
@@ -179,15 +215,18 @@ impl<P, F: Scalar> BoundedFiniteDiff<P, F> {
         }
     }
 }
-impl<P, const SQUARE: bool, F: Scalar, J> FiniteDiff<P, SQUARE, F, J> {
-    /// Transfer first-derivative settings into a [`BoundedFiniteDiff`].
+impl<P, const SQUARE: bool, F: Scalar, J, Evaluation>
+    FiniteDiff<P, SQUARE, F, J, Evaluation>
+{
+    /// Transfer first-derivative settings and the evaluation mode into a
+    /// [`BoundedFiniteDiff`].
     /// The resulting adapter supports gradients and Jacobians only. Hessian
     /// settings have no effect on its first derivatives.
     pub fn with_bounds<V: VectorLen + VectorIndex<F>>(
         self,
         lower: V,
         upper: V,
-    ) -> BoundedFiniteDiff<P, F> {
+    ) -> BoundedFiniteDiff<P, F, Evaluation> {
         let mut result = BoundedFiniteDiff::new(self.problem, lower, upper)
             .gradient_method(self.gradient_method)
             .jacobian_method(self.jacobian_method)
@@ -195,11 +234,13 @@ impl<P, const SQUARE: bool, F: Scalar, J> FiniteDiff<P, SQUARE, F, J> {
         if let Some(step) = self.fixed_step {
             result = result.with_step(step);
         }
-        result
+        result.with_evaluation()
     }
 }
 
-impl<P: CostFunction, F: Scalar> CostFunction for BoundedFiniteDiff<P, F> {
+impl<P: CostFunction, F: Scalar, Evaluation> CostFunction
+    for BoundedFiniteDiff<P, F, Evaluation>
+{
     type Param = P::Param;
     type Output = P::Output;
     type Error = P::Error;
@@ -207,7 +248,9 @@ impl<P: CostFunction, F: Scalar> CostFunction for BoundedFiniteDiff<P, F> {
         self.problem.cost(x)
     }
 }
-impl<P: Residual, F: Scalar> Residual for BoundedFiniteDiff<P, F> {
+impl<P: Residual, F: Scalar, Evaluation> Residual
+    for BoundedFiniteDiff<P, F, Evaluation>
+{
     type Param = P::Param;
     type Output = P::Output;
     type Error = P::Error;
@@ -301,26 +344,44 @@ fn probes<F: Scalar>(
     }
 }
 
-pub(super) fn columns<V, F, E, C>(
+type Bounds<'a, F> = (&'a [F], &'a [F]);
+
+pub(super) struct ColumnProbes<'a, C, V, R, F> {
+    inputs: &'a C,
+    point: &'a V,
+    base: &'a R,
+    options: Options<F>,
+    bounds: Option<Bounds<'a, F>>,
+    scale: F,
+}
+
+type GradientProbes<'a, 'b, P, V, F> =
+    (&'a V, (&'b P, Options<F>, Bounds<'b, F>, F, F));
+
+pub(super) fn columns<Evaluation, V, F, E, C>(
     x: &V,
     options: Options<F>,
-    bounds: Option<(&[F], &[F])>,
-    evaluate: C,
+    bounds: Option<Bounds<'_, F>>,
+    inputs: &C,
+    evaluate: impl Fn(&C, &V) -> Result<Vec<F>, E> + Sync,
 ) -> Result<(usize, Vec<Vec<F>>), E>
 where
-    V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
-    F: Scalar + MaybeSync + MaybeSend,
-    E: MaybeSend,
-    C: Fn(&V) -> Result<Vec<F>, E> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex<F>,
+    F: Scalar,
+    for<'a> Evaluation:
+        ProbeEvaluation<ColumnProbes<'a, C, V, Vec<F>, F>, Vec<F>, E>,
 {
-    columns_into(
+    validate_point(x, bounds);
+    let base = evaluate(inputs, x)?;
+    columns_with_base::<Evaluation, _, _, _, _, _>(
         x,
         options,
         bounds,
-        Vec::new(),
+        &base,
         |_| Vec::new(),
-        |x, out| {
-            *out = evaluate(x)?;
+        inputs,
+        |inputs, x, out| {
+            *out = evaluate(inputs, x)?;
             Ok(())
         },
     )
@@ -352,59 +413,51 @@ where
     }
 }
 
-fn columns_into<V, R, F, E, C>(
+fn columns_with_base<Evaluation, V, R, F, E, C>(
     x: &V,
     options: Options<F>,
-    bounds: Option<(&[F], &[F])>,
-    mut base: R,
-    scratch: impl Fn(&R) -> R + MaybeSync,
-    evaluate: C,
-) -> Result<(usize, Vec<Vec<F>>), E>
-where
-    V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
-    R: Clone + VectorLen + VectorIndex<F> + MaybeSync,
-    F: Scalar + MaybeSync + MaybeSend,
-    E: MaybeSend,
-    C: Fn(&V, &mut R) -> Result<(), E> + MaybeSync,
-{
-    validate_point(x, bounds);
-    evaluate(x, &mut base)?;
-    columns_with_base(x, options, bounds, &base, scratch, evaluate)
-}
-
-fn columns_with_base<V, R, F, E, C>(
-    x: &V,
-    options: Options<F>,
-    bounds: Option<(&[F], &[F])>,
+    bounds: Option<Bounds<'_, F>>,
     base: &R,
-    scratch: impl Fn(&R) -> R + MaybeSync,
-    evaluate: C,
+    scratch: impl Fn(&R) -> R + Sync,
+    inputs: &C,
+    evaluate: impl Fn(&C, &V, &mut R) -> Result<(), E> + Sync,
 ) -> Result<(usize, Vec<Vec<F>>), E>
 where
-    V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
-    R: Clone + VectorLen + VectorIndex<F> + MaybeSync,
-    F: Scalar + MaybeSync + MaybeSend,
-    E: MaybeSend,
-    C: Fn(&V, &mut R) -> Result<(), E> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex<F>,
+    R: Clone + VectorLen + VectorIndex<F>,
+    F: Scalar,
+    for<'a> Evaluation:
+        ProbeEvaluation<ColumnProbes<'a, C, V, R, F>, Vec<F>, E>,
 {
     let m = base.vec_len();
-    let scale = options.scale();
-    let evaluate = &evaluate;
-    let columns = try_map_range_with(
+    let probes = ColumnProbes {
+        inputs,
+        point: x,
+        base,
+        scale: options.scale(),
+        options,
+        bounds,
+    };
+    let columns = Evaluation::try_map(
         x.vec_len(),
-        || (x.clone(), scratch(base)),
-        |(probe, residual), j| {
+        &probes,
+        |probes| (probes.point.clone(), scratch(probes.base)),
+        |probes, (probe, residual), j| {
+            let x = probes.point;
+            let base = probes.base;
             let value = x.get_scalar(j);
-            let (lo, hi) = bounds
+            let (lo, hi) = probes
+                .bounds
                 .map_or((F::neg_infinity(), F::infinity()), |(lo, hi)| {
                     (lo[j], hi[j])
                 });
-            let (first, second) = options.probes(value, scale, lo, hi);
+            let (first, second) =
+                probes.options.probes(value, probes.scale, lo, hi);
             if first == value {
                 return Ok(vec![F::zero(); m]);
             }
             probe.set_scalar(j, first);
-            evaluate(probe, residual)?;
+            evaluate(probes.inputs, probe, residual)?;
             assert_eq!(
                 residual.vec_len(),
                 m,
@@ -416,7 +469,7 @@ where
                 .collect();
             if let Some(second) = second {
                 probe.set_scalar(j, second);
-                evaluate(probe, residual)?;
+                evaluate(probes.inputs, probe, residual)?;
                 assert_eq!(
                     residual.vec_len(),
                     m,
@@ -436,51 +489,67 @@ where
     Ok((m, columns))
 }
 
-impl<P, V, F> BoundedFiniteDiff<P, F>
+impl<P, V, F, Evaluation> BoundedFiniteDiff<P, F, Evaluation>
 where
-    P: CostFunction<Param = V, Output = F> + MaybeSync,
-    V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
-    F: Scalar + MaybeSync + MaybeSend,
-    P::Error: MaybeSend,
+    P: CostFunction<Param = V, Output = F>,
+    V: Clone + VectorLen + VectorIndex<F>,
+    F: Scalar,
 {
     fn gradient_with_base_into(
         &self,
         x: &V,
         cost: F,
         out: &mut V,
-    ) -> Result<(), P::Error> {
+    ) -> Result<(), P::Error>
+    where
+        for<'a, 'b> Evaluation:
+            ProbeEvaluation<GradientProbes<'a, 'b, P, V, F>, F, P::Error>,
+    {
         let options = self.options(false);
         let scale = options.scale();
-        gradient_from_probes_into(x, out, |probe, j| {
-            let value = x.get_scalar(j);
-            let (first, second) =
-                options.probes(value, scale, self.lower[j], self.upper[j]);
-            if first == value {
-                return Ok(F::zero());
-            }
-            probe.set_scalar(j, first);
-            let first_cost = self.problem.cost(probe)?;
-            let h1 = first - value;
-            let mut derivative = (first_cost - cost) / h1;
-            if let Some(second) = second {
-                probe.set_scalar(j, second);
-                let second_cost = self.problem.cost(probe)?;
-                let h2 = second - value;
-                let slope = (second_cost - cost) / h2;
-                derivative = derivative + h1 / (h2 - h1) * (derivative - slope);
-            }
-            probe.set_scalar(j, value);
-            Ok(derivative)
-        })
+        gradient_from_probes_into::<Evaluation, _, _, _, _>(
+            x,
+            out,
+            (
+                &self.problem,
+                options,
+                (&self.lower[..], &self.upper[..]),
+                scale,
+                cost,
+            ),
+            |x, (problem, options, (lower, upper), scale, cost), probe, j| {
+                let value = x.get_scalar(j);
+                let (first, second) =
+                    options.probes(value, *scale, lower[j], upper[j]);
+                if first == value {
+                    return Ok(F::zero());
+                }
+                probe.set_scalar(j, first);
+                let first_cost = problem.cost(probe)?;
+                let h1 = first - value;
+                let mut derivative = (first_cost - *cost) / h1;
+                if let Some(second) = second {
+                    probe.set_scalar(j, second);
+                    let second_cost = problem.cost(probe)?;
+                    let h2 = second - value;
+                    let slope = (second_cost - *cost) / h2;
+                    derivative =
+                        derivative + h1 / (h2 - h1) * (derivative - slope);
+                }
+                probe.set_scalar(j, value);
+                Ok(derivative)
+            },
+        )
     }
 }
 
-impl<P, V, F> Gradient for BoundedFiniteDiff<P, F>
+impl<P, V, F, Evaluation> Gradient for BoundedFiniteDiff<P, F, Evaluation>
 where
-    P: CostFunction<Param = V, Output = F> + MaybeSync,
-    V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
-    F: Scalar + MaybeSync + MaybeSend,
-    P::Error: MaybeSend,
+    P: CostFunction<Param = V, Output = F>,
+    V: Clone + VectorLen + VectorIndex<F>,
+    F: Scalar,
+    for<'a, 'b> Evaluation:
+        ProbeEvaluation<GradientProbes<'a, 'b, P, V, F>, F, P::Error>,
 {
     type Gradient = V;
     fn gradient(&self, x: &V) -> Result<V, P::Error> {
@@ -509,13 +578,14 @@ where
         Ok(cost)
     }
 }
-impl<P, V, F> Jacobian for BoundedFiniteDiff<P, F>
+impl<P, V, F, Evaluation> Jacobian for BoundedFiniteDiff<P, F, Evaluation>
 where
-    P: Residual<Param = V> + MaybeSync,
-    V: Clone + VectorLen + VectorIndex<F> + DenseMatrixFromFn<F> + MaybeSync,
-    P::Output: Clone + VectorLen + VectorIndex<F> + MaybeSync,
-    F: Scalar + MaybeSync + MaybeSend,
-    P::Error: MaybeSend,
+    P: Residual<Param = V>,
+    V: Clone + VectorLen + VectorIndex<F> + DenseMatrixFromFn<F>,
+    P::Output: Clone + VectorLen + VectorIndex<F>,
+    F: Scalar,
+    for<'a> Evaluation:
+        ProbeEvaluation<ColumnProbes<'a, P, V, P::Output, F>, Vec<F>, P::Error>,
 {
     type Jacobian = V::Matrix;
     fn jacobian(&self, x: &V) -> Result<V::Matrix, P::Error> {
@@ -554,27 +624,34 @@ where
     }
 }
 
-impl<P, V, F> BoundedFiniteDiff<P, F>
+impl<P, V, F, Evaluation> BoundedFiniteDiff<P, F, Evaluation>
 where
-    P: Residual<Param = V> + MaybeSync,
-    V: Clone + VectorLen + VectorIndex<F> + DenseMatrixFromFn<F> + MaybeSync,
-    P::Output: Clone + VectorLen + VectorIndex<F> + MaybeSync,
-    F: Scalar + MaybeSync + MaybeSend,
-    P::Error: MaybeSend,
+    P: Residual<Param = V>,
+    V: Clone + VectorLen + VectorIndex<F> + DenseMatrixFromFn<F>,
+    P::Output: Clone + VectorLen + VectorIndex<F>,
+    F: Scalar,
 {
     fn jacobian_with_base_into(
         &self,
         x: &V,
         res: &P::Output,
         jac: &mut V::Matrix,
-    ) -> Result<(), P::Error> {
-        let (m, cols) = columns_with_base(
+    ) -> Result<(), P::Error>
+    where
+        for<'a> Evaluation: ProbeEvaluation<
+                ColumnProbes<'a, P, V, P::Output, F>,
+                Vec<F>,
+                P::Error,
+            >,
+    {
+        let (m, cols) = columns_with_base::<Evaluation, _, _, _, _, _>(
             x,
             self.options(true),
             Some((&self.lower, &self.upper)),
             res,
             Clone::clone,
-            |x, out| self.problem.residual_into(x, out),
+            &self.problem,
+            |problem, x, out| problem.residual_into(x, out),
         )?;
         V::dense_from_fn_into(m, x.vec_len(), |i, j| cols[j][i], jac);
         Ok(())
@@ -602,7 +679,8 @@ where
     Ok(eq)
 }
 
-impl<P, F> crate::Constraints for BoundedFiniteDiff<P, F>
+impl<P, F, Evaluation> crate::Constraints
+    for BoundedFiniteDiff<P, F, Evaluation>
 where
     P: crate::Constraints,
     F: crate::Scalar,
@@ -615,7 +693,8 @@ where
     }
 }
 
-impl<P, F> crate::NonlinearEqualityValues for BoundedFiniteDiff<P, F>
+impl<P, F, Evaluation> crate::NonlinearEqualityValues
+    for BoundedFiniteDiff<P, F, Evaluation>
 where
     P: crate::NonlinearEqualityValues,
     F: crate::Scalar,
@@ -631,7 +710,8 @@ where
     }
 }
 
-impl<P, F> crate::NonlinearInequalityValues for BoundedFiniteDiff<P, F>
+impl<P, F, Evaluation> crate::NonlinearInequalityValues
+    for BoundedFiniteDiff<P, F, Evaluation>
 where
     P: crate::NonlinearInequalityValues,
     F: crate::Scalar,
@@ -647,14 +727,19 @@ where
     }
 }
 
-impl<P, V, F> crate::ConstraintJacobian for BoundedFiniteDiff<P, F>
+impl<P, V, F, Evaluation> crate::ConstraintJacobian
+    for BoundedFiniteDiff<P, F, Evaluation>
 where
-    P: CostFunction<Param = V, Output = F> + MaybeSync,
+    P: CostFunction<Param = V, Output = F>,
     P: crate::Constraints,
     P::Set: crate::core::constraint::evaluation::NonlinearSet<P, V, F>,
-    V: Clone + VectorLen + VectorIndex<F> + DenseMatrixFromFn<F> + MaybeSync,
-    P::Error: MaybeSend,
-    F: Scalar + MaybeSend + MaybeSync,
+    V: Clone + VectorLen + VectorIndex<F> + DenseMatrixFromFn<F>,
+    F: Scalar,
+    for<'a> Evaluation: ProbeEvaluation<
+            ColumnProbes<'a, P, V, Vec<F>, F>,
+            Vec<F>,
+            crate::ConstraintSolveError<P::Error>,
+        >,
 {
     type Param = V;
     type Jacobian = <V as DenseMatrixFromFn<F>>::Matrix;
@@ -671,10 +756,13 @@ where
             ),
         )?;
         let options = self.options(true);
-        let (_, cols) =
-            columns(x, options, Some((&self.lower, &self.upper)), |point| {
-                constraint_values(&self.problem, point, expected)
-            })?;
+        let (_, cols) = columns::<Evaluation, _, _, _, _>(
+            x,
+            options,
+            Some((&self.lower, &self.upper)),
+            &self.problem,
+            |problem, point| constraint_values(problem, point, expected),
+        )?;
         Ok(V::dense_from_fn(m, x.vec_len(), |i, j| cols[j][i]))
     }
 }

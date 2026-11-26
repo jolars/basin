@@ -80,6 +80,42 @@ pub fn two_workers() -> Threaded {
 ///     PopulationProgress::from_point(vec![2.0, 1.0]),
 /// ).run().unwrap();
 /// ```
+///
+/// Threaded finite differences require a shareable problem, even when the
+/// callback error can be sent between threads.
+///
+/// ```compile_fail
+/// use basin::{CostFunction, FiniteDiff, Gradient};
+/// use std::{cell::Cell, convert::Infallible};
+/// struct Local(Cell<f64>);
+/// impl CostFunction for Local {
+///     type Param = Vec<f64>;
+///     type Output = f64;
+///     type Error = Infallible;
+///     fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
+///         Ok(self.0.get() * x[0].powi(2))
+///     }
+/// }
+/// let fd = FiniteDiff::new(Local(Cell::new(1.0))).with_parallel_evaluation();
+/// fd.gradient(&vec![1.0]).unwrap();
+/// ```
+///
+/// Callback errors must be sendable, even when the problem is shareable.
+///
+/// ```compile_fail
+/// use basin::{CostFunction, FiniteDiff, Hessian};
+/// use std::rc::Rc;
+/// struct LocalError;
+/// impl CostFunction for LocalError {
+///     type Param = Vec<f64>;
+///     type Output = f64;
+///     type Error = Rc<str>;
+///     fn cost(&self, _: &Vec<f64>) -> Result<f64, Self::Error> {
+///         Err(Rc::from("evaluation failed"))
+///     }
+/// }
+/// FiniteDiff::new(LocalError).with_parallel_evaluation().hessian(&vec![1.0]);
+/// ```
 pub fn on_two_workers<T: Send>(run: impl FnOnce() -> T + Send) -> T {
     two_workers().0.install(run)
 }

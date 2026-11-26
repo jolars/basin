@@ -270,10 +270,10 @@ fn vec_hessian_matches_original_stencils() {
 
 #[test]
 fn forward_hessian_evaluates_each_probe_once() {
-    use std::sync::Mutex;
+    use std::sync::{Arc, Mutex};
 
     struct Recorded {
-        probes: Mutex<Vec<Vec<u8>>>,
+        probes: Arc<Mutex<Vec<Vec<u8>>>>,
         fail: Option<Vec<u8>>,
     }
 
@@ -292,7 +292,15 @@ fn forward_hessian_evaluates_each_probe_once() {
         }
     }
 
-    let run = || {
+    fn run<A>(wrap: impl Fn(Recorded) -> A)
+    where
+        A: Hessian<
+                Param = Vec<f64>,
+                Output = f64,
+                Hessian = basin::DenseMatrix,
+                Error = &'static str,
+            >,
+    {
         for n in [0, 1, 2, 5] {
             let mut expected = vec![vec![0; n]];
             for i in 0..n {
@@ -307,17 +315,16 @@ fn forward_hessian_evaluates_each_probe_once() {
                 }
             }
             expected.sort();
-            let fd = FiniteDiff::new(Recorded {
-                probes: Mutex::new(Vec::new()),
+            let log = Arc::new(Mutex::new(Vec::new()));
+            let fd = wrap(Recorded {
+                probes: log.clone(),
                 fail: None,
-            })
-            .hessian_method(Method::Forward)
-            .with_step(0.125);
+            });
             let x = vec![0.0; n];
             let reference =
                 reference(nonlinear, &x, Method::Forward, Some(0.125));
             check_matrix(&fd.hessian(&x).unwrap(), &reference);
-            let mut probes = fd.get_ref().probes.lock().unwrap();
+            let mut probes = log.lock().unwrap();
             probes.sort();
             assert_eq!(*probes, expected);
             probes.clear();
@@ -325,19 +332,17 @@ fn forward_hessian_evaluates_each_probe_once() {
             let mut out = Vec::<f64>::dense_from_fn(n + 1, n + 1, |_, _| 99.0);
             fd.hessian_into(&x, &mut out).unwrap();
             check_matrix(&out, &reference);
-            let mut probes = fd.get_ref().probes.lock().unwrap();
+            let mut probes = log.lock().unwrap();
             probes.sort();
             assert_eq!(*probes, expected);
             drop(probes);
 
             // Every kind of probe can fail, including the base at n = 0.
             for fail in expected {
-                let fd = FiniteDiff::new(Recorded {
-                    probes: Mutex::new(Vec::new()),
+                let fd = wrap(Recorded {
+                    probes: Arc::new(Mutex::new(Vec::new())),
                     fail: Some(fail),
-                })
-                .hessian_method(Method::Forward)
-                .with_step(0.125);
+                });
                 let mut out = Vec::<f64>::dense_from_fn(2, 3, |_, _| 99.0);
                 assert_eq!(fd.hessian_into(&x, &mut out), Err("failed probe"));
                 assert_eq!((out.matrix_rows(), out.matrix_cols()), (2, 3));
@@ -348,17 +353,23 @@ fn forward_hessian_evaluates_each_probe_once() {
                 }
             }
         }
+    }
+    let adapter = |problem| {
+        FiniteDiff::new(problem)
+            .hessian_method(Method::Forward)
+            .with_step(0.125)
     };
+    run(adapter);
     #[cfg(feature = "parallel")]
     for workers in [1, 2, 4] {
         rayon::ThreadPoolBuilder::new()
             .num_threads(workers)
             .build()
             .unwrap()
-            .install(run);
+            .install(|| {
+                run(|problem| adapter(problem).with_parallel_evaluation())
+            });
     }
-    #[cfg(not(feature = "parallel"))]
-    run();
 }
 
 #[cfg(feature = "parallel")]
@@ -423,7 +434,8 @@ fn forward_hessian_pair_probes_can_finish_before_base_and_singles() {
                 step: fixed.unwrap_or_else(|| f64::EPSILON.powf(0.25)),
                 wait_for_base: !shared_base,
             })
-            .hessian_method(Method::Forward);
+            .hessian_method(Method::Forward)
+            .with_parallel_evaluation();
             if let Some(step) = fixed {
                 fd = fd.with_step(step);
             }

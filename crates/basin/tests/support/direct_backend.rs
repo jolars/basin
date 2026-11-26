@@ -1,5 +1,4 @@
 use basin::CountsMirror as _;
-use basin::core::parallel::{MaybeSend, MaybeSync};
 use basin::{
     CostFunction, Direct, Executor, PointState, Scalar, State, TerminationCode,
     VectorIndex, VectorLen,
@@ -45,12 +44,8 @@ impl<V: VectorIndex<F>, F: Scalar> CostFunction for Quadratic<V, F> {
 
 pub fn check<V, F>(make: fn(&[F]) -> V)
 where
-    F: Scalar + MaybeSend + MaybeSync,
-    V: std::ops::Index<usize, Output = F>
-        + Clone
-        + VectorIndex<F>
-        + VectorLen
-        + MaybeSync,
+    F: Scalar,
+    V: std::ops::Index<usize, Output = F> + Clone + VectorIndex<F> + VectorLen,
 {
     let num = |v| F::from_f64(v).unwrap();
     for (lower, upper, target) in [

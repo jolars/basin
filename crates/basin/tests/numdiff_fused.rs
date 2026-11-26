@@ -84,10 +84,15 @@ where
     V: Clone
         + VectorLen
         + VectorIndex
-        + DenseBackend<Matrix: MatrixIndex + SquareMatrixFromFn>
+        + DenseBackend<Matrix: MatrixIndex + SquareMatrixFromFn + Sync>
         + Send
         + Sync,
 {
+    #[cfg(feature = "parallel")]
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(2)
+        .build()
+        .unwrap();
     for values in [&[][..], &[0.25][..], &[-0.75, 0.25, 0.0, 1.25][..]] {
         let x = make(values);
         let n = values.len();
@@ -178,6 +183,19 @@ where
                         same_vector(&g, &grad);
                         check_hessian::<V>(&h, &hess, n);
                     }
+                    #[cfg(feature = "parallel")]
+                    pool.install(|| {
+                        let threaded = fd.with_parallel_evaluation();
+                        threaded.get_ref().reset();
+                        let (f, g, h) =
+                            threaded.cost_and_gradient_and_hessian(&x).unwrap();
+                        threaded
+                            .get_ref()
+                            .check_calls(1 + gradient_probes + hessian_probes);
+                        same_scalar(f, cost);
+                        same_vector(&g, &grad);
+                        check_hessian::<V>(&h, &hess, n);
+                    });
                 }
             }
         }
@@ -205,6 +223,11 @@ where
     V: Clone + VectorLen + VectorIndex<F> + Send + Sync,
     F: Scalar + Send + Sync,
 {
+    #[cfg(feature = "parallel")]
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(2)
+        .build()
+        .unwrap();
     let zero = F::zero();
     let one = F::one();
     let half = F::from_f64(0.5).unwrap();
@@ -282,6 +305,16 @@ where
                         );
                     }
                 }
+                #[cfg(feature = "parallel")]
+                pool.install(|| {
+                    let threaded = fd.with_parallel_evaluation();
+                    threaded.get_ref().reset();
+                    let f =
+                        threaded.cost_and_gradient_into(&x, &mut out).unwrap();
+                    threaded.get_ref().check_calls(calls);
+                    same_scalar(f, cost);
+                    same_vector(&out, &expected);
+                });
             }
         }
     }

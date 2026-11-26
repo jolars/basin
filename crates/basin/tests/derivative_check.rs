@@ -68,6 +68,34 @@ fn checks_analytic_gradient_and_rectangular_jacobian() {
     assert_eq!(j.comparisons.len(), 6);
     assert!(g.direction.is_none());
     assert!(j.skipped_coordinates.is_empty());
+
+    #[cfg(feature = "parallel")]
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(2)
+        .build()
+        .unwrap()
+        .install(|| {
+            let threaded = checker.with_parallel_evaluation();
+            for (actual, expected) in [
+                (threaded.check_gradient(&p, &x).unwrap(), g),
+                (threaded.check_jacobian(&p, &x).unwrap(), j),
+            ] {
+                assert_eq!(
+                    actual.comparisons.len(),
+                    expected.comparisons.len()
+                );
+                for (actual, expected) in
+                    actual.comparisons.iter().zip(expected.comparisons)
+                {
+                    assert_eq!(actual.coordinate, expected.coordinate);
+                    assert_eq!(actual.output, expected.output);
+                    assert_eq!(
+                        actual.finite_difference.to_bits(),
+                        expected.finite_difference.to_bits()
+                    );
+                }
+            }
+        });
 }
 
 #[test]

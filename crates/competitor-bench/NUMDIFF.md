@@ -75,9 +75,9 @@ For unbounded Jacobian staging, use the Criterion regex
 `numdiff/.*/(jacobian|residual_jacobian)/` and accounting filter `jacobian/`
 (the latter also includes bounded Jacobians as an unchanged control). Compare
 tall and wide shapes across every backend: Vec and ndarray publish in row-major
-order, while nalgebra and faer publish in column-major order. With `parallel`
-disabled or a one-worker pool, unbounded kernels reuse the residual probe
-buffer and stage scalar columns in one buffer.
+order, while nalgebra and faer publish in column-major order. In serial mode or
+with a one-worker Rayon pool, unbounded kernels reuse the residual probe buffer
+and stage scalar columns in one buffer.
 Each column has one padding scalar to avoid power-of-two strides when publishing
 to a row-major matrix. Central Jacobians discover the residual length from the
 probes, preserving the `2n` callback count. All probes complete before the output is published;
@@ -174,9 +174,9 @@ passes. Every pass independently validates the numerical output.
 
 ## Time sequential and parallel builds
 
-Use separate processes and named baselines. A one-worker parallel build retains
-feature-specific dispatch and thread-safety bounds, so measure the build without
-`parallel` as well. Jacobian and Hessian kernels avoid Rayon iteration and
+Use separate processes and named baselines. The benchmark and verifier select
+Rayon on the adapters when built with `parallel`. Measure both serial
+evaluation and Rayon with one worker. Jacobian and Hessian kernels avoid Rayon iteration and
 repeated job-local probe clones when the current pool has one worker. Gradient
 staging retains its existing Rayon path: a direct one-worker loop slowed a large
 expensive-callback workload despite improving small cheap cases. `RAYON_NUM_THREADS`

@@ -199,10 +199,15 @@ where
         + DenseMatrixFromFn<F>
         + Sync,
     F: Scalar + Send + Sync,
-    V::Matrix: MatrixIndex<F>,
+    V::Matrix: MatrixIndex<F> + Sync,
 {
     check_scalar_probe_results(make);
     use basin::ConstraintJacobian;
+    #[cfg(feature = "parallel")]
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(2)
+        .build()
+        .unwrap();
     for method in [Method::Forward, Method::Central] {
         let p = BoundedFiniteDiff::new(
             BackendDomain { make },
@@ -211,6 +216,19 @@ where
         )
         .gradient_method(method)
         .jacobian_method(method);
+        #[cfg(feature = "parallel")]
+        let threaded: BoundedFiniteDiff<
+            _,
+            F,
+            basin::ParallelEvaluation,
+        > = basin::FiniteDiff::new_with_scalar(BackendDomain { make })
+            .gradient_method(method)
+            .jacobian_method(method)
+            .with_parallel_evaluation()
+            .with_bounds(
+                make(&[F::zero(), F::one()]),
+                make(&[F::one(), F::one()]),
+            );
         for a in [F::zero(), F::one()] {
             let x = make(&[a, F::one()]);
             let g = p.gradient(&x).unwrap();
@@ -231,6 +249,23 @@ where
             assert!((c.matrix_entry(1, 0) - a - a).abs() < tolerance);
             assert_eq!(j.matrix_entry(0, 1), F::zero());
             assert_eq!(c.matrix_entry(1, 1), F::zero());
+            #[cfg(feature = "parallel")]
+            pool.install(|| {
+                let jacobian = threaded.jacobian(&x).unwrap();
+                let constraints = threaded.constraint_jacobian(&x).unwrap();
+                for row in 0..2 {
+                    for column in 0..2 {
+                        assert_eq!(
+                            jacobian.matrix_entry(row, column),
+                            j.matrix_entry(row, column)
+                        );
+                        assert_eq!(
+                            constraints.matrix_entry(row, column),
+                            c.matrix_entry(row, column)
+                        );
+                    }
+                }
+            });
         }
     }
 }

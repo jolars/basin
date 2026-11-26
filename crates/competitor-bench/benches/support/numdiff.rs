@@ -412,11 +412,16 @@ fn row_weight(i: usize, m: usize) -> f64 {
     0.01 * (i + 1) as f64 / m as f64
 }
 
+#[cfg(feature = "parallel")]
+type Evaluation = basin::ParallelEvaluation;
+#[cfg(not(feature = "parallel"))]
+type Evaluation = basin::SerialEvaluation;
+
 pub struct Fixture<V: BenchVector, P> {
     case: Case,
     problem: P,
-    fd: FiniteDiff<P>,
-    bounded: BoundedFiniteDiff<P>,
+    fd: FiniteDiff<P, true, f64, (), Evaluation>,
+    bounded: BoundedFiniteDiff<P, f64, Evaluation>,
     x: V,
     direction: V,
     gradient: V,
@@ -455,6 +460,11 @@ where
         )
         .gradient_method(case.method)
         .jacobian_method(case.method);
+        #[cfg(feature = "parallel")]
+        let (fd, bounded) = (
+            fd.with_parallel_evaluation(),
+            bounded.with_parallel_evaluation(),
+        );
         let (rows, cols) = if case.kernel.is_jacobian() {
             (case.m, case.n)
         } else if case.kernel.is_hessian() {

@@ -1,16 +1,19 @@
 # Evaluation feature unification fixture
 
 The application depends on a local library and a threaded library. Only the
-threaded library requests Basin's `parallel` feature. The local library runs
-finite differences and population evaluation with an `Rc`-backed callback and
-error, both in isolation and with unified features.
+threaded library requests Basin's `parallel` feature. The local library uses
+Basin's finite-difference adapters, derivative checker, standalone helpers,
+and CMA-ES with an `Rc`-backed callback and error. These tests run both in
+isolation and with unified features.
 
-The population tests use Basin's CMA-ES. They verify that a threaded run
-overlaps objective calls and matches the serial population and counts.
-The finite-difference prototype uses fixture-defined policies through Basin's
-public executor. The tests compare forward and central Hessian-vector products
-with analytic results and Basin's serial helpers. A rendezvous verifies overlap,
-and a synthesized gradient exercises nested dispatch on the same pool.
+The application tests verify that serial finite-difference probes stay on the
+calling thread and that the threaded modes of `FiniteDiff` and `CmaEs` overlap
+objective calls and match serial solver results and counts.
+
+The Hessian-vector product prototype uses fixture-defined policies. Tests
+compare forward and central products with analytic results and Basin's serial
+helpers. A rendezvous verifies overlap, and a synthesized gradient exercises
+nested dispatch on the same pool.
 
 A run factory can move its configuration to a worker and create the executor
 and local hooks there. An already-built executor contains non-`Send` hook

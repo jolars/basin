@@ -165,6 +165,41 @@ Threaded batches require a shareable problem and parameters, and sendable
 outputs and errors. A serial batch can use local callbacks and errors even
 when another dependency enables `parallel`.
 
+## Threaded finite differences
+
+`FiniteDiff`, `BoundedFiniteDiff`, and `DerivativeChecker` evaluate probes on
+the calling thread by default, including when a dependency enables `parallel`.
+To retain threaded evaluation from Basin 3.x, enable `parallel` and call
+`with_parallel_evaluation()` on the adapter or checker. Independent probes run
+on the active Rayon pool. Directional checks evaluate their probes on the
+calling thread.
+
+Standalone finite-difference functions now also evaluate their probes on the
+calling thread. To migrate a threaded helper call, configure the corresponding
+stencil, function precision, and optional fixed step on a `FiniteDiff` adapter.
+For example, replace a threaded `forward_difference_gradient` call with:
+
+```rust
+use basin::{FiniteDiff, Gradient, Method};
+
+let finite_diff = FiniteDiff::new(problem)
+    .gradient_method(Method::Forward)
+    .function_precision(precision)
+    .with_step(step)
+    .with_parallel_evaluation();
+let gradient = finite_diff.gradient(&point)?;
+```
+
+Omit `.with_step(step)` to use adaptive steps. Construct the adapter where you
+own the problem, or wrap a borrowed problem in a type that forwards its
+callbacks. For Jacobians and Hessians, use `.jacobian_method(...)` with
+`Jacobian::jacobian` or `.hessian_method(...)` with `Hessian::hessian`.
+
+In explicit type annotations, use `FiniteDiff<P, SQUARE, F, J, ParallelEvaluation>`,
+`BoundedFiniteDiff<P, F, ParallelEvaluation>`, or
+`DerivativeChecker<F, ParallelEvaluation>`. Bounds and matrix shape builders
+preserve the selected evaluation mode.
+
 ## Finite-difference Hessian matrices
 
 `FiniteDiff::new`, `FiniteDiff::new_with_scalar`, and the standalone

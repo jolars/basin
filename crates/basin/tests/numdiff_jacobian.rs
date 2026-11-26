@@ -51,8 +51,13 @@ impl<V: VectorLen + VectorIndex> Residual for Function<V> {
 fn check<V>(make: fn(&[f64]) -> V)
 where
     V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + Send + Sync,
-    V::Matrix: MatrixIndex,
+    V::Matrix: MatrixIndex + Sync,
 {
+    #[cfg(feature = "parallel")]
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(2)
+        .build()
+        .unwrap();
     for step in [None, Some(0.125)] {
         for (n, m) in [(0, 3), (3, 0), (4, 17), (17, 4), (65, 3)] {
             for method in [Method::Forward, Method::Central] {
@@ -94,37 +99,51 @@ where
                         (plus - residual(&x, i)) / h
                     }
                 });
-                let verify = |actual: &V::Matrix, fused: bool| {
-                    assert_eq!(
-                        (actual.matrix_rows(), actual.matrix_cols()),
-                        (m, n)
-                    );
-                    for i in 0..m {
-                        for j in 0..n {
-                            assert_eq!(
-                                actual.matrix_entry(i, j).to_bits(),
-                                expected.matrix_entry(i, j).to_bits()
-                            );
+                let verify =
+                    |actual: &V::Matrix, fused: bool, problem: &Function<V>| {
+                        assert_eq!(
+                            (actual.matrix_rows(), actual.matrix_cols()),
+                            (m, n)
+                        );
+                        for i in 0..m {
+                            for j in 0..n {
+                                assert_eq!(
+                                    actual.matrix_entry(i, j).to_bits(),
+                                    expected.matrix_entry(i, j).to_bits()
+                                );
+                            }
                         }
-                    }
-                    let count = if matches!(method, Method::Central) {
-                        2 * n + usize::from(fused || n == 0)
-                    } else {
-                        n + 1
+                        let count = if matches!(method, Method::Central) {
+                            2 * n + usize::from(fused || n == 0)
+                        } else {
+                            n + 1
+                        };
+                        assert_eq!(problem.calls.swap(0, Relaxed), count);
                     };
-                    assert_eq!(fd.get_ref().calls.swap(0, Relaxed), count);
-                };
-                verify(&fd.jacobian(&x).unwrap(), false);
+                verify(&fd.jacobian(&x).unwrap(), false, fd.get_ref());
                 let mut jac = V::dense_from_fn(1, 1, |_, _| 99.0);
                 for _ in 0..2 {
                     fd.jacobian_into(&x, &mut jac).unwrap();
-                    verify(&jac, false);
+                    verify(&jac, false, fd.get_ref());
                     let mut res = make(&[99.0]);
                     fd.residual_and_jacobian_into(&x, &mut res, &mut jac)
                         .unwrap();
-                    verify(&jac, true);
+                    verify(&jac, true, fd.get_ref());
                     assert_eq!(res.vec_len(), m);
                 }
+                #[cfg(feature = "parallel")]
+                pool.install(|| {
+                    let threaded = fd.with_parallel_evaluation();
+                    let (res, jac) =
+                        threaded.residual_and_jacobian(&x).unwrap();
+                    verify(&jac, true, threaded.get_ref());
+                    assert_eq!(res.vec_len(), m);
+                    verify(
+                        &threaded.jacobian(&x).unwrap(),
+                        false,
+                        threaded.get_ref(),
+                    );
+                });
             }
         }
     }
@@ -146,6 +165,7 @@ where
         assert_eq!((jac.matrix_rows(), jac.matrix_cols()), (2, 1));
         assert_eq!(jac.matrix_entry(0, 0), 99.0);
         assert_eq!(jac.matrix_entry(1, 0), 99.0);
+
         let mut res = make(&[]);
         assert_eq!(
             fd.residual_and_jacobian_into(&x, &mut res, &mut jac),
@@ -154,6 +174,19 @@ where
         assert_eq!((jac.matrix_rows(), jac.matrix_cols()), (2, 1));
         assert_eq!(jac.matrix_entry(0, 0), 99.0);
         assert_eq!(jac.matrix_entry(1, 0), 99.0);
+
+        #[cfg(feature = "parallel")]
+        pool.install(|| {
+            let threaded = fd.with_parallel_evaluation();
+            let mut jac = V::dense_from_fn(2, 1, |_, _| 99.0);
+            assert_eq!(
+                threaded.jacobian_into(&x, &mut jac),
+                Err("last-coordinate probe failed")
+            );
+            assert_eq!((jac.matrix_rows(), jac.matrix_cols()), (2, 1));
+            assert_eq!(jac.matrix_entry(0, 0), 99.0);
+            assert_eq!(jac.matrix_entry(1, 0), 99.0);
+        });
     }
 }
 
