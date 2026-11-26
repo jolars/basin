@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, v1]
+    branches: [main, v1, v3]
   pull_request:
-    branches: [main, v1]
+    branches: [main, v1, v3]
 
 permissions:
   contents: read
@@ -268,7 +268,8 @@ jobs:
   versionary:
     if: >-
       github.event_name == 'push' &&
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v1')
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v1' ||
+       github.ref == 'refs/heads/v3')
     needs: [fmt, clippy, msrv, docs, test, lapack, backend-unification, wasm, snippets]
     runs-on: ubuntu-latest
     concurrency:

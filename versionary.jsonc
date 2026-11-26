@@ -2,8 +2,8 @@
   "$schema": "https://raw.githubusercontent.com/jolars/versionary/main/schemas/config.json",
   "version": 1,
   "release-type": "rust",
-  "release-branch": "versionary/release",
-  "release-latest": true,
+  "release-branch": "versionary/release-v3",
+  "release-latest": false,
   "allow-stable-major": true,
   "include-commit-authors": true,
   "release-reference-comments": "best-effort"

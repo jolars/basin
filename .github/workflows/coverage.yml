@@ -2,9 +2,9 @@ name: Coverage
 
 on:
   push:
-    branches: [main, v1]
+    branches: [main, v1, v3]
   pull_request:
-    branches: [main, v1]
+    branches: [main, v1, v3]
   workflow_dispatch:
 
 concurrency:

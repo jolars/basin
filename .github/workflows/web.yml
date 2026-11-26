@@ -2,9 +2,9 @@ name: Website
 
 on:
   push:
-    branches: [main, v1]
+    branches: [main, v1, v3]
   pull_request:
-    branches: [main, v1]
+    branches: [main, v1, v3]
   release:
     types: [published]
   schedule:
@@ -118,10 +118,11 @@ jobs:
         id: changelog-links
         shell: bash
         env:
-          RELEASE_SHA: >-
+          RELEASE_PR_SHA: >-
             ${{ github.event_name == 'pull_request' &&
                 github.event.pull_request.head.repo.full_name == github.repository &&
-                (github.head_ref == 'versionary/release' || github.head_ref == 'versionary/release-v1') &&
+                (github.head_ref == 'versionary/release' || github.head_ref == 'versionary/release-v1' ||
+                 github.head_ref == 'versionary/release-v3') &&
                 github.event.pull_request.head.sha || '' }}
         run: |
           # GitHub's commit pages intermittently return 503. Check the hashes
@@ -130,17 +131,32 @@ jobs:
           mkdir -p "$commit_links"
           git log --all --format=%H | (cd "$commit_links" && xargs -r touch --)
 
-          if [[ -n "$RELEASE_SHA" ]]; then
-            # Versionary creates the tag after merge. Check the comparison
-            # using the release PR's commit until the tag exists.
-            tag="$(jq -er '."pending-release-targets"[] | select(.path == ".") | .tag' .versionary-manifest.json)"
-            if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              echo "Expected a stable Versionary release tag, got $tag." >&2
-              exit 1
-            fi
-            tag_pattern="${tag//./[.]}"
-            echo "remap=--remap '(^https://github[.]com/jolars/basin/compare/[^/]+[.][.][.])${tag_pattern}$ \${1}${RELEASE_SHA}'" >> "$GITHUB_OUTPUT"
+          if [[ ! -f .versionary-manifest.json ]]; then
+            exit 0
           fi
+          tag="$(jq -r '."pending-release-targets"[]? | select(.path == ".") | .tag // empty' .versionary-manifest.json)"
+          if [[ -z "$tag" ]]; then
+            exit 0
+          fi
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Expected a stable Versionary release tag, got $tag." >&2
+            exit 1
+          fi
+          if git show-ref --verify --quiet "refs/tags/$tag"; then
+            exit 0
+          fi
+
+          # Versionary tags the release after CI on the merged commit. Until
+          # then, check the comparison against the release commit directly.
+          release_sha="$RELEASE_PR_SHA"
+          if [[ -z "$release_sha" ]]; then
+            release_sha="$(git log -1 --first-parent --format=%H HEAD -- .versionary-manifest.json)"
+            if [[ -z "$release_sha" || "$(git show -s --format='%(trailers:key=Versionary-Release,valueonly)' "$release_sha")" != true ]]; then
+              exit 0
+            fi
+          fi
+          tag_pattern="${tag//./[.]}"
+          echo "remap=--remap '(^https://github[.]com/jolars/basin/compare/[^/]+[.][.][.])${tag_pattern}$ \${1}${release_sha}'" >> "$GITHUB_OUTPUT"
 
       - name: Check website links
         uses: lycheeverse/lychee-action@v2
