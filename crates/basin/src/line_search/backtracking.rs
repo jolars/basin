@@ -147,10 +147,11 @@ where
             if alpha <= F::zero() {
                 break;
             }
-            if iteration > 0 {
-                trial.clone_from(param);
+            if iteration == 0 {
+                trial.scaled_add(alpha, direction);
+            } else {
+                trial.assign_scaled_add(param, alpha, direction);
             }
-            trial.scaled_add(alpha, direction);
             let trial_cost = problem.cost(&trial)?;
             if trial_cost.is_finite()
                 && trial_cost <= cost + self.c * alpha * g_dot_d

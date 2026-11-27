@@ -116,6 +116,15 @@ pub trait ScaledAdd<S = f64> {
     /// Add `scalar · other` into `self` in place.
     fn scaled_add(&mut self, scalar: S, other: &Self);
 
+    /// Write `source + scalar * other` into this buffer.
+    fn assign_scaled_add(&mut self, source: &Self, scalar: S, other: &Self)
+    where
+        Self: Clone,
+    {
+        self.clone_from(source);
+        self.scaled_add(scalar, other);
+    }
+
     /// Apply the scaled addition and report whether any component changed.
     /// Returns `None` when the backend does not track component changes.
     fn scaled_add_with_change(

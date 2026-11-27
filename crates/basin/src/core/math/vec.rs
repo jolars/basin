@@ -24,6 +24,14 @@ impl<F: Scalar> ScaledAdd<F> for Vec<F> {
         }
     }
 
+    fn assign_scaled_add(&mut self, source: &Self, scalar: F, other: &Self) {
+        assert_eq!(source.len(), other.len(), "scaled_add: length mismatch");
+        self.resize(source.len(), F::zero());
+        for ((out, &x), &direction) in self.iter_mut().zip(source).zip(other) {
+            *out = x + scalar * direction;
+        }
+    }
+
     fn scaled_add_with_change(
         &mut self,
         scalar: F,
@@ -351,6 +359,23 @@ mod tests {
     use super::*;
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
+
+    #[test]
+    fn assign_scaled_add_reuses_destination_and_resizes() {
+        let mut point = vec![99.0; 4];
+        let allocation = point.as_ptr();
+        point.assign_scaled_add(&vec![1.0, 2.0], 0.5, &vec![2.0, -4.0]);
+        assert_eq!(point, [2.0, 0.0]);
+        assert_eq!(point.as_ptr(), allocation);
+
+        point.assign_scaled_add(
+            &vec![1.0, 2.0, 3.0, 4.0],
+            1.0,
+            &vec![2.0, -4.0, 0.0, 1.0],
+        );
+        assert_eq!(point, [3.0, -2.0, 3.0, 5.0]);
+        assert_eq!(point.as_ptr(), allocation);
+    }
 
     #[test]
     fn sample_uniform_box_stays_within_bounds() {
