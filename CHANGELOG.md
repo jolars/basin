@@ -1,5 +1,45 @@
 # Changelog
 
+## [4.0.0](https://github.com/jolars/basin/compare/v3.6.0...v4.0.0) (2026-11-27)
+
+### Breaking changes
+
+- allow configured executors to move between threads ([`b15fb13`](https://github.com/jolars/basin/commit/b15fb13a303efc3034e5dc5ac7167383cebb9fb3))
+- enforce evaluation budgets from problem counts ([`4a27bd4`](https://github.com/jolars/basin/commit/4a27bd419b96a434d4951d8eccb54e08684e27d3))
+- step solvers in place ([`c5431eb`](https://github.com/jolars/basin/commit/c5431eb716709dcc2d426418e059c297bd09dc68)), refs [#140](https://github.com/jolars/basin/issues/140)
+- make evaluation buffer reuse automatic ([`c900e57`](https://github.com/jolars/basin/commit/c900e574232cbffe22af5ae8f1244180927e6a71))
+- make threaded finite differences opt-in ([`93ff7e2`](https://github.com/jolars/basin/commit/93ff7e2a188d735095a18f6f9ec599ff9ffbe213))
+- default to square finite-difference Hessians ([`d938089`](https://github.com/jolars/basin/commit/d9380890ccae828f144a129bdfeb806543ccd5a9))
+- remove Nelder-Mead cost-change tolerances ([`c02a9e9`](https://github.com/jolars/basin/commit/c02a9e9fbf541b6a60457ab0b9282936bce7c82f)), closes [#146](https://github.com/jolars/basin/issues/146)
+- make solver batch evaluation opt-in ([`a01c1b6`](https://github.com/jolars/basin/commit/a01c1b657abb86bcb1f6cd9f4cf0b4cd605ae41d))
+- make checked records the progress API ([`55443f9`](https://github.com/jolars/basin/commit/55443f97fca7792c32977389bc4a84f59dc5afca))
+- rename checkpoints and state snapshots ([`c3946d7`](https://github.com/jolars/basin/commit/c3946d7aa20a0749c2088f134a2556a15d741d49))
+- split Serde support from Postcard checkpoint files ([`e731fe1`](https://github.com/jolars/basin/commit/e731fe132e93a304f072682b6b1f56e8086bbb47))
+
+### Features
+
+- allow configured executors to move between threads ([`b15fb13`](https://github.com/jolars/basin/commit/b15fb13a303efc3034e5dc5ac7167383cebb9fb3))
+- enforce evaluation budgets from problem counts ([`4a27bd4`](https://github.com/jolars/basin/commit/4a27bd419b96a434d4951d8eccb54e08684e27d3))
+- step solvers in place ([`c5431eb`](https://github.com/jolars/basin/commit/c5431eb716709dcc2d426418e059c297bd09dc68)), refs [#140](https://github.com/jolars/basin/issues/140)
+- add Ask AI to the Basin docs ([`a026ab3`](https://github.com/jolars/basin/commit/a026ab390a4291443480af2fa08ee116ac0308ed))
+- make evaluation buffer reuse automatic ([`c900e57`](https://github.com/jolars/basin/commit/c900e574232cbffe22af5ae8f1244180927e6a71))
+- make threaded finite differences opt-in ([`93ff7e2`](https://github.com/jolars/basin/commit/93ff7e2a188d735095a18f6f9ec599ff9ffbe213))
+- default to square finite-difference Hessians ([`d938089`](https://github.com/jolars/basin/commit/d9380890ccae828f144a129bdfeb806543ccd5a9))
+- make solver batch evaluation opt-in ([`a01c1b6`](https://github.com/jolars/basin/commit/a01c1b657abb86bcb1f6cd9f4cf0b4cd605ae41d))
+- make checked records the progress API ([`55443f9`](https://github.com/jolars/basin/commit/55443f97fca7792c32977389bc4a84f59dc5afca))
+- rename checkpoints and state snapshots ([`c3946d7`](https://github.com/jolars/basin/commit/c3946d7aa20a0749c2088f134a2556a15d741d49))
+- split Serde support from Postcard checkpoint files ([`e731fe1`](https://github.com/jolars/basin/commit/e731fe132e93a304f072682b6b1f56e8086bbb47))
+
+### Bug Fixes
+
+- remove Nelder-Mead cost-change tolerances ([`c02a9e9`](https://github.com/jolars/basin/commit/c02a9e9fbf541b6a60457ab0b9282936bce7c82f)), closes [#146](https://github.com/jolars/basin/issues/146)
+- require checked state record readers ([`b5ba11c`](https://github.com/jolars/basin/commit/b5ba11c2250f7bb4035a3e776727faacd76908ce))
+
+### Performance Improvements
+
+- write backtracking retries in one pass ([`b6ccf77`](https://github.com/jolars/basin/commit/b6ccf77f1b7ef962190a85afc0d7023929f45858))
+- reuse accepted backtracking costs ([`e7d97cc`](https://github.com/jolars/basin/commit/e7d97cc919b95f07615266dffca974dbb178abab))
+
 ## [3.6.0](https://github.com/jolars/basin/compare/v3.5.0...v3.6.0) (2026-11-24)
 
 ### Features
