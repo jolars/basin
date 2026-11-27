@@ -3,7 +3,8 @@ use crate::core::termination::TerminationReport;
 
 // Adapting state observers keeps both kinds in one registration-ordered list
 // with one dynamic call per callback and no bounds on state or solver storage.
-pub(crate) struct StateObserver<O>(pub(crate) O);
+#[doc(hidden)]
+pub struct StateObserver<O>(pub(crate) O);
 
 impl<S: crate::State, So, O: Observe<S>> ObserveSolver<S, So>
     for StateObserver<O>
@@ -35,7 +36,8 @@ impl<S: crate::State, So, O: Observe<S>> ObserveSolver<S, So>
     }
 }
 
-pub(crate) struct SolverCallback<C>(pub(crate) C);
+#[doc(hidden)]
+pub struct SolverCallback<C>(pub(crate) C);
 
 impl<S: crate::State, So, C> ObserveSolver<S, So> for SolverCallback<C>
 where

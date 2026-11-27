@@ -164,6 +164,7 @@ fn example_observer_on_quadratic() {
         FirstOrderState::new(vec![3.0, -4.0, 5.0]),
     )
     .max_iter(200)
+    .into_local()
     .observe_with(recorder, ObserverMode::Always)
     .observe_with(ProgressLogger, ObserverMode::Every(5))
     .run()

@@ -281,6 +281,7 @@ fn rejection_after_accepted_steps_does_not_establish_convergence() {
             FirstOrderState::new(vec![0.1]),
         )
         .max_iter(100)
+        .into_local()
         .stop_when(move |state| {
             observed.borrow_mut().push(state.param()[0]);
             None

@@ -265,6 +265,7 @@ fn completion_controls_iteration_observation_and_final_report_is_sticky() {
             }),
             PointState::new(vec![3.]),
         )
+        .into_local()
         .observe_solver(
             move |_, _, event| {
                 output.borrow_mut().push(match event {
@@ -500,6 +501,7 @@ fn continuing_partial_steps_publish_work_without_iteration_observation() {
         ForwardSteps(PartialThenComplete(false)),
         PointState::new(vec![3.]),
     )
+    .into_local()
     .observe_solver(
         move |s, _, event| {
             if matches!(event, ObservationEvent::Iter) {
@@ -523,6 +525,7 @@ fn continuing_partial_steps_publish_work_without_iteration_observation() {
     let saved = stepper.into_checkpoint().unwrap();
     let output = iterations.clone();
     let mut stepper = Executor::resume_from_checkpoint(Fit, saved)
+        .into_local()
         .observe_solver(
             move |s, _, event| {
                 if matches!(event, ObservationEvent::Iter) {

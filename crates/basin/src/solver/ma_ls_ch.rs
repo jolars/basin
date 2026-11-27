@@ -623,8 +623,8 @@ where
             };
 
         // -- Phase 4: drive the inner. --
-        let mut control = crate::RunControl::new().max_iter(u64::MAX);
-        ls.configure_segment(&inner_state, &mut control);
+        let control = crate::RunControl::empty().max_iter(u64::MAX);
+        let mut control = ls.configure_segment(&inner_state, control);
         control.cap_evaluations(crate::EvaluationKind::Cost, self.ls_intensity);
         let inner_result = crate::core::inner::diagnostics::run(
             &mut self.inner_diagnostics,

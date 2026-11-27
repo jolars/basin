@@ -1,5 +1,6 @@
 //! Forward algorithm builders without creating another convergence layer.
 use super::*;
+use crate::core::run_control::{HookMode, LocalHooks, StopFactory, StoreStop};
 use crate::solver::lbfgs::Lbfgs;
 use crate::solver::*;
 use crate::{CountsMirror, FactorizePivotedQr};
@@ -190,6 +191,28 @@ where
     I: MemeticInner<V, F>,
     I::State: CountsMirror,
 {
+    /// Allow thread-local inner stop hooks while retaining convergence settings.
+    #[allow(clippy::type_complexity)] // Keep the solver and convergence types.
+    pub fn into_local(
+        self,
+    ) -> ConfiguredSolver<
+        DeInject<I, V, F, Evaluation, LocalHooks>,
+        CG,
+        CX,
+        CC,
+        CT,
+    > {
+        self.map_solver(DeInject::into_local)
+    }
+}
+
+impl<CG, CX, CC, CT, I, V, F, Evaluation, H: HookMode>
+    ConfiguredSolver<DeInject<I, V, F, Evaluation, H>, CG, CX, CC, CT>
+where
+    F: Scalar,
+    I: MemeticInner<V, F>,
+    I::State: CountsMirror,
+{
     forward_setting!(DeInject, with_k, k: usize);
     forward_setting!(DeInject, with_refine_every, n: u64);
     forward_setting!(DeInject, with_inner_max_iter, n: u64);
@@ -198,13 +221,14 @@ where
     where
         Mk: FnMut() -> CheckFn + 'static,
         CheckFn: FnMut(&I::State) -> Option<crate::ApplicationStop> + 'static,
+        H: StoreStop<I::State, StopFactory<Mk, CheckFn>>,
     {
         self.map_solver(|solver| solver.inner_stop_when_factory(make))
     }
 }
 
-impl<CG, CX, CC, CT, I, V, F, Evaluation>
-    ConfiguredSolver<DeInject<I, V, F, Evaluation>, CG, CX, CC, CT>
+impl<CG, CX, CC, CT, I, V, F, Evaluation, H: HookMode>
+    ConfiguredSolver<DeInject<I, V, F, Evaluation, H>, CG, CX, CC, CT>
 where
     F: Scalar,
     I: MemeticInner<V, F>,
@@ -385,9 +409,9 @@ impl<CG, CX, CC, CT, L, V, F: Scalar>
     forward_setting!(NonlinearCg, with_restart_interval, interval: Option<u64>);
 }
 
-impl<CG, CX, CC, CT, I, V, F>
+impl<CG, CX, CC, CT, I, V, F, H: HookMode>
     ConfiguredSolver<
-        BasinHopping<I, V, F, RandomDisplacement<F>, Metropolis<F>>,
+        BasinHopping<I, V, F, RandomDisplacement<F>, Metropolis<F>, H>,
         CG,
         CX,
         CC,
@@ -409,12 +433,29 @@ where
     I: WarmStart<V>,
     <I as InitialState<V>>::State: State + CountsMirror,
 {
+    /// Allow thread-local inner stop hooks while retaining convergence settings.
+    #[allow(clippy::type_complexity)] // Keep the solver and convergence types.
+    pub fn into_local(
+        self,
+    ) -> ConfiguredSolver<BasinHopping<I, V, F, S, A, LocalHooks>, CG, CX, CC, CT>
+    {
+        self.map_solver(BasinHopping::into_local)
+    }
+}
+
+impl<CG, CX, CC, CT, I, V, F, S, A, H: HookMode>
+    ConfiguredSolver<BasinHopping<I, V, F, S, A, H>, CG, CX, CC, CT>
+where
+    F: Scalar,
+    I: WarmStart<V>,
+    <I as InitialState<V>>::State: State + CountsMirror,
+{
     /// Configure [`with_step_taker`](BasinHopping::with_step_taker) while retaining convergence settings.
     #[allow(clippy::type_complexity)] // Preserve the typed algorithm conversion.
     pub fn with_step_taker<S2>(
         self,
         step: S2,
-    ) -> ConfiguredSolver<BasinHopping<I, V, F, S2, A>, CG, CX, CC, CT> {
+    ) -> ConfiguredSolver<BasinHopping<I, V, F, S2, A, H>, CG, CX, CC, CT> {
         self.map_solver(|solver| solver.with_step_taker(step))
     }
     /// Configure [`with_acceptance_test`](BasinHopping::with_acceptance_test) while retaining convergence settings.
@@ -422,7 +463,7 @@ where
     pub fn with_acceptance_test<A2>(
         self,
         accept: A2,
-    ) -> ConfiguredSolver<BasinHopping<I, V, F, S, A2>, CG, CX, CC, CT> {
+    ) -> ConfiguredSolver<BasinHopping<I, V, F, S, A2, H>, CG, CX, CC, CT> {
         self.map_solver(|solver| solver.with_acceptance_test(accept))
     }
     forward_setting!(BasinHopping, with_adaptive, adaptive: bool);
@@ -438,6 +479,7 @@ where
                 &<I as InitialState<V>>::State,
             ) -> Option<crate::ApplicationStop>
             + 'static,
+        H: StoreStop<<I as InitialState<V>>::State, StopFactory<Mk, CheckFn>>,
     {
         self.map_solver(|solver| solver.inner_stop_when_factory(make))
     }
@@ -469,6 +511,28 @@ where
     I: MemeticInner<V, F>,
     I::State: CountsMirror,
 {
+    /// Allow thread-local inner stop hooks while retaining convergence settings.
+    #[allow(clippy::type_complexity)] // Keep the solver and convergence types.
+    pub fn into_local(
+        self,
+    ) -> ConfiguredSolver<
+        BoundedCmaInject<I, V, M, F, LocalHooks>,
+        CG,
+        CX,
+        CC,
+        CT,
+    > {
+        self.map_solver(BoundedCmaInject::into_local)
+    }
+}
+
+impl<CG, CX, CC, CT, I, V, M, F, H: HookMode>
+    ConfiguredSolver<BoundedCmaInject<I, V, M, F, H>, CG, CX, CC, CT>
+where
+    F: Scalar,
+    I: MemeticInner<V, F>,
+    I::State: CountsMirror,
+{
     forward_setting!(BoundedCmaInject, with_k, k: usize);
     forward_setting!(BoundedCmaInject, with_c_y, c_y: F);
     forward_setting!(BoundedCmaInject, with_inner_max_iter, n: u64);
@@ -478,6 +542,7 @@ where
     where
         Mk: FnMut() -> CheckFn + 'static,
         CheckFn: FnMut(&I::State) -> Option<crate::ApplicationStop> + 'static,
+        H: StoreStop<I::State, StopFactory<Mk, CheckFn>>,
     {
         self.map_solver(|solver| solver.inner_stop_when_factory(make))
     }
@@ -577,6 +642,28 @@ where
     I: MemeticInner<V, F>,
     I::State: CountsMirror,
 {
+    /// Allow thread-local inner stop hooks while retaining convergence settings.
+    #[allow(clippy::type_complexity)] // Keep the solver and convergence types.
+    pub fn into_local(
+        self,
+    ) -> ConfiguredSolver<
+        CmaInject<I, V, M, F, Evaluation, LocalHooks>,
+        CG,
+        CX,
+        CC,
+        CT,
+    > {
+        self.map_solver(CmaInject::into_local)
+    }
+}
+
+impl<CG, CX, CC, CT, I, V, M, F, Evaluation, H: HookMode>
+    ConfiguredSolver<CmaInject<I, V, M, F, Evaluation, H>, CG, CX, CC, CT>
+where
+    F: Scalar,
+    I: MemeticInner<V, F>,
+    I::State: CountsMirror,
+{
     forward_setting!(CmaInject, with_k, k: usize);
     forward_setting!(CmaInject, with_c_y, c_y: F);
     forward_setting!(CmaInject, with_inner_max_iter, n: u64);
@@ -586,6 +673,7 @@ where
     where
         Mk: FnMut() -> CheckFn + 'static,
         CheckFn: FnMut(&I::State) -> Option<crate::ApplicationStop> + 'static,
+        H: StoreStop<I::State, StopFactory<Mk, CheckFn>>,
     {
         self.map_solver(|solver| solver.inner_stop_when_factory(make))
     }

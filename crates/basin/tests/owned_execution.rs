@@ -237,13 +237,16 @@ impl CheckpointSink<OwnedSolver, OwnedState> for Recorder {
     }
 }
 
-fn executor(log: &Log) -> Executor<Quadratic, OwnedState, OwnedSolver> {
+fn executor(
+    log: &Log,
+) -> Executor<Quadratic, OwnedState, OwnedSolver, basin::LocalHooks> {
     Executor::new(
         Quadratic::default(),
         OwnedSolver::default(),
         OwnedState::new(),
     )
     .max_iter(3)
+    .into_local()
     .observe_with(Recorder(Rc::clone(log)), ObserverMode::Always)
     .checkpoint_with(Recorder(Rc::clone(log)), ObserverMode::Always)
 }
@@ -257,6 +260,7 @@ fn checkpoint_moves_allocations_and_resumes_without_init_or_reset() {
         let solver = OwnedSolver::default();
         let workspace_address = solver.workspace.as_ptr();
         let mut stepper = Executor::new(Quadratic::default(), solver, state)
+            .into_local()
             .observe_with(Recorder(Rc::clone(&log)), ObserverMode::Always)
             .checkpoint_with(Recorder(Rc::clone(&log)), ObserverMode::Always)
             .into_stepper()
@@ -429,6 +433,7 @@ fn hard_errors_do_not_publish_a_checkpoint_or_final_callbacks() {
         OwnedSolver::default(),
         OwnedState::new(),
     )
+    .into_local()
     .observe_with(Recorder(Rc::clone(&log)), ObserverMode::Always)
     .checkpoint_with(Recorder(Rc::clone(&log)), ObserverMode::Always)
     .into_stepper()
@@ -449,6 +454,7 @@ fn hard_errors_do_not_publish_a_checkpoint_or_final_callbacks() {
             OwnedSolver::default(),
             OwnedState::new(),
         )
+        .into_local()
         .observe_with(Recorder(Rc::clone(&log)), ObserverMode::Always)
         .checkpoint_with(Recorder(Rc::clone(&log)), ObserverMode::Always)
         .run_with_solver();

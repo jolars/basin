@@ -198,6 +198,7 @@ where
         let trace = Rc::new(RefCell::new(TraceTotals::default()));
         let captured = Rc::clone(&trace);
         let result = executor
+            .into_local()
             .observe_solver(
                 move |_, solver, _| captured.borrow_mut().observe(solver),
                 ObserverMode::Always,

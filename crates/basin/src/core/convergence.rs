@@ -896,9 +896,9 @@ where
     fn configure_segment(
         &mut self,
         state: &Self::State,
-        control: &mut crate::RunControl<Self::State>,
-    ) {
-        self.solver.configure_segment(state, control);
+        control: crate::RunControl<Self::State, crate::LocalHooks>,
+    ) -> crate::RunControl<Self::State, crate::LocalHooks> {
+        self.solver.configure_segment(state, control)
     }
 }
 

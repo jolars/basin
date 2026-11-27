@@ -133,7 +133,7 @@ impl<V: Vector> Short<V> {
     fn executor(
         &self,
         adapter: Adapter,
-    ) -> Executor<&Self, FirstOrderState<V>, Lbfgsb<V>>
+    ) -> Executor<&Self, FirstOrderState<V>, Lbfgsb<V>, basin::LocalHooks>
     where
         Lbfgsb<V>: for<'a> Solver<
                 &'a Self,
@@ -161,7 +161,8 @@ impl<V: Vector> Short<V> {
             solver,
             FirstOrderState::new(self.start.clone()),
         )
-        .max_iter(2000);
+        .max_iter(2000)
+        .into_local();
         // A disabled application stop still allocates a closure and dispatches
         // it at every boundary. Let the solver handle this case on its own.
         if matches!(adapter, Adapter::RequiredStops)
@@ -208,7 +209,7 @@ impl<V: Vector> Short<V> {
     pub fn initialize(
         &self,
         adapter: Adapter,
-    ) -> Stepper<&Self, FirstOrderState<V>, Lbfgsb<V>>
+    ) -> Stepper<&Self, FirstOrderState<V>, Lbfgsb<V>, basin::LocalHooks>
     where
         Lbfgsb<V>: for<'a> Solver<
                 &'a Self,

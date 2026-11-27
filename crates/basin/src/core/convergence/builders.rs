@@ -1,5 +1,6 @@
 use super::*;
 use crate::Lbfgs;
+use crate::core::run_control::HookMode;
 use crate::solver::*;
 
 macro_rules! cost_setters {
@@ -218,14 +219,14 @@ cost_setters!([So,V,F:Scalar] AugmentedLagrangianMethod<So,V,F>, []);
 step_setters!([So,V,F:Scalar] AugmentedLagrangianMethod<So,V,F>, []);
 cost_setters!([V,LS,F:Scalar] MaLsCh<V,LS,F>, [LS: crate::ResumableInner<V,F>]);
 step_setters!([V,LS,F:Scalar] MaLsCh<V,LS,F>, [LS: crate::ResumableInner<V,F>]);
-cost_setters!([I,V,M,F:Scalar,Evaluation] CmaInject<I,V,M,F,Evaluation>, [I: MemeticInner<V,F>]);
-step_setters!([I,V,M,F:Scalar,Evaluation] CmaInject<I,V,M,F,Evaluation>, [I: MemeticInner<V,F>]);
-cost_setters!([I,V,M,F:Scalar] BoundedCmaInject<I,V,M,F>, [I: MemeticInner<V,F>]);
-step_setters!([I,V,M,F:Scalar] BoundedCmaInject<I,V,M,F>, [I: MemeticInner<V,F>]);
-cost_setters!([I,V,F:Scalar,Evaluation] DeInject<I,V,F,Evaluation>, [I: MemeticInner<V,F>]);
-step_setters!([I,V,F:Scalar,Evaluation] DeInject<I,V,F,Evaluation>, [I: MemeticInner<V,F>]);
-cost_setters!([V,I,T,A,F:Scalar] BasinHopping<I,V,F,T,A>, [I: crate::WarmStart<V>]);
-step_setters!([V,I,T,A,F:Scalar] BasinHopping<I,V,F,T,A>, [I: crate::WarmStart<V>]);
+cost_setters!([I,V,M,F:Scalar,Evaluation,H:HookMode] CmaInject<I,V,M,F,Evaluation,H>, [I: MemeticInner<V,F>]);
+step_setters!([I,V,M,F:Scalar,Evaluation,H:HookMode] CmaInject<I,V,M,F,Evaluation,H>, [I: MemeticInner<V,F>]);
+cost_setters!([I,V,M,F:Scalar,H:HookMode] BoundedCmaInject<I,V,M,F,H>, [I: MemeticInner<V,F>]);
+step_setters!([I,V,M,F:Scalar,H:HookMode] BoundedCmaInject<I,V,M,F,H>, [I: MemeticInner<V,F>]);
+cost_setters!([I,V,F:Scalar,Evaluation,H:HookMode] DeInject<I,V,F,Evaluation,H>, [I: MemeticInner<V,F>]);
+step_setters!([I,V,F:Scalar,Evaluation,H:HookMode] DeInject<I,V,F,Evaluation,H>, [I: MemeticInner<V,F>]);
+cost_setters!([V,I,T,A,F:Scalar,H:HookMode] BasinHopping<I,V,F,T,A,H>, [I: crate::WarmStart<V>]);
+step_setters!([V,I,T,A,F:Scalar,H:HookMode] BasinHopping<I,V,F,T,A,H>, [I: crate::WarmStart<V>]);
 gradient_setters!([L, V, F: Scalar] GradientDescent<L, V, F>, []);
 gradient_setters!([V, L, M, I, F: Scalar] Bfgs<V,F,M,L,I>, [V: crate::DenseBackend<F>]);
 gradient_setters!([V,L,F:Scalar] Lbfgs<V,F,crate::solver::lbfgs::Unbounded,L>, []);

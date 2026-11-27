@@ -18,7 +18,20 @@ use web_time::{Duration, Instant};
 #[cfg(test)]
 mod tests;
 
-type Stop<S> = Box<dyn FnMut(&S) -> Option<Termination<<S as State>::Float>>>;
+mod hooks;
+pub use hooks::{
+    HookMode, LocalHooks, SendHooks, StopCallback, StopFactory, StopHook,
+    StoreObserver, StoreSink, StoreStop,
+};
+
+type NumericCheck<S, T> =
+    fn(&T, &S) -> Option<Termination<<S as State>::Float>>;
+type ObjectiveTarget<S> =
+    (<S as State>::Float, NumericCheck<S, <S as State>::Float>);
+type StallCheck<S> = fn(
+    &mut ObjectiveStall<<S as State>::Float>,
+    &S,
+) -> Option<Termination<<S as State>::Float>>;
 
 struct ObjectiveStall<F: Scalar> {
     patience: u64,
@@ -58,31 +71,6 @@ impl<F: Scalar> ObjectiveStall<F> {
     }
 }
 
-enum Entry<S: State> {
-    Hook(Stop<S>),
-    Factory {
-        make: Box<dyn FnMut() -> Stop<S>>,
-        current: Option<Stop<S>>,
-    },
-}
-
-impl<S: State> Entry<S> {
-    fn reset(&mut self) {
-        if let Self::Factory { make, current } = self {
-            *current = Some(make());
-        }
-    }
-
-    fn check(&mut self, state: &S) -> Option<Termination<<S as State>::Float>> {
-        match self {
-            Self::Hook(check) => check(state),
-            Self::Factory { make, current } => {
-                current.get_or_insert_with(make)(state)
-            }
-        }
-    }
-}
-
 #[derive(Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
@@ -100,26 +88,28 @@ pub(crate) struct Limits {
 /// acceptance stall, and hooks.
 /// The clock starts at the first check after initialization.
 /// Publication validation, when enabled, precedes observers and all checks.
-pub struct RunControl<S: State> {
+///
+/// Use [`into_local`](Self::into_local) before registering callbacks that
+/// capture thread-local data.
+pub struct RunControl<S: State, H: HookMode = SendHooks> {
     pub(crate) max_iter: u64,
     pub(crate) limits: Limits,
     validate: Option<fn(&S)>,
     start: Option<Instant>,
-    target: Option<Stop<S>>,
-    improvement: Option<Entry<S>>,
-    acceptance: Option<Stop<S>>,
-    entries: Vec<Entry<S>>,
+    target: Option<ObjectiveTarget<S>>,
+    improvement: Option<(ObjectiveStall<S::Float>, StallCheck<S>)>,
+    acceptance: Option<(u64, NumericCheck<S, u64>)>,
+    entries: Vec<Box<H::Stop<S>>>,
 }
 
 impl<S: State> Default for RunControl<S> {
     fn default() -> Self {
-        Self::new()
+        Self::empty()
     }
 }
 
-impl<S: State> RunControl<S> {
-    /// Create controls with a 1,000-iteration limit and no other stops.
-    pub fn new() -> Self {
+impl<S: State, H: HookMode> RunControl<S, H> {
+    pub(crate) fn empty() -> Self {
         Self {
             max_iter: 1000,
             limits: Limits::default(),
@@ -131,7 +121,43 @@ impl<S: State> RunControl<S> {
             entries: Vec::new(),
         }
     }
+}
 
+impl<S: State> RunControl<S> {
+    /// Create controls with a 1,000-iteration limit and no other stops.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Allow thread-local callbacks, preserving configured checks and history.
+    pub fn into_local(self) -> RunControl<S, LocalHooks> {
+        let Self {
+            max_iter,
+            limits,
+            validate,
+            start,
+            target,
+            improvement,
+            acceptance,
+            entries,
+        } = self;
+        RunControl {
+            max_iter,
+            limits,
+            validate,
+            start,
+            target,
+            improvement,
+            acceptance,
+            entries: entries
+                .into_iter()
+                .map(|hook| -> Box<dyn StopHook<S>> { hook })
+                .collect(),
+        }
+    }
+}
+
+impl<S: State, H: HookMode> RunControl<S, H> {
     /// Set the absolute iteration limit. Replaces the previous limit.
     pub fn max_iter(mut self, limit: u64) -> Self {
         self.max_iter = limit;
@@ -224,7 +250,7 @@ impl<S: State> RunControl<S> {
         S: ObjectiveIncumbentState<Float = F>,
     {
         assert!(target.is_finite(), "target objective must be finite");
-        self.target = Some(Box::new(move |state| {
+        self.target = Some((target, |&target, state| {
             let cost = state.selected_record()?.cost?;
             (cost <= target).then_some(Termination::Target { cost, target })
         }));
@@ -260,17 +286,14 @@ impl<S: State> RunControl<S> {
             min_delta.is_finite() && min_delta >= F::zero(),
             "minimum improvement must be finite and nonnegative"
         );
-        self.improvement = Some(Entry::Factory {
-            make: Box::new(move || {
-                let mut stall = ObjectiveStall {
-                    patience,
-                    min_delta,
-                    anchor: None,
-                };
-                Box::new(move |state| stall.check(state))
-            }),
-            current: None,
-        });
+        self.improvement = Some((
+            ObjectiveStall {
+                patience,
+                min_delta,
+                anchor: None,
+            },
+            ObjectiveStall::check,
+        ));
         self
     }
 
@@ -287,7 +310,7 @@ impl<S: State> RunControl<S> {
         S: AcceptanceState,
     {
         assert!(patience > 0, "patience must be positive");
-        self.acceptance = Some(Box::new(move |state| {
+        self.acceptance = Some((patience, |&patience, state| {
             (state.iter().saturating_sub(state.last_accepted_iter())
                 >= patience)
                 .then_some(Termination::Stalled(Stall::NoAcceptedMove {
@@ -303,40 +326,35 @@ impl<S: State> RunControl<S> {
     /// Append a custom state-based stop, evaluated before solver convergence.
     ///
     /// Return `Some(ApplicationStop::new("my_stop"))` for an application stop,
-    /// or another reason describing the condition. A closure's captured state
-    /// persists when these controls are reused. Use [`stop_when_factory`](Self::stop_when_factory)
+    /// to request a clean stop. A closure's captured state persists when
+    /// these controls are reused. Use [`stop_when_factory`](Self::stop_when_factory)
     /// for history that must start fresh on each borrowed run.
-    pub fn stop_when<C>(mut self, mut check: C) -> Self
+    pub fn stop_when<C>(mut self, check: C) -> Self
     where
         C: FnMut(&S) -> Option<ApplicationStop> + 'static,
+        H: StoreStop<S, StopCallback<C>>,
     {
-        self.entries.push(Entry::Hook(Box::new(move |state| {
-            check(state).map(Termination::Application)
-        })));
+        self.entries.push(H::store_stop(StopCallback(check)));
         self
     }
 
     /// Append a factory that creates fresh closure history for each run.
-    pub fn stop_when_factory<M, C>(mut self, mut make: M) -> Self
+    pub fn stop_when_factory<M, C>(mut self, make: M) -> Self
     where
         M: FnMut() -> C + 'static,
         C: FnMut(&S) -> Option<ApplicationStop> + 'static,
+        H: StoreStop<S, StopFactory<M, C>>,
     {
-        self.entries.push(Entry::Factory {
-            make: Box::new(move || {
-                let mut check = make();
-                Box::new(move |state| {
-                    check(state).map(Termination::Application)
-                })
-            }),
-            current: None,
-        });
+        self.entries.push(H::store_stop(StopFactory::new(make)));
         self
     }
 
     pub(crate) fn reset(&mut self) {
         self.start = None;
-        for entry in self.improvement.iter_mut().chain(&mut self.entries) {
+        if let Some((stall, _)) = &mut self.improvement {
+            stall.anchor = None;
+        }
+        for entry in &mut self.entries {
             entry.reset();
         }
     }
@@ -396,26 +414,30 @@ impl<S: State> RunControl<S> {
         if !limits.is_empty() {
             return Some(Termination::Limit(limits));
         }
-        if let Some(reason) =
-            self.target.as_mut().and_then(|check| check(state))
+        if let Some(reason) = self
+            .target
+            .as_ref()
+            .and_then(|(target, check)| check(target, state))
         {
             return Some(reason);
         }
         if let Some(reason) = self
             .improvement
             .as_mut()
-            .and_then(|check| check.check(state))
+            .and_then(|(stall, check)| check(stall, state))
         {
             return Some(reason);
         }
-        if let Some(reason) =
-            self.acceptance.as_mut().and_then(|check| check(state))
+        if let Some(reason) = self
+            .acceptance
+            .as_ref()
+            .and_then(|(patience, check)| check(patience, state))
         {
             return Some(reason);
         }
         for entry in &mut self.entries {
             if let Some(reason) = entry.check(state) {
-                return Some(reason);
+                return Some(Termination::Application(reason));
             }
         }
         None
@@ -434,8 +456,7 @@ macro_rules! control_methods {
         where
             S: crate::core::state::EvaluatedState,
         {
-            self.control =
-                std::mem::take(&mut self.control).require_evaluated_state();
+            self.control = self.control.require_evaluated_state();
             self
         }
         /// Set a raw category or total-work budget at iteration boundaries.
@@ -447,8 +468,7 @@ macro_rules! control_methods {
             kind: crate::EvaluationKind,
             limit: u64,
         ) -> Self {
-            self.control =
-                std::mem::take(&mut self.control).max_evaluations(kind, limit);
+            self.control = self.control.max_evaluations(kind, limit);
             self
         }
         /// Stop when an eligible objective-ordered incumbent reaches a finite target.
@@ -462,8 +482,7 @@ macro_rules! control_methods {
         where
             S: crate::core::state::ObjectiveIncumbentState<Float = F>,
         {
-            self.control =
-                std::mem::take(&mut self.control).target_objective(target);
+            self.control = self.control.target_objective(target);
             self
         }
         /// Stop after completed iterations without a sufficient objective decrease.
@@ -481,13 +500,13 @@ macro_rules! control_methods {
         where
             S: crate::core::state::ObjectiveIncumbentState<Float = F>,
         {
-            self.control = std::mem::take(&mut self.control)
-                .no_objective_improvement(patience, min_delta);
+            self.control =
+                self.control.no_objective_improvement(patience, min_delta);
             self
         }
         /// Set a time budget starting at the first post-initialization check.
         pub fn max_time(mut self, limit: web_time::Duration) -> Self {
-            self.control = std::mem::take(&mut self.control).max_time(limit);
+            self.control = self.control.max_time(limit);
             self
         }
         /// Stop after a positive number of iterations without an accepted move.
@@ -495,8 +514,7 @@ macro_rules! control_methods {
         where
             S: crate::core::state::AcceptanceState,
         {
-            self.control =
-                std::mem::take(&mut self.control).no_acceptance(patience);
+            self.control = self.control.no_acceptance(patience);
             self
         }
         /// Append a factory creating fresh application-stop history for each run.
@@ -504,9 +522,12 @@ macro_rules! control_methods {
         where
             M: FnMut() -> C + 'static,
             C: FnMut(&S) -> Option<crate::ApplicationStop> + 'static,
+            H: crate::core::run_control::StoreStop<
+                    S,
+                    crate::core::run_control::StopFactory<M, C>,
+                >,
         {
-            self.control =
-                std::mem::take(&mut self.control).stop_when_factory(make);
+            self.control = self.control.stop_when_factory(make);
             self
         }
     };

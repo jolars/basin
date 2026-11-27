@@ -48,6 +48,7 @@ use crate::core::state::State;
 /// let history = Shared::default();
 /// Executor::new(Quadratic, GradientDescent::new(0.1), FirstOrderState::new(vec![1.0, 1.0]))
 ///     .max_iter(5)
+///     .into_local()
 ///     .observe_with(history.clone(), ObserverMode::Always)
 ///     .run()
 ///     .unwrap();

@@ -166,6 +166,43 @@ iterations without sufficient improvement in the best cost, use
 `Executor::no_objective_improvement(patience, min_delta)`. See the
 [Nelder–Mead guide](../solvers/derivative-free/nelder-mead/#interpret-the-simplex-tests).
 
+## Moving configured runs between threads
+
+`Executor` can move to a worker before `run()` when its problem, solver,
+state, state scalar (`S::Float`), and registered hooks are `Send`. This works
+with serial evaluation.
+The worker owns the run and calls its hooks on the thread driving it.
+If you use a stepper, call `into_stepper()` on the worker to run
+initialization and subsequent callbacks on that thread. If you move an
+initialized stepper, later callbacks run on the receiving thread.
+
+When an observer, checkpoint sink, or stop callback captures thread-local
+data such as `Rc`, call `.into_local()` before registering it:
+
+```rust
+let result = Executor::from_start(problem, solver, initial_guess)
+    .into_local()
+    .observe_with(observer, ObserverMode::Always)
+    .run()?;
+```
+
+The switch keeps earlier settings and hooks. In explicit type annotations for
+a local executor or stepper, add `LocalHooks` as the last type argument. Use
+the same switch on a standalone `RunControl` or `InnerExecutor` before
+registering a local stop callback. Wrappers that support both modes can use
+`H: HookMode` for their hook mode parameter.
+
+For `BasinHopping`, `CmaInject`, `BoundedCmaInject`, and `DeInject`,
+call `.into_local()` on the **solver** before attaching a thread-local
+`inner_stop_when_factory`. A transferable inner stop requires both the
+factory and its returned callback to be `Send`. Inner numerical settings
+such as `with_inner_max_iter` use the usual builder calls.
+
+In a custom `ResumableInner::configure_segment` implementation for MA-LSCh,
+take and return `RunControl<Self::State, LocalHooks>` by value.
+MA-LSCh creates local controls for each segment. Apply builders directly
+to the supplied controls and return the result.
+
 ## Threaded population evaluation
 
 Population batches in `CmaEs`, `De`, `GlobalBestPso`, and `RandomSearch`, and

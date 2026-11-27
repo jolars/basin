@@ -12,6 +12,9 @@ pub mod diagnostics;
 use crate::core::executor::OptimizationResult;
 use crate::core::math::Scalar;
 use crate::core::problem::Problem;
+use crate::core::run_control::{
+    HookMode, LocalHooks, SendHooks, StopCallback, StoreStop,
+};
 use crate::core::solver::Solver;
 use crate::core::state::{CountsMirror, State};
 
@@ -160,12 +163,15 @@ where
     /// operators configure their own convergence directly. The outer solver
     /// supplies execution budgets, which are checked before convergence.
     /// MA-LSCh uses the smaller of its local-search intensity and any cost
-    /// evaluation limit set here.
+    /// evaluation limit set here. The controls live for the segment and
+    /// accept thread-local stop hooks. Apply builders to the supplied
+    /// controls and return them for the outer solver to use.
     fn configure_segment(
         &mut self,
         _state: &Self::State,
-        _control: &mut crate::RunControl<Self::State>,
-    ) {
+        control: crate::RunControl<Self::State, crate::LocalHooks>,
+    ) -> crate::RunControl<Self::State, crate::LocalHooks> {
+        control
     }
 }
 
@@ -246,13 +252,13 @@ where
 ///    its objective is missing, reevaluate it under the outer problem's rules,
 ///    and apply its own acceptance test. Consumers that need an evaluated
 ///    objective must check that the corresponding record carries one.
-pub struct InnerExecutor<S: State, So> {
+pub struct InnerExecutor<S: State, So, H: HookMode = SendHooks> {
     solver: So,
-    control: crate::RunControl<S>,
+    control: crate::RunControl<S, H>,
 }
 
 #[cfg(feature = "serde")]
-impl<S: State, So> serde::Serialize for InnerExecutor<S, So>
+impl<S: State, So, H: HookMode> serde::Serialize for InnerExecutor<S, So, H>
 where
     So: serde::Serialize,
 {
@@ -277,7 +283,8 @@ where
 }
 
 #[cfg(feature = "serde")]
-impl<'de, S: State, So> serde::Deserialize<'de> for InnerExecutor<S, So>
+impl<'de, S: State, So, H: HookMode> serde::Deserialize<'de>
+    for InnerExecutor<S, So, H>
 where
     So: serde::Deserialize<'de>,
 {
@@ -300,8 +307,8 @@ where
         Ok(Self {
             solver: stored.solver,
             control: {
-                let mut control =
-                    crate::RunControl::new().max_iter(stored.max_iter);
+                let mut control = crate::RunControl::<S, H>::empty()
+                    .max_iter(stored.max_iter);
                 control.limits = stored.limits;
                 control
             },
@@ -319,6 +326,16 @@ impl<S: State + CountsMirror, So> InnerExecutor<S, So> {
         }
     }
 
+    /// Allow thread-local stop hooks while preserving the solver and controls.
+    pub fn into_local(self) -> InnerExecutor<S, So, LocalHooks> {
+        InnerExecutor {
+            solver: self.solver,
+            control: self.control.into_local(),
+        }
+    }
+}
+
+impl<S: State + CountsMirror, So, H: HookMode> InnerExecutor<S, So, H> {
     /// Set the inner-loop iteration budget. Each call to
     /// [`run`](Self::run) drives the inner solver up to this many
     /// iterations.
@@ -334,8 +351,9 @@ impl<S: State + CountsMirror, So> InnerExecutor<S, So> {
     pub fn stop_when<C>(mut self, check: C) -> Self
     where
         C: FnMut(&S) -> Option<crate::ApplicationStop> + 'static,
+        H: StoreStop<S, StopCallback<C>>,
     {
-        self.control = std::mem::take(&mut self.control).stop_when(check);
+        self.control = self.control.stop_when(check);
         self
     }
 

@@ -81,11 +81,10 @@ whether to adopt the conditional changes below.
   enables the feature. Apply thread-safety bounds to the threaded path.
   Validate the migration on Basin's built-in finite-difference adapters and
   population solvers with the downstream feature-unification fixture.
-- [ ] **Decide whether configured executors should be movable.** The downstream
-  fixture moves a run factory to a worker and creates the executor and its
-  local hooks there. If callers need to move an already-built executor,
-  prototype hook storage that preserves `Send` for transferable runs while
-  supporting local observers, stop hooks, and checkpoint sinks.
+- [x] **Support moving configured executors to a worker.** Executors and
+  inner run controls accept transferable hooks by default. Use
+  `.into_local()` before registering thread-local hooks. See the [Basin 4.0
+  migration guide](web/src/guide/migrating-to-v4/index.md#moving-configured-runs-between-threads).
 - [ ] **Decide how to consolidate the line-search contract.** Use the
   [line-search API prototype](#line-search-api-prototype) to decide what an
   accepted result must carry, how to enforce feasible trials, and how

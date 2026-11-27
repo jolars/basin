@@ -159,6 +159,7 @@ impl<V: Vector> Driver<V> {
             FirstOrderState::new(V::filled(lower.as_slice().len(), 3.0)),
         )
         .max_iter(2000)
+        .into_local()
         .stop_when(move |state: &FirstOrderState<V>| {
             let value = state.current_record().unwrap().cost.unwrap();
             let old = previous.replace(value);

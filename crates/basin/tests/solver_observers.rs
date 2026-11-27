@@ -70,7 +70,13 @@ impl ObserveSolver<PointState<f64>, Probe> for Recorder {
         );
     }
 }
-fn attach(run: Run, kind: u8, log: Log, mode: ObserverMode) -> Run {
+fn attach(
+    run: Run,
+    kind: u8,
+    log: Log,
+    mode: ObserverMode,
+) -> Executor<Linear, PointState<f64>, Probe, basin::LocalHooks> {
+    let run = run.into_local();
     match kind {
         0 => run.observe_solver(
             move |s, so, event| record(&log, s, so.diagnostic, event.into()),
@@ -248,6 +254,7 @@ fn mixed_observers_preserve_registration_order_and_borrow_workspace() {
     let pointer = probe.workspace.as_ptr() as usize;
     let result = Executor::new(Linear, probe, PointState::new(10.0))
         .max_iter(1)
+        .into_local()
         .observe_with(StateTag(tags.clone()), ObserverMode::Always)
         .observe_solver(
             move |_, so, _| {
@@ -296,6 +303,7 @@ fn annealing_diagnostics_describe_next_proposal_including_restarts() {
     .with_reannealing_fixed(3);
     let result = Executor::from_start(Cost, solver, 10.0)
         .max_iter(4)
+        .into_local()
         .observe_solver(
             move |_, so, _| output.borrow_mut().push(so.temperature()),
             ObserverMode::Always,
@@ -381,6 +389,7 @@ fn slsqp_observer_reads_optional_borrowed_multipliers() {
     let seen = Rc::new(Cell::new(false));
     let flag = seen.clone();
     Executor::from_start(Quadratic, solver, vec![2.0])
+        .into_local()
         .observe_solver(
             move |_, so, _| {
                 if let Some(values) = so.equality_multipliers() {
@@ -440,6 +449,7 @@ fn scalar_f32_and_default_trait_hooks_need_no_extra_capabilities() {
     );
     Executor::from_start(Cost, solver, 10.0)
         .max_iter(2)
+        .into_local()
         .observe_solver_with(
             TemperatureLogger(last.clone()),
             ObserverMode::Always,
@@ -521,6 +531,7 @@ fn solver_observer_can_cancel_after_a_completed_iteration() {
     let output = log.clone();
     let result = executor(Scenario::Normal)
         .with_cancellation_token(token)
+        .into_local()
         .observe_solver(
             move |state, solver, event| {
                 record(&output, state, solver.diagnostic, event.into());
@@ -598,6 +609,7 @@ fn state_and_solver_may_borrow_local_data_with_mixed_observers() {
         PointState::new(&start),
     )
     .max_iter(1)
+    .into_local()
     .observe_with(Progress, ObserverMode::Always)
     .observe_solver(
         move |state, solver, _| {

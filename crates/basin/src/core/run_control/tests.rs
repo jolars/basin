@@ -210,6 +210,7 @@ fn direct_hooks_keep_captures_while_factories_reset_history() {
     let direct = Rc::new(RefCell::new(Vec::new()));
     let factory = Rc::new(RefCell::new(Vec::new()));
     let mut control = RunControl::new()
+        .into_local()
         .stop_when({
             let direct = Rc::clone(&direct);
             let mut calls = 0;

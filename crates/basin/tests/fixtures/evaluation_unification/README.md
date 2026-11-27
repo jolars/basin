@@ -15,15 +15,27 @@ compare forward and central products with analytic results and Basin's serial
 helpers. A rendezvous verifies overlap, and a synthesized gradient exercises
 nested dispatch on the same pool.
 
-A run factory can move its configuration to a worker and create the executor
-and local hooks there. An already-built executor contains non-`Send` hook
-storage. Hooks that capture existing `Rc` state run on their owning thread.
+A run factory can send its configuration to a worker and create local hooks
+there. The application tests also send a configured Basin executor directly,
+with observers, application stops, and checkpoint sinks already attached.
+The tests cover a memetic solver with a transferable inner stop factory and
+an inner factory that captures local state.
+
+## Configured executor prototypes
+
+The [prototypes](application/src/executor_prototypes.rs) compare boxed hooks
+with an explicit local switch against inferring transferability from each
+hook's concrete type. Basin uses the explicit switch. That keeps the executor
+type stable across registrations within each mode, including registrations in
+a loop. Inferred hooks can accept local captures through the ordinary
+registration methods, but each registration changes the executor's type.
 
 Run from this directory:
 
 ```sh
 cargo test -p basin-evaluation-local
 cargo test --workspace
+cargo test -p basin-evaluation-application --test executor_transfer
 cargo tree -p basin-evaluation-local -e features -i basin
 cargo tree -p basin-evaluation-application -e features -i basin
 ```

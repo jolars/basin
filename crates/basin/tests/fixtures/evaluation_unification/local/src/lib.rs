@@ -264,6 +264,7 @@ pub fn check_local_runs() {
         vec![2.0, 1.0],
     )
     .max_iter(2)
+    .into_local()
     .stop_when(move |_| {
         observed.set(observed.get() + 1);
         None

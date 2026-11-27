@@ -8,6 +8,9 @@ use crate::core::math::{
     VectorLen,
 };
 use crate::core::problem::{CostFunction, Problem};
+use crate::core::run_control::{
+    HookMode, LocalHooks, SendHooks, StopFactory, StoreStop,
+};
 use crate::core::solver::Solver;
 use crate::core::state::{CountsMirror, PopulationProgress, State};
 use crate::core::termination::Termination;
@@ -77,13 +80,13 @@ use crate::solver::cma_inject::{MemeticInner, default_c_y};
         deserialize = "I: serde::Deserialize<'de>, V: serde::Deserialize<'de>, M: serde::Deserialize<'de>, F: serde::Deserialize<'de>"
     ))
 )]
-pub struct BoundedCmaInject<I, V, M, F = f64>
+pub struct BoundedCmaInject<I, V, M, F = f64, H: HookMode = SendHooks>
 where
     F: Scalar,
     I: MemeticInner<V, F>,
 {
     cma: BoundedCmaEs<V, M, F>,
-    inner: InnerExecutor<I::State, I>,
+    inner: InnerExecutor<I::State, I, H>,
     #[cfg_attr(feature = "serde", serde(default))]
     inner_diagnostics: Option<Vec<crate::core::inner::diagnostics::Record<F>>>,
     k: usize,
@@ -109,6 +112,31 @@ where
         }
     }
 
+    /// Allow thread-local inner stop hooks while retaining the configured solver.
+    pub fn into_local(self) -> BoundedCmaInject<I, V, M, F, LocalHooks> {
+        let Self {
+            cma,
+            inner,
+            inner_diagnostics,
+            k,
+            c_y_override,
+        } = self;
+        BoundedCmaInject {
+            cma,
+            inner: inner.into_local(),
+            inner_diagnostics,
+            k,
+            c_y_override,
+        }
+    }
+}
+
+impl<I, V, M, F, H: HookMode> BoundedCmaInject<I, V, M, F, H>
+where
+    F: Scalar,
+    I: MemeticInner<V, F>,
+    I::State: CountsMirror,
+{
     /// Inspect the outer distribution model without transferring its ownership.
     pub fn cma(&self) -> &BoundedCmaEs<V, M, F> {
         &self.cma
@@ -201,6 +229,7 @@ where
     pub fn inner_stop_when_factory<Mk, CheckFn>(self, make: Mk) -> Self
     where
         Mk: FnMut() -> CheckFn + 'static,
+        H: StoreStop<I::State, StopFactory<Mk, CheckFn>>,
         CheckFn: FnMut(&I::State) -> Option<crate::ApplicationStop> + 'static,
     {
         let Self {
@@ -220,8 +249,8 @@ where
     }
 }
 
-impl<P, I, V, M, F> Solver<P, PopulationProgress<V, F>>
-    for BoundedCmaInject<I, V, M, F>
+impl<P, I, V, M, F, H: HookMode> Solver<P, PopulationProgress<V, F>>
+    for BoundedCmaInject<I, V, M, F, H>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F> + BoxProblem<Param = V>,

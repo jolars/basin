@@ -138,6 +138,7 @@ fn executor_budgets_and_exact_resume() {
     .max_evaluations(crate::EvaluationKind::JacobianProduct, 4)
     .max_evaluations(crate::EvaluationKind::TransposeJacobianProduct, 2)
     .max_evaluations(crate::EvaluationKind::TotalWork, 9)
+    .into_local()
     .observe_solver(
         move |state, _, _| trace.borrow_mut().push(*state.counts()),
         ObserverMode::Always,
@@ -322,6 +323,7 @@ fn executor_product_failure_preserves_charge_and_discards_state() {
             ModelDriver::default(),
             crate::PointState::new(vec![1.0, -0.5]),
         )
+        .into_local()
         .observe_solver(
             move |_, _, _| seen.set(seen.get() + 1),
             crate::ObserverMode::Always,

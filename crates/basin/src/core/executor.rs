@@ -51,7 +51,10 @@ use crate::core::observer::{
     StateObserver,
 };
 use crate::core::problem::{EvalCounts, Problem};
-use crate::core::run_control::RunControl;
+use crate::core::run_control::{
+    HookMode, LocalHooks, RunControl, SendHooks, StopCallback, StoreObserver,
+    StoreSink, StoreStop,
+};
 use crate::core::solver::Solver;
 use crate::core::state::{CountsMirror, State};
 use crate::core::termination::{
@@ -315,6 +318,11 @@ impl<F: Scalar> StepOutcome<F> {
     }
 }
 
+type Observers<S, So, H> =
+    Vec<(Box<<H as HookMode>::Observer<S, So>>, ObserverMode)>;
+type CheckpointSinks<S, So, H> =
+    Vec<(Box<<H as HookMode>::Sink<S, So>>, ObserverMode)>;
+
 /// Drive a solver one iteration at a time.
 ///
 /// Owns the problem, state, solver, and execution controls, runs
@@ -326,6 +334,11 @@ impl<F: Scalar> StepOutcome<F> {
 ///
 /// [`Executor::run`] is `self.into_stepper().run_to_end()`; the stepper
 /// is the building block, the executor is the convenience wrapper.
+///
+/// Initialization callbacks run on the thread that calls
+/// [`Executor::into_stepper`]. When a `Send` stepper moves to another thread,
+/// subsequent callbacks run on the thread driving it. Move the executor
+/// before calling `into_stepper` to run every callback on the same worker.
 ///
 /// # Example
 ///
@@ -342,19 +355,19 @@ impl<F: Scalar> StepOutcome<F> {
 ///     }
 /// };
 /// ```
-pub struct Stepper<P, S: State, So> {
+pub struct Stepper<P, S: State, So, H: HookMode = SendHooks> {
     problem: Problem<P>,
     // A hard error discards the partially updated state.
     state: Option<S>,
     solver: So,
-    control: RunControl<S>,
-    observers: Vec<(Box<dyn ObserveSolver<S, So>>, ObserverMode)>,
-    checkpoints: Vec<(Box<dyn CheckpointSink<So, S>>, ObserverMode)>,
+    control: RunControl<S, H>,
+    observers: Observers<S, So, H>,
+    checkpoints: CheckpointSinks<S, So, H>,
     cancellation_token: Option<CancellationToken>,
     finished: Option<TerminationReport<S::Float>>,
 }
 
-impl<P, S, So> Stepper<P, S, So>
+impl<P, S, So, H: HookMode> Stepper<P, S, So, H>
 where
     S: State + CountsMirror,
     So: Solver<P, S>,
@@ -634,7 +647,7 @@ fn check_boundary<P, S, So>(
     baseline: Option<&EvalCounts>,
     state: &S,
     solver: &mut So,
-    control: &mut RunControl<S>,
+    control: &mut RunControl<S, impl HookMode>,
 ) -> Option<TerminationReport<S::Float>>
 where
     S: State,
@@ -662,7 +675,7 @@ fn step_once<P, S, So>(
     baseline: &EvalCounts,
     state: &mut S,
     solver: &mut So,
-    control: &mut RunControl<S>,
+    control: &mut RunControl<S, impl HookMode>,
     selection: &mut Option<crate::SelectionChange>,
 ) -> Result<StepOutcome<S::Float>, So::Error>
 where
@@ -708,7 +721,7 @@ pub fn run_loop_with_control<P, S, So>(
     problem: &mut Problem<P>,
     state: S,
     solver: &mut So,
-    control: &mut RunControl<S>,
+    control: &mut RunControl<S, impl HookMode>,
 ) -> Result<OptimizationResult<S>, So::Error>
 where
     S: State + CountsMirror,
@@ -723,7 +736,7 @@ pub(crate) fn run_segment_with_control<P, S, So>(
     problem: &mut Problem<P>,
     mut state: S,
     solver: &mut So,
-    control: &mut RunControl<S>,
+    control: &mut RunControl<S, impl HookMode>,
     initialized: bool,
 ) -> Result<OptimizationResult<S>, So::Error>
 where
@@ -774,6 +787,11 @@ where
 /// ordering and [`into_stepper`](Self::into_stepper) for one-step-at-a-
 /// time control.
 ///
+/// The default executor can move to another thread when the owned problem,
+/// solver, state, and the state's scalar type (`S::Float`) are `Send`. Its
+/// hook registration methods accept `Send` callbacks. Call
+/// [`into_local`](Self::into_local) to register hooks that capture thread-local data.
+///
 /// # Examples
 ///
 /// Minimize the 2-D sphere and read the outcome off the
@@ -813,13 +831,13 @@ where
 ///
 /// assert!(result.current_record().unwrap().cost.unwrap() < 1e-12);
 /// ```
-pub struct Executor<P, S: State, So> {
+pub struct Executor<P, S: State, So, H: HookMode = SendHooks> {
     problem: P,
     state: S,
     solver: So,
-    control: RunControl<S>,
-    observers: Vec<(Box<dyn ObserveSolver<S, So>>, ObserverMode)>,
-    checkpoints: Vec<(Box<dyn CheckpointSink<So, S>>, ObserverMode)>,
+    control: RunControl<S, H>,
+    observers: Observers<S, So, H>,
+    checkpoints: CheckpointSinks<S, So, H>,
     cancellation_token: Option<CancellationToken>,
     resume_counts: Option<EvalCounts>,
 }
@@ -901,6 +919,50 @@ where
         Self::new(problem, solver, state)
     }
 
+    /// Allow thread-local hooks such as observers that capture an `Rc`.
+    ///
+    /// Preserves settings and hooks already registered.
+    pub fn into_local(self) -> Executor<P, S, So, LocalHooks> {
+        let Self {
+            problem,
+            state,
+            solver,
+            control,
+            observers,
+            checkpoints,
+            cancellation_token,
+            resume_counts,
+        } = self;
+        Executor {
+            problem,
+            state,
+            solver,
+            control: control.into_local(),
+            observers: observers
+                .into_iter()
+                .map(|(hook, mode)| {
+                    let hook: Box<dyn ObserveSolver<S, So>> = hook;
+                    (hook, mode)
+                })
+                .collect(),
+            checkpoints: checkpoints
+                .into_iter()
+                .map(|(hook, mode)| {
+                    let hook: Box<dyn CheckpointSink<So, S>> = hook;
+                    (hook, mode)
+                })
+                .collect(),
+            cancellation_token,
+            resume_counts,
+        }
+    }
+}
+
+impl<P, S, So, H: HookMode> Executor<P, S, So, H>
+where
+    S: State + CountsMirror,
+    So: Solver<P, S>,
+{
     /// Set the absolute iteration limit, replacing the previous limit.
     pub fn max_iter(mut self, n: u64) -> Self {
         self.control.max_iter = n;
@@ -914,8 +976,9 @@ where
     pub fn stop_when<C>(mut self, check: C) -> Self
     where
         C: FnMut(&S) -> Option<ApplicationStop> + 'static,
+        H: StoreStop<S, StopCallback<C>>,
     {
-        self.control = std::mem::take(&mut self.control).stop_when(check);
+        self.control = self.control.stop_when(check);
         self
     }
 
@@ -989,9 +1052,10 @@ where
     pub fn observe_with<O>(mut self, observer: O, mode: ObserverMode) -> Self
     where
         O: Observe<S> + 'static,
+        H: StoreObserver<S, So, StateObserver<O>>,
     {
         self.observers
-            .push((Box::new(StateObserver(observer)), mode));
+            .push((H::store_observer(StateObserver(observer)), mode));
         self
     }
 
@@ -1013,8 +1077,9 @@ where
     ) -> Self
     where
         O: ObserveSolver<S, So> + 'static,
+        H: StoreObserver<S, So, O>,
     {
-        self.observers.push((Box::new(observer), mode));
+        self.observers.push((H::store_observer(observer), mode));
         self
     }
 
@@ -1061,6 +1126,7 @@ where
     pub fn observe_solver<C>(self, callback: C, mode: ObserverMode) -> Self
     where
         C: FnMut(&S, &So, ObservationEvent<'_, S::Float>) + 'static,
+        H: StoreObserver<S, So, SolverCallback<C>>,
     {
         self.observe_solver_with(SolverCallback(callback), mode)
     }
@@ -1082,8 +1148,9 @@ where
     ) -> Self
     where
         C: CheckpointSink<So, S> + 'static,
+        H: StoreSink<S, So, C>,
     {
-        self.checkpoints.push((Box::new(checkpoint), mode));
+        self.checkpoints.push((H::store_sink(checkpoint), mode));
         self
     }
 
@@ -1095,10 +1162,14 @@ where
     /// `observe_init` hooks fire in either case. Cancellation is first checked
     /// by the returned stepper's initial [`step`](Stepper::step).
     ///
+    /// Initialization callbacks run on the thread calling this method.
+    /// To run every callback on a worker, move the executor there before
+    /// calling this method.
+    ///
     /// Returns `Err` when [`Solver::init`] does (e.g. the problem's
     /// initial cost/gradient evaluation `Err`-ed). Observers do *not* fire
     /// on that error path.
-    pub fn into_stepper(self) -> Result<Stepper<P, S, So>, So::Error> {
+    pub fn into_stepper(self) -> Result<Stepper<P, S, So, H>, So::Error> {
         let Self {
             problem,
             mut state,

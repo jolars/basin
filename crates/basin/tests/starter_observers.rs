@@ -65,6 +65,7 @@ fn history_records_full_trajectory_with_monotone_best() {
         FirstOrderState::new(vec![1.0, -2.0, 3.0]),
     )
     .max_iter(6)
+    .into_local()
     .observe_with(history.clone(), ObserverMode::Always)
     .run()
     .unwrap();
@@ -99,6 +100,7 @@ fn history_every_n_thins_iters() {
         FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(9)
+    .into_local()
     .observe_with(history.clone(), ObserverMode::Every(3))
     .run()
     .unwrap();

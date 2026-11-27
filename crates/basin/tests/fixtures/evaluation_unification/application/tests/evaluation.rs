@@ -167,6 +167,7 @@ fn configured_run_moves_before_local_hooks_are_created() {
         let hook_state = Rc::clone(&observed);
         let result = Executor::from_start(problem, solver, initial)
             .max_iter(5)
+            .into_local()
             .observe_solver(
                 move |_, _, event| {
                     assert_eq!(thread::current().id(), worker);

@@ -109,7 +109,8 @@ mod adapters;
 mod history;
 mod report;
 
-pub(crate) use adapters::{SolverCallback, StateObserver};
+#[doc(hidden)]
+pub use adapters::{SolverCallback, StateObserver};
 pub use history::History;
 pub use report::Report;
 

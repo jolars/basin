@@ -174,6 +174,7 @@ fn public_quadratic_iterations_reuse_trial_buffers() {
         vec![0.5, 0.5],
     )
     .max_iter(1000)
+    .into_local()
     .observe_with(AllocationObserver(counts.clone()), ObserverMode::Never)
     .run()
     .unwrap();

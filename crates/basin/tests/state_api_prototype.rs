@@ -1169,6 +1169,7 @@ fn production_observers_borrow_the_same_simplex_storage() {
         NelderMead::new(),
         SimplexState::new(points).unwrap(),
     )
+    .into_local()
     .observe_with(observer, ObserverMode::Always)
     .max_iter(10)
     .run()

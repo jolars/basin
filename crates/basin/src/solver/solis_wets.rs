@@ -544,9 +544,10 @@ where
     fn configure_segment(
         &mut self,
         _state: &Self::State,
-        _control: &mut crate::RunControl<Self::State>,
-    ) {
+        control: crate::RunControl<Self::State, crate::LocalHooks>,
+    ) -> crate::RunControl<Self::State, crate::LocalHooks> {
         self.accepted_iterate = true;
+        control
     }
 }
 

@@ -805,6 +805,7 @@ fn hard_inner_errors_never_publish_partial_state() {
         injection(vec![0.5, 0.0]),
         SelectedPopulationProgress::empty(),
     )
+    .into_local()
     .observe_solver(
         move |_, _, _| calls.set(calls.get() + 1),
         basin::ObserverMode::Always,
@@ -1049,6 +1050,7 @@ fn standalone_checkpoints_resume_the_script_and_observers_do_no_work() {
     let calls = observed.clone();
     let result = make()
         .max_iter(3)
+        .into_local()
         .observe_solver(
             move |state, _, _| {
                 assert!(state.evaluated_record().is_some());
@@ -1113,7 +1115,8 @@ fn zero_objective_progress_is_observable_and_resumes_exactly() {
         delayed_feasibility(),
         SelectedPopulationProgress::empty(),
     )
-    .max_evaluations(EvaluationKind::Residual, 6);
+    .max_evaluations(EvaluationKind::Residual, 6)
+    .into_local();
     for mode in [ObserverMode::Always, ObserverMode::SelectionChanged] {
         let observations = observations.clone();
         executor = executor.observe_solver(
@@ -1231,6 +1234,7 @@ fn partial_step_publishes_constraint_selection_after_feasibility_only_refinement
         },
         basin::ObserverMode::Always,
     )
+    .into_local()
     .observe_solver(
         move |state, _, event| {
             if let basin::ObservationEvent::SelectionChanged(change) = event {

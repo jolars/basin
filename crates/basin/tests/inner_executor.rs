@@ -122,17 +122,18 @@ fn sort_by_cost(iterates: &mut [Vec<f64>], costs: &mut [f64]) {
 /// from each iterate and replaces the iterate with the inner's converged
 /// param. This is intentionally simple (it isn't real Nelder-Mead) but
 /// exercises the full composition contract.
-struct PerVertexRefine<G> {
-    inner: InnerExecutor<FirstOrderState<Vec<f64>>, G>,
+struct PerVertexRefine<G, H: basin::HookMode> {
+    inner: InnerExecutor<FirstOrderState<Vec<f64>>, G, H>,
 }
 
-impl<G> PerVertexRefine<G> {
-    fn new(inner: InnerExecutor<FirstOrderState<Vec<f64>>, G>) -> Self {
+impl<G, H: basin::HookMode> PerVertexRefine<G, H> {
+    fn new(inner: InnerExecutor<FirstOrderState<Vec<f64>>, G, H>) -> Self {
         Self { inner }
     }
 }
 
-impl<P, G> Solver<P, MultiStartState> for PerVertexRefine<G>
+impl<P, G, H: basin::HookMode> Solver<P, MultiStartState>
+    for PerVertexRefine<G, H>
 where
     P: CostFunction<Param = Vec<f64>, Output = f64>
         + Gradient<Param = Vec<f64>, Gradient = Vec<f64>>,
@@ -298,6 +299,7 @@ fn inner_executor_creates_stop_history_once_per_run() {
             .with_absolute_gradient_tolerance(1e-8),
     )
     .max_iter(50)
+    .into_local()
     .stop_when_factory({
         let resets = Rc::clone(&resets);
         move || {

@@ -115,6 +115,7 @@ fn init_then_iter_per_step_then_final_with_reason() {
         FirstOrderState::new(vec![1.0, -2.0, 3.0]),
     )
     .max_iter(5)
+    .into_local()
     .observe_with(recorder, ObserverMode::Always)
     .run()
     .unwrap();
@@ -145,6 +146,7 @@ fn every_n_gates_iter_only() {
         FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(10)
+    .into_local()
     .observe_with(recorder, ObserverMode::Every(3))
     .run()
     .unwrap();
@@ -172,6 +174,7 @@ fn never_skips_iter_but_init_final_fire() {
         FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(4)
+    .into_local()
     .observe_with(recorder, ObserverMode::Never)
     .run()
     .unwrap();
@@ -198,6 +201,7 @@ fn new_best_fires_on_every_strict_improvement() {
         FirstOrderState::new(vec![1.0, -2.0, 3.0]),
     )
     .max_iter(5)
+    .into_local()
     .observe_with(recorder, ObserverMode::NewBest)
     .run()
     .unwrap();
@@ -224,6 +228,7 @@ fn new_best_skips_non_improving_iters() {
         FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(4)
+    .into_local()
     .observe_with(recorder, ObserverMode::NewBest)
     .run()
     .unwrap();
@@ -253,6 +258,7 @@ fn multiple_observers_fire_in_registration_order() {
         FirstOrderState::new(vec![1.0]),
     )
     .max_iter(2)
+    .into_local()
     .observe_with(a, ObserverMode::Always)
     .observe_with(b, ObserverMode::Always)
     .run()
@@ -281,6 +287,7 @@ fn observer_fires_via_stepper_step_loop() {
         FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(3)
+    .into_local()
     .observe_with(recorder, ObserverMode::Always)
     .into_stepper()
     .unwrap();

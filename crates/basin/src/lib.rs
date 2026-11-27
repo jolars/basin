@@ -397,7 +397,9 @@ pub use crate::core::problem::{
     CostFunction, EvalCounts, EvaluationBuffers, EvaluationKind, Gradient,
     Hessian, HessianProduct, Jacobian, MiniBatchGradient, Problem, Residual,
 };
-pub use crate::core::run_control::RunControl;
+pub use crate::core::run_control::{
+    HookMode, LocalHooks, RunControl, SendHooks,
+};
 pub use crate::core::solver::{Solver, SolverStep};
 pub use crate::core::state::{
     AcceptanceState, ConstraintViolationState, CountsMirror, CurrentRef,

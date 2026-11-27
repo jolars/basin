@@ -9,6 +9,9 @@ use crate::core::math::{
     SampleUniformBox, Scalar, ScaleInPlace, ScaledAdd, VectorLen,
 };
 use crate::core::problem::{CostFunction, Problem};
+use crate::core::run_control::{
+    HookMode, LocalHooks, SendHooks, StopFactory, StoreStop,
+};
 use crate::core::solver::Solver;
 use crate::core::state::{CountsMirror, PopulationProgress, State};
 use crate::core::termination::Termination;
@@ -170,13 +173,18 @@ use crate::solver::de::De;
         deserialize = "I: serde::Deserialize<'de>, F: serde::Deserialize<'de>"
     ))
 )]
-pub struct DeInject<I, V, F = f64, Evaluation = crate::SerialEvaluation>
-where
+pub struct DeInject<
+    I,
+    V,
+    F = f64,
+    Evaluation = crate::SerialEvaluation,
+    H: HookMode = SendHooks,
+> where
     F: Scalar,
     I: MemeticInner<V, F>,
 {
     de: De<F, Evaluation>,
-    inner: InnerExecutor<I::State, I>,
+    inner: InnerExecutor<I::State, I, H>,
     #[cfg_attr(feature = "serde", serde(default))]
     inner_diagnostics: Option<Vec<crate::core::inner::diagnostics::Record<F>>>,
     k: usize,
@@ -204,6 +212,33 @@ where
         }
     }
 
+    /// Allow thread-local inner stop hooks while retaining the configured solver.
+    pub fn into_local(self) -> DeInject<I, V, F, Evaluation, LocalHooks> {
+        let Self {
+            de,
+            inner,
+            inner_diagnostics,
+            k,
+            refine_every,
+            _phantom,
+        } = self;
+        DeInject {
+            de,
+            inner: inner.into_local(),
+            inner_diagnostics,
+            k,
+            refine_every,
+            _phantom,
+        }
+    }
+}
+
+impl<I, V, F, Evaluation, H: HookMode> DeInject<I, V, F, Evaluation, H>
+where
+    F: Scalar,
+    I: MemeticInner<V, F>,
+    I::State: CountsMirror,
+{
     /// Number of best-ranked candidates to refine each generation.
     /// Default `1`.
     ///
@@ -269,6 +304,7 @@ where
     pub fn inner_stop_when_factory<Mk, CheckFn>(self, make: Mk) -> Self
     where
         Mk: FnMut() -> CheckFn + 'static,
+        H: StoreStop<I::State, StopFactory<Mk, CheckFn>>,
         CheckFn: FnMut(&I::State) -> Option<crate::ApplicationStop> + 'static,
     {
         let Self {
@@ -290,7 +326,7 @@ where
     }
 }
 
-impl<I, V, F, Evaluation> DeInject<I, V, F, Evaluation>
+impl<I, V, F, Evaluation, H: HookMode> DeInject<I, V, F, Evaluation, H>
 where
     F: Scalar,
     I: MemeticInner<V, F>,
@@ -312,8 +348,8 @@ where
     }
 }
 
-impl<P, I, V, F, Evaluation> Solver<P, PopulationProgress<V, F>>
-    for DeInject<I, V, F, Evaluation>
+impl<P, I, V, F, Evaluation, H: HookMode> Solver<P, PopulationProgress<V, F>>
+    for DeInject<I, V, F, Evaluation, H>
 where
     F: Scalar + SampleUniform,
     P: CostFunction<Param = V, Output = F> + BoxProblem<Param = V>,

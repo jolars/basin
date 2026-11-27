@@ -831,14 +831,15 @@ where
     fn configure_segment(
         &mut self,
         _state: &Self::State,
-        _control: &mut crate::RunControl<Self::State>,
-    ) {
+        control: crate::RunControl<Self::State, crate::LocalHooks>,
+    ) -> crate::RunControl<Self::State, crate::LocalHooks> {
         if !self.distribution_tolerance_configured {
             self.distribution_tolerance = Some(
                 F::from_f64(1e-12).unwrap()
                     * self.sigma().unwrap_or(self.initial_sigma),
             );
         }
+        control
     }
 }
 

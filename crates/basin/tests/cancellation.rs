@@ -249,6 +249,7 @@ fn stepper_cancels_between_iterations_without_rewinding_state() {
         Executor::new(Quadratic, ScriptedSolver, ScriptedState::new(vec![2.0]))
             .max_iter(100)
             .with_cancellation_token(token)
+            .into_local()
             .observe_with(observer, ObserverMode::Always)
             .into_stepper()
             .unwrap();

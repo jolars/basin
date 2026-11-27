@@ -12,6 +12,9 @@ use crate::core::inner::{InitialState, InnerExecutor, WarmStart};
 use crate::core::math::{SampleUniformBox, Scalar, VectorLen};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, Rng, RngExt, SeedableRng};
+use crate::core::run_control::{
+    HookMode, LocalHooks, SendHooks, StopFactory, StoreStop,
+};
 use crate::core::solver::Solver;
 use crate::core::state::{CountsMirror, PointState, State};
 use crate::core::termination::Termination;
@@ -327,17 +330,25 @@ fn accept_guard(new_success: bool, incumbent_success: bool) -> bool {
 /// # }
 /// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    serde(bound(
+        serialize = "I: serde::Serialize, F: serde::Serialize, S: serde::Serialize, A: serde::Serialize",
+        deserialize = "I: serde::Deserialize<'de>, F: serde::Deserialize<'de>, S: serde::Deserialize<'de>, A: serde::Deserialize<'de>"
+    ))
+)]
 pub struct BasinHopping<
     I,
     V,
     F = f64,
     S = RandomDisplacement<F>,
     A = Metropolis<F>,
+    H: HookMode = SendHooks,
 > where
     F: Scalar,
     I: WarmStart<V>,
 {
-    inner: InnerExecutor<<I as InitialState<V>>::State, I>,
+    inner: InnerExecutor<<I as InitialState<V>>::State, I, H>,
     step: S,
     accept: A,
     seed: u64,
@@ -396,7 +407,15 @@ where
             inner_diagnostics: None,
         }
     }
+}
 
+impl<I, V, F, H: HookMode>
+    BasinHopping<I, V, F, RandomDisplacement<F>, Metropolis<F>, H>
+where
+    F: Scalar,
+    I: WarmStart<V>,
+    <I as InitialState<V>>::State: State + CountsMirror,
+{
     /// Set the default-displacement step half-width (SciPy `stepsize`,
     /// default `0.5`). Match it to the typical separation between local
     /// minima of your problem.
@@ -427,6 +446,51 @@ where
     I: WarmStart<V>,
     <I as InitialState<V>>::State: State + CountsMirror,
 {
+    /// Allow thread-local inner stop hooks while retaining the configured solver.
+    pub fn into_local(self) -> BasinHopping<I, V, F, S, A, LocalHooks> {
+        let Self {
+            inner,
+            step,
+            accept,
+            seed,
+            rng,
+            accepted_iterate,
+            adaptive,
+            interval,
+            target_accept_rate,
+            stepwise_factor,
+            nstep,
+            naccept,
+            incumbent_success,
+            pending_stop,
+            inner_diagnostics,
+        } = self;
+        BasinHopping {
+            inner: inner.into_local(),
+            step,
+            accept,
+            seed,
+            rng,
+            accepted_iterate,
+            adaptive,
+            interval,
+            target_accept_rate,
+            stepwise_factor,
+            nstep,
+            naccept,
+            incumbent_success,
+            pending_stop,
+            inner_diagnostics,
+        }
+    }
+}
+
+impl<I, V, F, S, A, H: HookMode> BasinHopping<I, V, F, S, A, H>
+where
+    F: Scalar,
+    I: WarmStart<V>,
+    <I as InitialState<V>>::State: State + CountsMirror,
+{
     /// Inspect the perturbation strategy, including its current adapted scale.
     pub fn step_taker(&self) -> &S {
         &self.step
@@ -434,7 +498,10 @@ where
 
     /// Replace the step taker (perturbation strategy). Changes the `S` type
     /// parameter; configure your custom step taker before passing it.
-    pub fn with_step_taker<S2>(self, step: S2) -> BasinHopping<I, V, F, S2, A> {
+    pub fn with_step_taker<S2>(
+        self,
+        step: S2,
+    ) -> BasinHopping<I, V, F, S2, A, H> {
         BasinHopping {
             inner: self.inner,
             step,
@@ -458,7 +525,7 @@ where
     pub fn with_acceptance_test<A2>(
         self,
         accept: A2,
-    ) -> BasinHopping<I, V, F, S, A2> {
+    ) -> BasinHopping<I, V, F, S, A2, H> {
         BasinHopping {
             inner: self.inner,
             step: self.step,
@@ -562,6 +629,7 @@ where
     pub fn inner_stop_when_factory<Mk, CheckFn>(mut self, make: Mk) -> Self
     where
         Mk: FnMut() -> CheckFn + 'static,
+        H: StoreStop<<I as InitialState<V>>::State, StopFactory<Mk, CheckFn>>,
         CheckFn: FnMut(
                 &<I as InitialState<V>>::State,
             ) -> Option<crate::ApplicationStop>
@@ -572,8 +640,8 @@ where
     }
 }
 
-impl<I, V: Clone, F: Scalar, S, A> InitialState<V>
-    for BasinHopping<I, V, F, S, A>
+impl<I, V: Clone, F: Scalar, S, A, H: HookMode> InitialState<V>
+    for BasinHopping<I, V, F, S, A, H>
 where
     I: WarmStart<V>,
 {
@@ -583,8 +651,8 @@ where
     }
 }
 
-impl<P, I, V, F, S, A> Solver<P, PointState<V, F>>
-    for BasinHopping<I, V, F, S, A>
+impl<P, I, V, F, S, A, H: HookMode> Solver<P, PointState<V, F>>
+    for BasinHopping<I, V, F, S, A, H>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,

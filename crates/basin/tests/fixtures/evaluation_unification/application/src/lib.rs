@@ -1,7 +1,9 @@
 //! A configured factory can cross threads before it creates the executor.
 //!
 //! ```compile_fail,E0277
-//! use basin::{Executor, FirstOrderState};
+//! use basin::{Executor, FirstOrderState, LocalHooks};
 //! fn assert_send<T: Send>() {}
-//! assert_send::<Executor<(), FirstOrderState<Vec<f64>>, ()>>();
+//! assert_send::<Executor<(), FirstOrderState<Vec<f64>>, (), LocalHooks>>();
 //! ```
+
+pub mod executor_prototypes;

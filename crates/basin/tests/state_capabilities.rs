@@ -200,6 +200,7 @@ fn incomplete_publications_never_reach_observers() {
                 FirstOrderState::new(vec![1.0]),
             )
             .require_evaluated_state()
+            .into_local()
             .observe_with(CountObservers(calls.clone()), ObserverMode::Always)
             .run();
         });
@@ -221,6 +222,7 @@ fn restored_checkpoints_and_borrowed_initialization_are_validated() {
         );
         let _ = Executor::resume_from_checkpoint((), checkpoint)
             .require_evaluated_state()
+            .into_local()
             .observe_with(CountObservers(calls.clone()), ObserverMode::Always)
             .into_stepper();
     });
@@ -410,6 +412,28 @@ fn nonnumeric_controls_are_never_silently_discarded_by_serialization() {
     assert!(postcard::to_allocvec(&acceptance).is_err());
 }
 
+#[cfg(feature = "serde")]
+#[test]
+fn local_inner_executor_preserves_the_numeric_checkpoint_payload() {
+    type LocalInner =
+        InnerExecutor<PointState<f64>, Trajectory, basin::LocalHooks>;
+    let transferable =
+        InnerExecutor::<PointState<f64>, _>::new(Trajectory::new(&[]))
+            .max_iter(2);
+    let encoded = postcard::to_allocvec(&transferable).unwrap();
+    let local = transferable.into_local();
+    assert_eq!(postcard::to_allocvec(&local).unwrap(), encoded);
+    let restored: LocalInner = postcard::from_bytes(&encoded).unwrap();
+    assert_eq!(postcard::to_allocvec(&restored).unwrap(), encoded);
+
+    let captured = Rc::new(Cell::new(false));
+    let local = restored.stop_when(move |_| {
+        captured.set(true);
+        None
+    });
+    assert!(postcard::to_allocvec(&local).is_err());
+}
+
 struct Quadratic;
 
 impl basin::Constraints for Quadratic {
@@ -594,6 +618,7 @@ fn clean_stops_stamp_all_counts_and_errors_keep_charged_batch_work() {
     let mut stepper =
         Executor::new(Quadratic, WorkStep::Fail, PointState::new(1.0))
             .require_evaluated_state()
+            .into_local()
             .observe_with(CountObservers(calls.clone()), ObserverMode::Always)
             .into_stepper()
             .unwrap();
