@@ -1062,48 +1062,61 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
                         LineSearchOutcome::Failed => F::zero(),
                     };
 
-                    let accepted = if stp.is_finite()
-                        && stp > F::zero()
-                        && stp <= stpmx
-                    {
-                        let (param, evaluation) = if let Some(evaluation) =
-                            line_search_result.evaluation
-                        {
-                            (
-                                evaluation.param,
-                                Some((evaluation.cost, evaluation.gradient)),
-                            )
-                        } else {
-                            let mut param = state.param().clone();
-                            param.scaled_add(stp, &d_v);
-                            (param, None)
-                        };
-                        if inside_box(
-                            param.as_float_slice(),
-                            problem.inner().lower().as_float_slice(),
-                            problem.inner().upper().as_float_slice(),
-                        ) {
-                            let (cost, gradient) =
-                                if let Some(evaluation) = evaluation {
-                                    evaluation
-                                } else {
-                                    problem.cost_and_gradient_reusing(
-                                        &param,
-                                        history.gradient_buffer.take(),
-                                    )?
+                    let accepted =
+                        if stp.is_finite() && stp > F::zero() && stp <= stpmx {
+                            let (param, evaluation) = if let Some(evaluation) =
+                                line_search_result.evaluation
+                            {
+                                (
+                                    evaluation.param,
+                                    (
+                                        Some(evaluation.cost),
+                                        Some(evaluation.gradient),
+                                    ),
+                                )
+                            } else if let Some((param, cost)) =
+                                line_search_result.accepted_cost
+                            {
+                                (param, (Some(cost), None))
+                            } else {
+                                let mut param = state.param().clone();
+                                param.scaled_add(stp, &d_v);
+                                (param, (None, None))
+                            };
+                            if inside_box(
+                                param.as_float_slice(),
+                                problem.inner().lower().as_float_slice(),
+                                problem.inner().upper().as_float_slice(),
+                            ) {
+                                let (cost, gradient) = match evaluation {
+                                    (Some(cost), Some(gradient)) => {
+                                        (cost, gradient)
+                                    }
+                                    (Some(cost), None) => (
+                                        cost,
+                                        problem.gradient_reusing(
+                                            &param,
+                                            history.gradient_buffer.take(),
+                                        )?,
+                                    ),
+                                    (None, _) => problem
+                                        .cost_and_gradient_reusing(
+                                            &param,
+                                            history.gradient_buffer.take(),
+                                        )?,
                                 };
-                            // A line-search warning can select an invalid callback
-                            // result. Keep the last finite iterate and use the normal
-                            // restart path instead of publishing it as progress.
-                            (finite_evaluation(&param, cost, &gradient)
-                                && (projected.is_none() || cost <= f_old))
-                                .then_some((param, cost, gradient))
+                                // A line-search warning can select an invalid callback
+                                // result. Keep the last finite iterate and use the normal
+                                // restart path instead of publishing it as progress.
+                                (finite_evaluation(&param, cost, &gradient)
+                                    && (projected.is_none() || cost <= f_old))
+                                    .then_some((param, cost, gradient))
+                            } else {
+                                None
+                            }
                         } else {
                             None
-                        }
-                    } else {
-                        None
-                    };
+                        };
                     (stp, accepted)
                 };
 
@@ -1476,18 +1489,23 @@ where
             ));
         }
 
-        let (param_new, f_new, g_new) =
-            if let Some(evaluation) = line_search_result.evaluation {
-                (evaluation.param, evaluation.cost, evaluation.gradient)
-            } else {
-                let mut param = state.param().clone();
-                param.scaled_add(stp, &d_v);
-                let (cost, gradient) = problem.cost_and_gradient_reusing(
-                    &param,
-                    history.gradient_buffer.take(),
-                )?;
-                (param, cost, gradient)
-            };
+        let (param_new, f_new, g_new) = if let Some(evaluation) =
+            line_search_result.evaluation
+        {
+            (evaluation.param, evaluation.cost, evaluation.gradient)
+        } else if let Some((param, cost)) = line_search_result.accepted_cost {
+            let gradient = problem
+                .gradient_reusing(&param, history.gradient_buffer.take())?;
+            (param, cost, gradient)
+        } else {
+            let mut param = state.param().clone();
+            param.scaled_add(stp, &d_v);
+            let (cost, gradient) = problem.cost_and_gradient_reusing(
+                &param,
+                history.gradient_buffer.take(),
+            )?;
+            (param, cost, gradient)
+        };
         if !finite_evaluation(&param_new, f_new, &g_new) {
             state
                 .set_evaluation(f_old, g_v)

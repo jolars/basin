@@ -514,6 +514,7 @@ mod backend_aliases;
 #[derive(Clone, Copy)]
 enum CustomSearch {
     StepOnly,
+    CostOnly,
     Retained,
     Failed,
 }
@@ -549,6 +550,7 @@ impl LineSearch<Quadratic, Vec<f64>> for CustomSearch {
             Self::StepOnly => {
                 LineSearchResult::new(LineSearchOutcome::Step(step))
             }
+            Self::CostOnly => LineSearchResult::with_cost(step, trial, cost),
             Self::Retained => {
                 let gradient = problem.gradient(&trial)?;
                 LineSearchResult::with_evaluation(step, trial, cost, gradient)
@@ -573,6 +575,16 @@ fn custom_bounded_searches_publish_matching_records_and_counts() {
         (
             CustomSearch::StepOnly,
             vec![vec![0.5], vec![1.0], vec![1.0]],
+            1.0,
+            2401.0,
+            -98.0,
+            2,
+            1,
+            TerminationCode::MaxIter,
+        ),
+        (
+            CustomSearch::CostOnly,
+            vec![vec![0.5], vec![1.0]],
             1.0,
             2401.0,
             -98.0,

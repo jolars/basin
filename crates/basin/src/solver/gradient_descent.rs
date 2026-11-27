@@ -210,6 +210,17 @@ where
                     .expect("gradient dimension differs from parameter");
                 return Ok(crate::SolverStep::completed());
             }
+            if let Some((param, cost)) = line_search_result.accepted_cost {
+                // Keep the iterate buffer hot and release the trial buffer
+                // before the gradient callback can allocate.
+                drop(param);
+                state.seed_param_mut().scaled_add(alpha, &direction);
+                problem.gradient_into(state.param(), &mut grad)?;
+                state
+                    .set_evaluation(cost, grad)
+                    .expect("gradient dimension differs from parameter");
+                return Ok(crate::SolverStep::completed());
+            }
             state.seed_param_mut().scaled_add(alpha, &direction);
         } else {
             // Heavy ball: v ← β·v + αₖ·direction (direction = −∇f), then

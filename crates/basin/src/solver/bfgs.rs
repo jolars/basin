@@ -335,6 +335,10 @@ where
         let (param, cost_new, g_new) =
             if let Some(evaluation) = search_result.evaluation {
                 (evaluation.param, evaluation.cost, evaluation.gradient)
+            } else if let Some((param, cost)) = search_result.accepted_cost {
+                let gradient = problem
+                    .gradient_reusing(&param, self.gradient_buffer.take())?;
+                (param, cost, gradient)
             } else {
                 let mut param = param.clone();
                 param.scaled_add(F::one(), &s);

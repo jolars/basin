@@ -81,7 +81,7 @@ impl<V, F> LineSearchEvaluation<V, F> {
     }
 }
 
-/// Outcome of a line search, optionally carrying its accepted evaluation.
+/// Outcome of a line search, with optional retained cost and gradient data.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub struct LineSearchResult<V, F> {
@@ -89,6 +89,7 @@ pub struct LineSearchResult<V, F> {
     pub outcome: LineSearchOutcome<F>,
     /// Objective and gradient at the selected step, when retained.
     pub evaluation: Option<LineSearchEvaluation<V, F>>,
+    pub(crate) accepted_cost: Option<(V, F)>,
 }
 
 impl<V, F> LineSearchResult<V, F> {
@@ -97,7 +98,24 @@ impl<V, F> LineSearchResult<V, F> {
         Self {
             outcome,
             evaluation: None,
+            accepted_cost: None,
         }
+    }
+
+    /// Construct a selected step with the objective at its trial point.
+    pub fn with_cost(step: F, param: V, cost: F) -> Self {
+        Self {
+            outcome: LineSearchOutcome::Step(step),
+            evaluation: None,
+            accepted_cost: Some((param, cost)),
+        }
+    }
+
+    /// Borrow the selected parameter and cost retained without a gradient.
+    pub fn accepted_cost(&self) -> Option<(&V, &F)> {
+        self.accepted_cost
+            .as_ref()
+            .map(|(param, cost)| (param, cost))
     }
 
     /// Construct a selected step with its retained evaluation.
@@ -105,6 +123,7 @@ impl<V, F> LineSearchResult<V, F> {
         Self {
             outcome: LineSearchOutcome::Step(step),
             evaluation: Some(LineSearchEvaluation::new(param, cost, gradient)),
+            accepted_cost: None,
         }
     }
 }
@@ -219,6 +238,8 @@ pub trait LineSearch<P, V, F = f64> {
     }
 
     /// Returns the outcome and, when available, the evaluation at its step.
+    /// Use [`LineSearchResult::with_cost`] to retain just the cost. The point
+    /// must equal `param + step * direction`.
     ///
     /// The default preserves compatibility with line searches that return only
     /// a step. Implementations that evaluate both the objective and gradient at

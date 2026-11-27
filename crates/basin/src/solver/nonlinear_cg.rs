@@ -388,6 +388,13 @@ where
                 return Ok(None);
             }
             evaluation
+        } else if let Some((next, cost)) = result.accepted_cost {
+            if !usable_displacement(param, &next) {
+                return Ok(None);
+            }
+            let gradient =
+                problem.gradient_reusing(&next, self.gradient_buffer.take())?;
+            LineSearchEvaluation::new(next, cost, gradient)
         } else {
             let mut next = param.clone();
             next.scaled_add(alpha, direction);

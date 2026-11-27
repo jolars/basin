@@ -204,6 +204,27 @@ fn retained_evaluations_faer() {
 }
 
 #[test]
+fn backtracking_reuses_the_accepted_cost() {
+    let calls = Calls::default();
+    let result = Executor::from_start(
+        Sphere::new(&calls),
+        GradientDescent::with_line_search(basin::Backtracking::new()),
+        vec![1.0, 2.0],
+    )
+    .max_iter(1)
+    .run()
+    .unwrap();
+    assert_eq!(
+        *calls.costs.borrow(),
+        [vec![1.0, 2.0], vec![-1.0, -2.0], vec![0.0, 0.0]]
+    );
+    assert_eq!(result.cost_evals(), 3);
+    assert_eq!(result.state.gradient_evals(), 2);
+    assert_eq!(result.state.gradient(), Some(&vec![0.0, 0.0]));
+    assert_eq!(result.current_record().unwrap().cost, Some(0.0));
+}
+
+#[test]
 fn sphere_target_interrupt_uses_five_cost_and_four_gradient_calls() {
     let calls = Calls::default();
     let mut problem = Sphere::new(&calls);

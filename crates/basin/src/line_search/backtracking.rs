@@ -114,6 +114,18 @@ where
         gradient: &V,
         direction: &V,
     ) -> Result<LineSearchOutcome<F>, Self::Error> {
+        self.next_with_evaluation(problem, param, cost, gradient, direction)
+            .map(|result| result.outcome)
+    }
+
+    fn next_with_evaluation(
+        &mut self,
+        problem: &mut Problem<P>,
+        param: &V,
+        cost: F,
+        gradient: &V,
+        direction: &V,
+    ) -> Result<LineSearchResult<V, F>, Self::Error> {
         // Armijo: f(x + α d) ≤ f(x) + c α (∇f · d). For a descent direction,
         // `g_dot_d` is negative, so the threshold drops with α.
         let g_dot_d = gradient.dot(direction);
@@ -128,7 +140,7 @@ where
             && F::zero() < self.c
             && self.c < F::one();
         if !valid {
-            return Ok(LineSearchOutcome::Failed);
+            return Ok(LineSearchResult::new(LineSearchOutcome::Failed));
         }
         let mut trial = param.clone();
         for iteration in 0..self.max_iter {
@@ -143,11 +155,13 @@ where
             if trial_cost.is_finite()
                 && trial_cost <= cost + self.c * alpha * g_dot_d
             {
-                return Ok(LineSearchOutcome::Step(alpha));
+                return Ok(LineSearchResult::with_cost(
+                    alpha, trial, trial_cost,
+                ));
             }
             alpha = alpha * self.rho;
         }
-        Ok(LineSearchOutcome::Failed)
+        Ok(LineSearchResult::new(LineSearchOutcome::Failed))
     }
 
     fn next_with_bounds(

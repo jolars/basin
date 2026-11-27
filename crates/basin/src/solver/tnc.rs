@@ -716,15 +716,21 @@ where
                 mathematical_maximum,
             );
         }
-        let retained = result.evaluation.filter(|e| {
-            e.param.vec_len() == n
-                && (0..n).all(|i| e.param.get_scalar(i) == next.get_scalar(i))
-        });
-        let (next_cost, next_g) = if let Some(e) = retained {
-            (e.cost, e.gradient)
+        let matches_next = |point: &V| {
+            point.vec_len() == n
+                && (0..n).all(|i| point.get_scalar(i) == next.get_scalar(i))
+        };
+        let (next_cost, next_g) = if let Some(evaluation) =
+            result.evaluation.filter(|e| matches_next(&e.param))
+        {
+            (evaluation.cost, evaluation.gradient)
+        } else if let Some((_, cost)) = result
+            .accepted_cost
+            .filter(|(param, _)| matches_next(param))
+        {
+            (cost, problem.gradient(&next)?)
         } else {
-            let (f, g) = problem.cost_and_gradient(&next)?;
-            (f, g)
+            problem.cost_and_gradient(&next)?
         };
         if next.vec_len() != n
             || next_g.vec_len() != n
